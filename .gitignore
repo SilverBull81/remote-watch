@@ -28,6 +28,7 @@ credentials.local.*
 *.local.toml
 *.local.yaml
 *.local.yml
+/credentials.local.json
 secrets/
 
 # Local editor and agent state

@@ -1,15 +1,15 @@
 ﻿# Remote Watch
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-160026
+Дата и время последнего изменения: 260928-180519
 
 Python-библиотека для стандартного логирования, уведомлений на телефон
 и адресных команд приложениям на удалённых серверах.
 
-**Состояние: фоновая доставка и адаптеры Telegram/ntfy, 0.1.0.dev3.** Обычный logger передаёт выбранные
+**Состояние: фоновая доставка, Telegram/ntfy и ручные smoke, 0.1.0.dev4.** Обычный logger передаёт выбранные
 уведомления через ограниченные очереди в каналы фонового runtime. Реализованы
 подготовка текста, маршрутизация, ограниченные повторы с full jitter и retry-after,
 TTL, sync/async запуск и остановка, счётчики по получателям и ограниченный atexit.
@@ -37,6 +37,8 @@ NotificationChannel, Destination, Route, RetryPolicy, RuntimeConfig, WatcherConf
 Исполняемый пример с тестовым каналом, подключение к существующему logger и
 описание ограничений: [RUNTIME.md](docs/RUNTIME.md).
 Подключение Telegram/ntfy и явный тест реальной отправки: [ADAPTERS.md](docs/ADAPTERS.md).
+Проверка одной командой с локальным credentials-файлом: [SMOKE.md](docs/SMOKE.md).
+Настройка токена и закрытой темы ntfy: [NTFY_SETUP.md](docs/NTFY_SETUP.md).
 
 ## Пользовательские команды
 
@@ -71,6 +73,8 @@ ntfy предварительно выбран для первого альте�
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Планируемые настройки и исходные лимиты |
 | [RUNTIME.md](docs/RUNTIME.md) | Работающий путь logging → очереди → тестовые каналы |
 | [ADAPTERS.md](docs/ADAPTERS.md) | Telegram/ntfy, токены, ошибки HTTP и реальная отправка |
+| [SMOKE.md](docs/SMOKE.md) | Одна пробная отправка выбранному сервису |
+| [NTFY_SETUP.md](docs/NTFY_SETUP.md) | Закрытый topic, права отправителя/телефона и токен |
 | [COMMANDS.md](docs/COMMANDS.md) | Пользовательские callbacks, partial и расширенный контракт |
 | [GATEWAY.md](docs/GATEWAY.md) | Необязательный relay и отдельный command hub |
 | [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Порядок реализации и результаты этапов |
@@ -81,4 +85,4 @@ ntfy предварительно выбран для первого альте�
 | [AGENTS.md](AGENTS.md) | Правила работы в репозитории |
 
 Следующий шаг — удобная настройка logger/runtime и примеры приложений.
-Реальная отправка с целевых серверов и проверка на телефоне ещё впереди.
+Пользователь подтвердил Telegram на телефоне; ntfy и остальные целевые серверы ещё предстоит проверить.
