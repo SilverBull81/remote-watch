@@ -1,20 +1,20 @@
 ﻿# Remote Watch
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-142747
+Дата и время последнего изменения: 260928-160026
 
 Python-библиотека для стандартного логирования, уведомлений на телефон
 и адресных команд приложениям на удалённых серверах.
 
-**Состояние: фоновая доставка с повторами без сети, 0.1.0.dev2.** Обычный logger передаёт выбранные
+**Состояние: фоновая доставка и адаптеры Telegram/ntfy, 0.1.0.dev3.** Обычный logger передаёт выбранные
 уведомления через ограниченные очереди в каналы фонового runtime. Реализованы
 подготовка текста, маршрутизация, ограниченные повторы с full jitter и retry-after,
 TTL, sync/async запуск и остановка, счётчики по получателям и ограниченный atexit.
 По умолчанию разрешены три попытки; `max_attempts=1` отключает повторы.
-Пакет собирается без runtime-зависимостей. Готовые адаптеры Telegram/ntfy,
+Core собирается без runtime-зависимостей; адаптеры подключают aiohttp через extras.
 RemoteWatcher как удобный фасад и gateway пока не реализованы.
 
 ## Установка для локальной разработки
@@ -24,7 +24,7 @@ runtime-проверки на 3.10 и Linux ещё нужны. Распрост�
 лицензия не выбрана, публичная публикация не выполняется.
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,telegram,ntfy]"
 python -m ruff check .
 python -m pytest -q
 python -m build
@@ -36,6 +36,7 @@ NotificationChannel, Destination, Route, RetryPolicy, RuntimeConfig, WatcherConf
 Настройки и правила фабрик каналов: [CONFIGURATION.md](docs/CONFIGURATION.md).
 Исполняемый пример с тестовым каналом, подключение к существующему logger и
 описание ограничений: [RUNTIME.md](docs/RUNTIME.md).
+Подключение Telegram/ntfy и явный тест реальной отправки: [ADAPTERS.md](docs/ADAPTERS.md).
 
 ## Пользовательские команды
 
@@ -69,6 +70,7 @@ ntfy предварительно выбран для первого альте�
 | [CHANNELS.md](docs/CHANNELS.md) | ntfy, Matrix, альтернативы и условия выбора |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Планируемые настройки и исходные лимиты |
 | [RUNTIME.md](docs/RUNTIME.md) | Работающий путь logging → очереди → тестовые каналы |
+| [ADAPTERS.md](docs/ADAPTERS.md) | Telegram/ntfy, токены, ошибки HTTP и реальная отправка |
 | [COMMANDS.md](docs/COMMANDS.md) | Пользовательские callbacks, partial и расширенный контракт |
 | [GATEWAY.md](docs/GATEWAY.md) | Необязательный relay и отдельный command hub |
 | [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Порядок реализации и результаты этапов |
@@ -78,5 +80,5 @@ ntfy предварительно выбран для первого альте�
 | [ADR](docs/adr/README.md) | Обоснование архитектурных решений |
 | [AGENTS.md](AGENTS.md) | Правила работы в репозитории |
 
-Следующий шаг — исходящие адаптеры Telegram/ntfy и их offline contract tests.
+Следующий шаг — удобная настройка logger/runtime и примеры приложений.
 Реальная отправка с целевых серверов и проверка на телефоне ещё впереди.

@@ -1,16 +1,16 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-142747
+Дата и время последнего изменения: 260928-160026
 
 ## Статус
 
 Реализованы Identity, SnapshotLimits, RetryPolicy, RuntimeConfig, Destination,
-Route и WatcherConfig. Они проверяют данные без запуска runtime. Формата файла,
-готовых provider-конструкторов и logging helper пока нет.
+Route и WatcherConfig. Они проверяют данные без запуска runtime. Добавлены
+TelegramConfig/NtfyConfig и их ленивые фабрики. Формата файла и logging helper пока нет.
 В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
 YAML, JSON, TOML или специальных URL. Интеграция со стандартным logging реализована
 через NotificationRuntime.handler; отдельный loader расширений dictConfig не входит
@@ -35,11 +35,12 @@ RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.ret
 WatcherConfig.routes и WatcherConfig.commands. Сами dataclasses очереди не создают
 и таймауты не исполняют. NotificationRuntime применяет ограничения при запуске.
 
-В версии 0.1.0.dev2 runtime применяет `RetryPolicy` полностью для очереди и повторов:
+В версии 0.1.0.dev3 runtime применяет `RetryPolicy` полностью для очереди и повторов:
 по умолчанию три попытки, full jitter, backoff cap, retry-after и общий TTL.
 `max_attempts=1` отключает повторы. Общий attempt_timeout применяется к каждой попытке;
-connect_timeout должен отдельно соблюдать будущий сетевой адаптер, поскольку общий
-протокол send не раскрывает стадию установления соединения.
+connect_timeout отдельно соблюдает HTTP-клиент Telegram/ntfy, поскольку общий
+протокол send не раскрывает стадию установления соединения. Метод config.destination()
+передаёт одну политику обеим сторонам; см. [ADAPTERS.md](ADAPTERS.md).
 
 Для воспроизводимых проверок NotificationRuntime принимает `delivery_clock` с методами
 `monotonic()` и `async sleep(delay)`, а также `random_source()` с конечным значением
@@ -73,7 +74,8 @@ outstanding_capacity и RetryPolicy. Фабрика — синхронный cal
 создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
 соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
 Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
-Готовых Telegram/ntfy-фабрик и secret resolver сейчас нет. Неизвестные provider-имена
+TelegramConfig/NtfyConfig создают готовые фабрики через destination(); токены читаются
+из переменных окружения при open. Общего secret resolver пока нет. Неизвестные provider-имена
 не импортируются: так подключаются пользовательские реализации без registry SDK.
 
 В 0.1 каждый adapter instance привязан к одному назначению. Разные destination IDs,

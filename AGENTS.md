@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-142747
+Дата и время последнего изменения: 260928-160026
 
 ## Project Intent
 
@@ -15,8 +15,9 @@ applications.
 The repository implements immutable event/delivery models, typed configuration,
 local command registration and a logging-to-channel path with bounded queues and
 a managed worker. Bounded retries, full jitter, retry-after, TTL, sync/async lifecycle,
-per-destination counters and bounded atexit cleanup are implemented. Provider
-adapters and gateway are still planned; validation uses offline channels.
+per-destination counters and bounded atexit cleanup are implemented. Telegram and
+ntfy outbound adapters use optional aiohttp; validation uses fake HTTP and loopback.
+Gateway is still planned; live-provider/Android delivery remains unverified.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
 The target phone is Android. Telegram and provisionally ntfy are the first
@@ -36,6 +37,7 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 - Read `docs/COMMANDS.md` before changing application-owned command registration.
   Functions, partials and explicit CommandSpec declarations are supported.
 - Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
+- Read `docs/ADAPTERS.md` for provider configuration, HTTP behavior and opt-in live tests.
 
 ## Architectural Constraints
 
