@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-131628
+Дата и время последнего изменения: 260928-142747
 
 ## Статус
 
@@ -35,11 +35,17 @@ RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.ret
 WatcherConfig.routes и WatcherConfig.commands. Сами dataclasses очереди не создают
 и таймауты не исполняют. NotificationRuntime применяет ограничения при запуске.
 
-В версии 0.1.0.dev1 runtime требует явно задать `RetryPolicy(max_attempts=1)` у всех
-получателей. Значение 3 остаётся целевым default модели, но пока отклоняется runtime.
-Backoff и retry-after не исполняются до шага 3. Общий attempt_timeout уже применяется;
+В версии 0.1.0.dev2 runtime применяет `RetryPolicy` полностью для очереди и повторов:
+по умолчанию три попытки, full jitter, backoff cap, retry-after и общий TTL.
+`max_attempts=1` отключает повторы. Общий attempt_timeout применяется к каждой попытке;
 connect_timeout должен отдельно соблюдать будущий сетевой адаптер, поскольку общий
 протокол send не раскрывает стадию установления соединения.
+
+Для воспроизводимых проверок NotificationRuntime принимает `delivery_clock` с методами
+`monotonic()` и `async sleep(delay)`, а также `random_source()` с конечным значением
+от 0 до 1. Они должны быть быстрыми и поддерживать кооперативную отмену ожидания.
+Часы `clock()` задают только UTC-дату уведомления. Lifecycle и таймаут send остаются
+ограниченными реальным временем; виртуальные часы не могут отменить срок остановки.
 
 Identity — непустые строки; пустое/неизвестное значение не подставляется из сети
 или названия чата. Для неизвестной region/host допустим явный маркер unknown.

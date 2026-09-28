@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 260928-142747
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -15,16 +15,22 @@
 #
 # -> NotificationRuntime: Владелец фонового потока и каналов отправки.
 #    Конструктор:
-#    -> __init__(): Подготовка состояния объекта без запуска фоновой работы.
+#    -> __init__(): Создание объекта.
 #    Интерфейс:
 #    -> state(): Чтение текущего состояния runtime.
 #    -> stats(): Независимая копия счётчиков.
 #    -> start(): Запуск фонового потока и подготовка клиентов.
+#    -> astart(): Асинхронный запуск без блокировки loop приложения.
 #    -> stop(): Ожидание завершения в пределах общего срока.
+#    -> astop(): Асинхронная остановка без блокировки loop приложения.
 #    Специальные методы:
 #    -> __enter__(): Запуск при входе в контекст.
 #    -> __exit__(): Остановка при выходе из контекста.
+#    -> __aenter__(): Вход в асинхронный контекст.
+#    -> __aexit__(): Выход из асинхронного контекста.
 #    Служебные методы:
+#    -> _finish_lifecycle(): Завершение уже запущенного lifecycle при отмене вызывающей задачи.
+#    -> _lifecycle_call(): Ожидание синхронного lifecycle вне loop приложения.
 #    -> _count(): Изменение счётчика под блокировкой.
 #    -> _accepting(): Проверка возможности приёма новых записей.
 #    -> _submit(): Приём уведомления без ожидания свободного места.
@@ -37,6 +43,9 @@
 #    -> _drain_deadline(): Срок обработки очереди с резервом на закрытие клиентов.
 #    -> _dispatch(): Передача уведомлений в ограниченные очереди получателей.
 #    -> _send_loop(): Последовательные попытки отправки одному получателю.
+#    -> _attempt(): Одна ограниченная попытка с безопасной классификацией ошибок.
+#    -> _deliver(): Повторы одной доставки без освобождения её слота.
+#    -> _delivery_now(): Проверенное показание монотонных часов доставки.
 #    -> _cleanup(): Отмена остатка работы и закрытие клиентов.
 #
 # Функции:
@@ -50,17 +59,21 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import math
+import random
 import threading
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from datetime import datetime, timezone
 from enum import Enum
 from types import TracebackType
 from uuid import uuid4
 
 from ._context import delivery_context
+from ._retry import retry_delay
+from ._shutdown import register, unregister
 from ._validation import require_callback
 from .channels import NotificationChannel
 from .config import Destination, WatcherConfig
@@ -68,6 +81,7 @@ from .delivery import Delivery, DeliveryResult, DeliveryStatus
 from .events import Notification
 from .logging_handler import NotificationHandler
 from .routing import PolicyRouter
+from .timing import DeliveryClock, SystemDeliveryClock
 
 #******************************************************************************************************************
 # КЛАССЫ
@@ -95,6 +109,14 @@ class RuntimeState(str, Enum):
 class RuntimeStats:
     """Snapshot cumulative counters; event and delivery units are documented separately."""
 
+    attempts: int = 0                       # Начатые попытки отправки, включая первую.
+    retries: int = 0                        # Начатые повторные попытки.
+    retry_waits: int = 0                    # Назначенные ожидания перед повтором.
+    permanent_failure: int = 0              # Доставки с окончательным отказом сервиса.
+    exhausted: int = 0                      # Доставки, исчерпавшие число попыток.
+    scheduler_errors: int = 0               # Ошибки подменяемых часов или генератора задержек.
+    shutdown_discarded_retries: int = 0     # Доставки, отменённые между попытками.
+
     admitted: int = 0                       # Уведомления, принятые входной очередью.
     suppressed: int = 0                     # Записи, исключённые флагом, контекстом или правилами.
     normalization_failed: int = 0           # Записи с ошибкой подготовки данных.
@@ -106,7 +128,7 @@ class RuntimeStats:
     failed_attempts: int = 0                # Попытки с известным отказом сервиса.
     unknown_attempts: int = 0               # Попытки с неизвестным исходом, включая таймаут.
     adapter_errors: int = 0                 # Исключения и неверные результаты адаптера.
-    expired: int = 0                        # Доставки, срок которых истёк до начала попытки.
+    expired: int = 0                        # Доставки, для которых уже не хватает оставшегося времени.
     shutdown_discarded_events: int = 0      # Остаток входной очереди при остановке.
     shutdown_discarded_deliveries: int = 0  # Доставки, отменённые до начала попытки.
     shutdown_unknown: int = 0               # Активные попытки, отменённые при остановке.
@@ -125,7 +147,7 @@ class _DestinationState:
     destination: Destination                        # Настройки получателя.
     channel: NotificationChannel                    # Клиент, созданный в рабочем потоке.
     queue: asyncio.Queue[tuple[Delivery, float]]    # Доставки и их сроки по монотонным часам.
-    outstanding: int = 0                            # Очередь вместе с активной попыткой.
+    outstanding: int = 0                            # Очередь, активная отправка и ожидание повтора.
     task: asyncio.Task[None] | None = None          # Единственный исполнитель для получателя.
 #------------------------------------------------------------------------------------------------------------------
 
@@ -159,10 +181,9 @@ def utc_now() -> datetime:
 # КЛАСС : Владелец фонового потока и каналов отправки
 #------------------------------------------------------------------------------------------------------------------
 class NotificationRuntime:
-    """Own one thread, one loop and bounded single-attempt delivery queues.
+    """Own one thread, one loop and bounded delivery queues including retries.
 
-    This stage requires max_attempts=1 explicitly. Retry scheduling and asynchronous
-    lifecycle wrappers are deferred. Channel factories must be quick and synchronous;
+    Channel factories must be quick and synchronous;
     channel methods must be asynchronous and cooperate with cancellation.
     """
 
@@ -175,6 +196,8 @@ class NotificationRuntime:
         *,
         redactor: Callable[[str], str] | None = None,
         clock: Callable[[], datetime] = utc_now,
+        delivery_clock: DeliveryClock | None = None,
+        random_source: Callable[[], float] = random.random,
         ) -> None:
 
         """Prepare local state without starting threads or constructing channels.
@@ -187,19 +210,31 @@ class NotificationRuntime:
 
         :param clock: Aware UTC clock for event timestamps; deadlines use monotonic time.
         :type clock: Callable[[], datetime]
+
+        :param delivery_clock: Injectable monotonic delivery clock and cancellable waits.
+        :type delivery_clock: DeliveryClock | None
+
+        :param random_source: Nonblocking random fraction source for full jitter.
+        :type random_source: Callable[[], float]
         """
 
         # config - неизменяемые настройки приложения и получателей.
         # redactor - редактор сообщений; применяется до помещения данных в очередь.
         # clock - часы для дат уведомлений; тесты могут передать фиксированное время.
+        # delivery_clock, random_source - подменяемые часы доставки и источник случайных задержек.
 
         if not isinstance(config, WatcherConfig):
             raise TypeError("config must be WatcherConfig")
 
-        if any(destination.retry.max_attempts != 1 for destination in config.destinations):
-            raise ValueError("retry scheduling is not implemented; set max_attempts=1 for this stage")
-
         require_callback(clock, 0, "clock", allow_async=False)
+        require_callback(random_source, 0, "random_source", allow_async=False)
+        self._delivery_clock = delivery_clock if delivery_clock is not None else SystemDeliveryClock()
+        require_callback(self._delivery_clock.monotonic, 0, "delivery_clock.monotonic", allow_async=False)
+
+        if not inspect.iscoroutinefunction(self._delivery_clock.sleep):
+            raise TypeError("delivery_clock.sleep must be asynchronous")
+
+        self._random_source = random_source
         self.config = config
         self.session_id = uuid4().hex
         self.notification_ttl = max((item.retry.ttl for item in config.destinations), default=300.0)
@@ -212,6 +247,7 @@ class NotificationRuntime:
         self._lifecycle_lock = threading.Lock()
         self._state = RuntimeState.CREATED
         self._counts = {item.name: 0 for item in fields(RuntimeStats)}
+        self._destination_counts = {item.destination_id: self._counts.copy() for item in config.destinations}
         self._ingress: deque[tuple[Notification, float]] = deque()
         self._wake_pending = False
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -246,16 +282,25 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Независимая копия счётчиков
     #--------------------------------------------------------------------------------------------------------------
-    def stats(self) -> RuntimeStats:
+    def stats(
+        self,
+        destination_id: str | None = None,
+        ) -> RuntimeStats:
 
         """Read independent cumulative counters safely from any thread.
+
+        :param destination_id: Destination identifier, or None for aggregate counters.
+        :type destination_id: str | None
 
         :return: Immutable counter snapshot.
         :rtype: RuntimeStats
         """
 
+        # destination_id - получатель для детализации; без него возвращается общая статистика.
+
         with self._lock:
-            return RuntimeStats(**self._counts)
+            counts = self._counts if destination_id is None else self._destination_counts[destination_id]
+            return RuntimeStats(**counts)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -278,12 +323,14 @@ class NotificationRuntime:
 
                 self._startup_deadline = time.monotonic() + self.config.runtime.startup_timeout
                 self._thread = threading.Thread(target=self._thread_main, name="remote-watch", daemon=True)
+                register(self)
                 try:
                     self._thread.start()
                 except Exception:
                     self._state = RuntimeState.FAILED
                     self._counts["startup_failed"] += 1
                     self._done.set()
+                    unregister(self)
                     raise RuntimeError("notification worker could not be started") from None
 
             self._ready.wait(max(0.0, self._startup_deadline - time.monotonic()))
@@ -301,6 +348,19 @@ class NotificationRuntime:
 
             # Текст исходного исключения адаптера может содержать адреса и ключи доступа.
             raise RuntimeError("notification runtime failed to start") from None
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Асинхронный запуск без блокировки loop приложения
+    #--------------------------------------------------------------------------------------------------------------
+    async def astart(self) -> None:
+
+        """Start without blocking the application loop; cancellation also stops the runtime."""
+
+        if threading.current_thread() is self._thread:
+            raise RuntimeError("astart cannot be called from a channel")
+
+        await self._lifecycle_call(self.start, stop_on_cancel=True)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -329,6 +389,20 @@ class NotificationRuntime:
                     self._state = RuntimeState.FAILED
 
                 raise TimeoutError("notification worker did not stop within shutdown_timeout")
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Асинхронная остановка без блокировки loop приложения
+    #--------------------------------------------------------------------------------------------------------------
+    async def astop(self) -> None:
+
+        """Stop without blocking the application loop, finishing cleanup even if cancelled."""
+
+        if threading.current_thread() is self._thread:
+            self._request_stop()
+            return
+
+        await self._lifecycle_call(self.stop, stop_on_cancel=False)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -374,12 +448,125 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Вход в асинхронный контекст
+    #--------------------------------------------------------------------------------------------------------------
+    async def __aenter__(self) -> NotificationRuntime:
+
+        """Start an asynchronous runtime context.
+
+        :return: This runtime.
+        :rtype: NotificationRuntime
+        """
+
+        await self.astart()
+        return self
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Выход из асинхронного контекста
+    #--------------------------------------------------------------------------------------------------------------
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+        ) -> None:
+
+        """Stop without suppressing application exceptions.
+
+        :param exc_type: Active exception type, if any.
+        :type exc_type: type[BaseException] | None
+
+        :param exc_value: Active exception instance, if any.
+        :type exc_value: BaseException | None
+
+        :param traceback: Active traceback, if any.
+        :type traceback: TracebackType | None
+        """
+
+        # exc_type, exc_value, traceback - стандартные сведения об исключении приложения.
+
+        await self.astop()
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Завершение уже запущенного lifecycle при отмене вызывающей задачи
+    #--------------------------------------------------------------------------------------------------------------
+    async def _finish_lifecycle(
+        self,
+        task: asyncio.Task[None],
+        ) -> None:
+
+        """Wait for an owned lifecycle operation despite repeated caller cancellation.
+
+        :param task: Shielded start/stop task that must be observed to completion.
+        :type task: asyncio.Task[None]
+        """
+
+        # task - операция с собственным конечным сроком ожидания фонового потока.
+
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+
+        task.result()
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Ожидание синхронного lifecycle вне loop приложения
+    #--------------------------------------------------------------------------------------------------------------
+    async def _lifecycle_call(
+        self,
+        operation: Callable[[], None],
+        *,
+        stop_on_cancel: bool,
+        ) -> None:
+
+        """Offload a bounded blocking operation and preserve ownership on cancellation.
+
+        :param operation: Synchronous start or stop.
+        :type operation: Callable[[], None]
+
+        :param stop_on_cancel: Whether a cancelled start must be followed by stop.
+        :type stop_on_cancel: bool
+        """
+
+        # operation - ожидание запуска или остановки; каналами по-прежнему владеет только worker.
+        # stop_on_cancel - отменённый запуск не должен оставлять работающий runtime без владельца.
+
+        task = asyncio.create_task(asyncio.to_thread(operation))
+
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # Отмена ожидания не останавливает to_thread. Дожидаемся его результата без блокировки loop.
+            try:
+                await self._finish_lifecycle(task)
+            except Exception:
+                pass
+
+            if stop_on_cancel:
+                cleanup = asyncio.create_task(asyncio.to_thread(self.stop))
+
+                try:
+                    await self._finish_lifecycle(cleanup)
+                except Exception:
+                    pass
+
+            raise
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Изменение счётчика под блокировкой
     #--------------------------------------------------------------------------------------------------------------
     def _count(
         self,
         name: str,
         amount: int = 1,
+        *,
+        destination_id: str | None = None,
         ) -> None:
 
         """Increment a fixed internal counter.
@@ -389,12 +576,19 @@ class NotificationRuntime:
 
         :param amount: Counter increment.
         :type amount: int
+
+        :param destination_id: Optional destination receiving the same increment.
+        :type destination_id: str | None
         """
 
         # name, amount - имя заранее объявленного счётчика и величина изменения.
+        # destination_id - получатель; число наборов счётчиков ограничено настройками.
 
         with self._lock:
             self._counts[name] += amount
+
+            if destination_id is not None:
+                self._destination_counts[destination_id][name] += amount
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -482,9 +676,19 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Закрытие приёма и запрос на остановку
     #--------------------------------------------------------------------------------------------------------------
-    def _request_stop(self) -> None:
+    def _request_stop(
+        self,
+        *,
+        deadline: float | None = None,
+        ) -> None:
 
-        """Close admission and wake the worker without joining it."""
+        """Close admission and wake the worker without joining it.
+
+        :param deadline: Optional stricter real monotonic deadline for process exit.
+        :type deadline: float | None
+        """
+
+        # deadline - общий срок atexit; обычная остановка использует настройки runtime.
 
         with self._lock:
             if self._state is RuntimeState.CREATED and self._thread is None:
@@ -500,6 +704,9 @@ class NotificationRuntime:
 
             if self._stop_deadline is None:
                 self._stop_deadline = time.monotonic() + self.config.runtime.shutdown_timeout
+
+            if deadline is not None:
+                self._stop_deadline = min(self._stop_deadline, deadline)
 
             self._stop_requested = True
             self._schedule_wake_locked()
@@ -534,6 +741,7 @@ class NotificationRuntime:
             self._ready.set()
             self._done.set()
             delivery_context.reset(token)
+            unregister(self)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -661,7 +869,7 @@ class NotificationRuntime:
                     state = self._destinations[destination_id]
 
                     if state.outstanding >= state.destination.outstanding_capacity:
-                        self._count("destination_overflow")
+                        self._count("destination_overflow", destination_id=destination_id)
                         continue
 
                     # Deadline переводится в монотонное время один раз; последующая коррекция UTC его не продлит.
@@ -674,7 +882,7 @@ class NotificationRuntime:
                     )
                     state.queue.put_nowait((delivery, admitted_at + ttl))
                     state.outstanding += 1
-                    self._count("routed")
+                    self._count("routed", destination_id=destination_id)
                     del delivery
 
                 # Не удерживаем последний обработанный снимок во время ожидания следующей записи.
@@ -704,55 +912,188 @@ class NotificationRuntime:
         :type state: _DestinationState
         """
 
-        # state - состояние одного получателя; слот занят и в очереди, и во время отправки.
+        # state - состояние одного получателя; слот занят в очереди, при отправке и в паузе между попытками.
 
         while True:
             delivery, deadline = await state.queue.get()
 
             try:
-                remaining = deadline - time.monotonic()
-
-                if remaining <= 0:
-                    self._count("expired")
-                    continue
-
-                try:
-                    result = await asyncio.wait_for(
-                        state.channel.send(delivery),
-                        min(remaining, state.destination.retry.attempt_timeout),
-                    )
-
-                    if not isinstance(result, DeliveryResult):
-                        raise TypeError("channel returned an invalid result")
-                except asyncio.CancelledError:
-                    # Самостоятельный CancelledError адаптера не должен навсегда остановить его очередь.
-                    if not self._cancelling:
-                        self._count("adapter_errors")
-                        self._count("unknown_attempts")
-                        continue
-
-                    # Отмена во время остановки не доказывает, что сервис ничего не получил.
-                    self._count("shutdown_unknown")
-                    raise
-                except asyncio.TimeoutError:
-                    self._count("unknown_attempts")
-                    continue
-                except Exception:
-                    self._count("adapter_errors")
-                    self._count("unknown_attempts")
-                    continue
-
-                if result.status is DeliveryStatus.PROVIDER_ACCEPTED:
-                    self._count("accepted")
-                elif result.status is DeliveryStatus.UNKNOWN:
-                    self._count("unknown_attempts")
-                else:
-                    # Повторы появятся на следующем этапе; здесь каждая доставка имеет ровно одну попытку.
-                    self._count("failed_attempts")
+                await self._deliver(state, delivery, deadline)
+            except Exception:
+                # Ошибка пользовательского источника времени или случайных чисел не убивает очередь.
+                self._count("scheduler_errors", destination_id=state.destination.destination_id)
             finally:
                 state.outstanding -= 1
                 state.queue.task_done()
                 del delivery
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Одна ограниченная попытка с безопасной классификацией ошибок
+    #--------------------------------------------------------------------------------------------------------------
+    async def _attempt(
+        self,
+        state: _DestinationState,
+        delivery: Delivery,
+        timeout: float,
+        ) -> DeliveryResult:
+
+        """Perform one attempt, converting adapter failures into an unknown outcome.
+
+        :param state: Destination channel state.
+        :type state: _DestinationState
+
+        :param delivery: Stable delivery with the current attempt number.
+        :type delivery: Delivery
+
+        :param timeout: Remaining attempt budget in real seconds.
+        :type timeout: float
+
+        :return: Validated provider result or a safe unknown outcome.
+        :rtype: DeliveryResult
+        """
+
+        # state, delivery, timeout - получатель, текущая попытка и оставшееся время.
+
+        destination_id = state.destination.destination_id
+        self._count("attempts", destination_id=destination_id)
+
+        if delivery.attempt > 1:
+            self._count("retries", destination_id=destination_id)
+
+        try:
+            result = await asyncio.wait_for(state.channel.send(delivery), timeout)
+
+            if not isinstance(result, DeliveryResult):
+                raise TypeError("channel returned an invalid result")
+
+            return result
+        except asyncio.CancelledError:
+            if self._cancelling:
+                self._count("shutdown_unknown", destination_id=destination_id)
+                raise
+
+            # Самостоятельный CancelledError адаптера не должен остановить все будущие отправки.
+            self._count("adapter_errors", destination_id=destination_id)
+        except asyncio.TimeoutError:
+            pass
+        except Exception:
+            self._count("adapter_errors", destination_id=destination_id)
+
+        return DeliveryResult(status=DeliveryStatus.UNKNOWN)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Повторы одной доставки без освобождения её слота
+    #--------------------------------------------------------------------------------------------------------------
+    async def _deliver(
+        self,
+        state: _DestinationState,
+        delivery: Delivery,
+        deadline: float,
+        ) -> None:
+
+        """Keep a delivery at the queue head through bounded attempts and retry waits.
+
+        :param state: Destination channel and retry policy.
+        :type state: _DestinationState
+
+        :param delivery: Initial delivery whose identifier must remain stable.
+        :type delivery: Delivery
+
+        :param deadline: Absolute expiry according to the delivery clock.
+        :type deadline: float
+        """
+
+        # state, delivery - получатель и доставка; delivery_id сохраняется между повторами.
+        # deadline - один срок на всю доставку, а не новый срок для каждой попытки.
+
+        policy = state.destination.retry
+        destination_id = state.destination.destination_id
+
+        while True:
+            ttl_remaining = deadline - self._delivery_now()
+            stop_remaining = self._drain_deadline() - time.monotonic()
+
+            if min(ttl_remaining, stop_remaining) <= 0:
+                reason = "expired" if ttl_remaining <= stop_remaining else (
+                    "shutdown_discarded_retries" if delivery.attempt > 1 else "shutdown_discarded_deliveries"
+                )
+                self._count(reason, destination_id=destination_id)
+                return
+
+            timeout = min(ttl_remaining, stop_remaining, policy.attempt_timeout)
+            result = await self._attempt(state, delivery, timeout)
+
+            if result.status is DeliveryStatus.PROVIDER_ACCEPTED:
+                self._count("accepted", destination_id=destination_id)
+                return
+
+            if result.status is DeliveryStatus.UNKNOWN:
+                self._count("unknown_attempts", destination_id=destination_id)
+            else:
+                self._count("failed_attempts", destination_id=destination_id)
+
+            if result.status is DeliveryStatus.PERMANENT_FAILURE:
+                self._count("permanent_failure", destination_id=destination_id)
+                return
+
+            if delivery.attempt >= policy.max_attempts:
+                self._count("exhausted", destination_id=destination_id)
+                return
+
+            delay = retry_delay(policy, delivery.attempt, result.retry_after, self._random_source())
+            ttl_remaining = deadline - self._delivery_now()
+            stop_remaining = self._drain_deadline() - time.monotonic()
+
+            # Не держим заведомо бесполезный таймер, если следующая попытка уже не поместится в срок.
+            if delay >= min(ttl_remaining, stop_remaining):
+                reason = "expired" if ttl_remaining <= stop_remaining else "shutdown_discarded_retries"
+                self._count(reason, destination_id=destination_id)
+                return
+
+            self._count("retry_waits", destination_id=destination_id)
+
+            try:
+                # Один ожидающий исполнитель на получателя; новые задачи для будущих повторов не создаются.
+                wake_at = self._delivery_now() + delay
+                await self._delivery_clock.sleep(delay)
+
+                # Таймер может проснуться раньше срока из-за точности часов. Нижнюю границу retry-after сохраняем.
+                while True:
+                    remaining_wait = wake_at - self._delivery_now()
+
+                    if remaining_wait <= 0:
+                        break
+
+                    await self._delivery_clock.sleep(remaining_wait)
+            except asyncio.CancelledError:
+                if self._cancelling:
+                    self._count("shutdown_discarded_retries", destination_id=destination_id)
+                    raise
+
+                raise RuntimeError("delivery clock cancelled its own wait") from None
+
+            delivery = replace(delivery, attempt=delivery.attempt + 1)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Проверенное показание монотонных часов доставки
+    #--------------------------------------------------------------------------------------------------------------
+    def _delivery_now(self) -> float:
+
+        """Read a finite numeric delivery timestamp without accepting malformed clock values.
+
+        :return: Monotonic delivery time.
+        :rtype: float
+        """
+
+        value = self._delivery_clock.monotonic()
+
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError("delivery clock must return finite numeric time")
+
+        return float(value)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -776,7 +1117,7 @@ class NotificationRuntime:
                 state.queue.get_nowait()
                 state.queue.task_done()
                 state.outstanding -= 1
-                self._count("shutdown_discarded_deliveries")
+                self._count("shutdown_discarded_deliveries", destination_id=state.destination.destination_id)
 
         # При ошибке запуска используем остаток startup budget; при остановке — общий shutdown budget.
         deadline = self._stop_deadline if self._stop_deadline is not None else self._startup_deadline
@@ -785,7 +1126,7 @@ class NotificationRuntime:
             try:
                 await asyncio.wait_for(state.channel.close(), max(0.0, deadline - time.monotonic()))
             except (Exception, asyncio.CancelledError):
-                self._count("close_failed")
+                self._count("close_failed", destination_id=state.destination.destination_id)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 

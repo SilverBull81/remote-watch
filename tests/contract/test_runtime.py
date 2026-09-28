@@ -1,10 +1,10 @@
 ﻿# Сквозные проверки logging, фоновой отправки, очередей и остановки без сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 260928-142747
 #
 # Классы:
 # -> RecordingChannel: Тестовый канал с управляемыми отказами и задержкой.
@@ -28,7 +28,7 @@
 # -> test_adapter_failures_and_recursive_logging(): Изоляция отказов и защита двух runtime от рекурсии.
 # -> test_lifecycle_and_open_failure(): Границы запуска и откат частично открытых клиентов.
 # -> test_redaction_and_size_limits(): Удаление чувствительных данных и контроль размера.
-# -> test_retry_configuration_is_explicit(): Явный отказ от пока не реализованных повторов.
+# -> test_default_retry_configuration(): Применение стандартной политики повторов.
 # -> test_levels_filters_and_hierarchy(): Стандартные уровни, фильтры и иерархия logging.
 # -> test_internal_namespace_and_redactor_recursion(): Исключение внутреннего logging и рекурсии редактора.
 # -> test_multiple_producers(): Учёт сообщений нескольких потоков без потери пробуждений.
@@ -614,27 +614,28 @@ def test_redaction_and_size_limits(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Явный отказ от пока не реализованных повторов
+# ТЕСТ : Применение стандартной политики повторов
 #------------------------------------------------------------------------------------------------------------------
-def test_retry_configuration_is_explicit(
+def test_default_retry_configuration(
     identity: Identity,
     ) -> None:
 
-    """Reject deferred retry behavior instead of silently ignoring its settings.
+    """Accept the default retry policy once retry scheduling is available.
 
     :param identity: Application identity fixture.
     :type identity: Identity
     """
 
-    # identity - сведения приложения; значение max_attempts по умолчанию пока не поддержано runtime.
+    # identity - сведения приложения; стандартная политика теперь применяется runtime.
 
     config = WatcherConfig(
         identity=identity,
         destinations=(Destination(destination_id="one", channel_factory=RecordingChannel),),
     )
 
-    with pytest.raises(ValueError, match="max_attempts=1"):
-        NotificationRuntime(config)
+    runtime = NotificationRuntime(config)
+    assert runtime.config.destinations[0].retry.max_attempts == 3
+    runtime.stop()
 #------------------------------------------------------------------------------------------------------------------
 
 

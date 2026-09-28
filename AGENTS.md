@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-131628
+Дата и время последнего изменения: 260928-142747
 
 ## Project Intent
 
@@ -13,9 +13,10 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The repository implements immutable event/delivery models, typed configuration,
-local command registration and a single-attempt logging-to-channel path with bounded
-queues and a managed worker. Runtime currently requires max_attempts=1. Retry
-scheduling, async lifecycle wrappers, provider adapters and gateway are still planned.
+local command registration and a logging-to-channel path with bounded queues and
+a managed worker. Bounded retries, full jitter, retry-after, TTL, sync/async lifecycle,
+per-destination counters and bounded atexit cleanup are implemented. Provider
+adapters and gateway are still planned; validation uses offline channels.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
 The target phone is Android. Telegram and provisionally ntfy are the first

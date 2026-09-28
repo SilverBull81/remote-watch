@@ -1,10 +1,10 @@
 ﻿# Подключение стандартного logging к очереди уведомлений без сетевых операций.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 260928-142747
 #
 # Классы:
 # -> NotificationHandler: Обработчик logging для очереди уведомлений.
@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -109,9 +108,9 @@ class NotificationHandler(logging.Handler):
             return
 
         token = delivery_context.set(True)
-        received_at = time.monotonic()
 
         try:
+            received_at = self._runtime._delivery_now()
             notification = prepare_notification(
                 record,
                 identity=self._runtime.config.identity,
