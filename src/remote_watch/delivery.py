@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-123443
 #
 # Классы:
 #
@@ -74,9 +74,9 @@ class Delivery:
     """
 
     notification: Notification  # Подготовленное уведомление.
-    destination_id: str  # Имя настроенного получателя.
-    delivery_id: str  # Общий идентификатор всех повторов отправки.
-    attempt: int = 1  # Номер попытки, начиная с единицы.
+    destination_id: str         # Имя настроенного получателя.
+    delivery_id: str            # Общий идентификатор всех повторов отправки.
+    attempt: int = 1            # Номер попытки, начиная с единицы.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка задания
@@ -110,11 +110,11 @@ class DeliveryResult:
     Adapters must redact sensitive information before constructing this result.
     """
 
-    status: DeliveryStatus  # Результат попытки отправки.
-    source: ResultSource = ResultSource.PROVIDER  # Кто ответил: сервис доставки или шлюз.
-    reason_code: str | None = None  # Краткий код причины без секретных данных.
-    provider_message_id: str | None = None  # Идентификатор принятого сервисом сообщения.
-    retry_after: float | None = None  # Задержка до следующей попытки, секунды.
+    status: DeliveryStatus                          # Результат попытки отправки.
+    source: ResultSource = ResultSource.PROVIDER    # Кто ответил: сервис доставки или шлюз.
+    reason_code: str | None = None                  # Краткий код причины без секретных данных.
+    provider_message_id: str | None = None          # Идентификатор принятого сервисом сообщения.
+    retry_after: float | None = None                # Задержка до следующей попытки, секунды.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка согласованности результата

@@ -1,10 +1,10 @@
 ﻿# Локальная регистрация пользовательских команд без удалённого приёма и исполнения.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-123443
 #
 # Классы:
 #
@@ -62,12 +62,12 @@ class CommandContext:
     semantics. This data class itself does not authenticate or authorize a caller.
     """
 
-    command_id: str  # Идентификатор запроса на выполнение команды.
-    actor_id: str  # Идентификатор отправителя команды.
-    conversation_id: str  # Идентификатор чата или беседы.
-    identity: Identity  # Сведения о целевом приложении.
-    session_id: str  # Идентификатор целевого запуска приложения.
-    arguments: Mapping[str, str] = field(  # Именованные строковые аргументы команды.
+    command_id: str         # Идентификатор запроса на выполнение команды.
+    actor_id: str           # Идентификатор отправителя команды.
+    conversation_id: str    # Идентификатор чата или беседы.
+    identity: Identity      # Сведения о целевом приложении.
+    session_id: str         # Идентификатор целевого запуска приложения.
+    arguments: Mapping[str, str] = field(   # Именованные строковые аргументы команды.
         default_factory=dict,
         repr=False,
         )
@@ -130,15 +130,15 @@ class CommandSpec:
     Registration never invokes callback/validator and never grants command access.
     """
 
-    name: str  # Имя команды в приложении.
-    callback: CommandCallback = field(repr=False)  # Пользовательский обработчик команды.
-    takes_context: bool = False  # Передавать ли обработчику CommandContext.
-    description: str = ""  # Описание команды для справки.
-    required_scope: str | None = None  # Право доступа, необходимое для команды.
-    timeout: float = 10.0  # Предельное время выполнения, секунды.
-    read_only: bool = False  # Заявлено ли отсутствие изменений состояния.
-    idempotent: bool = False  # Заявлена ли безопасность повторного вызова.
-    validate_arguments: ArgumentValidator | None = field(  # Проверка аргументов до вызова обработчика.
+    name: str                                       # Имя команды в приложении.
+    callback: CommandCallback = field(repr=False)   # Пользовательский обработчик команды.
+    takes_context: bool = False                     # Передавать ли обработчику CommandContext.
+    description: str = ""                           # Описание команды для справки.
+    required_scope: str | None = None               # Право доступа, необходимое для команды.
+    timeout: float = 10.0                           # Предельное время выполнения, секунды.
+    read_only: bool = False                         # Заявлено ли отсутствие изменений состояния.
+    idempotent: bool = False                        # Заявлена ли безопасность повторного вызова.
+    validate_arguments: ArgumentValidator | None = field(   # Проверка аргументов до вызова обработчика.
         default=None,
         repr=False,
         )
@@ -196,7 +196,7 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     """
 
     specs: tuple[CommandSpec, ...] = field(default=(), repr=False)  # Зарегистрированные команды приложения.
-    _by_name: Mapping[str, CommandSpec] = field(  # Поиск команды по имени без изменения реестра.
+    _by_name: Mapping[str, CommandSpec] = field(                    # Поиск команды по имени без изменения реестра.
         init=False,
         repr=False,
         compare=False,

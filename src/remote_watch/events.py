@@ -1,10 +1,10 @@
 ﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-123443
 #
 # Классы:
 #
@@ -50,11 +50,11 @@ class Identity:
     Every field is an explicitly supplied nonblank string of at most 256 UTF-8 bytes.
     """
 
-    service: str  # Название приложения.
-    environment: str  # Окружение: рабочее, тестовое и т. п.
-    region: str  # Регион размещения.
-    host: str  # Имя сервера.
-    instance_id: str  # Идентификатор экземпляра приложения.
+    service: str        # Название приложения.
+    environment: str    # Окружение: рабочее, тестовое и т. п.
+    region: str         # Регион размещения.
+    host: str           # Имя сервера.
+    instance_id: str    # Идентификатор экземпляра приложения.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка сведений о приложении
@@ -82,10 +82,10 @@ class SnapshotLimits:
     metadata_max_bytes bounds all other serialized event fields together.
     """
 
-    event_max_bytes: int = 16384  # Предел размера всего уведомления, байт.
-    message_max_bytes: int = 8192  # Предел размера сообщения, байт.
-    exception_max_bytes: int = 4096  # Предел размера описания ошибки, байт.
-    metadata_max_bytes: int = 2048  # Предел размера служебных полей, байт.
+    event_max_bytes: int = 16384        # Предел размера всего уведомления, байт.
+    message_max_bytes: int = 8192       # Предел размера сообщения, байт.
+    exception_max_bytes: int = 4096     # Предел размера описания ошибки, байт.
+    metadata_max_bytes: int = 2048      # Предел размера служебных полей, байт.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка ограничений
@@ -120,24 +120,24 @@ class Notification:
     Construction validates but never truncates, performs I/O or generates identity.
     """
 
-    SCHEMA_VERSION: ClassVar[int] = 1  # Версия формата передачи данных.
-    event_id: str  # Идентификатор события.
-    session_id: str  # Идентификатор текущего запуска приложения.
-    identity: Identity  # Сведения об отправившем приложении.
-    created_at: datetime  # Время создания с часовым поясом.
-    expires_at: datetime  # Время, после которого отправка не нужна.
-    level_no: int  # Числовой уровень важности из logging.
-    level_name: str  # Название уровня важности.
-    logger_name: str  # Имя исходного логгера.
-    message: str = field(repr=False)  # Готовый текст сообщения.
-    exception: str | None = field(default=None, repr=False)  # Готовое описание ошибки, если есть.
-    topic: str | None = None  # Тема для выбора получателей.
-    tags: tuple[str, ...] = ()  # Метки для выбора получателей.
-    correlation_id: str | None = None  # Идентификатор связанной операции.
-    trace_id: str | None = None  # Идентификатор цепочки вызовов.
-    notify: bool | None = None  # Указание на отправку; None — по правилам.
-    truncated_fields: tuple[str, ...] = ()  # Имена ранее сокращённых текстовых полей.
-    limits: SnapshotLimits = field(  # Ограничения размера при проверке.
+    SCHEMA_VERSION: ClassVar[int] = 1   # Версия формата передачи данных.
+    event_id: str                       # Идентификатор события.
+    session_id: str                     # Идентификатор текущего запуска приложения.
+    identity: Identity                  # Сведения об отправившем приложении.
+    created_at: datetime                # Время создания с часовым поясом.
+    expires_at: datetime                # Время, после которого отправка не нужна.
+    level_no: int                       # Числовой уровень важности из logging.
+    level_name: str                     # Название уровня важности.
+    logger_name: str                    # Имя исходного логгера.
+    message: str = field(repr=False)    # Готовый текст сообщения.
+    exception: str | None = field(default=None, repr=False)     # Готовое описание ошибки, если есть.
+    topic: str | None = None            # Тема для выбора получателей.
+    tags: tuple[str, ...] = ()          # Метки для выбора получателей.
+    correlation_id: str | None = None   # Идентификатор связанной операции.
+    trace_id: str | None = None         # Идентификатор цепочки вызовов.
+    notify: bool | None = None          # Указание на отправку; None — по правилам.
+    truncated_fields: tuple[str, ...] = ()      # Имена ранее сокращённых текстовых полей.
+    limits: SnapshotLimits = field(     # Ограничения размера при проверке.
         default_factory=SnapshotLimits,
         repr=False,
         compare=False,

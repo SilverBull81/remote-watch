@@ -1,13 +1,12 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-123443
 #
 # Классы:
-#
 # -> DeliveryMode: Отправка напрямую или через будущий шлюз.
 #
 # -> RetryPolicy: Число попыток и время на отправку уведомления.
@@ -70,12 +69,12 @@ class RetryPolicy:
     event lifetime. Time values are finite positive seconds.
     """
 
-    max_attempts: int = 3  # Число попыток вместе с первой отправкой.
-    connect_timeout: float = 3.0  # Ожидание соединения, секунды.
-    attempt_timeout: float = 10.0  # Время на всю попытку, секунды.
-    backoff_base: float = 1.0  # Начальная задержка повторов, секунды.
-    backoff_cap: float = 30.0  # Наибольшая задержка повторов, секунды.
-    ttl: float = 300.0  # Срок актуальности уведомления, секунды.
+    max_attempts: int = 3           # Число попыток вместе с первой отправкой.
+    connect_timeout: float = 3.0    # Ожидание соединения, секунды.
+    attempt_timeout: float = 10.0   # Время на всю попытку, секунды.
+    backoff_base: float = 1.0       # Начальная задержка повторов, секунды.
+    backoff_cap: float = 30.0       # Наибольшая задержка повторов, секунды.
+    ttl: float = 300.0              # Срок актуальности уведомления, секунды.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка ограничений времени
@@ -112,11 +111,11 @@ class RuntimeConfig:
     snapshot_limits defines byte budgets for notification validation.
     """
 
-    ingress_capacity: int = 1024  # Число мест во входной очереди.
-    max_destinations: int = 16  # Наибольшее число настроенных получателей.
-    startup_timeout: float = 5.0  # Время на запуск, секунды.
-    shutdown_timeout: float = 5.0  # Время на завершение работы, секунды.
-    snapshot_limits: SnapshotLimits = field(default_factory=SnapshotLimits)  # Ограничения размера уведомления.
+    ingress_capacity: int = 1024        # Число мест во входной очереди.
+    max_destinations: int = 16          # Наибольшее число настроенных получателей.
+    startup_timeout: float = 5.0        # Время на запуск, секунды.
+    shutdown_timeout: float = 5.0       # Время на завершение работы, секунды.
+    snapshot_limits: SnapshotLimits = field(default_factory=SnapshotLimits)     # Ограничения размера уведомления.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка ограничений runtime
@@ -151,14 +150,14 @@ class Destination:
     covers queued, active and retrying deliveries. retry is the delivery policy.
     """
 
-    destination_id: str  # Уникальное имя получателя в настройках.
-    channel_factory: Callable[[], NotificationChannel] = field(  # Функция создания канала без аргументов.
+    destination_id: str                         # Уникальное имя получателя в настройках.
+    channel_factory: Callable[[], NotificationChannel] = field(     # Функция создания канала без аргументов.
         repr=False,
         )
-    provider: str = "custom"  # Название сервиса или типа канала.
-    mode: DeliveryMode = DeliveryMode.DIRECT  # Способ отправки: напрямую или через шлюз.
-    outstanding_capacity: int = 256  # Предел всех незавершённых доставок.
-    retry: RetryPolicy = field(default_factory=RetryPolicy)  # Настройки попыток отправки.
+    provider: str = "custom"                    # Название сервиса или типа канала.
+    mode: DeliveryMode = DeliveryMode.DIRECT    # Способ отправки: напрямую или через шлюз.
+    outstanding_capacity: int = 256             # Предел всех незавершённых доставок.
+    retry: RetryPolicy = field(default_factory=RetryPolicy)         # Настройки попыток отправки.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка настроек получателя без создания клиента
@@ -209,15 +208,15 @@ class Route:
     be combined by union; this class validates data but does not route events.
     """
 
-    destination_ids: tuple[str, ...]  # Имена получателей для этого правила.
-    min_level: int = logging.ERROR  # Минимальный уровень важности сообщения.
-    topic: str | None = None  # Требуемая тема; None — любая.
-    required_tags: tuple[str, ...] = ()  # Метки, которые должны быть у сообщения.
-    service: str | None = None  # Требуемое приложение; None — любое.
-    environment: str | None = None  # Требуемое окружение; None — любое.
-    region: str | None = None  # Требуемый регион; None — любой.
-    host: str | None = None  # Требуемый сервер; None — любой.
-    instance_id: str | None = None  # Требуемый экземпляр; None — любой.
+    destination_ids: tuple[str, ...]        # Имена получателей для этого правила.
+    min_level: int = logging.ERROR          # Минимальный уровень важности сообщения.
+    topic: str | None = None                # Требуемая тема; None — любая.
+    required_tags: tuple[str, ...] = ()     # Метки, которые должны быть у сообщения.
+    service: str | None = None              # Требуемое приложение; None — любое.
+    environment: str | None = None          # Требуемое окружение; None — любое.
+    region: str | None = None               # Требуемый регион; None — любой.
+    host: str | None = None                 # Требуемый сервер; None — любой.
+    instance_id: str | None = None          # Требуемый экземпляр; None — любой.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка и копирование условий отправки
@@ -258,10 +257,10 @@ class WatcherConfig:
     No commands are built in or automatically enabled. Empty routes select nothing.
     """
 
-    identity: Identity  # Сведения о текущем приложении.
+    identity: Identity                          # Сведения о текущем приложении.
     destinations: tuple[Destination, ...] = ()  # Настроенные получатели уведомлений.
-    routes: tuple[Route, ...] = ()  # Правила выбора получателей.
-    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)  # Настройки очередей и времени работы.
+    routes: tuple[Route, ...] = ()              # Правила выбора получателей.
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)       # Настройки очередей и времени работы.
     commands: CommandRegistry | Mapping[str, CommandCallback] = field(  # Пользовательские команды.
         default_factory=CommandRegistry,
         )

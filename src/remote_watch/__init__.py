@@ -1,21 +1,16 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-123443
 #
 # Экспорт:
-#
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
-#
 # -> Delivery, DeliveryResult, DeliveryStatus, ResultSource: Одна попытка доставки.
-#
 # -> NotificationChannel: Асинхронный интерфейс канала.
-#
 # -> Destination, DeliveryMode, RetryPolicy, Route, RuntimeConfig, WatcherConfig: Настройки.
-#
 # -> CommandCallback, ArgumentValidator, CommandContext, CommandRegistry, CommandSpec: Регистрация команд.
 
 
