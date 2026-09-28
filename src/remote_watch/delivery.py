@@ -1,15 +1,23 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
+#
+# Version 1.0.1
+#
+# Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
+#
+# Дата и время последнего изменения: 260928-121352
+#
 # Классы:
+#
 # -> DeliveryStatus: Классификация результата попытки.
+#
 # -> ResultSource: Источник ответа.
+#
 # -> Delivery: Неизменяемое задание одной попытки.
 #    -> __post_init__(): Проверка идентификаторов и номера попытки.
+#
 # -> DeliveryResult: Безопасный структурированный результат.
 #    -> __post_init__(): Проверка совместимости полей результата.
-#
-# Version 1.0.0
-# Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
-# Дата и время последнего изменения: 260928-110519
+
 
 #******************************************************************************************************************
 # ИМПОРТ
@@ -27,6 +35,7 @@ from .events import Notification
 # КЛАССЫ
 #******************************************************************************************************************
 
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Классификация результата одной попытки
 #------------------------------------------------------------------------------------------------------------------
@@ -40,6 +49,7 @@ class DeliveryStatus(str, Enum):
     UNKNOWN = "unknown"
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Источник результата
 #------------------------------------------------------------------------------------------------------------------
@@ -49,6 +59,7 @@ class ResultSource(str, Enum):
     PROVIDER = "provider"
     RELAY = "relay"
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Одна попытка доставки
@@ -62,10 +73,10 @@ class Delivery:
     This value describes an attempt; it does not schedule or execute it.
     """
 
-    notification: Notification
-    destination_id: str
-    delivery_id: str
-    attempt: int = 1
+    notification: Notification  # Подготовленное уведомление.
+    destination_id: str  # Имя настроенного получателя.
+    delivery_id: str  # Общий идентификатор всех повторов отправки.
+    attempt: int = 1  # Номер попытки, начиная с единицы.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка задания
@@ -74,13 +85,16 @@ class Delivery:
 
         """Validate the snapshot, identifiers and one-based attempt number."""
 
+        # Задание ссылается на уже проверенное уведомление; повторы сохраняют тот же delivery_id.
         if not isinstance(self.notification, Notification):
             raise TypeError("notification must be Notification")
+
         require_text(self.destination_id, "destination_id")
         require_text(self.delivery_id, "delivery_id")
         require_int(self.attempt, "attempt")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Результат одной попытки
@@ -96,11 +110,11 @@ class DeliveryResult:
     Adapters must redact sensitive information before constructing this result.
     """
 
-    status: DeliveryStatus
-    source: ResultSource = ResultSource.PROVIDER
-    reason_code: str | None = None
-    provider_message_id: str | None = None
-    retry_after: float | None = None
+    status: DeliveryStatus  # Результат попытки отправки.
+    source: ResultSource = ResultSource.PROVIDER  # Кто ответил: сервис доставки или шлюз.
+    reason_code: str | None = None  # Краткий код причины без секретных данных.
+    provider_message_id: str | None = None  # Идентификатор принятого сервисом сообщения.
+    retry_after: float | None = None  # Задержка до следующей попытки, секунды.
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка согласованности результата
@@ -109,21 +123,42 @@ class DeliveryResult:
 
         """Reject contradictory statuses, invalid codes and unbounded retry delays."""
 
+        # Результат описывает ответ сервиса или шлюза, а не показ уведомления на телефоне.
         if not isinstance(self.status, DeliveryStatus):
             raise TypeError("status must be DeliveryStatus")
+
         if not isinstance(self.source, ResultSource):
             raise TypeError("source must be ResultSource")
+
+        # Допускается короткий машинный код; произвольный текст ответа может раскрыть ключи доступа.
         if self.reason_code is not None:
             require_text(self.reason_code, "reason_code", 64)
+
             if re.fullmatch(r"[a-z][a-z0-9_.-]*", self.reason_code) is None:
                 raise ValueError("reason_code must be a safe machine code")
+
+        # Идентификатор сообщения подтверждает принятие сервисом и несовместим с ошибкой отправки.
         if self.provider_message_id is not None:
             require_text(self.provider_message_id, "provider_message_id")
+
             if self.status is not DeliveryStatus.PROVIDER_ACCEPTED:
                 raise ValueError("provider_message_id requires provider_accepted")
+
+        # Указание задержки допустимо только для известной временной ошибки или ограничения частоты.
         if self.retry_after is not None:
             require_number(self.retry_after, "retry_after", allow_zero=True)
+
             if self.status not in (DeliveryStatus.RATE_LIMITED, DeliveryStatus.TRANSIENT_FAILURE):
                 raise ValueError("retry_after requires a retryable known failure")
     #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
+#------------------------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    print(
+        'Модуль remote_watch.delivery не предназначен для прямого запуска.',
+    )
 #------------------------------------------------------------------------------------------------------------------

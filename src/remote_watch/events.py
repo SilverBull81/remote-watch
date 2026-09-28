@@ -1,17 +1,24 @@
-﻿# Неизменяемые модели идентичности и уведомления с проверяемой сериализацией.
-# Классы:
-# -> Identity: Явная идентичность приложения.
-#    -> __post_init__(): Проверка полей.
-# -> SnapshotLimits: Размеры удерживаемого снимка.
-#    -> __post_init__(): Проверка бюджетов.
-# -> Notification: Снимок события без ссылок на LogRecord.
-#    -> __post_init__(): Валидация и фиксация полей.
-#    -> to_dict(): Независимое JSON-совместимое представление.
-#    -> from_dict(): Проверка версии и восстановление снимка.
+﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.0
+# Version 1.0.1
+#
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
-# Дата и время последнего изменения: 260928-110519
+#
+# Дата и время последнего изменения: 260928-121352
+#
+# Классы:
+#
+# -> Identity: Сведения о приложении и его размещении.
+#    -> __post_init__(): Проверка полей.
+#
+# -> SnapshotLimits: Ограничения размера уведомления.
+#    -> __post_init__(): Проверка ограничений.
+#
+# -> Notification: Данные уведомления без ссылок на исходный LogRecord.
+#    -> __post_init__(): Проверка полей и сохранение независимых копий.
+#    -> to_dict(): Копия данных для преобразования в JSON.
+#    -> from_dict(): Чтение уведомления из словаря с проверкой версии.
+
 
 #******************************************************************************************************************
 # ИМПОРТ
@@ -30,8 +37,9 @@ from ._validation import require_int, require_text, text_tuple
 # КЛАССЫ
 #******************************************************************************************************************
 
+
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Явная идентичность приложения
+# КЛАСС : Сведения о приложении и его размещении
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Identity:
@@ -42,26 +50,28 @@ class Identity:
     Every field is an explicitly supplied nonblank string of at most 256 UTF-8 bytes.
     """
 
-    service: str
-    environment: str
-    region: str
-    host: str
-    instance_id: str
+    service: str  # Название приложения.
+    environment: str  # Окружение: рабочее, тестовое и т. п.
+    region: str  # Регион размещения.
+    host: str  # Имя сервера.
+    instance_id: str  # Идентификатор экземпляра приложения.
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка идентичности
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка сведений о приложении
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
         """Validate all explicit identity fields."""
 
+        # Все сведения задаёт приложение: имя сервера и экземпляра не угадываем по окружению.
         for item in fields(self):
             require_text(getattr(self, item.name), item.name)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Бюджеты размера снимка
+# КЛАСС : Ограничения размера уведомления
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SnapshotLimits:
@@ -72,27 +82,30 @@ class SnapshotLimits:
     metadata_max_bytes bounds all other serialized event fields together.
     """
 
-    event_max_bytes: int = 16384
-    message_max_bytes: int = 8192
-    exception_max_bytes: int = 4096
-    metadata_max_bytes: int = 2048
+    event_max_bytes: int = 16384  # Предел размера всего уведомления, байт.
+    message_max_bytes: int = 8192  # Предел размера сообщения, байт.
+    exception_max_bytes: int = 4096  # Предел размера описания ошибки, байт.
+    metadata_max_bytes: int = 2048  # Предел размера служебных полей, байт.
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка бюджетов
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка ограничений
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
         """Reject nonpositive budgets and fields exceeding the event budget."""
 
+        # Отдельное поле не может занимать больше, чем разрешено всему уведомлению.
         for item in fields(self):
             require_int(getattr(self, item.name), item.name)
+
             if getattr(self, item.name) > self.event_max_bytes:
                 raise ValueError(f"{item.name} exceeds event_max_bytes")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Сериализуемый неизменяемый снимок уведомления
+# КЛАСС : Подготовленное уведомление для отправки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Notification:
@@ -107,69 +120,96 @@ class Notification:
     Construction validates but never truncates, performs I/O or generates identity.
     """
 
-    SCHEMA_VERSION: ClassVar[int] = 1
-    event_id: str
-    session_id: str
-    identity: Identity
-    created_at: datetime
-    expires_at: datetime
-    level_no: int
-    level_name: str
-    logger_name: str
-    message: str = field(repr=False)
-    exception: str | None = field(default=None, repr=False)
-    topic: str | None = None
-    tags: tuple[str, ...] = ()
-    correlation_id: str | None = None
-    trace_id: str | None = None
-    notify: bool | None = None
-    truncated_fields: tuple[str, ...] = ()
-    limits: SnapshotLimits = field(default_factory=SnapshotLimits, repr=False, compare=False)
+    SCHEMA_VERSION: ClassVar[int] = 1  # Версия формата передачи данных.
+    event_id: str  # Идентификатор события.
+    session_id: str  # Идентификатор текущего запуска приложения.
+    identity: Identity  # Сведения об отправившем приложении.
+    created_at: datetime  # Время создания с часовым поясом.
+    expires_at: datetime  # Время, после которого отправка не нужна.
+    level_no: int  # Числовой уровень важности из logging.
+    level_name: str  # Название уровня важности.
+    logger_name: str  # Имя исходного логгера.
+    message: str = field(repr=False)  # Готовый текст сообщения.
+    exception: str | None = field(default=None, repr=False)  # Готовое описание ошибки, если есть.
+    topic: str | None = None  # Тема для выбора получателей.
+    tags: tuple[str, ...] = ()  # Метки для выбора получателей.
+    correlation_id: str | None = None  # Идентификатор связанной операции.
+    trace_id: str | None = None  # Идентификатор цепочки вызовов.
+    notify: bool | None = None  # Указание на отправку; None — по правилам.
+    truncated_fields: tuple[str, ...] = ()  # Имена ранее сокращённых текстовых полей.
+    limits: SnapshotLimits = field(  # Ограничения размера при проверке.
+        default_factory=SnapshotLimits,
+        repr=False,
+        compare=False,
+        )
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка снимка и ограничение удерживаемых данных
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка полей и размера уведомления
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
         """Normalize immutable fields and validate types, time bounds and sizes."""
 
+        # Сначала проверяем вложенные настройки и сведения об отправителе.
+        # Они нужны для последующих проверок текста и служебных полей.
         if not isinstance(self.identity, Identity):
             raise TypeError("identity must be Identity")
+
         if not isinstance(self.limits, SnapshotLimits):
             raise TypeError("limits must be SnapshotLimits")
+
+        # Обязательные идентификаторы должны быть непустыми; дополнительные поля могут отсутствовать.
         for name in ("event_id", "session_id", "level_name", "logger_name"):
             require_text(getattr(self, name), name)
+
         require_int(self.level_no, "level_no", 0)
+
         for name in ("topic", "correlation_id", "trace_id"):
             value = getattr(self, name)
+
             if value is not None:
                 require_text(value, name)
+
         if self.notify is not None and type(self.notify) is not bool:
             raise TypeError("notify must be bool or None")
 
-        # Время нормализуется без обращения к системным часам.
+        # Приводим обе даты к UTC, чтобы сравнение не зависело от часового пояса отправителя.
+        # Текущее время здесь не читаем: проверка срока отправки будет обязанностью очереди.
         for name in ("created_at", "expires_at"):
             value = getattr(self, name)
+
             if not isinstance(value, datetime) or value.utcoffset() is None:
                 raise ValueError(f"{name} must be a timezone-aware datetime")
+
             object.__setattr__(self, name, value.astimezone(timezone.utc))
+
         if self.expires_at <= self.created_at:
             raise ValueError("expires_at must follow created_at")
 
+        # Копируем коллекции: изменение исходного списка не должно менять готовое уведомление.
+        # object.__setattr__ нужен только при создании объекта с frozen=True.
         object.__setattr__(self, "tags", text_tuple(self.tags, "tags"))
         object.__setattr__(self, "truncated_fields", text_tuple(self.truncated_fields, "truncated_fields"))
+
         if not set(self.truncated_fields) <= {"message", "exception"}:
             raise ValueError("truncated_fields contains an unsupported field")
+
+        # Здесь только проверяем размер. Подготовка и сокращение текста выполняются до создания объекта.
         require_text(self.message, "message", self.limits.message_max_bytes, True)
+
         if self.exception is not None:
             require_text(self.exception, "exception", self.limits.exception_max_bytes, True)
 
-        # Отдельно проверяем полный JSON: escaping тоже занимает место в очереди/на wire.
+        # Проверяем размер готового JSON: экранирование символов увеличивает объём передаваемых данных.
         payload = self.to_dict()
         encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
         if len(encoded) > self.limits.event_max_bytes:
             raise ValueError("notification exceeds event_max_bytes")
+
+        # Ограничиваем служебные поля отдельно, чтобы длинные метки не заняли весь доступный объём.
         metadata = {key: value for key, value in payload.items() if key not in ("message", "exception")}
+
         if len(json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > (
             self.limits.metadata_max_bytes
         ):
@@ -177,7 +217,7 @@ class Notification:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # ПУБЛИЧНЫЙ МЕТОД : Независимое представление снимка
+    # ПУБЛИЧНЫЙ МЕТОД : Копия данных уведомления для передачи
     #--------------------------------------------------------------------------------------------------------------
     def to_dict(self) -> dict[str, object]:
 
@@ -187,7 +227,11 @@ class Notification:
         :rtype: dict[str, object]
         """
 
+        # Локальные ограничения размера не передаём: принимающая сторона использует свои настройки.
         payload = {item.name: getattr(self, item.name) for item in fields(self) if item.name != "limits"}
+
+        # Вложенные объекты превращаем в независимые словари и списки, даты — в строки ISO 8601.
+        # Получатель словаря может менять его, не затрагивая исходное уведомление.
         payload.update(
             schema_version=self.SCHEMA_VERSION,
             identity=asdict(self.identity),
@@ -200,7 +244,7 @@ class Notification:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # ПУБЛИЧНЫЙ МЕТОД : Восстановление снимка с проверкой схемы
+    # ПУБЛИЧНЫЙ МЕТОД : Чтение уведомления из словаря с проверкой формата
     #--------------------------------------------------------------------------------------------------------------
     @classmethod
     def from_dict(
@@ -222,30 +266,55 @@ class Notification:
         :rtype: Notification
         """
 
-        # payload - сериализованный снимок.
-        # limits - доверенная локальная политика размера.
+        # payload - данные уведомления, полученные из JSON.
+        # limits - ограничения размера из настроек принимающего приложения.
 
         if not isinstance(payload, Mapping):
             raise TypeError("payload must be a mapping")
+
+        # Не пытаемся угадать формат неизвестной версии или молча отбросить лишние поля.
         version = payload.get("schema_version")
+
         if type(version) is not int or version != cls.SCHEMA_VERSION:
             raise ValueError("unsupported notification schema_version")
+
         allowed = {item.name for item in fields(cls)} - {"limits"}
+
         if set(payload) - allowed - {"schema_version"}:
             raise ValueError("notification contains unknown fields")
+
+        # Рабочая копия позволяет восстановить типы полей, не меняя словарь вызывающего кода.
         data = dict(payload)
         del data["schema_version"]
+
         try:
             identity = data["identity"]
+
             if not isinstance(identity, Mapping):
                 raise TypeError("identity must be a mapping")
+
             data["identity"] = Identity(**identity)
+
             for name in ("created_at", "expires_at"):
                 if not isinstance(data[name], str):
                     raise TypeError("timestamp must be a string")
+
                 data[name] = datetime.fromisoformat(data[name].replace("Z", "+00:00"))
+
+            # Конструктор повторно проверит все поля, размеры и соотношение дат.
             return cls(**data, limits=limits if limits is not None else SnapshotLimits())
         except (KeyError, TypeError, ValueError):
+            # Внешние данные могут содержать секреты; не включаем их и исходную ошибку в сообщение.
             raise ValueError("invalid notification payload") from None
     #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
+#------------------------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    print(
+        'Модуль remote_watch.events не предназначен для прямого запуска.',
+    )
 #------------------------------------------------------------------------------------------------------------------

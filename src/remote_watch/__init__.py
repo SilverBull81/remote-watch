@@ -1,14 +1,23 @@
-﻿# Публичные контракты Remote Watch без запуска runtime и импорта провайдеров.
-# Экспорт:
-# -> Identity, Notification, SnapshotLimits: Неизменяемые события.
-# -> Delivery, DeliveryResult, DeliveryStatus, ResultSource: Одна попытка доставки.
-# -> NotificationChannel: Структурный async-протокол канала.
-# -> Destination, DeliveryMode, RetryPolicy, Route, RuntimeConfig, WatcherConfig: Настройки.
-# -> CommandCallback, ArgumentValidator, CommandContext, CommandRegistry, CommandSpec: Регистрация команд.
+﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.0
+# Version 1.0.1
+#
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
-# Дата и время последнего изменения: 260928-110519
+#
+# Дата и время последнего изменения: 260928-121352
+#
+# Экспорт:
+#
+# -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
+#
+# -> Delivery, DeliveryResult, DeliveryStatus, ResultSource: Одна попытка доставки.
+#
+# -> NotificationChannel: Асинхронный интерфейс канала.
+#
+# -> Destination, DeliveryMode, RetryPolicy, Route, RuntimeConfig, WatcherConfig: Настройки.
+#
+# -> CommandCallback, ArgumentValidator, CommandContext, CommandRegistry, CommandSpec: Регистрация команд.
+
 
 #******************************************************************************************************************
 # ИМПОРТ
@@ -32,4 +41,15 @@ from .delivery import ResultSource as ResultSource
 from .events import Identity as Identity
 from .events import Notification as Notification
 from .events import SnapshotLimits as SnapshotLimits
+
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
+#------------------------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    print(
+        'Модуль remote_watch.__init__ не предназначен для прямого запуска.',
+    )
 #------------------------------------------------------------------------------------------------------------------

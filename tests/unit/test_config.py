@@ -1,18 +1,31 @@
 ﻿# Проверки конфигурации, ленивых фабрик и результатов доставки.
-# Функции:
-# -> unused_factory(): Фабрика, которую конфигурация не должна вызывать.
-# Тесты:
-# -> test_configuration_is_lazy_and_detached(): Защитные копии без создания клиента.
-# -> test_configuration_rejects_invalid_references(): Дубликаты и отсутствующие адресаты.
-# -> test_finite_policy_bounds(): Неправильные временные бюджеты.
-# -> test_runtime_and_destination_validation(): Неподдерживаемые режимы и типы.
-# -> test_delivery_results(): Классификация одной попытки.
-# -> test_invalid_delivery_result(): Противоречивые поля результата.
-# -> test_delivery_retry_preserves_ids(): Явное изменение номера попытки.
 #
-# Version 1.0.0
+# Version 1.0.1
+#
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
-# Дата и время последнего изменения: 260928-110519
+#
+# Дата и время последнего изменения: 260928-121352
+#
+# Функции:
+#
+# -> unused_factory(): Фабрика, которую конфигурация не должна вызывать.
+#
+# Тесты:
+#
+# -> test_configuration_is_lazy_and_detached(): Защитные копии без создания клиента.
+#
+# -> test_configuration_rejects_invalid_references(): Дубликаты и отсутствующие адресаты.
+#
+# -> test_finite_policy_bounds(): Неправильные временные бюджеты.
+#
+# -> test_runtime_and_destination_validation(): Неподдерживаемые режимы и типы.
+#
+# -> test_delivery_results(): Классификация одной попытки.
+#
+# -> test_invalid_delivery_result(): Противоречивые поля результата.
+#
+# -> test_delivery_retry_preserves_ids(): Явное изменение номера попытки.
+
 
 #******************************************************************************************************************
 # ИМПОРТ
@@ -40,6 +53,7 @@ from remote_watch import (
 # ФУНКЦИИ
 #******************************************************************************************************************
 
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Контроль отсутствия побочных действий при конфигурации
 #------------------------------------------------------------------------------------------------------------------
@@ -54,9 +68,11 @@ def unused_factory() -> NotificationChannel:
     raise AssertionError("configuration must not create provider clients")
 #------------------------------------------------------------------------------------------------------------------
 
+
 #******************************************************************************************************************
 # ТЕСТЫ
 #******************************************************************************************************************
+
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конфигурация не создаёт каналы и не сохраняет изменяемые списки
@@ -71,7 +87,7 @@ def test_configuration_is_lazy_and_detached(
     :type identity: Identity
     """
 
-    # identity - идентичность приложения.
+    # identity - сведения о приложении.
 
     destinations = [Destination(destination_id="phone", channel_factory=unused_factory)]
     target_ids = ["phone"]
@@ -88,6 +104,7 @@ def test_configuration_is_lazy_and_detached(
     assert "unused_factory" not in repr(config)
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неоднозначная конфигурация не принимается
 #------------------------------------------------------------------------------------------------------------------
@@ -101,21 +118,27 @@ def test_configuration_rejects_invalid_references(
     :type identity: Identity
     """
 
-    # identity - идентичность приложения.
+    # identity - сведения о приложении.
 
     destination = Destination(destination_id="phone", channel_factory=unused_factory)
+
     with pytest.raises(ValueError, match="duplicate"):
         WatcherConfig(identity=identity, destinations=(destination, destination))
+
     with pytest.raises(ValueError, match="unknown"):
         WatcherConfig(identity=identity, routes=(Route(destination_ids=("absent",)),))
+
     with pytest.raises(ValueError, match="max_destinations"):
         WatcherConfig(identity=identity, runtime=RuntimeConfig(max_destinations=1),
                       destinations=(destination, replace(destination, destination_id="second")))
+
     with pytest.raises(ValueError):
         Route(destination_ids=())
+
     with pytest.raises(TypeError):
         WatcherConfig(identity=identity, commands={"invalid": object()})
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Временные бюджеты должны быть конечными и согласованными
@@ -141,6 +164,7 @@ def test_finite_policy_bounds(
         RetryPolicy(**changes)
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Нельзя случайно включить relay или безразмерную очередь
 #------------------------------------------------------------------------------------------------------------------
@@ -150,17 +174,23 @@ def test_runtime_and_destination_validation() -> None:
 
     with pytest.raises(ValueError, match="not implemented"):
         Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.RELAY)
+
     with pytest.raises(TypeError, match="mode"):
         Destination(destination_id="phone", channel_factory=unused_factory, mode="direct")
+
     with pytest.raises(TypeError, match="callback"):
         Destination(destination_id="phone", channel_factory=None)
+
     with pytest.raises(ValueError):
         RuntimeConfig(ingress_capacity=0)
+
     with pytest.raises(TypeError):
         RuntimeConfig(ingress_capacity=True)
+
     with pytest.raises(ValueError):
         RuntimeConfig(shutdown_timeout=float("inf"))
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Результаты различают известный успех, ограничение и неизвестный исход
@@ -176,6 +206,7 @@ def test_delivery_results() -> None:
     assert limited.retry_after == 0
     assert unknown.provider_message_id is None
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Несовместимые поля результата отклоняются
@@ -202,6 +233,7 @@ def test_invalid_delivery_result(
         DeliveryResult(**({"status": DeliveryStatus.PROVIDER_ACCEPTED} | changes))
 #------------------------------------------------------------------------------------------------------------------
 
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Повтор использует прежний delivery ID и прежний снимок
 #------------------------------------------------------------------------------------------------------------------
@@ -221,6 +253,17 @@ def test_delivery_retry_preserves_ids(
     second = replace(first, attempt=2)
     assert second.delivery_id == first.delivery_id
     assert second.notification is first.notification
+
     with pytest.raises(ValueError):
         replace(first, attempt=0)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
+#------------------------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    print(
+        'Модуль tests/unit/test_config.py не предназначен для прямого запуска. Используйте pytest.',
+    )
 #------------------------------------------------------------------------------------------------------------------
