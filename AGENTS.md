@@ -1,0 +1,70 @@
+﻿# Repository Instructions
+
+Version 1.0.0
+
+Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
+
+Дата и время последнего изменения: 260928-100331
+
+## Project Intent
+
+Remote Watch provides standard-logging integration, asynchronous notification
+delivery, and optional secure command routing for distributed Python
+applications.
+
+This repository is currently documentation-only. Treat described APIs as planned,
+not implemented. Legacy fin-data TelegramBot compatibility is not a requirement.
+The target phone is Android. Telegram and provisionally ntfy are the first
+outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
+
+## Read the Relevant Design Context
+
+- Read `PROJECT_BRIEF.md` when planning features, milestones, or product scope.
+- Read `ARCHITECTURE.md` when changing public APIs, logging integration,
+  concurrency, delivery guarantees, channels, routing, commands, security, or
+  package boundaries.
+- Do not reread both documents for unrelated mechanical edits.
+- Read `docs/CODE_STYLE.md` and `docs/DEVELOPMENT.md` before creating code or
+  changing documentation conventions. See `docs/VALIDATION.md` for required checks.
+- Read `docs/GATEWAY.md` for relay/command boundaries and `docs/CHANNELS.md` for
+  the provider selection rationale. Keep planned and verified behavior distinct.
+
+## Architectural Constraints
+
+- Preserve `logging.Logger` as the primary application-facing logging API; do
+  not introduce a required `Logger` subclass.
+- Do not perform network I/O on application logging threads.
+- Keep outbound notifications separate from inbound commands.
+- Core modules depend on transport protocols, never concrete provider classes.
+- Keep provider dependencies optional and isolated in adapters.
+- Use a central gateway when multiple instances share a bidirectional bot or
+  conversation.
+- Never provide arbitrary remote shell or Python evaluation as a built-in
+  command.
+- Prevent internal transport failures from recursively entering the notification
+  pipeline.
+- Never commit real credentials or require them for unit tests.
+- Keep remote delivery independent of local handlers and bound all outstanding
+  work, including retries and loop wakeups. Do not promise at-least-once attempts
+  for events that can be dropped before their first attempt.
+- Make direct/relay a per-destination setting. Outbound relay and inbound commands
+  are separate capabilities; neither enables the other implicitly.
+
+## Development Expectations
+
+- Prefer small typed interfaces and composition over inheritance.
+- Keep application identity explicit: service, environment, region, host, and
+  `instance_id` must not be inferred from chat display text.
+- Make retries, timeouts, queue bounds, shutdown behavior, and failure semantics
+  explicit and testable.
+- Unit tests use fake transports and deterministic time; live-provider tests are
+  opt-in integration tests.
+- When a design decision materially changes `ARCHITECTURE.md`, update the
+  document or add an Architecture Decision Record in the same change.
+- Tooling direction is setuptools/build, pytest and Ruff; see DEVELOPMENT.md.
+  Python 3.10+ is the target, subject to environment/dependency validation before
+  implementation. Do not invent a pyproject or test results for documentation work.
+- Configuration starts with typed Python objects; no required file format yet.
+- Follow Russian documentation/comments, English identifiers/docstrings, file
+  versions and Moscow timestamps, UTF-8 BOM/CRLF for Markdown/Python as specified
+  in CODE_STYLE.md. Do not copy neighboring projects' runtime dependencies.

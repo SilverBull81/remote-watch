@@ -1,0 +1,39 @@
+# Python, environment, builds and checks
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+env/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage*
+htmlcov/
+.tox/
+
+# Local runtime data and secrets
+data/
+runs/
+logs/
+*.log
+*.sqlite*
+.env
+.env.*
+!.env.example
+credentials.local.*
+*.local.json
+*.local.toml
+*.local.yaml
+*.local.yml
+secrets/
+
+# Local editor and agent state
+.vscode/
+.idea/
+.codex/
+.agents/
+.DS_Store
+Thumbs.db
