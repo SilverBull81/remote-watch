@@ -1,14 +1,16 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-100331
+Дата и время последнего изменения: 260928-110519
 
 ## Статус
 
-Это планируемый контракт. Публичные конструкторы и формат файла ещё не реализованы.
+Реализованы Identity, SnapshotLimits, RetryPolicy, RuntimeConfig, Destination,
+Route и WatcherConfig. Они проверяют данные без запуска runtime. Формата файла,
+готовых provider-конструкторов и logging helper пока нет.
 В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
 YAML, JSON, TOML или специальных URL. Интеграция handler с обычным logging остаётся
 возможной; отдельный loader расширений dictConfig не входит в первую версию.
@@ -25,6 +27,12 @@ YAML, JSON, TOML или специальных URL. Интеграция handler
 | delivery policy | Outstanding budget, TTL, attempts, timeouts, backoff |
 | redaction | Обработка чувствительных данных до очереди |
 | internal diagnostics | Локальный sink и ограничение частоты |
+| commands | Реализован: словарь callbacks или CommandRegistry из CommandSpec |
+
+Все реализованные policy/model-конструкторы доступны из remote_watch. Публичные имена:
+RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.retry,
+WatcherConfig.routes и WatcherConfig.commands. Политики задают требования к будущему
+runtime; сами dataclasses очереди не создают и таймауты не исполняют.
 
 Identity — непустые строки; пустое/неизвестное значение не подставляется из сети
 или названия чата. Для неизвестной region/host допустим явный маркер unknown.
@@ -44,6 +52,16 @@ service secret reference и remote alias; provider credentials у приложе
 Смешивание прямых credentials и relay binding в одном назначении отклоняется.
 0.1 отклоняет relay как ещё неподдерживаемый режим. Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
+
+На контрактном этапе Destination принимает destination_id, provider (описательное
+имя, по умолчанию custom), channel_factory, mode=DeliveryMode.DIRECT,
+outstanding_capacity и RetryPolicy. Фабрика — синхронный callable без аргументов,
+в том числе класс с пустым конструктором. Она должна вернуть NotificationChannel;
+создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
+соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
+Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
+Готовых Telegram/ntfy-фабрик и secret resolver сейчас нет. Неизвестные provider-имена
+не импортируются: так подключаются пользовательские реализации без registry SDK.
 
 В 0.1 каждый adapter instance привязан к одному назначению. Разные destination IDs,
 указывающие на один chat/topic, считаются разными намеренными доставками; router
@@ -72,6 +90,15 @@ service secret reference и remote alias; provider credentials у приложе
 | backoff_base / cap | 1 / 30 | Full jitter для retry |
 | startup_timeout | 5 | Запуск worker/клиентов, без обязательного health request |
 | shutdown_timeout | 5 | Общее время drain, cancellation и close |
+
+В реализации SnapshotLimits.metadata_max_bytes ограничивает компактный JSON всех
+полей снимка, кроме message/exception; учитываются также IDs, timestamps, schema
+и признаки усечения. Notification валидирует уже подготовленный текст и не усекает
+его самостоятельно. Будущий logging normalizer выполнит усечение до создания модели.
+From_dict принимает только schema_version=1 и не принимает limits из payload.
+
+TTL назначения хранится в RetryPolicy.ttl. Эффективный deadline — минимум срока
+снимка и created_at + TTL назначения; счёт с момента каждой новой попытки запрещён.
 
 При первой неуспешной попытке задержка выбирается равномерно от 0 до base,
 далее верхняя граница удваивается до cap. Для rate limit задержка не меньше
@@ -115,3 +142,8 @@ Custom adapter обязан соблюдать тот же контракт.
 Hot reload в 0.1 отсутствует. Для изменения настроек закрывается старый runtime
 и создаётся новый; перенос очереди между ними не обещается. Ротация credentials
 также требует пересоздания соответствующего runtime до появления reload-контракта.
+
+Команды регистрируются локально через WatcherConfig.commands. Конфигурация принимает
+либо CommandRegistry, либо mapping имён на функции без оставшихся обязательных
+аргументов; partial позволяет привязать состояние приложения. Подробности:
+[COMMANDS.md](COMMANDS.md). Сетевого command mode в этом каркасе нет.

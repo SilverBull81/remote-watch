@@ -1,15 +1,17 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-100331
+Дата и время последнего изменения: 260928-110519
 
 ## Статус и границы
 
-Это проектная спецификация, а не описание реализованного пакета.
-Текущий репозиторий содержит только документацию. Scope определяет
+Это спецификация целевого поведения с частичной реализацией. В текущем каркасе
+есть Identity/Notification, Delivery/DeliveryResult, типизированная конфигурация,
+NotificationChannel и реестр пользовательских команд. Фоновый runtime, logging
+handler, провайдеры и gateway ещё не реализованы. Scope определяет
 [PROJECT_BRIEF.md](PROJECT_BRIEF.md), порядок реализации —
 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
@@ -120,17 +122,32 @@ Router возвращает уникальные destination IDs, без provide
 
 ## Публичные границы расширения
 
-Названия ниже — проектный контракт, окончательные сигнатуры проверяются в первом
-вертикальном прототипе. Наследование от framework-класса не требуется.
+Модели, конфигурация, NotificationChannel и регистрационный контракт команд уже
+реализованы. Остальные границы проверяются в следующем вертикальном прототипе.
+Наследование от framework-класса не требуется.
 
 | Граница | Ответственность |
 | --- | --- |
-| `NotificationChannel` | Async `open`, одна попытка `send`, async `close` для одного назначения |
+| `NotificationChannel` | Реализован протокол: async open(), send(Delivery) → DeliveryResult, close() |
 | Delivery transport | Общий контракт отправки для direct adapter или relay client |
 | `PolicyRouter` | Чистое сопоставление снимка с настроенными destination IDs |
 | `NotificationHandler` | Logging integration, снимок, неблокирующий приём |
 | `NotificationRuntime` | Поток/loop, очереди, расписание попыток, stats и lifecycle |
 | `CommandSource` (0.3) | Отдельный поток проверяемых входящих provider events |
+
+Send получает Delivery, а не только Notification: адаптеру нужны стабильный
+delivery ID и номер попытки, в том числе для будущего relay. Фабрика Destination
+создаёт канал без аргументов только при будущем запуске runtime; конструктор
+конфигурации не создаёт provider client. Close должен допускать cleanup после
+частично неудачного open. Методы протокола не являются реализованной доставкой.
+
+WatcherConfig.commands нормализует словарь callback-функций в CommandRegistry.
+CommandSpec добавляет контекст, валидатор именованных строковых аргументов,
+required scope, timeout, read_only и idempotent. Регистрация ничего не исполняет,
+не проверяет actor и не выдаёт разрешения. Эти поля обязан применять будущий
+dispatcher. Пользовательский набор команд не ограничен встроенным status.
+Контракт и примеры: [COMMANDS.md](docs/COMMANDS.md),
+решение: [ADR 0004](docs/adr/0004-application-command-registry.md).
 
 Не нужно создавать два одинаковых публичных протокола отправки: общий минимальный
 контракт используется как каналом, так и relay transport. Адаптер владеет своим
@@ -186,7 +203,8 @@ escalation и произвольные выполняемые выражения
 Retry использует exponential backoff с full jitter; число попыток включает первую.
 Provider retry-after задаёт нижнюю границу ожидания, а не повод превысить expiry
 или shutdown deadline. Истечение TTL завершает доставку до следующей попытки.
-UTC используется в данных, monotonic clock — для локальных задержек/deadlines.
+Для конкретного назначения deadline не позже Notification.expires_at и created_at
+плюс его RetryPolicy.ttl. UTC используется в данных, monotonic clock — для локальных задержек/deadlines.
 На входе relay оставшийся TTL ограничивается его собственной политикой.
 
 Гарантия 0.1 — best effort в памяти с ограниченными повторами. Нет гарантии даже
@@ -268,6 +286,13 @@ Instances регистрируются с проверенной service identit
 source conversation, точную цель, имя, валидированные аргументы, expiry и correlation.
 Display name и текст сообщения не удостоверяют пользователя. Проверки ACL применяются
 к пользователю, операции и целевой группе; приложение повторно проверяет scope.
+
+Команды полностью определяет приложение при создании конфигурации будущего
+RemoteWatcher: словарём callbacks или явными CommandSpec. Callback может привязать
+состояние приложения через partial; эти ссылки не сериализуются и не передаются hub.
+Hub видит только capability metadata и проверенные запросы. Начальная реализация
+приёма команд проверяет read-only `status` как приёмочный сценарий, а не как
+единственное допустимое имя пользовательской команды.
 
 Первый сценарий — read-only `status` одному живому instance через authenticated
 HTTPS long polling. Нужны expiry, replay protection, аудит, ограничение частоты,

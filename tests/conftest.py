@@ -1,0 +1,63 @@
+﻿# Детерминированные фикстуры контрактных тестов без сети и credentials.
+# Функции:
+# -> identity(): Явная тестовая идентичность.
+# -> notification(): Фиксированный снимок с заданным UTC временем.
+#
+# Version 1.0.0
+# Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
+# Дата и время последнего изменения: 260928-110519
+
+#******************************************************************************************************************
+# ИМПОРТ
+#******************************************************************************************************************
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from remote_watch import Identity, Notification
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Явная идентичность тестового приложения
+#------------------------------------------------------------------------------------------------------------------
+@pytest.fixture
+def identity() -> Identity:
+
+    """Create explicit test identity without reading the host environment.
+
+    :return: Fixed application identity.
+    :rtype: Identity
+    """
+
+    return Identity(service="quotes", environment="test", region="test-region", host="test-host", instance_id="one")
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Уведомление с фиксированным временем
+#------------------------------------------------------------------------------------------------------------------
+@pytest.fixture
+def notification(
+    identity: Identity,
+    ) -> Notification:
+
+    """Create a reproducible notification without consulting a clock.
+
+    :param identity: Explicit test identity.
+    :type identity: Identity
+
+    :return: Immutable test notification.
+    :rtype: Notification
+    """
+
+    # identity - идентичность тестового приложения.
+
+    created_at = datetime(2026, 9, 28, 10, 0, tzinfo=timezone.utc)
+    return Notification(
+        event_id="event-1", session_id="session-1", identity=identity,
+        created_at=created_at, expires_at=created_at + timedelta(minutes=5),
+        level_no=40, level_name="ERROR", logger_name="test.application", message="Источник недоступен",
+    )
+#------------------------------------------------------------------------------------------------------------------

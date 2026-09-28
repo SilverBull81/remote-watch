@@ -5,3 +5,4 @@
 *.toml text eol=crlf
 .gitignore text eol=crlf
 .gitattributes text eol=crlf
+MANIFEST.in text eol=crlf

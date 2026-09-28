@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-100331
+Дата и время последнего изменения: 260928-110519
 
 ## Project Intent
 
@@ -12,8 +12,11 @@ Remote Watch provides standard-logging integration, asynchronous notification
 delivery, and optional secure command routing for distributed Python
 applications.
 
-This repository is currently documentation-only. Treat described APIs as planned,
-not implemented. Legacy fin-data TelegramBot compatibility is not a requirement.
+The repository implements the package scaffold, immutable event/delivery models,
+typed configuration, channel protocol and local command registration. Runtime,
+logging handlers, provider adapters and gateway are still planned. Do not describe
+registration metadata as enforced command authorization or execution.
+Legacy fin-data TelegramBot compatibility is not a requirement.
 The target phone is Android. Telegram and provisionally ntfy are the first
 outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 
@@ -28,6 +31,8 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
   changing documentation conventions. See `docs/VALIDATION.md` for required checks.
 - Read `docs/GATEWAY.md` for relay/command boundaries and `docs/CHANNELS.md` for
   the provider selection rationale. Keep planned and verified behavior distinct.
+- Read `docs/COMMANDS.md` before changing application-owned command registration.
+  Functions, partials and explicit CommandSpec declarations are supported.
 
 ## Architectural Constraints
 
@@ -61,9 +66,9 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
   opt-in integration tests.
 - When a design decision materially changes `ARCHITECTURE.md`, update the
   document or add an Architecture Decision Record in the same change.
-- Tooling direction is setuptools/build, pytest and Ruff; see DEVELOPMENT.md.
-  Python 3.10+ is the target, subject to environment/dependency validation before
-  implementation. Do not invent a pyproject or test results for documentation work.
+- Tooling is setuptools/build, pytest and Ruff; see docs/DEVELOPMENT.md and pyproject.toml.
+  Python 3.10+ is the declared target; the current runtime check is Windows/Python 3.12.
+  Keep actual test results separate from unverified platforms and future features.
 - Configuration starts with typed Python objects; no required file format yet.
 - Follow Russian documentation/comments, English identifiers/docstrings, file
   versions and Moscow timestamps, UTF-8 BOM/CRLF for Markdown/Python as specified

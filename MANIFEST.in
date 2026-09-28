@@ -1,0 +1,5 @@
+include AGENTS.md ARCHITECTURE.md PROJECT_BRIEF.md
+include .gitattributes .gitignore
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include src/remote_watch py.typed

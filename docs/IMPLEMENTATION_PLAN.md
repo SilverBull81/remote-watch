@@ -1,15 +1,17 @@
 ﻿# План реализации
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-100331
+Дата и время последнего изменения: 260928-110519
 
 ## Текущее состояние
 
-Подготовлена документационная основа. Исходный код, сборка пакета, тесты и gateway
-ещё не реализованы. Номера 0.1/0.2/0.3 обозначают предполагаемые релизы пакета;
+Реализован шаг 1: каркас, модели, конфигурация, NotificationChannel, локальная
+регистрация команд и offline unit/contract tests. Версия каркаса — 0.1.0.dev0;
+runtime, provider adapters и gateway ещё не реализованы.
+Номера 0.1/0.2/0.3 обозначают предполагаемые релизы пакета;
 Version 1.0.0 в шапках обозначает редакцию отдельного документа.
 
 Работа выполняется небольшими проверяемыми изменениями. Сначала проверяется
@@ -32,6 +34,10 @@ Version 1.0.0 в шапках обозначает редакцию отдель
 ## 0.1 — библиотека уведомлений
 
 ### Шаг 1. Каркас и контракты
+
+Статус: реализован. Добавлены также CommandContext/CommandSpec/CommandRegistry
+и commands в WatcherConfig по уточнённому требованию пользователя. Это регистрация,
+а не перенос сетевого контура команд в первый этап.
 
 Создать pyproject, layout src/remote_watch и тестовые каталоги только при начале
 реализации. Определить Identity, Notification, Destination, DeliveryResult,
@@ -107,7 +113,8 @@ Command endpoints в relay-only deployment отсутствуют.
 1. Определить persistent command/replay/audit storage, bounded retention и lease/ack.
 2. Создать отдельный CommandSource и единственного владельца shared inbound state.
 3. Добавить authenticated instance registration, session binding и heartbeat.
-4. Реализовать read-only status одной точной цели и коррелированный ответ.
+4. Подключить пользовательский CommandRegistry к dispatcher; проверить read-only
+   status одной точной цели и коррелированный ответ как первый сквозной сценарий.
 5. Проверить ACL, replay, expiry, рестарт, старую сессию и повтор после потери ответа.
 
 Первый вертикальный сценарий — через Telegram; проверка Matrix SDK/E2EE может

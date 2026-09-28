@@ -1,10 +1,10 @@
 ﻿# Необязательный gateway
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-100331
+Дата и время последнего изменения: 260928-110519
 
 ## Две отдельные возможности
 
@@ -105,8 +105,12 @@ lease/ack, bounded retention и аудит принятых/отклонённы
 сбой после действия и до записи результата даёт unknown, не ложный success.
 Повторное выполнение разрешается только по idempotency-контракту конкретного handler.
 
-В первой итерации разрешён только read-only status одному instance. Значения
-аргументов валидируются до dispatch. Broadcast, pause/resume и reload_config
+В первой сетевой итерации приёмочным сценарием служит read-only status одному
+instance. Это не фиксированный whitelist имён в библиотеке: приложение задаёт
+команды через CommandRegistry/CommandSpec при создании конфигурации watcher.
+Callbacks остаются в приложении; gateway получает только разрешённые capabilities.
+Значения аргументов валидируются до dispatch. Общий допуск изменяющих команд,
+broadcast, pause/resume и reload_config
 добавляются после сценариев expiry, replay, session replacement и partial failure.
 Никакого произвольного shell или eval, даже для администратора.
 
