@@ -1,23 +1,26 @@
 ﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-123443
+# Дата и время последнего изменения: 260928-140516
 #
 # Классы:
-#
 # -> Identity: Сведения о приложении и его размещении.
-#    -> __post_init__(): Проверка полей.
+#    Специальные методы:
+#    -> __post_init__(): Проверка сведений о приложении.
 #
 # -> SnapshotLimits: Ограничения размера уведомления.
+#    Специальные методы:
 #    -> __post_init__(): Проверка ограничений.
 #
 # -> Notification: Данные уведомления без ссылок на исходный LogRecord.
-#    -> __post_init__(): Проверка полей и сохранение независимых копий.
-#    -> to_dict(): Копия данных для преобразования в JSON.
-#    -> from_dict(): Чтение уведомления из словаря с проверкой версии.
+#    Интерфейс:
+#    -> to_dict(): Копия данных уведомления для передачи.
+#    -> from_dict(): Чтение уведомления из словаря с проверкой формата.
+#    Специальные методы:
+#    -> __post_init__(): Проверка полей и размера уведомления.
 
 
 #******************************************************************************************************************
@@ -57,7 +60,7 @@ class Identity:
     instance_id: str    # Идентификатор экземпляра приложения.
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка сведений о приложении
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка сведений о приложении
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
@@ -88,7 +91,7 @@ class SnapshotLimits:
     metadata_max_bytes: int = 2048      # Предел размера служебных полей, байт.
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка ограничений
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка ограничений
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
@@ -144,7 +147,99 @@ class Notification:
         )
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка полей и размера уведомления
+    # ИНТЕРФЕЙС : Копия данных уведомления для передачи
+    #--------------------------------------------------------------------------------------------------------------
+    def to_dict(self) -> dict[str, object]:
+
+        """Return a fresh JSON-compatible payload with explicit schema version.
+
+        :return: Detached primitive data; mutations cannot affect this notification.
+        :rtype: dict[str, object]
+        """
+
+        # Локальные ограничения размера не передаём: принимающая сторона использует свои настройки.
+        payload = {item.name: getattr(self, item.name) for item in fields(self) if item.name != "limits"}
+
+        # Вложенные объекты превращаем в независимые словари и списки, даты — в строки ISO 8601.
+        # Получатель словаря может менять его, не затрагивая исходное уведомление.
+        payload.update(
+            schema_version=self.SCHEMA_VERSION,
+            identity=asdict(self.identity),
+            created_at=self.created_at.isoformat(),
+            expires_at=self.expires_at.isoformat(),
+            tags=list(self.tags),
+            truncated_fields=list(self.truncated_fields),
+        )
+        return payload
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение уведомления из словаря с проверкой формата
+    #--------------------------------------------------------------------------------------------------------------
+    @classmethod
+    def from_dict(
+        cls,
+        payload: Mapping[str, object],
+        *,
+        limits: SnapshotLimits | None = None,
+        ) -> Notification:
+
+        """Validate a schema-1 payload using local size limits.
+
+        :param payload: JSON-compatible notification data.
+        :type payload: Mapping[str, object]
+
+        :param limits: Local limits, never accepted from the remote payload.
+        :type limits: SnapshotLimits | None
+
+        :return: Validated immutable notification.
+        :rtype: Notification
+        """
+
+        # payload - данные уведомления, полученные из JSON.
+        # limits - ограничения размера из настроек принимающего приложения.
+
+        if not isinstance(payload, Mapping):
+            raise TypeError("payload must be a mapping")
+
+        # Не пытаемся угадать формат неизвестной версии или молча отбросить лишние поля.
+        version = payload.get("schema_version")
+
+        if type(version) is not int or version != cls.SCHEMA_VERSION:
+            raise ValueError("unsupported notification schema_version")
+
+        allowed = {item.name for item in fields(cls)} - {"limits"}
+
+        if set(payload) - allowed - {"schema_version"}:
+            raise ValueError("notification contains unknown fields")
+
+        # Рабочая копия позволяет восстановить типы полей, не меняя словарь вызывающего кода.
+        data = dict(payload)
+        del data["schema_version"]
+
+        try:
+            identity = data["identity"]
+
+            if not isinstance(identity, Mapping):
+                raise TypeError("identity must be a mapping")
+
+            data["identity"] = Identity(**identity)
+
+            for name in ("created_at", "expires_at"):
+                if not isinstance(data[name], str):
+                    raise TypeError("timestamp must be a string")
+
+                data[name] = datetime.fromisoformat(data[name].replace("Z", "+00:00"))
+
+            # Конструктор повторно проверит все поля, размеры и соотношение дат.
+            return cls(**data, limits=limits if limits is not None else SnapshotLimits())
+        except (KeyError, TypeError, ValueError):
+            # Внешние данные могут содержать секреты; не включаем их и исходную ошибку в сообщение.
+            raise ValueError("invalid notification payload") from None
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и размера уведомления
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
@@ -214,98 +309,6 @@ class Notification:
             self.limits.metadata_max_bytes
         ):
             raise ValueError("notification exceeds metadata_max_bytes")
-    #--------------------------------------------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------------------------------------------
-    # ПУБЛИЧНЫЙ МЕТОД : Копия данных уведомления для передачи
-    #--------------------------------------------------------------------------------------------------------------
-    def to_dict(self) -> dict[str, object]:
-
-        """Return a fresh JSON-compatible payload with explicit schema version.
-
-        :return: Detached primitive data; mutations cannot affect this notification.
-        :rtype: dict[str, object]
-        """
-
-        # Локальные ограничения размера не передаём: принимающая сторона использует свои настройки.
-        payload = {item.name: getattr(self, item.name) for item in fields(self) if item.name != "limits"}
-
-        # Вложенные объекты превращаем в независимые словари и списки, даты — в строки ISO 8601.
-        # Получатель словаря может менять его, не затрагивая исходное уведомление.
-        payload.update(
-            schema_version=self.SCHEMA_VERSION,
-            identity=asdict(self.identity),
-            created_at=self.created_at.isoformat(),
-            expires_at=self.expires_at.isoformat(),
-            tags=list(self.tags),
-            truncated_fields=list(self.truncated_fields),
-        )
-        return payload
-    #--------------------------------------------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------------------------------------------
-    # ПУБЛИЧНЫЙ МЕТОД : Чтение уведомления из словаря с проверкой формата
-    #--------------------------------------------------------------------------------------------------------------
-    @classmethod
-    def from_dict(
-        cls,
-        payload: Mapping[str, object],
-        *,
-        limits: SnapshotLimits | None = None,
-        ) -> Notification:
-
-        """Validate a schema-1 payload using local size limits.
-
-        :param payload: JSON-compatible notification data.
-        :type payload: Mapping[str, object]
-
-        :param limits: Local limits, never accepted from the remote payload.
-        :type limits: SnapshotLimits | None
-
-        :return: Validated immutable notification.
-        :rtype: Notification
-        """
-
-        # payload - данные уведомления, полученные из JSON.
-        # limits - ограничения размера из настроек принимающего приложения.
-
-        if not isinstance(payload, Mapping):
-            raise TypeError("payload must be a mapping")
-
-        # Не пытаемся угадать формат неизвестной версии или молча отбросить лишние поля.
-        version = payload.get("schema_version")
-
-        if type(version) is not int or version != cls.SCHEMA_VERSION:
-            raise ValueError("unsupported notification schema_version")
-
-        allowed = {item.name for item in fields(cls)} - {"limits"}
-
-        if set(payload) - allowed - {"schema_version"}:
-            raise ValueError("notification contains unknown fields")
-
-        # Рабочая копия позволяет восстановить типы полей, не меняя словарь вызывающего кода.
-        data = dict(payload)
-        del data["schema_version"]
-
-        try:
-            identity = data["identity"]
-
-            if not isinstance(identity, Mapping):
-                raise TypeError("identity must be a mapping")
-
-            data["identity"] = Identity(**identity)
-
-            for name in ("created_at", "expires_at"):
-                if not isinstance(data[name], str):
-                    raise TypeError("timestamp must be a string")
-
-                data[name] = datetime.fromisoformat(data[name].replace("Z", "+00:00"))
-
-            # Конструктор повторно проверит все поля, размеры и соотношение дат.
-            return cls(**data, limits=limits if limits is not None else SnapshotLimits())
-        except (KeyError, TypeError, ValueError):
-            # Внешние данные могут содержать секреты; не включаем их и исходную ошибку в сообщение.
-            raise ValueError("invalid notification payload") from None
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
