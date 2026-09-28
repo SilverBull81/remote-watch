@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-180519
+# Дата и время последнего изменения: 260928-184554
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -47,6 +47,7 @@
 #    -> _deliver(): Повторы одной доставки без освобождения её слота.
 #    -> _delivery_now(): Проверенное показание монотонных часов доставки.
 #    -> _cleanup(): Отмена остатка работы и закрытие клиентов.
+#    -> _close_channel(): Закрытие одного клиента в пределах общего срока.
 #
 # Функции:
 # -> utc_now(): Текущее время UTC с часовым поясом.
@@ -1121,11 +1122,41 @@ class NotificationRuntime:
         # При ошибке запуска используем остаток startup budget; при остановке — общий shutdown budget.
         deadline = self._stop_deadline if self._stop_deadline is not None else self._startup_deadline
 
-        for state in reversed(tuple(self._destinations.values())):
-            try:
-                await asyncio.wait_for(state.channel.close(), max(0.0, deadline - time.monotonic()))
-            except (Exception, asyncio.CancelledError):
-                self._count("close_failed", destination_id=state.destination.destination_id)
+        # Независимые клиенты закрываем параллельно: медленный close не должен лишать
+        # остальных возможности освободить соединения. Число задач ограничено max_destinations.
+        # Небольшой остаток оставляем для завершения loop и потока после отмены close.
+        remaining = max(0.0, deadline - time.monotonic())
+        close_deadline = deadline - min(0.05, remaining * 0.2)
+        await asyncio.gather(*(
+            self._close_channel(state, close_deadline) for state in self._destinations.values()
+        ))
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Закрытие одного клиента в пределах общего срока
+    #--------------------------------------------------------------------------------------------------------------
+    async def _close_channel(
+        self,
+        state: _DestinationState,
+        deadline: float,
+        ) -> None:
+
+        """Close an independent channel without consuming another channel's opportunity to close.
+
+        :param state: Owned destination state.
+        :type state: _DestinationState
+
+        :param deadline: Shared monotonic cleanup deadline.
+        :type deadline: float
+        """
+
+        # state - канал и счётчики одного получателя.
+        # deadline - общий срок завершения закрытия клиентов.
+
+        try:
+            await asyncio.wait_for(state.channel.close(), max(0.0, deadline - time.monotonic()))
+        except (Exception, asyncio.CancelledError):
+            self._count("close_failed", destination_id=state.destination.destination_id)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 

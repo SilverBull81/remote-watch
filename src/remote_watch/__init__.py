@@ -1,10 +1,10 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-142747
+# Дата и время последнего изменения: 260928-184554
 #
 # Экспорт:
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
@@ -15,6 +15,7 @@
 # -> NotificationHandler, PolicyRouter: Подготовка записей logging и выбор получателей.
 # -> NotificationRuntime, RuntimeState, RuntimeStats: Фоновая отправка, состояние и счётчики.
 # -> DeliveryClock, SystemDeliveryClock: Подменяемые часы доставки и ожидания повторов.
+# -> RemoteWatcher, ConsoleConfig, RotatingFileConfig: Подключение logger и локальных журналов.
 
 
 #******************************************************************************************************************
@@ -46,6 +47,9 @@ from .runtime import RuntimeState as RuntimeState
 from .runtime import RuntimeStats as RuntimeStats
 from .timing import DeliveryClock as DeliveryClock
 from .timing import SystemDeliveryClock as SystemDeliveryClock
+from .watcher import ConsoleConfig as ConsoleConfig
+from .watcher import RemoteWatcher as RemoteWatcher
+from .watcher import RotatingFileConfig as RotatingFileConfig
 
 #------------------------------------------------------------------------------------------------------------------
 

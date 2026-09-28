@@ -1,16 +1,18 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-160026
+Дата и время последнего изменения: 260928-184929
 
 ## Статус
 
 Реализованы Identity, SnapshotLimits, RetryPolicy, RuntimeConfig, Destination,
 Route и WatcherConfig. Они проверяют данные без запуска runtime. Добавлены
-TelegramConfig/NtfyConfig и их ленивые фабрики. Формата файла и logging helper пока нет.
+TelegramConfig/NtfyConfig и их ленивые фабрики. RemoteWatcher, ConsoleConfig и
+RotatingFileConfig описаны в [WATCHER.md](WATCHER.md). Обязательного формата файла нет;
+локальный JSON используется только явной smoke-командой.
 В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
 YAML, JSON, TOML или специальных URL. Интеграция со стандартным logging реализована
 через NotificationRuntime.handler; отдельный loader расширений dictConfig не входит
@@ -35,7 +37,7 @@ RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.ret
 WatcherConfig.routes и WatcherConfig.commands. Сами dataclasses очереди не создают
 и таймауты не исполняют. NotificationRuntime применяет ограничения при запуске.
 
-В версии 0.1.0.dev3 runtime применяет `RetryPolicy` полностью для очереди и повторов:
+В версии 0.1.0 runtime применяет `RetryPolicy` полностью для очереди и повторов:
 по умолчанию три попытки, full jitter, backoff cap, retry-after и общий TTL.
 `max_attempts=1` отключает повторы. Общий attempt_timeout применяется к каждой попытке;
 connect_timeout отдельно соблюдает HTTP-клиент Telegram/ntfy, поскольку общий

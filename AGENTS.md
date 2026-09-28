@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-180519
+Дата и время последнего изменения: 260928-184554
 
 ## Project Intent
 
@@ -17,8 +17,12 @@ local command registration and a logging-to-channel path with bounded queues and
 a managed worker. Bounded retries, full jitter, retry-after, TTL, sync/async lifecycle,
 per-destination counters and bounded atexit cleanup are implemented. Telegram and
 ntfy outbound adapters use optional aiohttp; validation uses fake HTTP and loopback.
-Gateway is still planned. The user confirmed one live Telegram delivery on their
-phone; ntfy and regional field validation remain pending. Keep this scope explicit.
+RemoteWatcher owns optional console/rotating-file handlers and notification lifecycle.
+Private version 0.1.0 is implemented; public distribution is not planned. Gateway is
+still planned. The user confirmed both Telegram and ntfy smoke messages on Android;
+ntfy uses a free account without topic reservation. Regional/background validation
+and Python 3.10/Linux runtime checks remain pending. Real application migration is
+deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
 The target phone is Android. Telegram and provisionally ntfy are the first
