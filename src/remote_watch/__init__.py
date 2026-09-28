@@ -1,10 +1,10 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-123443
+# Дата и время последнего изменения: 260928-131628
 #
 # Экспорт:
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
@@ -12,6 +12,8 @@
 # -> NotificationChannel: Асинхронный интерфейс канала.
 # -> Destination, DeliveryMode, RetryPolicy, Route, RuntimeConfig, WatcherConfig: Настройки.
 # -> CommandCallback, ArgumentValidator, CommandContext, CommandRegistry, CommandSpec: Регистрация команд.
+# -> NotificationHandler, PolicyRouter: Подготовка записей logging и выбор получателей.
+# -> NotificationRuntime, RuntimeState, RuntimeStats: Фоновая отправка, состояние и счётчики.
 
 
 #******************************************************************************************************************
@@ -36,6 +38,11 @@ from .delivery import ResultSource as ResultSource
 from .events import Identity as Identity
 from .events import Notification as Notification
 from .events import SnapshotLimits as SnapshotLimits
+from .logging_handler import NotificationHandler as NotificationHandler
+from .routing import PolicyRouter as PolicyRouter
+from .runtime import NotificationRuntime as NotificationRuntime
+from .runtime import RuntimeState as RuntimeState
+from .runtime import RuntimeStats as RuntimeStats
 
 #------------------------------------------------------------------------------------------------------------------
 

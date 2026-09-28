@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-110519
+Дата и время последнего изменения: 260928-131628
 
 ## Project Intent
 
@@ -12,10 +12,11 @@ Remote Watch provides standard-logging integration, asynchronous notification
 delivery, and optional secure command routing for distributed Python
 applications.
 
-The repository implements the package scaffold, immutable event/delivery models,
-typed configuration, channel protocol and local command registration. Runtime,
-logging handlers, provider adapters and gateway are still planned. Do not describe
-registration metadata as enforced command authorization or execution.
+The repository implements immutable event/delivery models, typed configuration,
+local command registration and a single-attempt logging-to-channel path with bounded
+queues and a managed worker. Runtime currently requires max_attempts=1. Retry
+scheduling, async lifecycle wrappers, provider adapters and gateway are still planned.
+Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
 The target phone is Android. Telegram and provisionally ntfy are the first
 outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
@@ -33,6 +34,7 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
   the provider selection rationale. Keep planned and verified behavior distinct.
 - Read `docs/COMMANDS.md` before changing application-owned command registration.
   Functions, partials and explicit CommandSpec declarations are supported.
+- Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
 
 ## Architectural Constraints
 

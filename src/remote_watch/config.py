@@ -1,10 +1,10 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-123443
+# Дата и время последнего изменения: 260928-131628
 #
 # Классы:
 # -> DeliveryMode: Отправка напрямую или через будущий шлюз.
@@ -145,7 +145,7 @@ class Destination:
 
     destination_id is a unique routing name; provider is descriptive, not an import.
     channel_factory takes no arguments and creates a NotificationChannel when the
-    future runtime starts. The factory owns provider configuration/secret references
+    runtime starts. The factory owns provider configuration/secret references
     and is excluded from repr. mode must currently be DIRECT. outstanding_capacity
     covers queued, active and retrying deliveries. retry is the delivery policy.
     """
@@ -202,10 +202,10 @@ class Destination:
 class Route:
     """Declare an AND predicate selecting one or more destinations.
 
-    destination_ids contains unique names. min_level defaults to ERROR; future
+    destination_ids contains unique names. min_level defaults to ERROR;
     notify=True bypasses only this threshold. topic/identity fields require exact
-    matches when supplied. All required_tags must occur in the event. Rules will
-    be combined by union; this class validates data but does not route events.
+    matches when supplied. All required_tags must occur in the event. Rules are
+    combined by union; this class validates data but does not route events.
     """
 
     destination_ids: tuple[str, ...]        # Имена получателей для этого правила.

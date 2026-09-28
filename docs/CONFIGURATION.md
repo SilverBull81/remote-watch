@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-110519
+Дата и время последнего изменения: 260928-131628
 
 ## Статус
 
@@ -12,8 +12,9 @@ Version 1.0.1
 Route и WatcherConfig. Они проверяют данные без запуска runtime. Формата файла,
 готовых provider-конструкторов и logging helper пока нет.
 В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
-YAML, JSON, TOML или специальных URL. Интеграция handler с обычным logging остаётся
-возможной; отдельный loader расширений dictConfig не входит в первую версию.
+YAML, JSON, TOML или специальных URL. Интеграция со стандартным logging реализована
+через NotificationRuntime.handler; отдельный loader расширений dictConfig не входит
+в первую версию. Пример: [RUNTIME.md](RUNTIME.md).
 
 ## Разделы
 
@@ -31,8 +32,14 @@ YAML, JSON, TOML или специальных URL. Интеграция handler
 
 Все реализованные policy/model-конструкторы доступны из remote_watch. Публичные имена:
 RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.retry,
-WatcherConfig.routes и WatcherConfig.commands. Политики задают требования к будущему
-runtime; сами dataclasses очереди не создают и таймауты не исполняют.
+WatcherConfig.routes и WatcherConfig.commands. Сами dataclasses очереди не создают
+и таймауты не исполняют. NotificationRuntime применяет ограничения при запуске.
+
+В версии 0.1.0.dev1 runtime требует явно задать `RetryPolicy(max_attempts=1)` у всех
+получателей. Значение 3 остаётся целевым default модели, но пока отклоняется runtime.
+Backoff и retry-after не исполняются до шага 3. Общий attempt_timeout уже применяется;
+connect_timeout должен отдельно соблюдать будущий сетевой адаптер, поскольку общий
+протокол send не раскрывает стадию установления соединения.
 
 Identity — непустые строки; пустое/неизвестное значение не подставляется из сети
 или названия чата. Для неизвестной region/host допустим явный маркер unknown.
@@ -94,7 +101,7 @@ Provider settings и ссылки на секреты принадлежат ф�
 В реализации SnapshotLimits.metadata_max_bytes ограничивает компактный JSON всех
 полей снимка, кроме message/exception; учитываются также IDs, timestamps, schema
 и признаки усечения. Notification валидирует уже подготовленный текст и не усекает
-его самостоятельно. Будущий logging normalizer выполнит усечение до создания модели.
+его самостоятельно. Logging normalizer выполняет усечение до создания модели.
 From_dict принимает только schema_version=1 и не принимает limits из payload.
 
 TTL назначения хранится в RetryPolicy.ttl. Эффективный deadline — минимум срока
