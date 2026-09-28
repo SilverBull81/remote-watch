@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-184554
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -77,8 +77,8 @@ from ._retry import retry_delay
 from ._shutdown import register, unregister
 from ._validation import require_callback
 from .channels import NotificationChannel
-from .config import Destination, WatcherConfig
-from .delivery import Delivery, DeliveryResult, DeliveryStatus
+from .config import DeliveryMode, Destination, WatcherConfig
+from .delivery import Delivery, DeliveryResult, DeliveryStatus, ResultSource
 from .events import Notification
 from .logging_handler import NotificationHandler
 from .routing import PolicyRouter
@@ -962,7 +962,9 @@ class NotificationRuntime:
             self._count("retries", destination_id=destination_id)
 
         try:
-            result = await asyncio.wait_for(state.channel.send(delivery), timeout)
+            # Relay должен ограничить срок gateway остатком TTL/остановки, а не исходной политикой.
+            bounded = replace(delivery, remaining_timeout=timeout)
+            result = await asyncio.wait_for(state.channel.send(bounded), timeout)
 
             if not isinstance(result, DeliveryResult):
                 raise TypeError("channel returned an invalid result")
@@ -980,7 +982,8 @@ class NotificationRuntime:
         except Exception:
             self._count("adapter_errors", destination_id=destination_id)
 
-        return DeliveryResult(status=DeliveryStatus.UNKNOWN)
+        source = ResultSource.RELAY if state.destination.mode is DeliveryMode.RELAY else ResultSource.PROVIDER
+        return DeliveryResult(status=DeliveryStatus.UNKNOWN, source=source)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

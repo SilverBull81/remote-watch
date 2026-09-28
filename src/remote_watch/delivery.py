@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -71,6 +71,8 @@ class Delivery:
 
     notification is an immutable snapshot. destination_id is a local logical name.
     delivery_id remains unchanged across retries. attempt is one-based.
+    remaining_timeout is the runtime's finite remaining attempt budget in seconds;
+    None permits a standalone adapter call to apply its configured timeout.
     This value describes an attempt; it does not schedule or execute it.
     """
 
@@ -78,6 +80,7 @@ class Delivery:
     destination_id: str         # Имя настроенного получателя.
     delivery_id: str            # Общий идентификатор всех повторов отправки.
     attempt: int = 1            # Номер попытки, начиная с единицы.
+    remaining_timeout: float | None = None  # Остаток срока попытки; None — вызов вне runtime.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка задания
@@ -93,6 +96,9 @@ class Delivery:
         require_text(self.destination_id, "destination_id")
         require_text(self.delivery_id, "delivery_id")
         require_int(self.attempt, "attempt")
+
+        if self.remaining_timeout is not None:
+            require_number(self.remaining_timeout, "remaining_timeout")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 

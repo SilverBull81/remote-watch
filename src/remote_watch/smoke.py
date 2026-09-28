@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-180519
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -170,11 +170,8 @@ async def _send(
     :rtype: DeliveryResult
     """
 
-    # provider - telegram или ntfy; одновременная рассылка двум сервисам здесь не выполняется.
+    # provider - telegram, ntfy или relay; команда проверяет ровно один выбранный путь.
     # settings - локальные настройки; их содержимое не входит в Notification и журнал.
-
-    from .adapters.ntfy import NtfyChannel, NtfyConfig
-    from .adapters.telegram import TelegramChannel, TelegramConfig
 
     token = settings.get("token")
     if not isinstance(token, str):
@@ -189,6 +186,8 @@ async def _send(
     os.environ[token_env] = token
     try:
         if provider == "telegram":
+            from .adapters.telegram import TelegramChannel, TelegramConfig
+
             channel = TelegramChannel(TelegramConfig(
                 token_env=token_env,
                 chat_id=settings.get("chat_id", settings.get("chat")),
@@ -197,10 +196,21 @@ async def _send(
                 allow_http=settings.get("allow_http", False),
             ), retry=policy)
         elif provider == "ntfy":
+            from .adapters.ntfy import NtfyChannel, NtfyConfig
+
             channel = NtfyChannel(NtfyConfig(
                 token_env=token_env,
                 topic=settings.get("topic", settings.get("chat")),
                 endpoint=settings.get("endpoint", "https://ntfy.sh"),
+                allow_http=settings.get("allow_http", False),
+            ), retry=policy)
+        elif provider == "relay":
+            from .adapters.relay import RelayChannel, RelayConfig
+
+            channel = RelayChannel(RelayConfig(
+                token_env=token_env,
+                endpoint=settings.get("endpoint"),
+                alias=settings.get("alias"),
                 allow_http=settings.get("allow_http", False),
             ), retry=policy)
         else:
@@ -235,7 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv - имя сервиса и необязательный путь к файлу; токены через командную строку не принимаются.
 
     parser = _Parser(description="Отправить одно синтетическое уведомление Remote Watch.")
-    parser.add_argument("provider", choices=("telegram", "ntfy"))
+    parser.add_argument("provider", choices=("telegram", "ntfy", "relay"))
     parser.add_argument("--credentials", type=Path, default=Path("credentials.local.json"))
 
     try:

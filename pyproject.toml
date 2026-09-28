@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "0.1.0"
+version = "0.2.0.dev1"
 description = "Standard logging integration and bounded asynchronous remote notifications"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,7 @@ classifiers = [
 dev = ["pytest>=8", "ruff>=0.6", "build>=1.2"]
 telegram = ["aiohttp>=3.14.3,<4"]
 ntfy = ["aiohttp>=3.14.3,<4"]
+relay = ["aiohttp>=3.14.3,<4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

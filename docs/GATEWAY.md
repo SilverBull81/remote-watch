@@ -1,10 +1,17 @@
 ﻿# Необязательный gateway
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-110519
+Дата и время последнего изменения: 260928-222548
+
+## Текущая реализация
+
+В 0.2.0.dev1 готовы wire-контракт и relay-клиент; серверный gateway с auth/ACL
+пока не реализован. Клиент проверен на подставном loopback-сервере. Конкретная
+схема и сроки: [RELAY.md](RELAY.md); упаковка: [ADR 0005](adr/0005-relay-wire-and-packaging.md).
+Дальнейшие разделы описывают целевое серверное поведение, а не готовый deployment.
 
 ## Две отдельные возможности
 
@@ -33,7 +40,7 @@ credentials приложением и каскад relay отключены. Р�
 
 Предлагаемый transport — HTTPS request/response с версионированным JSON envelope.
 Это wire-формат границы сервиса, он не навязывает JSON пользовательской конфигурации.
-Точные пути endpoints и schema фиксируются contract tests перед реализацией 0.2.
+Путь /v1/notifications и schema v1 зафиксированы в RELAY.md и contract tests 0.2.0.dev1.
 
 Запрос: schema version, неизменяемый Notification, destination alias, delivery ID,
 номер попытки и remaining TTL. TTL на gateway ограничивается server policy;
@@ -114,5 +121,6 @@ broadcast, pause/resume и reload_config
 добавляются после сценариев expiry, replay, session replacement и partial failure.
 Никакого произвольного shell или eval, даже для администратора.
 
-Packaging gateway выбирается до 0.2: допускается тот же репозиторий и отдельная
-distribution/extra. Core приложения не должен устанавливать серверный framework.
+Выбран тот же репозиторий/distribution и отдельный будущий extra gateway.
+До реализации сервера этот extra не создаётся; core приложения не устанавливает
+серверный framework. Клиент устанавливается через extra relay.

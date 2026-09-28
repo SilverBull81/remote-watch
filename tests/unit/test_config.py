@@ -1,10 +1,10 @@
 ﻿# Проверки конфигурации, ленивых фабрик и результатов доставки.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 260928-222548
 #
 # Функции:
 #
@@ -166,14 +166,14 @@ def test_finite_policy_bounds(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Нельзя случайно включить relay или безразмерную очередь
+# ТЕСТ : Проверка способов доставки и ограничений очереди
 #------------------------------------------------------------------------------------------------------------------
 def test_runtime_and_destination_validation() -> None:
 
-    """Reject unsupported modes and invalid queue/factory values eagerly."""
+    """Accept explicit transport modes and reject invalid queue/factory values eagerly."""
 
-    with pytest.raises(ValueError, match="not implemented"):
-        Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.RELAY)
+    destination = Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.RELAY)
+    assert destination.mode is DeliveryMode.RELAY
 
     with pytest.raises(TypeError, match="mode"):
         Destination(destination_id="phone", channel_factory=unused_factory, mode="direct")

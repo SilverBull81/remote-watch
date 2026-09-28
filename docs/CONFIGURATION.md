@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-184929
+Дата и время последнего изменения: 260928-222548
 
 ## Статус
 
@@ -65,8 +65,9 @@ Session ID создаётся на каждый runtime. Метаданные Lo
 
 Для direct необходимы provider settings. Для relay необходимы HTTPS gateway URL,
 service secret reference и remote alias; provider credentials у приложения не нужны.
-Смешивание прямых credentials и relay binding в одном назначении отклоняется.
-0.1 отклоняет relay как ещё неподдерживаемый режим. Нет автоматического переключения
+RelayConfig не содержит provider credentials и создаёт relay factory. В 0.2.0.dev1
+клиент уже реализован, рабочий gateway — ещё нет. Сам mode не подменяет произвольную
+пользовательскую фабрику. См. [RELAY.md](RELAY.md). Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
 
 На контрактном этапе Destination принимает destination_id, provider (описательное
@@ -76,7 +77,7 @@ outstanding_capacity и RetryPolicy. Фабрика — синхронный cal
 создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
 соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
 Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
-TelegramConfig/NtfyConfig создают готовые фабрики через destination(); токены читаются
+TelegramConfig/NtfyConfig/RelayConfig создают готовые фабрики через destination(); токены читаются
 из переменных окружения при open. Общего secret resolver пока нет. Неизвестные provider-имена
 не импортируются: так подключаются пользовательские реализации без registry SDK.
 

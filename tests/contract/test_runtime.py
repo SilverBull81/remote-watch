@@ -1,10 +1,10 @@
 ﻿# Сквозные проверки logging, фоновой отправки, очередей и остановки без сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-142747
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> RecordingChannel: Тестовый канал с управляемыми отказами и задержкой.
@@ -899,15 +899,19 @@ def test_startup_timeout_cleans_up(
 
     channel = RecordingChannel()
     config = make_runtime(identity, (channel,)).config
-    config = replace(config, runtime=replace(config.runtime, startup_timeout=0.2))
+    # Проверяем отмену зависшего open, а не точность планировщика ОС на границе десятков миллисекунд.
+    # При прежних 0.2 с резерв очистки составлял лишь 40 мс, что делало тест нестабильным под нагрузкой.
+    config = replace(config, runtime=replace(config.runtime, startup_timeout=1.0))
+    open_started = threading.Event()
 
     #--------------------------------------------------------------------------------------------------------------
-    # МЕТОД : Ожидание отмены по сроку запуска
+    # ФУНКЦИЯ : Ожидание отмены по сроку запуска
     #--------------------------------------------------------------------------------------------------------------
     async def blocked_open() -> None:
 
         """Wait indefinitely until the startup deadline cancels initialization."""
 
+        open_started.set()
         await asyncio.Event().wait()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -918,6 +922,7 @@ def test_startup_timeout_cleans_up(
         runtime.start()
 
     runtime.stop()
+    assert open_started.is_set()
     assert channel.closed and runtime.state is RuntimeState.FAILED
     assert not runtime._thread.is_alive()
 #------------------------------------------------------------------------------------------------------------------

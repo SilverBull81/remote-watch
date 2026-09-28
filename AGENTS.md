@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-184554
+Дата и время последнего изменения: 260928-222548
 
 ## Project Intent
 
@@ -18,8 +18,10 @@ a managed worker. Bounded retries, full jitter, retry-after, TTL, sync/async lif
 per-destination counters and bounded atexit cleanup are implemented. Telegram and
 ntfy outbound adapters use optional aiohttp; validation uses fake HTTP and loopback.
 RemoteWatcher owns optional console/rotating-file handlers and notification lifecycle.
-Private version 0.1.0 is implemented; public distribution is not planned. Gateway is
-still planned. The user confirmed both Telegram and ntfy smoke messages on Android;
+The private 0.1 baseline is complete. Version 0.2.0.dev1 adds a finite field-smoke CLI,
+relay wire models and an optional relay client. The server gateway, auth/ACL and
+command execution are not implemented; loopback tests use a gateway stub. Public
+distribution is not planned. The user confirmed both Telegram and ntfy smoke messages on Android;
 ntfy uses a free account without topic reservation. Regional/background validation
 and Python 3.10/Linux runtime checks remain pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
@@ -43,6 +45,8 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
   Functions, partials and explicit CommandSpec declarations are supported.
 - Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
 - Read `docs/ADAPTERS.md` for provider configuration, HTTP behavior and opt-in live tests.
+- Read `docs/RELAY.md` and ADR 0005 for the implemented relay client and pending server.
+- Read `docs/FIELD_SMOKE.md` for finite field runs, reports and manual phone observations.
 - Read `docs/SMOKE.md` for explicit one-message checks. Local credentials.local.json
   is ignored and must never be displayed, committed or included in build artifacts.
 

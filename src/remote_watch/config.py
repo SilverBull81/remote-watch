@@ -1,10 +1,10 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> DeliveryMode: Отправка напрямую или через будущий шлюз.
@@ -151,7 +151,7 @@ class Destination:
     destination_id is a unique routing name; provider is descriptive, not an import.
     channel_factory takes no arguments and creates a NotificationChannel when the
     runtime starts. The factory owns provider configuration/secret references
-    and is excluded from repr. mode must currently be DIRECT. outstanding_capacity
+    and is excluded from repr. mode describes the selected DIRECT or RELAY factory. outstanding_capacity
     covers queued, active and retrying deliveries. retry is the delivery policy.
     """
 
@@ -178,9 +178,8 @@ class Destination:
         if not isinstance(self.mode, DeliveryMode):
             raise TypeError("mode must be DeliveryMode")
 
-        # Режим шлюза зарезервирован в интерфейсе, но его реализация ещё не готова.
-        if self.mode is DeliveryMode.RELAY:
-            raise ValueError("relay delivery is not implemented")
+        # Способ доставки описывает выбранную фабрику; сам enum не подменяет прямой канал шлюзом.
+        # RelayConfig.destination задаёт согласованную пару mode/factory без зависимости core от адаптера.
 
         require_int(self.outstanding_capacity, "outstanding_capacity")
 

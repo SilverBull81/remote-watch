@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-180519
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -16,7 +16,7 @@
 #    -> close(): Закрытие клиента и освобождение ресурсов.
 #
 # Функции и тесты:
-# -> channels(): Подмена обоих каналов без запуска сети.
+# -> channels(): Подмена каналов без запуска сети.
 # -> test_smoke_command(): Выбор одного сервиса, свежие данные и очистка временного токена.
 # -> test_bad_credentials(): Безопасная ошибка при неверном локальном файле.
 # -> test_default_path_and_missing_file(): Чтение настроек из текущего каталога.
@@ -37,7 +37,7 @@ from pathlib import Path
 import pytest
 
 from remote_watch import Delivery, DeliveryResult, DeliveryStatus, RetryPolicy, smoke
-from remote_watch.adapters import ntfy, telegram
+from remote_watch.adapters import ntfy, relay, telegram
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -51,7 +51,7 @@ class FakeChannel:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: telegram.TelegramConfig | ntfy.NtfyConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
         *,
         retry: RetryPolicy,
         ) -> None:
@@ -59,7 +59,7 @@ class FakeChannel:
         """Keep the real validated configuration but skip the HTTP client.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig
+        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
@@ -84,7 +84,9 @@ class FakeChannel:
 
         """Check temporary authentication or reproduce a private startup error."""
 
-        assert os.environ[self.config.token_env] == "123:synthetic_secret"
+        expected = ("synthetic_service_token_01234567890123456789"
+                    if isinstance(self.config, relay.RelayConfig) else "123:synthetic_secret")
+        assert os.environ[self.config.token_env] == expected
         if self.open_error:
             raise RuntimeError("synthetic_secret")
     #--------------------------------------------------------------------------------------------------------------
@@ -127,12 +129,12 @@ class FakeChannel:
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Подмена обоих каналов без запуска сети
+# ФУНКЦИЯ : Подмена каналов без запуска сети
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 
-    """Replace both adapter constructors while preserving configuration validation.
+    """Replace adapter constructors while preserving configuration validation.
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -149,7 +151,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
     # ФУНКЦИЯ : Создание и сохранение тестовой сессии
     #--------------------------------------------------------------------------------------------------------------
     def create(
-        config: telegram.TelegramConfig | ntfy.NtfyConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
         *,
         retry: RetryPolicy,
         ) -> FakeChannel:
@@ -157,7 +159,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         """Capture a channel constructed by the smoke command.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig
+        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
@@ -176,6 +178,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 
     monkeypatch.setattr(telegram, "TelegramChannel", create)
     monkeypatch.setattr(ntfy, "NtfyChannel", create)
+    monkeypatch.setattr(relay, "RelayChannel", create)
     return created
 #------------------------------------------------------------------------------------------------------------------
 
@@ -184,7 +187,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 # ТЕСТ : Выбор одного сервиса, свежие данные и очистка временного токена
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("provider,address", [("telegram", "chat"), ("telegram", "chat_id"),
-    ("ntfy", "chat"), ("ntfy", "topic")])
+    ("ntfy", "chat"), ("ntfy", "topic"), ("relay", "alias")])
 def test_smoke_command(
     provider: str,
     address: str,
@@ -219,7 +222,10 @@ def test_smoke_command(
 
     path = tmp_path / "credentials.local.json"
     target = "-123" if provider == "telegram" else "test-topic"
-    path.write_text(json.dumps({provider: {"token": "123:synthetic_secret", address: target},
+    settings = {"token": "123:synthetic_secret", address: target}
+    if provider == "relay":
+        settings.update(token="synthetic_service_token_01234567890123456789", endpoint="https://gateway.invalid")
+    path.write_text(json.dumps({provider: settings,
         "unused": {"token": ""}}), encoding="utf-8-sig")
     original = path.read_bytes()
     before = dict(os.environ)
@@ -233,6 +239,7 @@ def test_smoke_command(
     assert dict(os.environ) == before and path.read_bytes() == original
     output = capsys.readouterr().out
     assert "synthetic_secret" not in output and target not in output and str(path) not in output
+    assert "synthetic_service_token" not in output
 #------------------------------------------------------------------------------------------------------------------
 
 

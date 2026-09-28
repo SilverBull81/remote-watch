@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260928-222548
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from .._validation import require_int
 from ..config import RetryPolicy
 from ..delivery import DeliveryResult, DeliveryStatus
 
@@ -52,20 +54,36 @@ class HttpSender:
     def __init__(
         self,
         policy: RetryPolicy,
+        *,
+        response_limit: int = 65536,
+        json_decoder: Callable[[bytes], object] = json.loads,
         ) -> None:
 
         """Store request budgets without importing or creating a network client.
 
         :param policy: Timeout and retry policy.
         :type policy: RetryPolicy
+
+        :param response_limit: Maximum response body size in bytes.
+        :type response_limit: int
+
+        :param json_decoder: Bounded JSON decoder, optionally rejecting duplicate fields.
+        :type json_decoder: Callable[[bytes], object]
         """
 
         # policy - политика времени ожидания и повторов.
+        # response_limit - предел размера ответа до разбора JSON.
+        # json_decoder - выбранный разборщик тела ответа без вывода его содержимого.
 
         if not isinstance(policy, RetryPolicy):
             raise TypeError("retry must be RetryPolicy")
+        require_int(response_limit, "response_limit")
+        if not callable(json_decoder):
+            raise TypeError("json_decoder must be callable")
 
         self._policy = policy
+        self._response_limit = response_limit
+        self._json_decoder = json_decoder
         self._client: aiohttp.ClientSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
@@ -89,7 +107,7 @@ class HttpSender:
             import aiohttp
         except ImportError:
             raise ImportError(
-                "install remote-watch[telegram] or remote-watch[ntfy] to send notifications",
+                "install remote-watch[telegram], remote-watch[ntfy] or remote-watch[relay] to send notifications",
             ) from None
 
         # Один канал обрабатывается последовательно. Cookies, proxy из окружения и распаковка не нужны.
@@ -158,12 +176,12 @@ class HttpSender:
             async with self._client.post(url, json=payload, headers=headers, allow_redirects=False) as response:
                 data = bytearray()
                 async for chunk in response.content.iter_chunked(4096):
-                    if len(data) + len(chunk) > 65536:
+                    if len(data) + len(chunk) > self._response_limit:
                         return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="response_too_large")
                     data.extend(chunk)
 
                 try:
-                    body = json.loads(data)
+                    body = self._json_decoder(bytes(data))
                 except (ValueError, UnicodeError, RecursionError):
                     body = None
                 return response.status, {"retry-after": response.headers.get("Retry-After", "")}, body
