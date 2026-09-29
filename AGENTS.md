@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-222548
+Дата и время последнего изменения: 260929-115555
 
 ## Project Intent
 
@@ -22,8 +22,10 @@ The private 0.1 baseline is complete. Version 0.2.0.dev1 adds a finite field-smo
 relay wire models and an optional relay client. The server gateway, auth/ACL and
 command execution are not implemented; loopback tests use a gateway stub. Public
 distribution is not planned. The user confirmed both Telegram and ntfy smoke messages on Android;
-ntfy uses a free account without topic reservation. Regional/background validation
-and Python 3.10/Linux runtime checks remain pending. Real application migration is
+ntfy uses a free account without topic reservation. Short regional tests found Telegram
+connect timeouts on both Russian hosts and ntfy long-message rejection on all three hosts.
+Version 0.2.0.dev2 fixes ntfy JSON serialization and wire size limits; regional retests,
+background validation and Python 3.10/Linux runtime checks remain pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.

@@ -1,10 +1,10 @@
 ﻿# Проверка границ настройки адаптеров и освобождения частично созданного клиента.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-115555
 #
 # Функции и тесты:
 # -> test_invalid_settings(): Отклонение неверных настроек до чтения токена.
@@ -44,6 +44,7 @@ from remote_watch.adapters.telegram import TelegramConfig
     ("ntfy", {"priority": True}), ("ntfy", {"priority": 0}), ("ntfy", {"priority": 6}),
     ("ntfy", {"token_env": "x\ny"}), ("ntfy", {"title": "x" * 257}),
     ("ntfy", {"tags": tuple(str(i) for i in range(17))}), ("ntfy", {"allow_http": 1}),
+    ("ntfy", {"tags": tuple(str(i) + "\x00" * 250 for i in range(16))}),
 ])
 def test_invalid_settings(
     provider: str,

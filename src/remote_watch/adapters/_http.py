@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-115555
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -57,6 +57,7 @@ class HttpSender:
         *,
         response_limit: int = 65536,
         json_decoder: Callable[[bytes], object] = json.loads,
+        json_encoder: Callable[[object], str] = json.dumps,
         ) -> None:
 
         """Store request budgets without importing or creating a network client.
@@ -69,21 +70,28 @@ class HttpSender:
 
         :param json_decoder: Bounded JSON decoder, optionally rejecting duplicate fields.
         :type json_decoder: Callable[[bytes], object]
+
+        :param json_encoder: Serializer shared with the adapter's request size checks.
+        :type json_encoder: Callable[[object], str]
         """
 
         # policy - политика времени ожидания и повторов.
         # response_limit - предел размера ответа до разбора JSON.
         # json_decoder - выбранный разборщик тела ответа без вывода его содержимого.
+        # json_encoder - способ упаковки запроса, согласованный с ограничениями адаптера.
 
         if not isinstance(policy, RetryPolicy):
             raise TypeError("retry must be RetryPolicy")
         require_int(response_limit, "response_limit")
         if not callable(json_decoder):
             raise TypeError("json_decoder must be callable")
+        if not callable(json_encoder):
+            raise TypeError("json_encoder must be callable")
 
         self._policy = policy
         self._response_limit = response_limit
         self._json_decoder = json_decoder
+        self._json_encoder = json_encoder
         self._client: aiohttp.ClientSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
@@ -127,6 +135,7 @@ class HttpSender:
                 trust_env=False,
                 auto_decompress=False,
                 headers={"Accept-Encoding": "identity"},
+                json_serialize=self._json_encoder,
             )
         except Exception:
             # Сессия ещё не приняла владение connector: освобождаем его сами при ошибке создания.

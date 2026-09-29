@@ -1,10 +1,10 @@
 ﻿# Длительная полевая проверка серверов и Android
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-222548
+Дата и время последнего изменения: 260929-115555
 
 ## Что проверяет команда
 
@@ -40,6 +40,7 @@ service/environment/region/host/instance, event/session/delivery IDs и врем
 ```sh
 python -m pip install "remote-watch[telegram,ntfy] @ git+ssh://git@github.com/OWNER/REPOSITORY.git@REVISION"
 python -m remote_watch.field_smoke --help
+python -c "from importlib.metadata import version; import remote_watch; print(version('remote-watch')); print(remote_watch.__file__)"
 ```
 
 OWNER/REPOSITORY/REVISION — заменяемые значения. На всех трёх серверах используйте
@@ -63,15 +64,22 @@ python -m remote_watch.field_smoke both --region ru --host server-ru --instance-
 Для суточного наблюдения, по одной команде в окружении каждого сервера:
 
 ```sh
-python -m remote_watch.field_smoke both --region ru --host server-ru --instance-id ru-01 --output runs/field-ru-day1.jsonl
-python -m remote_watch.field_smoke both --region region-2 --host server-2 --instance-id server-02 --output runs/field-server2-day1.jsonl
-python -m remote_watch.field_smoke both --region region-3 --host server-3 --instance-id server-03 --output runs/field-server3-day1.jsonl
+python -m remote_watch.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --interval 1800 --output runs/field-ru-day1.jsonl
+python -m remote_watch.field_smoke ntfy --region ru --host server-ru2 --instance-id ru-02 --interval 1800 --output runs/field-ru2-day1.jsonl
+python -m remote_watch.field_smoke both --region lv --host server-lv --instance-id lv-01 --interval 1800 --output runs/field-lv-day1.jsonl
 ```
 
 Замените region/host/instance-id своими явными обозначениями. По умолчанию длительность
 86400 секунд, интервал 900 секунд: около 96 сообщений на каждый канал от каждого сервера.
 Номера разных запусков различаются по `run`. `telegram` либо `ntfy` вместо `both`
 выбирает один канал. `--credentials` задаёт иной путь к локальному файлу.
+
+Команды выше явно задают интервал 1800 секунд: 48 сообщений за сутки с каждой машины,
+144 в ntfy со всех трёх. Это оставляет запас относительно опубликованного
+[лимита ntfy.sh 250 сообщений в сутки](https://docs.ntfy.sh/publish/#limitations),
+даже если расход трёх машин учитывается совместно. Короткие проверки, другие приложения
+и принятые повторные отправки также расходуют квоту. Три запуска с интервалом по умолчанию
+дали бы 288 сообщений; перед сутками проверьте остаток лимита своего аккаунта.
 
 Каждый запуск требует нового пути `.jsonl`; существующий отчёт не перезаписывается.
 Без `--output` создаётся уникальный файл в `runs/`, путь печатается при запуске.
@@ -84,6 +92,47 @@ python -m remote_watch.field_smoke both --region region-3 --host server-3 --inst
 способ сохранения сессии/процесса после отключения SSH. Ctrl+C завершает runtime и
 записывает итог. Аварийное завершение или принудительное убийство процесса могут
 оставить отчёт без summary; такой запуск не считается штатно завершённым.
+
+## Результаты короткого запуска 29.09.2026 и повторная проверка
+
+Разобраны три пары JSONL/log из локального каталога пользователя `C:\Work\runs`.
+Во всех запусках подготовлены четыре сообщения за 240 секунд с интервалом 60 секунд.
+Ниже приём сервисом по JSONL; пользователь подтвердил совпадающее получение на телефоне.
+
+| Отчёт | Размещение по сообщению пользователя | Python / версия пакета в отчёте | Telegram | ntfy |
+| --- | --- | --- | --- | --- |
+| field-ru-quick | Россия, сервер 1 | 3.12.7 / 0.2.0.dev1 | 0/4; 12 connect_timeout | 3/4; long text отклонён |
+| field-home-quick | Россия, сервер 2 | 3.12.10 / 0.2.0.dev1 | 0/4; 12 connect_timeout | 3/4; long text отклонён |
+| field-eu-quick | Латвия | 3.12.2 / 0.1.0.dev3 | 4/4 с первой попытки | 3/4; long text отклонён |
+
+Все три отчёта указывают Windows. Во всех runtime завершился в состоянии closed,
+без потерь диагностики, переполнений очередей и ошибок закрытия. Ошибки Telegram
+не остановили ntfy. Таймаут соединения подтверждает недоступность пути за отведённые
+3 секунды; по этим данным нельзя определить конкретный механизм сетевого ограничения.
+
+Для ntfy записан permanent_failure / http_rejected, а не принятие с потерей на Android.
+Старый отчёт не сохранял числовой HTTP-код. Найден дефект сериализации: JSON с
+ASCII-экранированием мог превысить 8192 байта при допустимых 4096 байтах message.
+В синтетическом воспроизведении получилось 11083 байта; после исправления — 4182.
+Исправление 0.2.0.dev2 проверяется по реальным байтам запроса на loopback-сервере.
+
+Перед суточным запуском установите **одну ревизию с 0.2.0.dev2 или новее** во всех
+окружениях. Проверьте версию и путь импорта командой выше: значение 0.1.0.dev3 при
+наличии field_smoke требует проверки установки, но само по себе не объясняет
+общий сбой ntfy. После обновления повторите четыре случая с новым именем отчёта:
+
+```sh
+python -m remote_watch.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-ru-recheck.jsonl
+python -m remote_watch.field_smoke both --region lv --host server-lv --instance-id lv-01 --duration 240 --interval 60 --output runs/field-lv-recheck.jsonl
+```
+
+На второй российской машине задайте собственные host/instance-id и имя отчёта.
+Условие перехода к суткам: accepted=4 у каждого выбранного канала и наличие на телефоне
+всех четырёх номеров, включая long text с отметкой сокращения. В России суточный тест
+пока имеет смысл для ntfy; прямой Telegram можно перепроверить после изменения
+сетевой доступности либо отдельно проверить через будущий gateway. Готового сервера
+relay в этой версии ещё нет. Длительный запуск обоих каналов при прежней недоступности
+Telegram будет ожидаемо завершаться с неполной доставкой.
 
 ## План наблюдений на телефоне
 

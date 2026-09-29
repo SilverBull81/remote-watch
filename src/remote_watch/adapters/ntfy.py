@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-115555
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -21,6 +21,10 @@
 #    -> send(): Одна попытка отправки и проверка ответа.
 #    -> close(): Закрытие клиента и освобождение ресурсов.
 #
+# Функции:
+# -> _encode_json(): Компактный JSON с кириллицей в UTF-8.
+# -> _publish_payload(): Ограничение текста и полного запроса перед отправкой.
+#
 
 
 #******************************************************************************************************************
@@ -28,6 +32,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from functools import partial
@@ -119,6 +124,10 @@ class NtfyConfig:
         object.__setattr__(self, "tags", text_tuple(self.tags, "tags"))
         if len(self.tags) > 16:
             raise ValueError("at most sixteen tags are supported")
+
+        # Даже метаданные с экранированием должны оставлять место для отметки об усечении.
+        # Проверяем это при настройке, чтобы неверный набор меток не ломал каждую отправку.
+        _publish_payload(self, "\n[сокращено]")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -154,7 +163,7 @@ class NtfyChannel:
             raise TypeError("config must be NtfyConfig")
 
         self._config = config
-        self._http = HttpSender(retry if retry is not None else RetryPolicy())
+        self._http = HttpSender(retry if retry is not None else RetryPolicy(), json_encoder=_encode_json)
         self._token: str | None = None
         self._opened = False
     #--------------------------------------------------------------------------------------------------------------
@@ -200,15 +209,8 @@ class NtfyChannel:
         if not isinstance(delivery, Delivery):
             raise TypeError("delivery must be Delivery")
 
-        # JSON сохраняет кириллицу в title/tags без ограничений ASCII-заголовков HTTP.
-        # Ограничиваем message в байтах: длинный текст не должен превращаться во вложение ntfy.
-        payload: dict[str, object] = {
-            "topic": self._config.topic,
-            "message": truncate(render(delivery), 4096),
-            "title": self._config.title,
-            "priority": self._config.priority,
-            "tags": list(self._config.tags),
-        }
+        # Проверяем не только текст, но и байты JSON, которые действительно отправит HTTP-клиент.
+        payload = _publish_payload(self._config, render(delivery))
         response = await self._http.post(self._config.endpoint.rstrip('/') + '/', payload, self._token)
         if isinstance(response, DeliveryResult):
             return response
@@ -236,6 +238,82 @@ class NtfyChannel:
             self._token = None
             self._opened = False
     #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Компактный JSON с кириллицей в UTF-8
+#------------------------------------------------------------------------------------------------------------------
+def _encode_json(payload: object) -> str:
+
+    """Serialize JSON without expanding Unicode characters into ASCII escapes.
+
+    :param payload: JSON-compatible request data.
+    :type payload: object
+
+    :return: The exact JSON text used by the HTTP client.
+    :rtype: str
+    """
+
+    # payload - данные запроса; содержимое не выводится в диагностику.
+
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Ограничение текста и полного запроса перед отправкой
+#------------------------------------------------------------------------------------------------------------------
+def _publish_payload(
+    config: NtfyConfig,
+    message: str,
+    ) -> dict[str, object]:
+
+    """Bound message bytes and serialized JSON bytes independently.
+
+    :param config: Validated destination metadata.
+    :type config: NtfyConfig
+
+    :param message: Rendered notification text.
+    :type message: str
+
+    :return: One publish request within both default ntfy limits.
+    :rtype: dict[str, object]
+    """
+
+    # config - постоянные настройки получателя.
+    # message - текст со сведениями об источнике и идентификаторами доставки.
+
+    # ntfy ограничивает текст 4096 байтами, а JSON publish — удвоенным размером текста.
+    # ensure_ascii=False устраняет разрастание кириллицы, но кавычки и управляющие символы
+    # всё равно экранируются; большой набор меток тоже занимает часть доступного объёма.
+    text = truncate(message, 4096)
+    payload: dict[str, object] = {
+        "topic": config.topic, "message": text, "title": config.title,
+        "priority": config.priority, "tags": list(config.tags),
+    }
+    if len(_encode_json(payload).encode("utf-8")) <= 8192:
+        return payload
+
+    marker = "\n[сокращено]"
+    payload["message"] = marker
+    if len(_encode_json(payload).encode("utf-8")) > 8192:
+        raise ValueError("ntfy display settings exceed the JSON request limit")
+
+    # Подбираем самый длинный допустимый префикс за ограниченное число шагов.
+    # Режем по символам Python: emoji и кириллица сохраняются целиком. Метаданные не меняем.
+    lower, upper = 0, len(text)
+    while lower < upper:
+        middle = (lower + upper + 1) // 2
+        candidate = text[:middle] + marker
+        payload["message"] = candidate
+        if len(candidate.encode("utf-8")) <= 4096 and len(_encode_json(payload).encode("utf-8")) <= 8192:
+            lower = middle
+        else:
+            upper = middle - 1
+
+    payload["message"] = text[:lower] + marker
+    return payload
 #------------------------------------------------------------------------------------------------------------------
 
 

@@ -1,13 +1,14 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-115555
 #
 # Функции и тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
+# -> test_ntfy_wire_limits(): Размер фактически отправленного JSON и текста ntfy.
 
 
 #******************************************************************************************************************
@@ -18,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import replace
 
 import pytest
 
@@ -172,6 +174,111 @@ def test_local_http(
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
     assert "synthetic" not in caplog.text
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Размер фактически отправленного JSON и текста ntfy
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("message", ["Короткий текст 📡", "Длинный текст 📡 " * 220, '\x00"\\\n' * 1100],
+    ids=["short", "unicode", "escaped"])
+@pytest.mark.parametrize("large_metadata", [False, True])
+def test_ntfy_wire_limits(
+    notification: Notification,
+    message: str,
+    large_metadata: bool,
+    ) -> None:
+
+    """Exercise actual aiohttp serialization against ntfy's two size limits.
+
+    :param notification: Synthetic source notification.
+    :type notification: Notification
+
+    :param message: Text exercising UTF-8 or JSON escaping.
+    :type message: str
+
+    :param large_metadata: Whether metadata consumes most of the request budget.
+    :type large_metadata: bool
+    """
+
+    # notification - исходное уведомление с вымышленной принадлежностью.
+    # message - короткий текст либо текст, требующий усечения.
+    # large_metadata - большой допустимый набор меток и заголовок.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка настоящих байтов запроса на локальном сервере
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """Reject oversized wire requests before parsing their JSON contents."""
+
+        from aiohttp import web
+
+        requests: list[bytes] = []
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Воспроизведение ограничений JSON publish API
+        #----------------------------------------------------------------------------------------------------------
+        async def publish(request: web.Request) -> web.Response:
+
+            """Apply the provider limits to raw bytes, then to the decoded message.
+
+            :param request: Incoming loopback request.
+            :type request: web.Request
+
+            :return: Provider-shaped acceptance or size rejection.
+            :rtype: web.Response
+            """
+
+            # request - локальный запрос без реальных credentials.
+
+            raw = await request.read()
+            requests.append(raw)
+            if len(raw) > 8192:
+                return web.json_response({"code": 41301}, status=413)
+
+            payload = json.loads(raw)
+            if len(payload["message"].encode("utf-8")) > 4096:
+                return web.json_response({"code": 40000}, status=400)
+            return web.json_response({"event": "message", "topic": payload["topic"], "id": "synthetic"})
+        #----------------------------------------------------------------------------------------------------------
+
+        app = web.Application()
+        app.router.add_post("/", publish)
+        runner = web.AppRunner(app, access_log=None)
+        await runner.setup()
+        server = await asyncio.get_running_loop().create_server(runner.server, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        # Полные метаданные дополнительно проверяют, что бюджет не сводится к длине message.
+        tags = tuple(str(i) + "т" * 127 for i in range(16)) if large_metadata else ("проверка",)
+        config = NtfyConfig(topic="test", token_env=None, endpoint=f"http://127.0.0.1:{port}",
+            allow_http=True, title="З" * 128 if large_metadata else "Проверка 📡", tags=tags)
+        channel = NtfyChannel(config)
+        delivery = Delivery(notification=replace(notification, message=message),
+            destination_id="phone", delivery_id="wire-size")
+        try:
+            await channel.open()
+            result = await asyncio.wait_for(channel.send(delivery), 3)
+            assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
+            assert len(requests) == 1
+            assert len(requests[0]) <= 8192
+            payload = json.loads(requests[0])
+            assert payload["title"] == config.title
+            assert payload["tags"] == list(tags)
+            assert "delivery_id=wire-size" in payload["message"]
+            assert len(payload["message"].encode("utf-8")) <= 4096
+            if len(message.encode("utf-8")) > 4096:
+                assert payload["message"].endswith("\n[сокращено]")
+            else:
+                assert payload["message"].endswith(message)
+        finally:
+            await channel.close()
+            server.close()
+            await server.wait_closed()
+            await runner.cleanup()
+    #--------------------------------------------------------------------------------------------------------------
+
+    asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
 
