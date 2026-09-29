@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-192353
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов.
@@ -400,7 +400,7 @@ def test_success_and_lifecycle(
             assert url == "https://ntfy.sh/"
             assert request["headers"]["Authorization"] == "Bearer tk_synthetic_test_token"
             assert payload["title"] == "Проверка" and payload["topic"] == "test-topic"
-            assert len(text.encode()) <= 4096
+            assert len(text.encode()) <= 4095
         assert "synthetic_test_token" not in repr(channel) + repr(channel._config) + repr(result)
         await channel.close()
         await channel.close()

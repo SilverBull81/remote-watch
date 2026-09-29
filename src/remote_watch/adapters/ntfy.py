@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 260929-192353
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -293,10 +293,13 @@ def _publish_payload(
     # config - постоянные настройки получателя.
     # message - текст со сведениями об источнике и идентификаторами доставки.
 
-    # ntfy ограничивает текст 4096 байтами, а JSON publish — удвоенным размером текста.
+    # Документированный предел ntfy — 4096 байт, но на двух реальных серверах
+    # dev5 ровно 4096 байт стабильно дали HTTP 500/50001, а 4095 были приняты.
+    # Оставляем один байт запаса; отметка об усечении входит в этот же предел.
+    # JSON publish отдельно ограничен 8192 байтами при стандартной настройке ntfy.
     # ensure_ascii=False устраняет разрастание кириллицы, но кавычки и управляющие символы
     # всё равно экранируются; большой набор меток тоже занимает часть доступного объёма.
-    text = truncate(message, 4096)
+    text = truncate(message, 4095)
     payload: dict[str, object] = {
         "topic": config.topic, "message": text, "title": config.title,
         "priority": config.priority, "tags": list(config.tags),
@@ -316,7 +319,7 @@ def _publish_payload(
         middle = (lower + upper + 1) // 2
         candidate = text[:middle] + marker
         payload["message"] = candidate
-        if len(candidate.encode("utf-8")) <= 4096 and len(_encode_json(payload).encode("utf-8")) <= 8192:
+        if len(candidate.encode("utf-8")) <= 4095 and len(_encode_json(payload).encode("utf-8")) <= 8192:
             lower = middle
         else:
             upper = middle - 1

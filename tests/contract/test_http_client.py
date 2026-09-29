@@ -1,10 +1,10 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-115555
+# Дата и время последнего изменения: 260929-192353
 #
 # Функции и тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
@@ -24,6 +24,7 @@ from dataclasses import replace
 import pytest
 
 from remote_watch import Delivery, DeliveryStatus, Notification, RetryPolicy
+from remote_watch.adapters._common import render
 from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
 from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
 
@@ -180,12 +181,16 @@ def test_local_http(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Размер фактически отправленного JSON и текста ntfy
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("message", ["Короткий текст 📡", "Длинный текст 📡 " * 220, '\x00"\\\n' * 1100],
-    ids=["short", "unicode", "escaped"])
+@pytest.mark.parametrize(("message", "rendered_size"), [
+    ("Короткий текст 📡", None), ("Длинный текст 📡 " * 220, None), ('\x00"\\\n' * 1100, None),
+    *[(pattern, size) for pattern in ("x", "Я📡") for size in (4095, 4096, 4097, 5000)],
+], ids=["short", "unicode", "escaped",
+        *[f"{alphabet}-{size}" for alphabet in ("ascii", "unicode") for size in (4095, 4096, 4097, 5000)]])
 @pytest.mark.parametrize("large_metadata", [False, True])
 def test_ntfy_wire_limits(
     notification: Notification,
     message: str,
+    rendered_size: int | None,
     large_metadata: bool,
     ) -> None:
 
@@ -197,12 +202,16 @@ def test_ntfy_wire_limits(
     :param message: Text exercising UTF-8 or JSON escaping.
     :type message: str
 
+    :param rendered_size: Exact UTF-8 size including the rendered header, if specified.
+    :type rendered_size: int | None
+
     :param large_metadata: Whether metadata consumes most of the request budget.
     :type large_metadata: bool
     """
 
     # notification - исходное уведомление с вымышленной принадлежностью.
     # message - короткий текст либо текст, требующий усечения.
+    # rendered_size - точный размер вместе с шапкой; None оставляет заданный текст.
     # large_metadata - большой допустимый набор меток и заголовок.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -238,8 +247,10 @@ def test_ntfy_wire_limits(
                 return web.json_response({"code": 41301}, status=413)
 
             payload = json.loads(raw)
-            if len(payload["message"].encode("utf-8")) > 4096:
-                return web.json_response({"code": 40000}, status=400)
+            # Оба полевых отчёта dev5: 4095 байт приняты, ровно 4096 дали 50001.
+            # Сервер воспроизводит наблюдённый отказ, чтобы поймать возврат к старой границе.
+            if len(payload["message"].encode("utf-8")) >= 4096:
+                return web.json_response({"code": 50001}, status=500)
             return web.json_response({"event": "message", "topic": payload["topic"], "id": "synthetic"})
         #----------------------------------------------------------------------------------------------------------
 
@@ -256,6 +267,17 @@ def test_ntfy_wire_limits(
         channel = NtfyChannel(config)
         delivery = Delivery(notification=replace(notification, message=message),
             destination_id="phone", delivery_id="wire-size")
+        if rendered_size is not None:
+            # Размер включает служебную шапку; простое повторение message не проверяет
+            # границу 4095/4096. Остаток заполняем ASCII, не разрывая Unicode-символы.
+            empty = replace(delivery, notification=replace(notification, message=""))
+            budget = rendered_size - len(render(empty).encode("utf-8"))
+            repeats, remainder = divmod(budget, len(message.encode("utf-8")))
+            text = message * repeats + "." * remainder
+            delivery = replace(delivery, notification=replace(notification, message=text))
+            assert len(render(delivery).encode("utf-8")) == rendered_size
+
+        original = render(delivery)
         try:
             await channel.open()
             result = await asyncio.wait_for(channel.send(delivery), 3)
@@ -266,11 +288,17 @@ def test_ntfy_wire_limits(
             assert payload["title"] == config.title
             assert payload["tags"] == list(tags)
             assert "delivery_id=wire-size" in payload["message"]
-            assert len(payload["message"].encode("utf-8")) <= 4096
-            if len(message.encode("utf-8")) > 4096:
+            sent = payload["message"]
+            assert len(sent.encode("utf-8")) <= 4095
+            assert result.message_bytes == len(sent.encode("utf-8"))
+            assert result.request_bytes == len(requests[0])
+            if len(original.encode("utf-8")) > 4095 or sent != original:
                 assert payload["message"].endswith("\n[сокращено]")
+                assert original.startswith(sent.removesuffix("\n[сокращено]"))
             else:
-                assert payload["message"].endswith(message)
+                assert sent == original
+            if not large_metadata and rendered_size == 4095:
+                assert sent == original
         finally:
             await channel.close()
             server.close()

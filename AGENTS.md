@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.2
+Version 1.1.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-190055
+Дата и время последнего изменения: 260929-192353
 
 ## Project Intent
 
@@ -38,9 +38,12 @@ root cause remains unresolved and 24-hour tests are deferred. In dev5 the diagno
 numbers are retained, a finite ntfy size diagnostic is available, relay enforces fixed
 notification limits before sending, and local real TLS is tested. Relay schema 1 stays
 the default for compatibility; schema 2 explicitly enables provider diagnostics.
-Do not equate diagnostic tooling with a verified fix for the live ntfy failure.
-See docs/REVIEW_0_1_0_2.md
-for the diagnostic, relay-limit, local TLS and compatibility work remaining.
+Two Russian dev5 diagnostics now show identical boundaries for ASCII and Unicode:
+4095 message bytes accepted; 4096 bytes return HTTP 500, provider code 50001.
+Version dev6 caps ntfy text at 4095 UTF-8 bytes including the truncation marker;
+the JSON cap remains 8192 bytes. Local HTTP regression covers the boundary.
+The exact provider internals remain unknown; dev6 live confirmation is pending.
+See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
 Background validation and Python 3.10/Linux runtime checks remain pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
