@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.1
+Version 1.1.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-183445
+Дата и время последнего изменения: 260929-190055
 
 ## Project Intent
 
@@ -33,8 +33,13 @@ ntfy uses a free account without topic reservation. Short regional tests found T
 connect timeouts on both Russian hosts and ntfy long-message rejection on all three hosts.
 Version 0.2.0.dev2 fixes ntfy JSON serialization and wire size limits. Two Russian
 rechecks on dev2 still confirm only three of four messages: long text returns
-http_temporary on all three attempts. Exact HTTP status is not retained yet;
-root cause remains unresolved and 24-hour tests are deferred. See docs/REVIEW_0_1_0_2.md
+http_temporary on all three attempts. Those reports do not retain exact HTTP status;
+root cause remains unresolved and 24-hour tests are deferred. In dev5 the diagnostic
+numbers are retained, a finite ntfy size diagnostic is available, relay enforces fixed
+notification limits before sending, and local real TLS is tested. Relay schema 1 stays
+the default for compatibility; schema 2 explicitly enables provider diagnostics.
+Do not equate diagnostic tooling with a verified fix for the live ntfy failure.
+See docs/REVIEW_0_1_0_2.md
 for the diagnostic, relay-limit, local TLS and compatibility work remaining.
 Background validation and Python 3.10/Linux runtime checks remain pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
@@ -61,6 +66,8 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 - Read `docs/RELAY.md`, `docs/GATEWAY_SERVER.md` and ADRs 0005/0006 for relay behavior,
   server admission/lifecycle and the external TCP/TLS ingress limits required for deployment.
 - Read `docs/FIELD_SMOKE.md` for finite field runs, reports and manual phone observations.
+- Read `docs/NTFY_DIAGNOSTIC.md` for bounded size probes and `docs/GATEWAY_TLS.md`
+  for deployment on company-owned VM infrastructure without physical-host access.
 - Read `docs/SMOKE.md` for explicit one-message checks. Local credentials.local.json
   is ignored and must never be displayed, committed or included in build artifacts.
 

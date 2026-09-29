@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-115555
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -179,14 +179,17 @@ class HttpSender:
         import aiohttp
 
         headers = {"Authorization": f"Bearer {token}"} if token else {}
+        status: int | None = None
         try:
             # Только POST: aiohttp не повторяет неидемпотентные запросы при обрыве keep-alive.
             # Redirect не выполняется даже в пределах того же host: получатель всегда задан настройкой.
             async with self._client.post(url, json=payload, headers=headers, allow_redirects=False) as response:
+                status = response.status
                 data = bytearray()
                 async for chunk in response.content.iter_chunked(4096):
                     if len(data) + len(chunk) > self._response_limit:
-                        return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="response_too_large")
+                        return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="response_too_large",
+                                              http_status=response.status)
                     data.extend(chunk)
 
                 try:
@@ -205,7 +208,8 @@ class HttpSender:
             return DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, reason_code="connect_timeout")
         except (asyncio.TimeoutError, aiohttp.ClientError, OSError):
             # После начала записи сервер мог принять сообщение. Повтор допустим, но возможен дубликат.
-            return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="transport_unknown")
+            return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="transport_unknown",
+                                  http_status=status)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

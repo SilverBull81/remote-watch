@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -29,7 +29,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 
 from .._validation import require_int
@@ -225,7 +225,7 @@ class TelegramChannel:
                     delay = max(delay or 0.0, provider_delay)
             code = body.get("error_code")
             if type(code) is int and 400 <= code <= 599:
-                return http_failure(code, delay)
+                return replace(http_failure(code, delay), http_status=status, provider_code=code)
 
         if not 200 <= status <= 299:
             return http_failure(status, delay)

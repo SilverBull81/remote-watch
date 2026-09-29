@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -37,7 +37,7 @@ from functools import partial
 from .._validation import require_number
 from ..config import DeliveryMode, Destination, RetryPolicy
 from ..delivery import Delivery, DeliveryResult, DeliveryStatus, ResultSource
-from ..relay import MAX_RESPONSE_BYTES, RelayRequest, _decode, decode_response, validate_alias
+from ..relay import MAX_RESPONSE_BYTES, RelayRequest, _decode, decode_response, encode_json, validate_alias
 from ._common import http_failure, read_token, retry_after, validate_endpoint, validate_env
 from ._http import HttpSender
 
@@ -55,6 +55,7 @@ class RelayConfig:
     server_timeout: float = 8.0         # Верхний срок обработки запроса gateway, секунды.
     network_margin: float = 1.0         # Резерв на обмен с gateway, секунды.
     allow_http: bool = False            # Явное разрешение HTTP только для локальной проверки.
+    schema_version: int = 1             # Версия wire: 2 добавляет числовую диагностику провайдера.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ленивое назначение с заданным способом доставки
@@ -107,6 +108,8 @@ class RelayConfig:
             raise ValueError("relay requires token_env")
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
+        if type(self.schema_version) is not int or self.schema_version not in (1, 2):
+            raise ValueError("unsupported relay schema version")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -167,6 +170,7 @@ class RelayChannel:
         config._check_policy(self._policy)
         self._config = config
         self._http = HttpSender(self._policy, response_limit=MAX_RESPONSE_BYTES,
+                                json_encoder=encode_json,
                                 json_decoder=partial(_decode, limit=MAX_RESPONSE_BYTES))
         self._token: str | None = None
     #--------------------------------------------------------------------------------------------------------------
@@ -221,8 +225,14 @@ class RelayChannel:
         if timeout <= 0:
             return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.PERMANENT_FAILURE,
                                   reason_code="relay_budget_exhausted")
-        request = RelayRequest(delivery=delivery, alias=self._config.alias,
-                               remaining_ttl=remaining, timeout=timeout)
+        try:
+            request = RelayRequest(delivery=delivery, alias=self._config.alias,
+                                   remaining_ttl=remaining, timeout=timeout,
+                                   schema_version=self._config.schema_version)
+        except (ValueError, TypeError, OverflowError):
+            # Неверный для wire размер не является неизвестным исходом: сеть ещё не начата.
+            return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.PERMANENT_FAILURE,
+                                  reason_code="relay_payload_limits")
         response = await self._http.post(self._config.endpoint.rstrip("/") + "/v1/notifications",
                                          request.to_dict(), self._token)
         if isinstance(response, DeliveryResult):
@@ -235,7 +245,7 @@ class RelayChannel:
                 result = replace(result, reason_code="relay_auth_denied")
             return replace(result, source=ResultSource.RELAY)
         try:
-            return decode_response(body, delivery)
+            return decode_response(body, delivery, schema_version=self._config.schema_version)
         except (ValueError, TypeError, OverflowError):
             return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.UNKNOWN,
                                   reason_code="invalid_relay_response")

@@ -1,10 +1,10 @@
 ﻿# Версионированные данные одной попытки доставки через будущий gateway.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> RelayRequest: Версионированный запрос одной попытки через gateway.
@@ -19,6 +19,7 @@
 # -> _object(): Запрет повторяющихся ключей JSON.
 # -> _decode(): Разбор ограниченного JSON без неоднозначных полей.
 # -> _keys(): Проверка версии и точного состава envelope.
+# -> encode_json(): Единое кодирование проверяемых и отправляемых данных.
 # -> encode_response(): Кодирование безопасного результата с корреляцией попытки.
 # -> decode_response(): Проверка ответа и его принадлежности текущей попытке.
 
@@ -39,6 +40,27 @@ from .events import Notification
 SCHEMA_VERSION = 1
 MAX_REQUEST_BYTES = 65536
 MAX_RESPONSE_BYTES = 4096
+DIAGNOSTIC_FIELDS = ("http_status", "provider_code", "message_bytes", "request_bytes")
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Единое кодирование проверяемых и отправляемых данных
+#------------------------------------------------------------------------------------------------------------------
+def encode_json(payload: object) -> str:
+
+    """Encode both validated and transmitted envelopes identically.
+
+    :param payload: JSON-compatible protocol data.
+    :type payload: object
+
+    :return: Compact UTF-8-compatible JSON text.
+    :rtype: str
+    """
+
+    # payload - данные протокола; значения не записываются в диагностику.
+
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+#------------------------------------------------------------------------------------------------------------------
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -141,7 +163,7 @@ def _keys(
 
     if set(payload) != expected:
         raise ValueError("relay envelope has missing or unknown fields")
-    if type(payload["schema_version"]) is not int or payload["schema_version"] != SCHEMA_VERSION:
+    if type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2):
         raise ValueError("unsupported relay schema version")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -157,6 +179,7 @@ class RelayRequest:
     alias: str                          # Разрешённое на gateway имя получателя.
     remaining_ttl: float                # Верхний предел оставшегося срока, секунды.
     timeout: float                      # Максимальное ожидание gateway, секунды.
+    schema_version: int = 1             # 1 — прежний ответ; 2 — ответ с числовой диагностикой.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Данные запроса без секретов и локальных настроек
@@ -169,7 +192,7 @@ class RelayRequest:
         :rtype: dict[str, object]
         """
 
-        return {"schema_version": SCHEMA_VERSION, "notification": self.delivery.notification.to_dict(),
+        return {"schema_version": self.schema_version, "notification": self.delivery.notification.to_dict(),
                 "alias": self.alias, "delivery_id": self.delivery.delivery_id,
                 "attempt": self.delivery.attempt, "remaining_ttl": self.remaining_ttl, "timeout": self.timeout}
     #--------------------------------------------------------------------------------------------------------------
@@ -199,6 +222,7 @@ class RelayRequest:
                         "remaining_ttl", "timeout"})
         try:
             return cls(alias=payload["alias"], remaining_ttl=payload["remaining_ttl"], timeout=payload["timeout"],
+                       schema_version=payload["schema_version"],
                        delivery=Delivery(notification=Notification.from_dict(payload["notification"]),
                                          destination_id=payload["alias"], delivery_id=payload["delivery_id"],
                                          attempt=payload["attempt"]))
@@ -215,12 +239,19 @@ class RelayRequest:
 
         if not isinstance(self.delivery, Delivery):
             raise TypeError("delivery must be Delivery")
+        if type(self.schema_version) is not int or self.schema_version not in (1, 2):
+            raise ValueError("unsupported relay schema version")
+
+        # Обе версии wire используют стандартные пределы Notification. Увеличенные
+        # локальные SnapshotLimits не расширяют доверие принимающей стороны.
+        # Повторная проверка на клиенте исключает заведомо бесполезный сетевой запрос.
+        Notification.from_dict(self.delivery.notification.to_dict())
         validate_alias(self.alias)
         require_number(self.remaining_ttl, "remaining_ttl")
         require_number(self.timeout, "timeout")
         if self.timeout > self.remaining_ttl:
             raise ValueError("relay timeout exceeds remaining TTL")
-        encoded = json.dumps(self.to_dict(), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        encoded = encode_json(self.to_dict()).encode("utf-8")
         if len(encoded) > MAX_REQUEST_BYTES:
             raise ValueError("relay request exceeds its byte limit")
     #--------------------------------------------------------------------------------------------------------------
@@ -233,6 +264,8 @@ class RelayRequest:
 def encode_response(
     delivery: Delivery,
     result: DeliveryResult,
+    *,
+    schema_version: int = 1,
     ) -> bytes:
 
     """Encode a correlated relay response without arbitrary provider error text.
@@ -243,19 +276,27 @@ def encode_response(
     :param result: Validated attempt result.
     :type result: DeliveryResult
 
+    :param schema_version: Version explicitly selected by the request.
+    :type schema_version: int
+
     :return: The value described by this operation.
     :rtype: bytes
     """
 
     # delivery - подготовленные данные одной попытки.
     # result - проверенный результат одной попытки.
+    # schema_version - версия запроса; сервер отвечает в том же формате.
 
     if not isinstance(delivery, Delivery) or not isinstance(result, DeliveryResult):
         raise TypeError("delivery and result must use validated models")
-    payload = {"schema_version": SCHEMA_VERSION, "delivery_id": delivery.delivery_id, "attempt": delivery.attempt,
+    if type(schema_version) is not int or schema_version not in (1, 2):
+        raise ValueError("unsupported relay schema version")
+    payload = {"schema_version": schema_version, "delivery_id": delivery.delivery_id, "attempt": delivery.attempt,
                "result": {"status": result.status.value, "reason_code": result.reason_code,
                           "provider_message_id": result.provider_message_id, "retry_after": result.retry_after}}
-    data = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    if schema_version == 2:
+        payload["result"].update({name: getattr(result, name) for name in DIAGNOSTIC_FIELDS})
+    data = encode_json(payload).encode("utf-8")
     if len(data) > MAX_RESPONSE_BYTES:
         raise ValueError("relay response exceeds its byte limit")
     return data
@@ -268,6 +309,8 @@ def encode_response(
 def decode_response(
     payload: object,
     delivery: Delivery,
+    *,
+    schema_version: int = 1,
     ) -> DeliveryResult:
 
     """Require an exact versioned response correlated to the attempted delivery.
@@ -278,28 +321,38 @@ def decode_response(
     :param delivery: Immutable delivery attempt.
     :type delivery: Delivery
 
+    :param schema_version: Version selected for this attempt, without automatic fallback.
+    :type schema_version: int
+
     :return: The value described by this operation.
     :rtype: DeliveryResult
     """
 
     # payload - данные запроса или ответа после разбора JSON.
     # delivery - подготовленные данные одной попытки.
+    # schema_version - версия текущей попытки; тихое понижение не допускается.
 
     if not isinstance(payload, dict):
         raise ValueError("relay response must be an object")
     _keys(payload, {"schema_version", "delivery_id", "attempt", "result"})
+    if type(schema_version) is not int or payload["schema_version"] != schema_version:
+        raise ValueError("relay response version mismatch")
     if payload["delivery_id"] != delivery.delivery_id or type(payload["attempt"]) is not int:
         raise ValueError("relay response correlation mismatch")
     if payload["attempt"] != delivery.attempt:
         raise ValueError("relay response attempt mismatch")
     result = payload["result"]
     expected = {"status", "reason_code", "provider_message_id", "retry_after"}
+    if schema_version == 2:
+        expected.update(DIAGNOSTIC_FIELDS)
     if not isinstance(result, dict) or set(result) != expected:
         raise ValueError("invalid relay result fields")
     try:
         return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus(result["status"]),
                               reason_code=result["reason_code"], provider_message_id=result["provider_message_id"],
-                              retry_after=result["retry_after"])
+                              retry_after=result["retry_after"],
+                              **({name: result[name] for name in DIAGNOSTIC_FIELDS}
+                                 if schema_version == 2 else {}))
     except (ValueError, TypeError, OverflowError):
         raise ValueError("invalid relay result") from None
 #------------------------------------------------------------------------------------------------------------------

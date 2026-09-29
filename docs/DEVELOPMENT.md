@@ -1,10 +1,10 @@
 ﻿# Разработка и работа с репозиторием
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-184554
+Дата и время последнего изменения: 260929-185913
 
 ## Принятые ориентиры
 
@@ -22,6 +22,12 @@ runtime-проверка — Python 3.12.2 на Windows, а не доказат�
 Каркас содержит pyproject, src/remote_watch, unit/contract tests и маркер py.typed.
 Core не имеет runtime-зависимостей; полный набор для разработки: pip install -e ".[dev,telegram,ntfy]".
 Пустые provider extras и фиктивные runtime-классы не создаются.
+
+Начиная с 0.2.0.dev5 extra dev включает cryptography для временных TLS-сертификатов
+контрактных тестов. После обновления checkout обновите окружение разработки:
+`python -m pip install -e ".[dev,telegram,ntfy,relay,gateway]"`.
+В рабочей установке библиотеки cryptography не нужна; тесты не добавляют доверенные
+сертификаты в ОС и не хранят закрытые ключи в репозитории.
 
 ## При начале реализации
 

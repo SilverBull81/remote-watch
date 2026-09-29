@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки.
@@ -244,6 +244,8 @@ class _ObservedChannel:
                 "event_id": delivery.notification.event_id, "delivery_id": delivery.delivery_id,
                 "sample": delivery.notification.correlation_id, "attempt": delivery.attempt,
                 "status": safe.status.value, "reason": safe.reason_code,
+                "http_status": safe.http_status, "provider_code": safe.provider_code,
+                "message_bytes": safe.message_bytes, "request_bytes": safe.request_bytes,
                 "elapsed_seconds": round(time.monotonic() - began, 3),
             })
     #--------------------------------------------------------------------------------------------------------------

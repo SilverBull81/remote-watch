@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-160026
+# Дата и время последнего изменения: 260929-185913
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -269,13 +269,16 @@ def http_failure(
     # delay - проверенная минимальная задержка повтора.
 
     if status == 429:
-        return DeliveryResult(status=DeliveryStatus.RATE_LIMITED, reason_code="rate_limited", retry_after=delay)
+        return DeliveryResult(status=DeliveryStatus.RATE_LIMITED, reason_code="rate_limited",
+                              retry_after=delay, http_status=status)
     if status == 408 or 500 <= status <= 599:
         return DeliveryResult(
             status=DeliveryStatus.TRANSIENT_FAILURE, reason_code="http_temporary", retry_after=delay,
+            http_status=status,
         )
     if 300 <= status <= 499:
-        return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="http_rejected")
+        return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="http_rejected",
+                              http_status=status)
     return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response")
 #------------------------------------------------------------------------------------------------------------------
 

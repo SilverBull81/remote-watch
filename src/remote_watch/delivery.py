@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -122,6 +122,10 @@ class DeliveryResult:
     reason_code: str | None = None                  # Краткий код причины без секретных данных.
     provider_message_id: str | None = None          # Идентификатор принятого сервисом сообщения.
     retry_after: float | None = None                # Задержка до следующей попытки, секунды.
+    http_status: int | None = None                  # Фактический HTTP-код; None — ответ не получен.
+    provider_code: int | None = None                # Числовой код ошибки API; None — нет допустимого кода.
+    message_bytes: int | None = None                # Размер переданного текста в UTF-8; None — неизвестен.
+    request_bytes: int | None = None                # Размер отправляемого JSON в UTF-8; None — неизвестен.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности результата
@@ -136,6 +140,18 @@ class DeliveryResult:
 
         if not isinstance(self.source, ResultSource):
             raise TypeError("source must be ResultSource")
+
+        # Диагностика допускает только ограниченные целые числа. Текст ответов,
+        # адреса и токены не должны проникать в модель через дополнительные поля.
+        for name, minimum, maximum in (
+            ("http_status", 100, 599), ("provider_code", 0, 999999),
+            ("message_bytes", 0, 2**31 - 1), ("request_bytes", 0, 2**31 - 1),
+        ):
+            value = getattr(self, name)
+            if value is not None:
+                require_int(value, name, minimum)
+                if value > maximum:
+                    raise ValueError(f"{name} exceeds its diagnostic limit")
 
         # Допускается короткий машинный код; произвольный текст ответа может раскрыть ключи доступа.
         if self.reason_code is not None:

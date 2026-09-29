@@ -1,12 +1,17 @@
 ﻿# Длительная полевая проверка серверов и Android
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-183445
+Дата и время последнего изменения: 260929-185913
 
 ## Что проверяет команда
+
+Для текущего сбоя long text прежде полного field run используйте новый
+[короткий сценарий размеров ntfy](NTFY_DIAGNOSTIC.md), доступный с 0.2.0.dev5.
+Обычные attempt-записи field_smoke с этой версии также содержат http_status,
+provider_code, message_bytes и request_bytes без приватных данных ответа.
 
 `python -m remote_watch.field_smoke` проверяет путь обычный logger → RemoteWatcher →
 очереди/retry → Telegram/ntfy. Команда появилась в 0.2.0.dev1 как инструмент полевой

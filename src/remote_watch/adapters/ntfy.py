@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-115555
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 
 from .._validation import require_int, require_text, text_tuple
@@ -211,18 +211,27 @@ class NtfyChannel:
 
         # Проверяем не только текст, но и байты JSON, которые действительно отправит HTTP-клиент.
         payload = _publish_payload(self._config, render(delivery))
+        sizes = {"message_bytes": len(str(payload["message"]).encode("utf-8")),
+                 "request_bytes": len(_encode_json(payload).encode("utf-8"))}
         response = await self._http.post(self._config.endpoint.rstrip('/') + '/', payload, self._token)
         if isinstance(response, DeliveryResult):
-            return response
+            return replace(response, **sizes)
         status, headers, body = response
         if not 200 <= status <= 299:
-            return http_failure(status, retry_after(headers["retry-after"]))
+            # Копируем лишь ограниченный числовой code. error/link и прочие поля
+            # ответа могут содержать приватные данные и не выходят из адаптера.
+            code = body.get("code") if isinstance(body, dict) else None
+            code = code if type(code) is int and 0 <= code <= 999999 else None
+            return replace(http_failure(status, retry_after(headers["retry-after"])),
+                           provider_code=code, http_status=status, **sizes)
 
         if isinstance(body, dict) and body.get("event") == "message" and body.get("topic") == self._config.topic:
             message_id = body.get("id")
             if isinstance(message_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", message_id):
-                return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id=message_id)
-        return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response")
+                return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id=message_id,
+                                      http_status=status, **sizes)
+        return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response",
+                              http_status=status, **sizes)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

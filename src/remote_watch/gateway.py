@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-180009
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> Gateway: Исходящий HTTP-сервер с управляемым временем работы.
@@ -557,7 +557,8 @@ class Gateway:
             finally:
                 self._busy.remove(alias)
             self._counts[result.status.value] += 1
-        response = web.Response(body=encode_response(envelope.delivery, result), content_type="application/json")
+        body = encode_response(envelope.delivery, result, schema_version=envelope.schema_version)
+        response = web.Response(body=body, content_type="application/json")
         response.force_close()
         return response
     #--------------------------------------------------------------------------------------------------------------

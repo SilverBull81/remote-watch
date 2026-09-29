@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260929-185913
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -211,6 +211,7 @@ async def _send(
                 token_env=token_env,
                 endpoint=settings.get("endpoint"),
                 alias=settings.get("alias"),
+                schema_version=settings.get("schema_version", 1),
                 allow_http=settings.get("allow_http", False),
             ), retry=policy)
         else:
