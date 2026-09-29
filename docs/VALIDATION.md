@@ -1,10 +1,10 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.1.4
+Version 1.1.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-202056
+Дата и время последнего изменения: 260929-203816
 
 ## Статус
 
@@ -27,13 +27,34 @@ wheel из sdist через tools/validate.py на Windows:
 В каждой строке прошли сборка, проверка архивов, чистая установка, граница
 optional dependencies и тесты установленного пакета без pythonpath=src.
 Пропуски core относятся к необязательному HTTP, два deselected — live tests.
-Обычный полный локальный pytest: 490 passed, 2 skipped; Ruff без ошибок.
+После исправления кодировки CLI полный локальный pytest: 491 passed, 2 skipped; Ruff без ошибок.
 Первые попытки загрузки сборочных зависимостей в песочнице зависали; успешные
 прогоны выполнены вне неё. Системный Python и реестр не изменялись.
 
-GitHub workflow содержит восемь jobs Windows/Linux × 3.10/3.12 × core/extras.
-**Linux и сам GitHub workflow ещё не запускались**; пункт №4 нельзя считать
-полностью принятым до зелёного CI конкретного коммита. Nginx-конфигурация,
+### Успешная матрица GitHub Actions, 29.09.2026
+
+Все восемь jobs прошли на коммите `0c750d42e75e68dbc994c443da24ac1d55f90f14`:
+[прогон 36605799611](https://github.com/SilverBull81/remote-watch/actions/runs/36605799611). Пункт №4 review закрыт.
+
+| Runner | Python | core | extras |
+| --- | --- | --- | --- |
+| windows-latest | 3.10.11 | 301 passed, 20 skipped, 2 deselected | 491 passed, 2 deselected |
+| windows-latest | 3.12.10 | 301 passed, 20 skipped, 2 deselected | 491 passed, 2 deselected |
+| ubuntu-latest | 3.10.21 | 301 passed, 20 skipped, 2 deselected | 491 passed, 2 deselected |
+| ubuntu-latest | 3.12.14 | 301 passed, 20 skipped, 2 deselected | 491 passed, 2 deselected |
+
+В каждом job прошли Ruff, сборка sdist/wheel, пересборка wheel из sdist,
+чистая установка, проверки зависимости/импорта и тесты установленного пакета.
+Отчёты report.json, tests.xml и логи сохранены в артефактах CI на семь дней;
+локальная копия — build/ci-downloads/36605799611. Credentials не использовались.
+
+Первый прогон на `2895ba2` обнаружил ошибку вывода gateway на Windows с cp1252:
+русское сообщение вызывало UnicodeEncodeError после открытия listener.
+Исправление задаёт UTF-8 только в точке входа отдельного CLI-процесса.
+Регрессионный тест воспроизвёл отказ до исправления и прошёл после него
+с унаследованными UTF-8/cp1252; библиотечный импорт потоки вывода не меняет.
+
+Nginx-конфигурация,
 Windows Task Scheduler и внешние маршруты подготовлены в документации,
 но на VM владельца не применялись. Сутки и региональный mixed smoke остаются открытыми.
 

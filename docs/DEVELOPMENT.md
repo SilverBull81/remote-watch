@@ -1,10 +1,10 @@
 ﻿# Разработка и работа с репозиторием
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-202056
+Дата и время последнего изменения: 260929-203816
 
 ## Принятые ориентиры
 
@@ -15,7 +15,8 @@ MLTrade — 3.12+. Это наблюдения о соседних проект�
 
 Для реализации выбраны setuptools/build, pytest и Ruff. Объявленная нижняя
 граница Python — 3.10; используются stdlib-возможности этой версии. Текущая
-runtime-проверка — Python 3.12.2 и 3.10.21 на Windows; Linux CI ещё не выполнялся.
+runtime-проверка охватывает Windows/Linux и Python 3.10/3.12, core/extras.
+Все восемь jobs GitHub Actions прошли; точные версии и ссылка — в [VALIDATION.md](VALIDATION.md).
 Основные платформы проверки — Windows и Linux. Не копировать Excel, браузерные
 и ML-зависимости соседей. Telegram/ntfy используют optional aiohttp; обоснование в ADAPTERS.md.
 

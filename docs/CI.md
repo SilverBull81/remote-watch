@@ -1,10 +1,10 @@
 ﻿# Воспроизводимые проверки пакета и матрица CI
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-202056
+Дата и время последнего изменения: 260929-203816
 
 ## Одна команда для выбранной среды
 
@@ -53,6 +53,8 @@ Windows/Linux × Python 3.10/3.12 × core/extras. Каждое работает 
 сохраните ссылку на run и его SHA. На машине разработки без Linux его результаты
 не подменяются проверкой синтаксиса Python 3.10.
 
-Текущие фактически выполненные проверки фиксируются в [VALIDATION.md](VALIDATION.md).
+29.09.2026 все восемь jobs прошли на коммите `0c750d42e75e68dbc994c443da24ac1d55f90f14`:
+[успешный прогон](https://github.com/SilverBull81/remote-watch/actions/runs/36605799611). Пункт №4 review закрыт.
+Фактические версии Python и результаты тестов зафиксированы в [VALIDATION.md](VALIDATION.md).
 Источники: [setup-python](https://github.com/actions/setup-python),
 [upload-artifact](https://github.com/actions/upload-artifact).

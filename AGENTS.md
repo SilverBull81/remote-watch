@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.4
+Version 1.1.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-202056
+Дата и время последнего изменения: 260929-203816
 
 ## Project Intent
 
@@ -47,10 +47,11 @@ The observed long-text failure is resolved for these runs; provider internals re
 Dev7 adds safe CLI error categories, shutdown statistics and a local stop file,
 shared-alias coverage, and a mixed relay-Telegram/direct-ntfy field mode.
 Maintained tools validate a wheel built from sdist in clean core/extras environments.
-Windows Python 3.10/3.12 passed both modes; the GitHub Actions Linux jobs have not run.
+Windows and Linux Python 3.10/3.12 passed both modes in all eight GitHub Actions jobs
+for commit 0c750d4; docs/VALIDATION.md records the run and exact interpreter versions.
 See docs/CI.md and docs/GATEWAY_OPERATIONS.md; VM autostart/proxy deployment is unverified.
 See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
-Long field validation and actual Linux CI results remain pending. Real application migration is
+Long field validation remains pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
@@ -113,7 +114,7 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 - When a design decision materially changes `ARCHITECTURE.md`, update the
   document or add an Architecture Decision Record in the same change.
 - Tooling is setuptools/build, pytest and Ruff; see docs/DEVELOPMENT.md and pyproject.toml.
-  Python 3.10+ is the declared target; runtime checks cover Windows/Python 3.10 and 3.12; Linux CI is prepared, not yet verified.
+  Python 3.10+ is the declared target; runtime checks cover Windows/Linux and Python 3.10/3.12 in successful CI jobs.
   Keep actual test results separate from unverified platforms and future features.
 - Configuration starts with typed Python objects; no required file format yet.
 - Follow Russian documentation/comments, English identifiers/docstrings, file
