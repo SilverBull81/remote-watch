@@ -30,6 +30,7 @@ credentials.local.*
 *.local.yml
 /credentials.local.json
 /gateway_settings.py
+/gateway_config.json
 secrets/
 
 # Local editor and agent state

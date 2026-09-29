@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "gateway": {
+    "capacity": 32
+  },
+  "destinations": [
+    {
+      "alias": "app1-telegram",
+      "provider": "telegram",
+      "settings": {
+        "token_env": "APP1_TELEGRAM_TOKEN",
+        "chat_id": 123456781
+      }
+    },
+    {
+      "alias": "app2-telegram",
+      "provider": "telegram",
+      "settings": {
+        "token_env": "APP2_TELEGRAM_TOKEN",
+        "chat_id": 123456782
+      }
+    },
+    {
+      "alias": "app3-telegram",
+      "provider": "telegram",
+      "settings": {
+        "token_env": "APP3_TELEGRAM_TOKEN",
+        "chat_id": 123456783
+      }
+    },
+    {
+      "alias": "app4-telegram",
+      "provider": "telegram",
+      "settings": {
+        "token_env": "APP4_TELEGRAM_TOKEN",
+        "chat_id": 123456784
+      }
+    }
+  ],
+  "principals": [
+    {
+      "name": "app1",
+      "token_env": "APP1_GATEWAY_TOKEN",
+      "identity": {
+        "service": "app1",
+        "environment": "production",
+        "region": "ru",
+        "host": "ru-server-1",
+        "instance_id": "one"
+      },
+      "aliases": ["app1-telegram"]
+    },
+    {
+      "name": "app2",
+      "token_env": "APP2_GATEWAY_TOKEN",
+      "identity": {
+        "service": "app2",
+        "environment": "production",
+        "region": "ru",
+        "host": "ru-server-1",
+        "instance_id": "one"
+      },
+      "aliases": ["app2-telegram"]
+    },
+    {
+      "name": "app3",
+      "token_env": "APP3_GATEWAY_TOKEN",
+      "identity": {
+        "service": "app3",
+        "environment": "production",
+        "region": "ru",
+        "host": "ru-server-1",
+        "instance_id": "one"
+      },
+      "aliases": ["app3-telegram"]
+    },
+    {
+      "name": "app4",
+      "token_env": "APP4_GATEWAY_TOKEN",
+      "identity": {
+        "service": "app4",
+        "environment": "production",
+        "region": "ru",
+        "host": "ru-server-1",
+        "instance_id": "one"
+      },
+      "aliases": ["app4-telegram"]
+    }
+  ]
+}

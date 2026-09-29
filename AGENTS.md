@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-122613
+Дата и время последнего изменения: 260929-180009
 
 ## Project Intent
 
@@ -23,6 +23,10 @@ relay wire models and an optional relay client. Version 0.2.0.dev3 implements th
 outbound gateway with exact credential/identity/alias grants, bounded admission,
 per-principal/destination rate limits and one provider attempt. Loopback tests cover
 the real gateway and mixed direct/relay delivery with fake provider HTTP endpoints.
+Version 0.2.0.dev4 adds optional strict JSON server configuration and a four-application
+example. JSON selects Telegram/ntfy from a fixed list and references environment secrets;
+custom providers retain the explicitly trusted Python factory path. One gateway supports
+multiple applications and destinations. Windows TLS deployment guidance is documented.
 Actual deployment and regional relay delivery are pending; command execution is not implemented. Public
 distribution is not planned. The user confirmed both Telegram and ntfy smoke messages on Android;
 ntfy uses a free account without topic reservation. Short regional tests found Telegram

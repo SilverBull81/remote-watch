@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-122613
+Дата и время последнего изменения: 260929-180009
 
 ## Статус
 
@@ -69,6 +69,13 @@ RelayConfig не содержит provider credentials и создаёт relay f
 реализованы клиент и сервер: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Сам mode не подменяет произвольную
 пользовательскую фабрику. См. [RELAY.md](RELAY.md). Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
+
+Для серверного процесса в 0.2.0.dev4 добавлена необязательная JSON-конфигурация:
+`python -m remote_watch.gateway --config gateway_config.json`. Она преобразуется
+в обычные GatewayConfig/GatewayPrincipal; формат настроек приложений не меняется.
+Файл, пример четырёх приложений и проверка без запуска описаны в
+[GATEWAY_SERVER.md](GATEWAY_SERVER.md). Развёртывание Windows/HTTPS — в
+[GATEWAY_TLS.md](GATEWAY_TLS.md).
 
 На контрактном этапе Destination принимает destination_id, provider (описательное
 имя, по умолчанию custom), channel_factory, mode=DeliveryMode.DIRECT,

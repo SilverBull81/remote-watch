@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-122613
+# Дата и время последнего изменения: 260929-180009
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -28,6 +28,7 @@
 # -> test_gateway_start_guards(): Защита запуска и независимость очистки от отмены владельца.
 # -> test_gateway_rate_and_chunked(): Ограничение частоты и размера chunked-запроса.
 # -> test_gateway_lost_reply(): Возможный дубликат при потере подтверждения провайдера.
+# -> test_gateway_multiple_apps(): Раздельные права и независимая отправка четырёх приложений.
 
 
 #******************************************************************************************************************
@@ -40,6 +41,7 @@ import json
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -60,6 +62,7 @@ from remote_watch._context import delivery_context
 from remote_watch.adapters.relay import RelayChannel, RelayConfig
 from remote_watch.gateway import Gateway
 from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway_json import load_gateway_config
 from remote_watch.relay import RelayRequest, decode_response
 
 aiohttp = pytest.importorskip("aiohttp")
@@ -823,6 +826,113 @@ def test_gateway_rate_and_chunked(
                         assert response.status == 429
                         assert 1 <= int(response.headers["Retry-After"]) <= 10
                     assert len(channel.calls) == 1
+        finally:
+            await gateway.close()
+    #--------------------------------------------------------------------------------------------------------------
+
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Раздельные права и независимая отправка четырёх приложений
+#------------------------------------------------------------------------------------------------------------------
+def test_gateway_multiple_apps(
+    notification: Notification,
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+
+    """Route four applications through one listener while enforcing separate grants.
+
+    :param notification: Synthetic notification fixture.
+    :type notification: Notification
+
+    :param monkeypatch: Temporary environment patch fixture.
+    :type monkeypatch: pytest.MonkeyPatch
+    """
+
+    # notification - синтетическое уведомление с фиксированным временем.
+    # monkeypatch - временное окружение с вымышленными сервисными токенами.
+
+    async def scenario() -> None:
+
+        """Exercise concurrent destinations and cross-application access denial."""
+
+        config = load_gateway_config(Path(__file__).parents[2] / "docs/examples/gateway_config.example.json")
+        channels = [Channel("wait"), Channel(), Channel(), Channel()]
+        principals = tuple(replace(item, min_interval=0) for item in config.principals)
+        destinations = tuple(replace(item, channel_factory=lambda channel=channel: channel)
+                             for item, channel in zip(config.destinations, channels))
+        config = replace(config, destinations=destinations, principals=principals, destination_interval=0)
+        tokens = [f"synthetic_application_{index}_credential_123456789" for index in range(4)]
+        for principal, token in zip(principals, tokens):
+            monkeypatch.setenv(principal.token_env, token)
+
+        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        await gateway.start(port=0)
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"http://127.0.0.1:{gateway.port}/v1/notifications"
+
+                async def post(
+                    index: int,
+                    alias: str,
+                    impersonate: bool = False,
+                    ) -> int:
+
+                    """Send one correlated request using an application's own token.
+
+                    :param index: Application index.
+                    :type index: int
+
+                    :param alias: Requested destination alias.
+                    :type alias: str
+
+                    :param impersonate: Whether to claim another application's identity.
+                    :type impersonate: bool
+
+                    :return: HTTP status after reading the response.
+                    :rtype: int
+                    """
+
+                    # index - номер приложения и его токена.
+                    # alias - запрошенное назначение.
+                    # impersonate - попытка подменить принадлежность отправителя.
+
+                    identity = principals[1 if impersonate else index].identity
+                    item = replace(envelope(replace(notification, identity=identity)), alias=alias)
+                    async with session.post(url, json=item.to_dict(), headers={
+                        "Authorization": f"Bearer {tokens[index]}", "Content-Type": "application/json",
+                    }) as response:
+                        body = await response.read()
+                        if response.status == 200:
+                            result = decode_response(json.loads(body), item.delivery)
+                            assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
+                        return response.status
+                #--------------------------------------------------------------------------------------------------
+
+                # Даже знание чужого alias или Identity не расширяет права своего токена.
+                assert await post(0, principals[1].aliases[0]) == 403
+                assert await post(0, principals[1].aliases[0], impersonate=True) == 403
+                assert not any(channel.calls for channel in channels)
+
+                # Задержка первого чата не останавливает отправку в три других чата.
+                pending = asyncio.create_task(post(0, principals[0].aliases[0]))
+                try:
+                    await asyncio.wait_for(channels[0].entered.wait(), 2)
+                    statuses = await asyncio.gather(*(post(index, principals[index].aliases[0])
+                                                       for index in range(1, 4)))
+                    assert statuses == [200, 200, 200]
+                    assert not pending.done()
+                    channels[0].release.set()
+                    assert await pending == 200
+                finally:
+                    channels[0].release.set()
+                    await asyncio.gather(pending, return_exceptions=True)
+
+                for principal, channel in zip(principals, channels):
+                    assert len(channel.calls) == 1
+                    assert channel.calls[0].notification.identity == principal.identity
         finally:
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------

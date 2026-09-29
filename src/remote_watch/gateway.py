@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-122613
+# Дата и время последнего изменения: 260929-180009
 #
 # Классы:
 # -> Gateway: Исходящий HTTP-сервер с управляемым временем работы.
@@ -31,7 +31,7 @@
 # -> _utc_now(): Текущее время UTC.
 # -> _consume_task(): Чтение результата поздней очистки.
 # -> _serve(): Работа отдельного процесса до сигнала остановки.
-# -> main(): Запуск доверенной локальной конфигурации gateway.
+# -> main(): Запуск gateway с JSON или доверенной Python-фабрикой.
 
 
 #******************************************************************************************************************
@@ -697,11 +697,11 @@ async def _serve(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запуск доверенной локальной конфигурации gateway
+# ФУНКЦИЯ : Запуск gateway с JSON или доверенной Python-фабрикой
 #------------------------------------------------------------------------------------------------------------------
 def main(argv: Sequence[str] | None = None) -> int:
 
-    """Load an explicitly trusted local Python factory and run a separate relay process.
+    """Load local JSON or a trusted Python factory and run a separate relay process.
 
     :param argv: Explicit CLI arguments or None.
     :type argv: Sequence[str] | None
@@ -713,21 +713,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv - аргументы запуска; None читает командную строку процесса.
 
     parser = argparse.ArgumentParser(description="Исходящий gateway Remote Watch без контура команд.")
-    parser.add_argument("factory", help="Доверенная локальная функция module:function, возвращающая GatewayConfig")
+    parser.add_argument("factory", nargs="?", help="Доверенная локальная функция module:function")
+    parser.add_argument("--config", help="JSON-файл настроек gateway, схема версии 1")
+    parser.add_argument("--check-config", action="store_true",
+                        help="Проверить настройки без запуска gateway и чтения токенов")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--cert")
     parser.add_argument("--key")
     args = parser.parse_args(argv)
+    if (args.factory is None) == (args.config is None):
+        parser.error("Укажите либо --config, либо Python-фабрику module:function.")
     try:
-        module, name = args.factory.split(":")
-        if not name.isidentifier():
-            raise ValueError("invalid factory")
-        config = getattr(importlib.import_module(module), name)()
+        # JSON предназначен для обычного развёртывания без собственного Python-кода.
+        # Фабрика остаётся альтернативой для пользовательских адаптеров и выполняется
+        # как доверенный код, в том числе при --check-config.
+        if args.config is not None:
+            from .gateway_json import load_gateway_config
+
+            config = load_gateway_config(args.config)
+        else:
+            module, name = args.factory.split(":")
+            if not name.isidentifier():
+                raise ValueError("invalid factory")
+            config = getattr(importlib.import_module(module), name)()
         if not isinstance(config, GatewayConfig):
             raise TypeError("factory must return GatewayConfig")
         if bool(args.cert) != bool(args.key):
             raise ValueError("both certificate and key are required")
+        if args.check_config:
+            print("Настройки gateway корректны. Токены, сертификаты и доступность сети не проверялись.")
+            return 0
         context = None
         if args.cert:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
