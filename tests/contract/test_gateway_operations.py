@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-202056
+# Дата и время последнего изменения: 260929-203401
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки.
@@ -437,15 +437,20 @@ def test_shared_alias(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Штатная остановка настоящего дочернего процесса
 #------------------------------------------------------------------------------------------------------------------
-def test_cli_process_stop(tmp_path: Path) -> None:
+@pytest.mark.parametrize("output_encoding", ["utf-8", "cp1252"])
+def test_cli_process_stop(tmp_path: Path, output_encoding: str) -> None:
 
     """Stop a real gateway child process through the local file on Windows and Unix.
 
     :param tmp_path: Temporary test directory.
     :type tmp_path: Path
+
+    :param output_encoding: Inherited encoding for redirected process output.
+    :type output_encoding: str
     """
 
     # tmp_path - временный каталог.
+    # output_encoding - кодировка перенаправленного вывода в родительском окружении.
 
     pytest.importorskip("aiohttp")
     factory = tmp_path / "synthetic_factory.py"
@@ -461,7 +466,10 @@ def test_cli_process_stop(tmp_path: Path) -> None:
         "    return GatewayConfig(destinations=(Destination(destination_id='phone', channel_factory=Channel,\n"
         "        retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name='app',\n"
         "        token_env='GW_PROCESS_TEST', identity=identity, aliases=('phone',)),))\n", encoding="utf-8")
+    # Англоязычная Windows обычно использует cp1252 для файла/pipe: кириллица CLI
+    # должна сохраняться и при таком окружении, а не завершать работающий gateway.
     environment = dict(os.environ, GW_PROCESS_TEST="synthetic_process_" + "x" * 32,
+                       PYTHONIOENCODING=output_encoding,
                        PYTHONPATH=os.pathsep.join((str(tmp_path), str(Path(cli.__file__).resolve().parents[1]))))
     stop = tmp_path / "gateway.stop"
     output = tmp_path / "process.log"
@@ -471,12 +479,12 @@ def test_cli_process_stop(tmp_path: Path) -> None:
                                    stdout=stream, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 8
-            while b"TCP" not in output.read_bytes():
-                assert process.poll() is None
+            while "Gateway запущен".encode("utf-8") not in output.read_bytes():
+                assert process.poll() is None, output.read_bytes().decode("utf-8", errors="replace")
                 assert time.monotonic() < deadline
                 time.sleep(0.02)
             stop.touch()
-            assert process.wait(timeout=8) == 0
+            assert process.wait(timeout=8) == 0, output.read_bytes().decode("utf-8", errors="replace")
         finally:
             if process.poll() is None:
                 process.kill()

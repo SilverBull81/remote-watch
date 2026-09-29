@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-202056
+# Дата и время последнего изменения: 260929-203401
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -60,6 +60,7 @@ import os
 import re
 import signal
 import ssl
+import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -871,5 +872,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 # ТОЧКА ВХОДА : Запуск исходящего gateway отдельным процессом
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Для отдельного CLI-процесса формат консоли и перенаправленных журналов — UTF-8.
+    # Иначе cp1252 на англоязычной Windows превращает русское сообщение в ошибку
+    # запуска сервера. Импорт библиотеки не меняет потоки вызывающего приложения.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())
 #------------------------------------------------------------------------------------------------------------------
