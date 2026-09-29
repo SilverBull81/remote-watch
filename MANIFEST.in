@@ -4,3 +4,4 @@ recursive-include docs *.md
 recursive-include tests *.py
 recursive-include src/remote_watch py.typed
 global-exclude credentials.local.json *.local.json
+global-exclude gateway_settings.py

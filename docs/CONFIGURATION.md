@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-222548
+Дата и время последнего изменения: 260929-122613
 
 ## Статус
 
@@ -65,8 +65,8 @@ Session ID создаётся на каждый runtime. Метаданные Lo
 
 Для direct необходимы provider settings. Для relay необходимы HTTPS gateway URL,
 service secret reference и remote alias; provider credentials у приложения не нужны.
-RelayConfig не содержит provider credentials и создаёт relay factory. В 0.2.0.dev1
-клиент уже реализован, рабочий gateway — ещё нет. Сам mode не подменяет произвольную
+RelayConfig не содержит provider credentials и создаёт relay factory. В 0.2.0.dev3
+реализованы клиент и сервер: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Сам mode не подменяет произвольную
 пользовательскую фабрику. См. [RELAY.md](RELAY.md). Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
 

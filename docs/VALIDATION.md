@@ -1,20 +1,49 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-115555
+Дата и время последнего изменения: 260929-122613
 
 ## Статус
 
 Реализован путь от logging до Telegram/ntfy с повторами и RemoteWatcher в 0.1.0. Проверяются модели,
 настройки, команды, подготовка записей, маршрутизация, ограниченные очереди и worker.
 Проверены retry scheduler, sync/async lifecycle и оба HTTP-адаптера. Gateway
-ещё отсутствует. Пользователь подтвердил оба smoke на Android. Доставка со всех
+реализован и проверен offline в 0.2.0.dev3. Пользователь подтвердил оба smoke на Android. Доставка со всех
 целевых серверов проверена коротким сценарием с обнаруженными отказами;
 длительная фоновая работа телефона ещё не проверена.
 Библиотечная матрица проверена на Windows/Python 3.12; полевой сценарий — отдельно.
+
+## Gateway 0.2.0.dev3
+
+Серверный процесс, auth/ACL, ограничения приёма и частоты, одна provider attempt,
+проверка expiry и управляемый shutdown реализованы. Инструкция:
+[GATEWAY_SERVER.md](GATEWAY_SERVER.md).
+
+Полный прогон на Windows/Python 3.12.2: **379 passed, 2 skipped**; Ruff без ошибок.
+
+Wheel/sdist собраны; проверены чистые окружения build/validation-gateway-core и
+build/validation-gateway-extras. Без extras импорт и CLI help работают, start объясняет
+необходимость gateway extra. С extras выполнен запрос установленного RelayChannel
+к установленному Gateway с fake provider. Выполнены 11 Python-блоков документации;
+проверены состав архивов, BOM/CRLF, ссылки, grammar Python 3.10 и отсутствие credentials.
+
+- Offline проверяет токен, дубликаты Authorization, точные identity/aliases, строгий JSON,
+  размер с Content-Length и chunked, запрет сжатия/Expect, отсутствие command endpoints.
+- Проверены независимые общая/per-principal/per-alias ёмкости и ограничения частоты;
+  лишние запросы не ждут в очереди. Медленное тело получает 408 и освобождает слот.
+- Истёкший UTC срок не продлевается допуском часов. Provider timeout, ошибка и
+  недопустимый relay-result дают UNKNOWN; сервер не выполняет повтор.
+- Ошибка/отмена startup освобождает частично открытый канал. Проверены отмена
+  активного HTTP-клиента, общий shutdown deadline, параллельный close каналов
+  и независимость cleanup от отмены ожидающего владельца.
+- Сквозной тест использует настоящие RemoteWatcher, RelayChannel, Gateway,
+  TelegramChannel и NtfyChannel с подставными HTTP endpoints. Telegram идёт через
+  gateway, ntfy напрямую. После потери первого ответа повтор может дать дубликат.
+- Реальные credentials и внешние provider endpoints в этой итерации не используются.
+  Региональный deployment, TLS/proxy и Unix SIGTERM остаются отдельными проверками.
 
 ## Исправление 0.2.0.dev2
 

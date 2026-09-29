@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-115555
+Дата и время последнего изменения: 260929-122613
 
 ## Статус и границы
 
@@ -14,7 +14,9 @@ NotificationChannel и реестр пользовательских коман�
 logging → подготовка данных → очереди → канал. Приватная версия 0.1.0 поддерживает
 ограниченные повторы, full jitter, retry-after, TTL, sync/async lifecycle и счётчики
 по получателям. Реализованы исходящие Telegram/ntfy. В 0.2.0.dev1 добавлены
-relay-клиент, wire-контракт и длительный field smoke; серверный gateway ещё отсутствует.
+relay-клиент, wire-контракт и длительный field smoke. В 0.2.0.dev3 реализован outbound
+gateway с точной auth/ACL, ограниченным приёмом, одной provider attempt и управляемой
+остановкой. Смешанный режим проверен на loopback; реальный deployment ещё не проверен.
 Адаптеры проверены на fake HTTP/loopback; пользователь подтвердил оба smoke
 на Android. Для ntfy пока используется бесплатный аккаунт без резервирования темы.
 Короткая проверка трёх серверов выявила таймауты Telegram в России и ошибку размера
@@ -321,7 +323,7 @@ URL, chat IDs, токены или цепочку следующего relay и�
 Первая итерация 0.2 реализует клиент RelayChannel, RelayConfig и RelayRequest.
 Протокол v1: POST /v1/notifications, Bearer auth, точный JSON envelope, 64 KiB request
 и 4 KiB response. Ответ коррелируется с delivery_id и attempt; malformed 2xx даёт UNKNOWN.
-Серверная проверка identity/ACL ещё не реализована. Подробности: [RELAY.md](docs/RELAY.md),
+В 0.2.0.dev3 сервер проверяет token → точная identity + aliases. Подробности: [RELAY.md](docs/RELAY.md),
 [ADR 0005](docs/adr/0005-relay-wire-and-packaging.md).
 
 Полный этап 0.2 использует ограниченный одноступенчатый relay: запрос приводит к одной попытке
@@ -331,6 +333,12 @@ relay не добавляет второй скрытый цикл retry. Timeou
 Gateway ограничивает concurrency, размеры и частоту на service/destination;
 при перегрузке возвращает явный временный отказ. Wire schema версионируется,
 `delivery_id` сохраняется, несовместимые версии отклоняются.
+
+На сервере нет очереди: capacity резервируется до чтения тела, один alias выполняет
+одну отправку. Для public ingress ограничения TCP/TLS-соединений и чтения заголовков
+обеспечивает reverse proxy; capacity не ограничивает все внутренние объекты HTTP-сервера.
+Настройки и честные границы: [GATEWAY_SERVER.md](docs/GATEWAY_SERVER.md),
+[ADR 0006](docs/adr/0006-gateway-admission-and-lifecycle.md).
 
 Переход к асинхронному `relay_accepted`/receipt и durable хранению является отдельным
 расширением с новыми гарантиями. Детали: [GATEWAY.md](docs/GATEWAY.md).

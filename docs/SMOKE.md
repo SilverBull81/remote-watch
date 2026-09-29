@@ -1,10 +1,10 @@
 ﻿# Ручная проверка доставки одной командой
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-222548
+Дата и время последнего изменения: 260929-122613
 
 ## Запуск
 
@@ -81,9 +81,10 @@ Endpoint по умолчанию: официальный Bot API для Telegram
 
 ## Relay, начиная с 0.2.0.dev1
 
-Для будущего совместимого gateway добавлена команда `python -m remote_watch.smoke relay`.
+Для совместимого gateway добавлена команда `python -m remote_watch.smoke relay`.
 Она использует extra relay и отдельную секцию credentials `relay` с endpoint, alias
-и сервисным token. Серверный gateway пока не реализован; схема и границы готовности
+и сервисным token. Сервер 0.2.0.dev3 настраивается по [GATEWAY_SERVER.md](GATEWAY_SERVER.md);
+нужно разрешить точную синтетическую Identity smoke. Схема и границы готовности
 описаны в [RELAY.md](RELAY.md). Короткие Telegram/ntfy smoke продолжают работать как раньше.
 
 ## Что уже проверено

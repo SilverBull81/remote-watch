@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-115555
+Дата и время последнего изменения: 260929-122613
 
 ## Project Intent
 
@@ -19,8 +19,11 @@ per-destination counters and bounded atexit cleanup are implemented. Telegram an
 ntfy outbound adapters use optional aiohttp; validation uses fake HTTP and loopback.
 RemoteWatcher owns optional console/rotating-file handlers and notification lifecycle.
 The private 0.1 baseline is complete. Version 0.2.0.dev1 adds a finite field-smoke CLI,
-relay wire models and an optional relay client. The server gateway, auth/ACL and
-command execution are not implemented; loopback tests use a gateway stub. Public
+relay wire models and an optional relay client. Version 0.2.0.dev3 implements the
+outbound gateway with exact credential/identity/alias grants, bounded admission,
+per-principal/destination rate limits and one provider attempt. Loopback tests cover
+the real gateway and mixed direct/relay delivery with fake provider HTTP endpoints.
+Actual deployment and regional relay delivery are pending; command execution is not implemented. Public
 distribution is not planned. The user confirmed both Telegram and ntfy smoke messages on Android;
 ntfy uses a free account without topic reservation. Short regional tests found Telegram
 connect timeouts on both Russian hosts and ntfy long-message rejection on all three hosts.
@@ -47,7 +50,8 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
   Functions, partials and explicit CommandSpec declarations are supported.
 - Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
 - Read `docs/ADAPTERS.md` for provider configuration, HTTP behavior and opt-in live tests.
-- Read `docs/RELAY.md` and ADR 0005 for the implemented relay client and pending server.
+- Read `docs/RELAY.md`, `docs/GATEWAY_SERVER.md` and ADRs 0005/0006 for relay behavior,
+  server admission/lifecycle and the external TCP/TLS ingress limits required for deployment.
 - Read `docs/FIELD_SMOKE.md` for finite field runs, reports and manual phone observations.
 - Read `docs/SMOKE.md` for explicit one-message checks. Local credentials.local.json
   is ignored and must never be displayed, committed or included in build artifacts.
