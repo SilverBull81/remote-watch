@@ -1,10 +1,50 @@
 ﻿# Длительная полевая проверка серверов и Android
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-192353
+Дата и время последнего изменения: 260929-202056
+
+## Смешанный режим dev7: Telegram через relay, ntfy напрямую
+
+Команда `mixed` читает секции relay и ntfy из локального credentials-файла.
+Секция telegram на клиенте не нужна: provider token и chat остаются на gateway.
+Alias секции relay должен указывать на Telegram-получателя сервера.
+
+```json
+{
+  "relay": {
+    "endpoint": "https://gateway.example.com",
+    "alias": "telegram-alerts",
+    "token": "REPLACE_WITH_APPLICATION_RELAY_TOKEN",
+    "schema_version": 2
+  },
+  "ntfy": {"topic": "REPLACE_WITH_TOPIC", "token": "REPLACE_WITH_NTFY_TOKEN"}
+}
+```
+
+Для полевого приложения на gateway должны быть разрешены точные identity:
+service=remote-watch-field, environment=field-test и region/host/instance_id из CLI.
+Это другая identity, чем у одноразового relay smoke; создайте отдельный principal
+для проверки, а не ослабляйте существующее правило. Нужен gateway dev5 или новее
+для схемы 2; схема 1 задаётся явно при проверке старого сервера.
+
+```powershell
+python -m remote_watch.field_smoke mixed --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-mixed-quick.jsonl
+```
+
+Для длительного запуска уберите --duration и задайте --interval 1800, как ниже.
+Ключи статистики остаются telegram и ntfy; новая карта delivery_modes в run-записи
+различает relay и direct. Попытки relay имеют ResultSource.RELAY; успешный исход
+означает подтверждение провайдером через gateway. Числовые поля переносятся согласно
+схеме relay, а не заполняются вымышленными значениями при их отсутствии у адаптера.
+
+В mixed нет автоматического переключения на прямой Telegram. Недоступность relay
+не останавливает независимый ntfy; общий успех требует приёма обоими каналами.
+Локально проверены четыре образца через настоящий HTTP, отказ прав relay и
+продолжающаяся доставка ntfy, очистка временных токенов и отсутствие их в отчёте.
+Реальные региональные relay/HTTPS-запуски остаются отдельной приёмкой.
 
 ## Что проверяет команда
 

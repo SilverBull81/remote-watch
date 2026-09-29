@@ -1,12 +1,20 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 260929-202056
 #
 # Классы:
+# -> _GatewayParser: Безопасные ошибки командной строки.
+#    Интерфейс:
+#    -> error(): Отказ без вывода значений аргументов.
+#
+# -> GatewayStartupError: Безопасный этап ошибки запуска.
+#    Конструктор:
+#    -> __init__(): Создание объекта.
+#
 # -> Gateway: Исходящий HTTP-сервер с управляемым временем работы.
 #    Конструктор:
 #    -> __init__(): Подготовка состояния без запуска ресурсов.
@@ -45,6 +53,7 @@ import hashlib
 import hmac
 import importlib
 import ipaddress
+import json
 import logging
 import math
 import os
@@ -55,6 +64,7 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ._context import delivery_context
@@ -79,6 +89,61 @@ def _utc_now() -> datetime:
     """
 
     return datetime.now(timezone.utc)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Безопасные ошибки командной строки
+#------------------------------------------------------------------------------------------------------------------
+class _GatewayParser(argparse.ArgumentParser):
+    """Reject command arguments without echoing private values."""
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Отказ без вывода значений аргументов
+    #--------------------------------------------------------------------------------------------------------------
+    def error(
+        self,
+        message: str,
+        ) -> None:
+
+        """Replace argparse details with a fixed safe category.
+
+        :param message: Original parser error; never displayed.
+        :type message: str
+        """
+
+        # message - исходная ошибка argparse, которая может содержать секретный аргумент.
+
+        self.exit(2, "Ошибка gateway: code=cli_arguments field=arguments. См. --help.\n")
+    #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Безопасный этап ошибки запуска
+#------------------------------------------------------------------------------------------------------------------
+class GatewayStartupError(RuntimeError):
+    """Describe a startup stage without copying transport exceptions."""
+
+    #--------------------------------------------------------------------------------------------------------------
+    # КОНСТРУКТОР
+    #--------------------------------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        stage: str,
+        ) -> None:
+
+        """Keep the fixed startup stage for local diagnostics.
+
+        :param stage: Fixed startup stage selected by the gateway.
+        :type stage: str
+        """
+
+        # stage - заданный в коде этап, без исходного текста исключения.
+
+        self.stage = stage if stage in ("credentials", "providers", "listener") else "startup"
+        super().__init__(f"gateway startup failed: {self.stage}")
+    #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -213,6 +278,7 @@ class Gateway:
         self._loop = asyncio.get_running_loop()
         self._state = "starting"
         self._start_task = asyncio.current_task()
+        stage = "credentials"
         try:
             # Токены читаются только при запуске. В памяти сервера для поиска остаются их хеши.
             seen = set()
@@ -226,7 +292,9 @@ class Gateway:
                 seen.add(digest)
                 self._tokens.append((digest, principal))
 
+            stage = "providers"
             await asyncio.wait_for(self._open_channels(), self._config.startup_timeout)
+            stage = "listener"
             app = web.Application(client_max_size=MAX_REQUEST_BYTES)
             # Единственный маршрут не создаёт ни command endpoints, ни общего HTTP proxy.
             app.router.add_post("/v1/notifications", self._handle, expect_handler=self._expect)
@@ -247,7 +315,7 @@ class Gateway:
             raise
         except Exception:
             await self.close()
-            raise RuntimeError("gateway startup failed; private transport details are hidden") from None
+            raise GatewayStartupError(stage) from None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -654,6 +722,7 @@ async def _serve(
     host: str,
     port: int,
     context: ssl.SSLContext | None,
+    stop_file: Path | None = None,
     ) -> None:
 
     """Run the configured gateway until the process is interrupted.
@@ -669,18 +738,24 @@ async def _serve(
 
     :param context: Server TLS context or None for loopback HTTP.
     :type context: ssl.SSLContext | None
+
+    :param stop_file: Optional local stop request file, initially absent.
+    :type stop_file: Path | None
     """
 
     # config - проверенные настройки сервера.
     # host - явный адрес прослушивания.
     # port - TCP-порт; ноль выбирает свободный порт.
     # context - настройки шифрования серверного соединения.
+    # stop_file - локальный файл запроса остановки; содержимое не читается.
 
     gateway = Gateway(config)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     signal_installed = False
     try:
+        if stop_file is not None and stop_file.exists():
+            raise ValueError("stop file must be absent at startup")
         # На Unix служебный SIGTERM запускает ту же очистку, что Ctrl+C. Windows использует Ctrl+C.
         try:
             loop.add_signal_handler(signal.SIGTERM, stop.set)
@@ -688,12 +763,24 @@ async def _serve(
         except NotImplementedError:
             pass
         await gateway.start(host=host, port=port, ssl_context=context)
-        print(f"Gateway запущен, TCP-порт {gateway.port}. Для остановки нажмите Ctrl+C.")
-        await stop.wait()
+        print(f"Gateway запущен, TCP-порт {gateway.port}. Для остановки нажмите Ctrl+C.", flush=True)
+        # Одна ограниченная проверка в секунду позволяет корректно остановить Windows-задачу
+        # без публичного admin endpoint и без принудительного уничтожения процесса.
+        while not stop.is_set():
+            if stop_file is not None and stop_file.exists():
+                break
+            try:
+                await asyncio.wait_for(stop.wait(), 1)
+            except asyncio.TimeoutError:
+                pass
     finally:
-        await gateway.close()
-        if signal_installed:
-            loop.remove_signal_handler(signal.SIGTERM)
+        try:
+            await gateway.close()
+        finally:
+            if signal_installed:
+                loop.remove_signal_handler(signal.SIGTERM)
+            # Только агрегаты: ни principals/alias, ни тексты/адреса, ни токены не выводятся.
+            print(json.dumps({"kind": "gateway_summary", "stats": gateway.stats()}, sort_keys=True), flush=True)
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -713,7 +800,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # argv - аргументы запуска; None читает командную строку процесса.
 
-    parser = argparse.ArgumentParser(description="Исходящий gateway Remote Watch без контура команд.")
+    parser = _GatewayParser(description="Исходящий gateway Remote Watch без контура команд.")
     parser.add_argument("factory", nargs="?", help="Доверенная локальная функция module:function")
     parser.add_argument("--config", help="JSON-файл настроек gateway, схема версии 1")
     parser.add_argument("--check-config", action="store_true",
@@ -722,9 +809,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--cert")
     parser.add_argument("--key")
+    parser.add_argument("--stop-file", type=Path, help="Локальный файл для запроса штатной остановки")
     args = parser.parse_args(argv)
     if (args.factory is None) == (args.config is None):
         parser.error("Укажите либо --config, либо Python-фабрику module:function.")
+    stage = "configuration"
     try:
         # JSON предназначен для обычного развёртывания без собственного Python-кода.
         # Фабрика остаётся альтернативой для пользовательских адаптеров и выполняется
@@ -740,6 +829,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config = getattr(importlib.import_module(module), name)()
         if not isinstance(config, GatewayConfig):
             raise TypeError("factory must return GatewayConfig")
+        stage = "tls"
         if bool(args.cert) != bool(args.key):
             raise ValueError("both certificate and key are required")
         if args.check_config:
@@ -750,11 +840,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.load_cert_chain(args.cert, args.key)
-        asyncio.run(_serve(config, args.host, args.port, context))
+        stage = "startup"
+        # Старый вызов без stop_file сохраняется для встраивания и существующих фабрик.
+        if args.stop_file is None:
+            asyncio.run(_serve(config, args.host, args.port, context))
+        else:
+            asyncio.run(_serve(config, args.host, args.port, context, args.stop_file))
     except KeyboardInterrupt:
         return 130
-    except Exception:
-        print("Gateway не запущен или завершился с ошибкой. Проверьте настройки, credentials и extra gateway.")
+    except Exception as error:
+        from .gateway_json import GatewayConfigError
+
+        # Выбираем только заранее известные категории. Не печатаем str(error), traceback
+        # или аргументы пользователя: в них могут оказаться токены и частные адреса.
+        if isinstance(error, GatewayConfigError):
+            code, field = error.code, error.field
+        elif isinstance(error, GatewayStartupError):
+            code, field = "startup_failed", error.stage
+        elif isinstance(error, ImportError):
+            code, field = "dependency_missing", stage
+        else:
+            code, field = "operation_failed", stage
+        print(f"Ошибка gateway: code={code} field={field}. Значения и детали скрыты.", flush=True)
         return 1
     return 0
 #------------------------------------------------------------------------------------------------------------------

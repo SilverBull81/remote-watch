@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.3
+Version 1.1.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-192353
+Дата и время последнего изменения: 260929-202056
 
 ## Project Intent
 
@@ -42,9 +42,15 @@ Two Russian dev5 diagnostics now show identical boundaries for ASCII and Unicode
 4095 message bytes accepted; 4096 bytes return HTTP 500, provider code 50001.
 Version dev6 caps ntfy text at 4095 UTF-8 bytes including the truncation marker;
 the JSON cap remains 8192 bytes. Local HTTP regression covers the boundary.
-The exact provider internals remain unknown; dev6 live confirmation is pending.
+Two dev6 rechecks each accepted 10/10; the user confirmed all 20 on Android.
+The observed long-text failure is resolved for these runs; provider internals remain unknown.
+Dev7 adds safe CLI error categories, shutdown statistics and a local stop file,
+shared-alias coverage, and a mixed relay-Telegram/direct-ntfy field mode.
+Maintained tools validate a wheel built from sdist in clean core/extras environments.
+Windows Python 3.10/3.12 passed both modes; the GitHub Actions Linux jobs have not run.
+See docs/CI.md and docs/GATEWAY_OPERATIONS.md; VM autostart/proxy deployment is unverified.
 See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
-Background validation and Python 3.10/Linux runtime checks remain pending. Real application migration is
+Long field validation and actual Linux CI results remain pending. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.
@@ -107,7 +113,7 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 - When a design decision materially changes `ARCHITECTURE.md`, update the
   document or add an Architecture Decision Record in the same change.
 - Tooling is setuptools/build, pytest and Ruff; see docs/DEVELOPMENT.md and pyproject.toml.
-  Python 3.10+ is the declared target; the current runtime check is Windows/Python 3.12.
+  Python 3.10+ is the declared target; runtime checks cover Windows/Python 3.10 and 3.12; Linux CI is prepared, not yet verified.
   Keep actual test results separate from unverified platforms and future features.
 - Configuration starts with typed Python objects; no required file format yet.
 - Follow Russian documentation/comments, English identifiers/docstrings, file

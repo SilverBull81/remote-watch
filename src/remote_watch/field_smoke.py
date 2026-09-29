@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 260929-202056
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки.
@@ -446,6 +446,7 @@ def _run(
         _write(stream, {"kind": "run", "schema_version": 1, "run_id": run_id, "utc": _utc(),
                         "identity": asdict(config.identity), "duration_seconds": config.duration,
                         "interval_seconds": config.interval, "providers": [d.destination_id for d in observed],
+                        "delivery_modes": {d.destination_id: d.mode.value for d in observed},
                         "python": platform.python_version(), "system": platform.system(),
                         "package_version": version("remote-watch")})
         try:
@@ -526,6 +527,17 @@ def _destination(
                                 endpoint=settings.get("endpoint", "https://api.telegram.org"),
                                 message_thread_id=settings.get("message_thread_id"),
                                 allow_http=settings.get("allow_http", False))
+    elif provider == "relay":
+        from .adapters.relay import RelayConfig
+
+        # Alias и provider credentials остаются на gateway; клиент использует собственный
+        # токен relay. Запас времени учитывает server_timeout и сетевой обмен.
+        config = RelayConfig(token_env=token_env, endpoint=settings.get("endpoint"), alias=settings.get("alias"),
+                             schema_version=settings.get("schema_version", 2),
+                             allow_http=settings.get("allow_http", False),
+                             server_timeout=settings.get("server_timeout", 8))
+        policy = replace(policy, attempt_timeout=config.server_timeout + config.network_margin)
+        return config.destination("telegram", retry=policy, outstanding_capacity=16)
     else:
         config = NtfyConfig(token_env=token_env, topic=settings.get("topic", settings.get("chat")),
                            endpoint=settings.get("endpoint", "https://ntfy.sh"),
@@ -551,7 +563,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv - аргументы команды либо параметры процесса.
 
     parser = _Parser(description="Длительная проверка Remote Watch с локальным отчётом.")
-    parser.add_argument("provider", choices=("telegram", "ntfy", "both"))
+    parser.add_argument("provider", choices=("telegram", "ntfy", "both", "mixed"))
     parser.add_argument("--credentials", type=Path, default=Path("credentials.local.json"))
     parser.add_argument("--region", required=True)
     parser.add_argument("--host", required=True)
@@ -564,7 +576,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = FieldConfig(identity=Identity(service="remote-watch-field", environment="field-test",
                                                region=args.region, host=args.host, instance_id=args.instance_id),
                              duration=args.duration, interval=args.interval)
-        providers = ("telegram", "ntfy") if args.provider == "both" else (args.provider,)
+        providers = (("relay", "ntfy") if args.provider == "mixed" else
+                     ("telegram", "ntfy") if args.provider == "both" else (args.provider,))
         output = args.output or Path("runs") / ("field-" + uuid4().hex + ".jsonl")
         with ExitStack() as cleanup:
             destinations = []

@@ -1,10 +1,15 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-180009
+# Дата и время последнего изменения: 260929-202056
+#
+# Классы:
+# -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
+#    Конструктор:
+#    -> __init__(): Создание объекта.
 #
 # Функции:
 # -> load_gateway_config(): Чтение и проверка локального JSON-файла.
@@ -39,6 +44,42 @@ MAX_CONFIG_BYTES = 1024 * 1024
 
 
 #------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Ошибка с фиксированной категорией и разделом схемы
+#------------------------------------------------------------------------------------------------------------------
+class GatewayConfigError(ValueError):
+    """Expose only fixed validation categories and schema field names."""
+
+    #--------------------------------------------------------------------------------------------------------------
+    # КОНСТРУКТОР
+    #--------------------------------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        code: str,
+        field: str,
+        ) -> None:
+
+        """Keep safe diagnostic labels without the source exception.
+
+        :param code: Fixed error category selected by the loader.
+        :type code: str
+
+        :param field: Fixed schema group selected by the loader.
+        :type field: str
+        """
+
+        # code - категория, заданная загрузчиком, а не текстом JSON.
+        # field - раздел известной схемы, без неизвестных ключей и значений.
+
+        self.code = code if code in ("config_read", "config_size", "config_json", "config_fields",
+                                      "config_schema", "config_value") else "config_value"
+        fields = ("config", "schema_version", "destinations", "principals", "gateway")
+        self.field = field if field in fields else "config"
+        super().__init__(f"Invalid gateway JSON configuration: code={self.code} field={self.field}")
+    #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение и проверка локального JSON-файла
 #------------------------------------------------------------------------------------------------------------------
 def load_gateway_config(path: str | Path) -> GatewayConfig:
@@ -56,33 +97,42 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
 
     # Ограничиваем чтение до разбора JSON. Файл может содержать локальные адреса,
     # поэтому ошибки наружу возвращаются без его содержимого и значений полей.
+    code, field = "config_read", "config"
     try:
         with Path(path).open("rb") as stream:
             data = stream.read(MAX_CONFIG_BYTES + 1)
+        code = "config_size"
         if len(data) > MAX_CONFIG_BYTES:
             raise ValueError("configuration is too large")
+        code = "config_json"
         root = json.loads(data.decode("utf-8-sig"), object_pairs_hook=_unique_object,
                           parse_constant=_invalid_constant)
+        code = "config_fields"
         root = _object(root, {"schema_version", "destinations", "principals", "gateway"},
                        {"schema_version", "destinations", "principals"})
+        code, field = "config_schema", "schema_version"
         if type(root["schema_version"]) is not int or root["schema_version"] != 1:
             raise ValueError("unsupported configuration schema")
 
         # Списки проверяются до создания адаптеров; собственные модели повторно
         # проверяют значения, точную Identity, права и единственность имён.
-        destinations = _items(root["destinations"], 64)
-        principals = _items(root["principals"], 256)
+        # Имя этапа задаётся самим загрузчиком; неизвестный ключ из файла не печатается.
+        code, field = "config_value", "destinations"
+        destinations = tuple(_destination(item) for item in _items(root["destinations"], 64))
+        field = "principals"
+        principals = tuple(_principal(item) for item in _items(root["principals"], 256))
+        field = "gateway"
         options = _object(root.get("gateway", {}), {
             "capacity", "body_timeout", "attempt_timeout", "startup_timeout",
             "shutdown_timeout", "future_tolerance", "destination_interval",
         })
         return GatewayConfig(
-            destinations=tuple(_destination(item) for item in destinations),
-            principals=tuple(_principal(item) for item in principals),
+            destinations=destinations,
+            principals=principals,
             **options,
         )
     except (OSError, ValueError, TypeError, RecursionError):
-        raise ValueError("Invalid gateway JSON configuration; check schema, fields and file access.") from None
+        raise GatewayConfigError(code, field) from None
 #------------------------------------------------------------------------------------------------------------------
 
 

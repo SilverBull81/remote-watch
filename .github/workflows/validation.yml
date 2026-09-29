@@ -1,0 +1,37 @@
+name: Package validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.10', '3.12']
+        mode: [core, extras]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install build ruff
+      - run: python -m ruff check .
+      - run: python tools/validate.py --mode ${{ matrix.mode }} --output build/ci-validation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.mode }}
+          path: |
+            build/ci-validation/report.json
+            build/ci-validation/tests.xml
+            build/ci-validation/*.log
+          retention-days: 7

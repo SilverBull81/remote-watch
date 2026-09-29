@@ -2,7 +2,10 @@ include AGENTS.md ARCHITECTURE.md PROJECT_BRIEF.md
 include .gitattributes .gitignore
 recursive-include docs *.md
 include docs/examples/gateway_config.example.json
+include docs/examples/gateway-nginx.conf
 recursive-include tests *.py
+recursive-include tools *.py
+include .github/workflows/validation.yml
 recursive-include src/remote_watch py.typed
 global-exclude credentials.local.json *.local.json
 global-exclude gateway_settings.py
