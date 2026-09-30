@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.1
+Version 1.2.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171719
+Дата и время последнего изменения: 260930-193650
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The installed package version remains 0.2.0.dev9; no stable 0.2.0 tag is implied.
+The package version is 0.3.0.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -37,11 +37,16 @@ Dev9 passed 576 local tests and clean core/extras wheel installation on Windows
 Python 3.12.2. The eight Windows/Linux Python 3.10/3.12 CI jobs passed for dev7;
 do not claim those matrix runs were repeated for dev9. See docs/VALIDATION.md.
 
-Stage 0.3 is in design; command registration metadata exists, remote execution does
-not. The owner explicitly requires both status/check_load and resume_load/suspend_load
+Stage 0.3.1 now implements pure models, strict command wire v1, correlation,
+monotonic relative budgets, state-transition proposals and actor-bound one-use
+confirmation proposals. See docs/COMMAND_PROTOCOL.md and ADR 0010. No storage, CAS,
+auth, network endpoints or callback execution exists yet; these models alone do
+not provide durable replay protection. The initial mutating-command freshness
+design uses a 30-second confirmation; UX feedback is still pending.
+Existing command registration remains compatible; remote execution does not exist. The owner explicitly requires both status/check_load and resume_load/suspend_load
 in the first usable version. All names/callbacks remain application-defined through
 mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole
-milestone. ADR 0009 records the direction and decisions still needed before code.
+milestone. ADR 0009 records the overall scope; ADR 0010 defines the implemented contract.
 Model duplicate delivery, persistent execution records, unknown outcomes, callback
 thread/loop ownership and unsynchronized clocks before enabling mutations. Never
 retry a possibly executed callback automatically. Outbound grants do not enable commands.

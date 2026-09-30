@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-202056
+# Дата и время последнего изменения: 260930-193650
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -47,6 +47,9 @@ def main() -> int:
     from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
     from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+    from remote_watch.command_freshness import CommandChallenge
+    from remote_watch.command_protocol import CommandRegistration, decode_command
+    from remote_watch.command_state import CommandRecord
     from remote_watch.gateway import Gateway
     from remote_watch.gateway_json import load_gateway_config
 
@@ -59,6 +62,8 @@ def main() -> int:
     assert importlib.util.find_spec("cryptography") is None
     assert (importlib.util.find_spec("aiohttp") is not None) == (args.mode == "extras")
     assert all("extra ==" in item for item in importlib.metadata.requires("remote-watch") or [])
+
+    assert all(item is not None for item in (CommandChallenge, CommandRegistration, decode_command, CommandRecord))
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
     assert all(item is not None for item in (RelayChannel, RelayConfig, TelegramChannel,
