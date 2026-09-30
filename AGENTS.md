@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.3
+Version 1.2.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-211036
+Дата и время последнего изменения: 260930-221931
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.0.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.3.0.dev2; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -37,16 +37,21 @@ Dev9 passed 576 local tests and clean core/extras wheel installation on Windows
 Python 3.12.2. The eight Windows/Linux Python 3.10/3.12 CI jobs passed for dev7;
 do not claim those matrix runs were repeated for dev9. See docs/VALIDATION.md.
 
-Stage 0.3.1 now implements pure models, strict command wire v1, correlation,
-monotonic relative budgets, state-transition proposals and actor-bound one-use
-confirmation proposals. See docs/COMMAND_PROTOCOL.md and ADR 0010. No storage, CAS,
-auth, network endpoints or callback execution exists yet; these models alone do
-not provide durable replay protection. The owner rejected mandatory confirmation:
-resume/suspend must work from a single message. The existing confirmation helper
-is an unused prototype, not the required interaction. A replacement freshness
-policy is still under discussion: provider timestamp plus a trusted hub time
-estimate, followed by the existing monotonic budgets. Do not enable mutations
-by merely removing confirmation or treating message receipt as fresh intent.
+Stages 0.3.1/0.3.2 provide command wire/state contracts and bounded SQLite journals.
+SQLite atomically persists source decisions/cursors, compares revisions before
+STARTED, recovers old generations, retains unknown running executions and keeps
+source high-water marks after payload cleanup. No auth, command endpoints,
+Telegram source or callback executor exists yet. See docs/COMMAND_STORAGE.md.
+The owner requires resume/suspend in a single message, without confirmation.
+TrustedClock uses an explicit trusted UTC interval, max age 120 seconds and
+monotonic remaining budgets. Optional HttpsDateTimeSource requires an explicitly
+trusted HTTPS origin and declared accuracy; no public source is selected by default.
+See docs/COMMAND_TIME.md and ADR 0011. Never reuse a journal generation after process
+restart, reset source cursors to replay events, or release unknown execution merely
+because its timeout elapsed. The old confirmation helper is an unused prototype.
+Dev2 passed 769 local tests and clean core/extras wheel checks on Windows Python
+3.12.2. Real local TLS and abrupt subprocess crashes were tested; no live time
+origin, real command source or new CI matrix was exercised. See docs/VALIDATION.md.
 Existing command registration remains compatible; remote execution does not exist. The owner explicitly requires both status/check_load and resume_load/suspend_load
 in the first usable version. All names/callbacks remain application-defined through
 mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole

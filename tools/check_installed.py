@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 260930-220144
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -47,11 +47,15 @@ def main() -> int:
     from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
     from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+    from remote_watch.adapters.time_source import HttpsDateTimeSource
     from remote_watch.command_freshness import CommandChallenge
     from remote_watch.command_protocol import CommandRegistration, decode_command
     from remote_watch.command_state import CommandRecord
+    from remote_watch.command_storage import CommandStore
+    from remote_watch.command_time import TrustedClock
     from remote_watch.gateway import Gateway
     from remote_watch.gateway_json import load_gateway_config
+    from remote_watch.sqlite_command_store import SQLiteCommandStore
 
     assert Path(sys.prefix).resolve() in Path(remote_watch.__file__).resolve().parents
     assert Path(remote_watch.__file__).with_name("py.typed").is_file()
@@ -64,6 +68,7 @@ def main() -> int:
     assert all("extra ==" in item for item in importlib.metadata.requires("remote-watch") or [])
 
     assert all(item is not None for item in (CommandChallenge, CommandRegistration, decode_command, CommandRecord))
+    assert all(item is not None for item in (CommandStore, SQLiteCommandStore, TrustedClock, HttpsDateTimeSource))
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
     assert all(item is not None for item in (RelayChannel, RelayConfig, TelegramChannel,
