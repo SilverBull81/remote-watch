@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.2
+Version 1.2.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-193650
+Дата и время последнего изменения: 260930-211036
 
 ## Project Intent
 
@@ -41,8 +41,12 @@ Stage 0.3.1 now implements pure models, strict command wire v1, correlation,
 monotonic relative budgets, state-transition proposals and actor-bound one-use
 confirmation proposals. See docs/COMMAND_PROTOCOL.md and ADR 0010. No storage, CAS,
 auth, network endpoints or callback execution exists yet; these models alone do
-not provide durable replay protection. The initial mutating-command freshness
-design uses a 30-second confirmation; UX feedback is still pending.
+not provide durable replay protection. The owner rejected mandatory confirmation:
+resume/suspend must work from a single message. The existing confirmation helper
+is an unused prototype, not the required interaction. A replacement freshness
+policy is still under discussion: provider timestamp plus a trusted hub time
+estimate, followed by the existing monotonic budgets. Do not enable mutations
+by merely removing confirmation or treating message receipt as fresh intent.
 Existing command registration remains compatible; remote execution does not exist. The owner explicitly requires both status/check_load and resume_load/suspend_load
 in the first usable version. All names/callbacks remain application-defined through
 mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole
