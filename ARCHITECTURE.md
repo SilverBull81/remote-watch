@@ -1,12 +1,18 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.1.6
+Version 1.1.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-164943
+Дата и время последнего изменения: 260930-171719
 
 ## Статус и границы
+
+На 30.09.2026 базовая 0.1 принята; объём 0.2 реализован и основной RU → LV →
+Telegram smoke подтверждён владельцем на телефоне после обновления venv до dev9.
+Длительный mixed и автозапуск VM не проверены. В 0.3 по уточнению владельца входят
+проверка состояния и resume/suspend, см. [ADR 0009](docs/adr/0009-command-scope-and-safety.md).
+Сетевое исполнение команд ещё не реализовано.
 
 В dev8 gateway JSON поддерживает token как альтернативу token_env у провайдеров
 и principals. Типизированные TelegramConfig/NtfyConfig/GatewayPrincipal также
@@ -33,7 +39,7 @@ logging → подготовка данных → очереди → канал.
 по получателям. Реализованы исходящие Telegram/ntfy. В 0.2.0.dev1 добавлены
 relay-клиент, wire-контракт и длительный field smoke. В 0.2.0.dev3 реализован outbound
 gateway с точной auth/ACL, ограниченным приёмом, одной provider attempt и управляемой
-остановкой. Смешанный режим проверен на loopback; реальный deployment ещё не проверен.
+остановкой. Смешанный режим проверен на loopback; основной реальный маршрут подтверждён в dev9.
 В 0.2.0.dev4 добавлен необязательный JSON-файл серверных настроек, схема версии 1.
 Отдельный gateway_json преобразует его в прежние типизированные объекты и выбирает
 только Telegram/ntfy из фиксированного списка. Core и GatewayConfig не импортируют
@@ -44,7 +50,7 @@ gateway с точной auth/ACL, ограниченным приёмом, од�
 при сохранении schema 1 по умолчанию и ранняя проверка фиксированных wire-пределов
 Notification. Обновление не меняет схему самого Notification и не включает
 автоматическую повторную отправку при несовпадении протокола. Проверен настоящий
-TLS на loopback с временным CA; реальное размещение ещё требует отдельной проверки.
+TLS на loopback с временным CA; в dev9 подтверждён и реальный HTTPS-путь RU → LV.
 Решение: [ADR 0007](docs/adr/0007-delivery-diagnostics.md).
 В dev6 предел текста ntfy уменьшен до 4095 байт: в двух российских отчётах dev5
 ровно 4096 байт стабильно дали HTTP 500/50001. Подробности и ограничения вывода:
@@ -409,10 +415,13 @@ HTTPS long polling. Нужны expiry, replay protection, аудит, огран
 lease/ack и учёт ответа. Истёкшие/повторные команды не выполняются как новые.
 После сбоя между действием и записью результата возможен unknown outcome: хранение
 command ID само по себе не делает произвольный side effect exactly-once.
-Broadcast, mutating commands и их recovery проектируются после этого сценария.
+После этого сценария в ту же 0.3 входят resume/suspend с устойчивым учётом начала
+исполнения и unknown без автоматического повторного callback. Разница часов VM
+учитывается отдельным командным контрактом; допуск expiry уведомлений не переносится.
+Broadcast и групповые операции отложены. Направление и оставшиеся решения — в ADR 0009.
 
 TLS с проверкой сертификата обязателен для remote соединений. Секреты передаются
-через явные ссылки на окружение/secret provider, не входят в repr, audit и исключения.
+через явную конфигурацию token/token_env; они не входят в repr, audit и исключения.
 Gateway сверяет identity с service credential. ACL закрыты по умолчанию.
 Аудит и replay state требуют ограниченного хранения и политики очистки; их отказ
 в command mode должен закрывать приём команд. Провайдерные redirects не должны
@@ -420,13 +429,14 @@ Gateway сверяет identity с service credential. ACL закрыты по �
 
 ## Границы пакета и проверки
 
-Планируемый layout — `src/remote_watch`, `tests/unit`, `tests/contract`,
+Реализованный layout — `src/remote_watch`, `tests/unit`, `tests/contract`,
 `tests/integration`. Модули появляются только вместе с поведением: модели,
 logging integration, routing, runtime, адаптеры, затем relay и commands.
 Core не импортирует Telegram/ntfy/Matrix SDK. Provider dependencies — optional
 extras с первого релиза. Импорт core работает без них.
 
-Gateway может жить в том же репозитории, но с отдельным набором зависимостей;
-решение о второй distribution принимается перед 0.2. CLI сейчас не создаётся.
+Gateway входит в ту же distribution с optional extra gateway и отдельной CLI
+`python -m remote_watch.gateway`. JSON/Python-конфигурация реализована; отдельная
+distribution для сервера в 0.2 не потребовалась.
 Тестовые контракты: [VALIDATION.md](docs/VALIDATION.md), правила разработки:
 [DEVELOPMENT.md](docs/DEVELOPMENT.md), решения: [ADR](docs/adr/README.md).

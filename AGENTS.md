@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.0
+Version 1.2.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-164943
+Дата и время последнего изменения: 260930-171719
 
 ## Project Intent
 
@@ -12,67 +12,44 @@ Remote Watch provides standard-logging integration, asynchronous notification
 delivery, and optional secure command routing for distributed Python
 applications.
 
-The repository implements immutable event/delivery models, typed configuration,
-local command registration and a logging-to-channel path with bounded queues and
-a managed worker. Bounded retries, full jitter, retry-after, TTL, sync/async lifecycle,
-per-destination counters and bounded atexit cleanup are implemented. Telegram and
-ntfy outbound adapters use optional aiohttp; validation uses fake HTTP and loopback.
-RemoteWatcher owns optional console/rotating-file handlers and notification lifecycle.
-The private 0.1 baseline is complete. Version 0.2.0.dev1 adds a finite field-smoke CLI,
-relay wire models and an optional relay client. Version 0.2.0.dev3 implements the
-outbound gateway with exact credential/identity/alias grants, bounded admission,
-per-principal/destination rate limits and one provider attempt. Loopback tests cover
-the real gateway and mixed direct/relay delivery with fake provider HTTP endpoints.
-Version 0.2.0.dev4 adds optional strict JSON server configuration and a four-application
-example. JSON selects Telegram/ntfy from a fixed list and references environment secrets;
-custom providers retain the explicitly trusted Python factory path. One gateway supports
-multiple applications and destinations. Windows TLS deployment guidance is documented.
-Actual deployment and regional relay delivery are pending; command execution is not implemented. Public
-distribution is not planned. The user confirmed both Telegram and ntfy smoke messages on Android;
-ntfy uses a free account without topic reservation. Short regional tests found Telegram
-connect timeouts on both Russian hosts and ntfy long-message rejection on all three hosts.
-Version 0.2.0.dev2 fixes ntfy JSON serialization and wire size limits. Two Russian
-rechecks on dev2 still confirm only three of four messages: long text returns
-http_temporary on all three attempts. Those reports do not retain exact HTTP status;
-root cause remains unresolved and 24-hour tests are deferred. In dev5 the diagnostic
-numbers are retained, a finite ntfy size diagnostic is available, relay enforces fixed
-notification limits before sending, and local real TLS is tested. Relay schema 1 stays
-the default for compatibility; schema 2 explicitly enables provider diagnostics.
-Two Russian dev5 diagnostics now show identical boundaries for ASCII and Unicode:
-4095 message bytes accepted; 4096 bytes return HTTP 500, provider code 50001.
-Version dev6 caps ntfy text at 4095 UTF-8 bytes including the truncation marker;
-the JSON cap remains 8192 bytes. Local HTTP regression covers the boundary.
-Two dev6 rechecks each accepted 10/10; the user confirmed all 20 on Android.
-The observed long-text failure is resolved for these runs; provider internals remain unknown.
-Dev7 adds safe CLI error categories, shutdown statistics and a local stop file,
-shared-alias coverage, and a mixed relay-Telegram/direct-ntfy field mode.
-Maintained tools validate a wheel built from sdist in clean core/extras environments.
-Windows and Linux Python 3.10/3.12 passed both modes in all eight GitHub Actions jobs
-for commit 0c750d4; docs/VALIDATION.md records the run and exact interpreter versions.
-Dev8 adds literal token or token_env in gateway JSON and typed provider/principal settings.
-JSON requires exactly one key; anonymous ntfy retains token_env=null. Secret fields
-are hidden from repr; fixed credential errors identify a known field and list index.
-Environment references resolve only at startup; parsing never writes process secrets.
-Dev9 adds an explicit clock_skew_tolerance (0..3600 seconds, default zero) for outbound
-gateway UTC comparisons. Relative client budgets and monotonic processing time remain
-bounded. This deliberately weakens the server's UTC age check; it does not synchronize
-clocks or enable command replay protection. Future-created events use relay_clock_skew
-and a separate counter. See ADR 0008 and GATEWAY_SERVER.md. Regional validation is pending.
-See docs/CI.md and docs/GATEWAY_OPERATIONS.md; VM autostart/proxy deployment is unverified.
-See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
-On 2026-09-30 the owner accepted basic direct delivery after about 12 hours:
-RU ntfy 26/26, LV Telegram and ntfy 26/26 each, all first-attempt provider acceptance.
-The owner confirmed the first 25 samples per host on Android; one delayed Telegram
-notification arrived later. Final summaries confirm closed runtime, no failures,
-no diagnostic drops and no shutdown losses after early interruption. Full 24 hours
-and powered-off phone were not verified; the owner waived both for this acceptance. Regional relay
-and VM deployment remain pending. WSL Ubuntu 24.04 is on a local Russian machine,
-not the intended gateway. See docs/FIELD_SMOKE.md. Real application migration is
-deferred until minimal inbound commands are ready. Keep these boundaries explicit.
-Do not describe registration metadata as enforced command authorization or execution.
-Legacy fin-data TelegramBot compatibility is not a requirement.
-The target phone is Android. Telegram and provisionally ntfy are the first
-outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
+The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
+The installed package version remains 0.2.0.dev9; no stable 0.2.0 tag is implied.
+Core provides standard logging integration, bounded queues/retries/TTL, independent
+destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
+ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
+configuration support literal token or token_env with private diagnostics.
+
+On 2026-09-30 the owner accepted direct delivery after about 12 hours: RU ntfy 26/26,
+LV Telegram and ntfy 26/26 each, all first-attempt provider acceptance. The first 25
+samples per host were confirmed on Android; full 24 hours and powered-off phone were
+waived. The ntfy long-text issue was fixed and confirmed in two 10-message rechecks.
+The owner then confirmed RU -> HTTPS gateway on LV -> Telegram -> phone after
+updating the LV venv to dev9: provider_accepted and immediate phone receipt. This
+last evidence comes from the conversation, not a newly inspected field report.
+Do not infer the exact clock allowance, wire schema or provider HTTP status from it.
+
+Dev9 explicitly allows bounded UTC clock skew for outbound relay; relative request
+budgets remain bounded. It weakens server UTC age checks and is not command replay
+protection. Actual VM clocks differ by more than a minute. See ADR 0008.
+Long regional mixed delivery, autostart/reboot and operational recovery remain
+unverified and do not block starting 0.3. Scope/evidence: docs/REVIEW_0_1_0_2.md.
+Dev9 passed 576 local tests and clean core/extras wheel installation on Windows
+Python 3.12.2. The eight Windows/Linux Python 3.10/3.12 CI jobs passed for dev7;
+do not claim those matrix runs were repeated for dev9. See docs/VALIDATION.md.
+
+Stage 0.3 is in design; command registration metadata exists, remote execution does
+not. The owner explicitly requires both status/check_load and resume_load/suspend_load
+in the first usable version. All names/callbacks remain application-defined through
+mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole
+milestone. ADR 0009 records the direction and decisions still needed before code.
+Model duplicate delivery, persistent execution records, unknown outcomes, callback
+thread/loop ownership and unsynchronized clocks before enabling mutations. Never
+retry a possibly executed callback automatically. Outbound grants do not enable commands.
+
+Real application migration remains deferred until this command path is ready.
+Legacy fin-data TelegramBot API compatibility is not required. The target phone is
+Android; ntfy uses a free account without topic reservation. Telegram is the first
+command source; Matrix follows. MAX and public distribution remain out of scope.
 
 ## Read the Relevant Design Context
 
