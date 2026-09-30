@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.9
+Version 1.2.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-123404
+Дата и время последнего изменения: 260930-164943
 
 ## Project Intent
 
@@ -53,6 +53,11 @@ Dev8 adds literal token or token_env in gateway JSON and typed provider/principa
 JSON requires exactly one key; anonymous ntfy retains token_env=null. Secret fields
 are hidden from repr; fixed credential errors identify a known field and list index.
 Environment references resolve only at startup; parsing never writes process secrets.
+Dev9 adds an explicit clock_skew_tolerance (0..3600 seconds, default zero) for outbound
+gateway UTC comparisons. Relative client budgets and monotonic processing time remain
+bounded. This deliberately weakens the server's UTC age check; it does not synchronize
+clocks or enable command replay protection. Future-created events use relay_clock_skew
+and a separate counter. See ADR 0008 and GATEWAY_SERVER.md. Regional validation is pending.
 See docs/CI.md and docs/GATEWAY_OPERATIONS.md; VM autostart/proxy deployment is unverified.
 See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
 On 2026-09-30 the owner accepted basic direct delivery after about 12 hours:

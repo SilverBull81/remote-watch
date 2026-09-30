@@ -1,10 +1,10 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 260930-164512
 #
 # Классы:
 # -> GatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
@@ -93,6 +93,7 @@ class GatewayConfig:
     startup_timeout: float = 5.0        # Общий срок подготовки всех каналов, секунды.
     shutdown_timeout: float = 5.0       # Общий срок завершения запросов и очистки, секунды.
     future_tolerance: float = 0.0       # Допуск будущего created_at; expiry не продлевается.
+    clock_skew_tolerance: float = 0.0   # Допуск расхождения UTC между машинами в обе стороны, секунды.
     destination_interval: float = 1.0   # Минимальная пауза между попытками одного alias, секунды.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -132,6 +133,9 @@ class GatewayConfig:
         for name in ("body_timeout", "attempt_timeout", "startup_timeout", "shutdown_timeout"):
             require_number(getattr(self, name), name)
         require_number(self.future_tolerance, "future_tolerance", allow_zero=True)
+        require_number(self.clock_skew_tolerance, "clock_skew_tolerance", allow_zero=True)
+        if self.clock_skew_tolerance > 3600:
+            raise ValueError("clock_skew_tolerance exceeds one hour")
         require_number(self.destination_interval, "destination_interval", allow_zero=True)
         if self.destination_interval > 3600:
             raise ValueError("destination_interval exceeds one hour")

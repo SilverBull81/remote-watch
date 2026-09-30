@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-180009
+# Дата и время последнего изменения: 260930-164512
 #
 # Функции и тесты:
 # -> document(): Синтетический файл настроек без секретов.
@@ -91,12 +91,13 @@ def test_json_valid(
     destination["timeouts"] = {"connect_timeout": 2, "attempt_timeout": 4, "ttl": 60}
     if provider == "ntfy":
         destination["settings"] = {"topic": "synthetic-topic", "token_env": None, "tags": ["warning"]}
-    value["gateway"] = {"capacity": 10}
+    value["gateway"] = {"capacity": 10, "clock_skew_tolerance": 600}
     path = tmp_path / "config.json"
     # BOM принимается для файлов, сохранённых стандартными средствами Windows.
     path.write_text(json.dumps(value), encoding="utf-8-sig")
     config = load_gateway_config(path)
     assert config.capacity == 10
+    assert config.clock_skew_tolerance == 600
     assert config.principals[0].aliases == ("phone",)
     assert config.destinations[0].provider == provider
     assert config.destinations[0].mode is DeliveryMode.DIRECT

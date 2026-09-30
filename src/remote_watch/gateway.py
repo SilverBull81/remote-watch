@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 260930-164512
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -599,13 +599,28 @@ class Gateway:
         now = self._utc_now()
         event = envelope.delivery.notification
         elapsed = asyncio.get_running_loop().time() - started
+
+        # Часы разных VM могут расходиться. Явный допуск ослабляет только сравнение
+        # UTC отправителя с UTC сервера; исходные даты в уведомлении не меняются.
+        # Это не измерение смещения: в пределах допуска сервер не отличает старое
+        # сообщение от свежего сообщения с отстающей машины.
+        skew = self._config.clock_skew_tolerance
         remaining = min(envelope.timeout - elapsed, envelope.remaining_ttl - elapsed,
-            (event.expires_at - now).total_seconds(),
-            destination.retry.ttl - (now - event.created_at).total_seconds(),
-            self._config.attempt_timeout, destination.retry.attempt_timeout)
-        if remaining <= 0 or (event.created_at - now).total_seconds() > self._config.future_tolerance:
+            (event.expires_at - now).total_seconds() + skew,
+            destination.retry.ttl - (now - event.created_at).total_seconds() + skew,
+            self._config.attempt_timeout, destination.retry.attempt_timeout, destination.retry.ttl)
+
+        # Относительные бюджеты клиента и монотонное время обработки не получают
+        # прибавку допуска. Даже при неверных UTC-часах попытка остаётся ограниченной.
+        # Старый future_tolerance сохраняет только одностороннее действие; допуски
+        # не складываются, чтобы настройка двух полей не расширяла окно неожиданно.
+        future_limit = max(self._config.future_tolerance, skew)
+        if remaining <= 0:
             self._counts["expired"] += 1
             result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="relay_expired")
+        elif (event.created_at - now).total_seconds() > future_limit:
+            self._counts["clock_skew"] += 1
+            result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="relay_clock_skew")
         else:
             # В одном alias работает только один канал. Очереди ожидания и второго retry loop нет.
             self._busy.add(alias)

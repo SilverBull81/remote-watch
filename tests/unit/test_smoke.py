@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 260930-164712
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -22,6 +22,7 @@
 # -> test_default_path_and_missing_file(): Чтение настроек из текущего каталога.
 # -> test_cleanup_on_failure(): Очистка после отмены и ошибок запуска или доставки.
 # -> test_argument_errors_are_private(): Ошибочные аргументы не попадают в вывод.
+# -> test_failure_diagnostics(): Известные причины видны, произвольные строки скрыты.
 
 
 #******************************************************************************************************************
@@ -415,6 +416,69 @@ def test_argument_errors_are_private(capsys: pytest.CaptureFixture[str]) -> None
 
     assert smoke.main(["synthetic_secret"]) == 2
     assert "synthetic_secret" not in capsys.readouterr().out
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Известные причины видны, произвольные строки скрыты
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("reason", ["relay_expired", "relay_clock_skew", "relay_auth_denied",
+    "tls_certificate", "relay_budget_exhausted", "synthetic_private_secret", None])
+def test_failure_diagnostics(
+    reason: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    ) -> None:
+
+    """Expose only allowlisted reasons and validated numeric diagnostics.
+
+    :param reason: Known reason, private text or no reason.
+    :type reason: str | None
+
+    :param monkeypatch: Dependency patch fixture.
+    :type monkeypatch: pytest.MonkeyPatch
+
+    :param capsys: Captured CLI output.
+    :type capsys: pytest.CaptureFixture[str]
+    """
+
+    # reason - проверяемый код; произвольный текст не должен попасть в вывод.
+    # monkeypatch/capsys - подмена отправки и перехват вывода без сети и credentials.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Возврат результата без чтения секретов и сетевой отправки
+    #--------------------------------------------------------------------------------------------------------------
+    async def send(
+        provider: str,
+        settings: dict[str, object],
+        ) -> DeliveryResult:
+
+        """Return a controlled failure without accessing a provider.
+
+        :param provider: Requested smoke adapter.
+        :type provider: str
+
+        :param settings: Synthetic empty settings.
+        :type settings: dict[str, object]
+
+        :return: Controlled failure diagnostics.
+        :rtype: DeliveryResult
+        """
+
+        # provider/settings - аргументы штатного smoke; сеть здесь не используется.
+
+        return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code=reason,
+            http_status=403, provider_code=50001)
+    #--------------------------------------------------------------------------------------------------------------
+
+    monkeypatch.setattr(smoke, "_load_settings", lambda path, provider: {})
+    monkeypatch.setattr(smoke, "_send", send)
+    assert smoke.main(["relay"]) == 1
+    output = capsys.readouterr().out
+    assert "http_status=403; provider_code=50001" in output
+    assert "synthetic_private_secret" not in output
+    if reason is not None and reason != "synthetic_private_secret":
+        assert f"reason_code={reason}" in output
 #------------------------------------------------------------------------------------------------------------------
 
 

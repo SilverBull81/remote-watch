@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 260930-164512
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -148,7 +148,7 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
         field = "gateway"
         options = _object(root.get("gateway", {}), {
             "capacity", "body_timeout", "attempt_timeout", "startup_timeout",
-            "shutdown_timeout", "future_tolerance", "destination_interval",
+            "shutdown_timeout", "future_tolerance", "clock_skew_tolerance", "destination_interval",
         })
         return GatewayConfig(
             destinations=tuple(destinations),

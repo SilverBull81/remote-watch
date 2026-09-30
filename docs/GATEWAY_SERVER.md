@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway: настройка и запуск
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-123013
+Дата и время последнего изменения: 260930-164943
 
 ## Реализовано в 0.2.0.dev3
 
@@ -122,7 +122,7 @@ python -m remote_watch.gateway --config gateway_config.json
 - `principals`: 1–256 объектов с обязательными name, identity, aliases и одним источником token/token_env;
   необязательные capacity и min_interval соответствуют таблице ниже.
 - `gateway`: необязательный объект с capacity, body_timeout, attempt_timeout,
-  startup_timeout, shutdown_timeout, future_tolerance, destination_interval.
+  startup_timeout, shutdown_timeout, future_tolerance, clock_skew_tolerance, destination_interval.
   Пропущенные поля используют значения из таблицы ниже.
 
 Для ntfy запись назначения, например, выглядит так:
@@ -256,7 +256,8 @@ Windows Task Scheduler: [GATEWAY_OPERATIONS.md](GATEWAY_OPERATIONS.md).
 | attempt_timeout | 8 с | Серверный предел одной отправки, дополнительно ограниченный клиентом и expiry |
 | startup_timeout | 5 с | Общий срок подготовки всех provider channels |
 | shutdown_timeout | 5 с | Общий срок дренирования, отмены и очистки |
-| future_tolerance | 0 с | Допуск будущего created_at; можно задать до 30 с, expiry не продлевается |
+| future_tolerance | 0 с | Односторонний допуск будущего created_at до 30 с; сам по себе expiry не продлевает |
+| clock_skew_tolerance | 0 с | Допуск расхождения UTC в обе стороны, 0–3600 с; ослабляет серверную проверку возраста |
 
 Интервалы частоты допускают 0 для отключения и не более 3600 секунд. Это минимальная
 пауза без накопления burst-кредита. Структуры учёта содержат только настроенные имена;
@@ -271,8 +272,40 @@ Content-Type должен быть application/json. JSON разбирается
 
 Сервер вычитает время чтения/разбора из timeout и remaining_ttl клиента, проверяет
 UTC expires_at и срок `created_at + Destination.retry.ttl`, затем ограничивает попытку
-server/destination attempt_timeout. Истёкший запрос получает постоянный `relay_expired`
-без provider send. Корректные часы на клиентах и gateway нужны до полевой проверки.
+server/destination attempt_timeout и Destination.retry.ttl. Истёкший запрос получает
+постоянный `relay_expired` без provider send. С dev9 время создания из будущего сверх
+допуска даёт отдельный `relay_clock_skew`; счётчик clock_skew отделён от expired.
+
+### Если часы VM расходятся
+
+При опережении часов gateway свежее сообщение клиента может выглядеть просроченным.
+Например, smoke живёт минуту; если часы LV спешат относительно RU на две минуты,
+настройка future_tolerance не поможет: она разрешает только обратное расхождение.
+
+Начиная с dev9 можно явно разрешить расхождение UTC в обе стороны:
+
+```json
+"gateway": {
+  "clock_skew_tolerance": 600
+}
+```
+
+Это фрагмент gateway_config.json, а не весь файл. Если gateway уже есть, добавьте
+поле в существующий объект. 600 секунд — пример для разницы до десяти минут;
+выберите допуск по фактической разнице с небольшим запасом, максимум 3600.
+Обновите сервер до dev9 или новее, проверьте --check-config и перезапустите gateway.
+Caddy, сертификат и настройки клиента для этого менять не требуется.
+
+Допуск прибавляется только к UTC-остаткам на gateway. Относительные timeout,
+remaining_ttl, монотонное время обработки и локальный срок клиента не увеличиваются.
+Даты в уведомлении сохраняются. Если также задан future_tolerance, для будущих
+событий применяется максимум двух значений, а не сумма.
+
+Цена настройки: в пределах допуска сервер не отличает действительно старый запрос
+от свежего с отстающей VM. UTC-проверка возраста ослабляется на указанный интервал;
+это не синхронизация часов и не защита от повторов. При нуле сохраняется строгая
+проверка. Настройка относится только к outbound, не к TLS или будущим командам.
+Подробное решение и границы: [ADR 0008](adr/0008-relay-clock-skew.md).
 
 HTTP 401/403 — отказ доступа; 429 с Retry-After — перегрузка или ограничение частоты;
 413 — слишком большое тело; 408 — истёк срок чтения. Provider timeout/ошибка после
@@ -297,7 +330,7 @@ Close сначала закрывает приём и listener, оставляе
 отмену: библиотека не может принудительно остановить блокирующий Python-код.
 
 Stats возвращает копию фиксированных агрегатов: requests, auth_denied, invalid,
-overloaded, rate_limited, expired, attempts, provider_accepted, статусы provider failures,
+overloaded, rate_limited, expired, clock_skew, attempts, provider_accepted, статусы provider failures,
 unknown, body_timeout, cancelled_requests, request_errors, close_failed и текущие
 active/destinations_busy. Нулевые накопительные счётчики могут отсутствовать;
 читайте их через `.get(name, 0)`. Это статистика процесса, не durable audit и не

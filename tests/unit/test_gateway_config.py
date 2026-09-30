@@ -1,10 +1,10 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-122613
+# Дата и время последнего изменения: 260930-164512
 #
 # Функции и тесты:
 # -> configuration(): Конфигурация без запуска фабрики канала.
@@ -54,6 +54,9 @@ def configuration(identity: Identity) -> GatewayConfig:
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("changes", [{"capacity": 0}, {"capacity": True}, {"capacity": 257},
     {"body_timeout": float("inf")}, {"shutdown_timeout": -1}, {"future_tolerance": 31},
+    {"clock_skew_tolerance": -1}, {"clock_skew_tolerance": True}, {"clock_skew_tolerance": "600"},
+    {"clock_skew_tolerance": float("inf")}, {"clock_skew_tolerance": float("nan")},
+    {"clock_skew_tolerance": None}, {"clock_skew_tolerance": 3601},
     {"destinations": []}, {"principals": []}, {"principals": [object()]}])
 def test_config_bounds(
     identity: Identity,

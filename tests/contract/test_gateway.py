@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-180009
+# Дата и время последнего изменения: 260930-164712
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -29,6 +29,8 @@
 # -> test_gateway_rate_and_chunked(): Ограничение частоты и размера chunked-запроса.
 # -> test_gateway_lost_reply(): Возможный дубликат при потере подтверждения провайдера.
 # -> test_gateway_multiple_apps(): Раздельные права и независимая отправка четырёх приложений.
+# -> test_gateway_clock_tolerance(): Расхождение UTC и границы допуска через настоящий HTTP.
+# -> test_gateway_elapsed_budget(): Допуск часов не восстанавливает исчерпанное время запроса.
 
 
 #******************************************************************************************************************
@@ -339,7 +341,8 @@ def test_gateway_requests(
                     assert response.status == expected
                     body = await response.read()
             if case in ("expired", "future"):
-                assert decode_response(json.loads(body), request.delivery).reason_code == "relay_expired"
+                assert decode_response(json.loads(body), request.delivery).reason_code == (
+                    "relay_expired" if case == "expired" else "relay_clock_skew")
             assert len(channel.calls) == int(case == "success")
             assert gateway.stats()["active"] == 0
         finally:
@@ -937,6 +940,161 @@ def test_gateway_multiple_apps(
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------
 
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Расхождение UTC и границы допуска через настоящий HTTP
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("schema", [1, 2])
+@pytest.mark.parametrize("offset,skew,lifetime,ttl,future,reason", [
+    (120, 0, 60, 300, 0, "relay_expired"),
+    (120, 180, 60, 300, 0, None),
+    (-120, 0, 60, 300, 0, "relay_clock_skew"),
+    (-120, 180, 60, 300, 0, None),
+    (-180, 180, 60, 300, 0, None),
+    (-181, 180, 60, 300, 0, "relay_clock_skew"),
+    (240, 180, 60, 300, 0, "relay_expired"),
+    (120, 180, 600, 5, 0, None),
+    (185, 180, 600, 5, 0, "relay_expired"),
+    (0, 600, 60, 300, 0, None),
+    (-20, 0, 60, 300, 30, None),
+    (-35, 10, 60, 300, 30, "relay_clock_skew"),
+    (3600, 3600, 60, 300, 0, None),
+])
+def test_gateway_clock_tolerance(
+    notification: Notification,
+    schema: int,
+    offset: int,
+    skew: int,
+    lifetime: int,
+    ttl: int,
+    future: int,
+    reason: str | None,
+    ) -> None:
+
+    """Check clock skew, unchanged timestamps and bounded provider work over HTTP.
+
+    :param notification: Fixed synthetic notification.
+    :type notification: Notification
+
+    :param schema: Relay response schema.
+    :type schema: int
+
+    :param offset: Gateway UTC offset from the sender, in seconds.
+    :type offset: int
+
+    :param skew: Explicit two-sided allowance, in seconds.
+    :type skew: int
+
+    :param lifetime: Notification lifetime in sender UTC.
+    :type lifetime: int
+
+    :param ttl: Server destination lifetime limit.
+    :type ttl: int
+
+    :param future: Legacy future-only allowance.
+    :type future: int
+
+    :param reason: Expected rejection or None for acceptance.
+    :type reason: str | None
+    """
+
+    # notification/schema - исходное событие и проверяемая версия протокола.
+    # offset/skew/future - фиксированная разница UTC и два независимых допуска.
+    # lifetime/ttl - сроки события и серверного назначения.
+    # reason - ожидаемый отказ; None означает одну отправку провайдеру.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Один запрос с заданными часами без ожидания реальных минут
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """Use a real loopback gateway with deterministic UTC and a fake provider."""
+
+        event = replace(notification, expires_at=notification.created_at + timedelta(seconds=lifetime))
+        channel = Channel()
+        config = settings(event, channel, clock_skew_tolerance=skew, future_tolerance=future)
+        destination = config.destinations[0]
+        config = replace(config, destinations=(replace(destination, retry=replace(destination.retry, ttl=ttl)),))
+        gateway = Gateway(config, utc_now=lambda: event.created_at + timedelta(seconds=offset))
+        request = replace(envelope(event), schema_version=schema)
+        await gateway.start(port=0)
+        try:
+            async with aiohttp.ClientSession(headers={"Authorization": "Bearer " + TOKEN}) as client:
+                async with client.post(f"http://127.0.0.1:{gateway.port}/v1/notifications",
+                        json=request.to_dict()) as response:
+                    assert response.status == 200
+                    result = decode_response(await response.json(), request.delivery, schema_version=schema)
+
+            assert result.reason_code == reason
+            if reason is None:
+                assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
+                assert len(channel.calls) == 1
+                sent = channel.calls[0]
+                assert sent.notification == event
+                assert 0 < sent.remaining_timeout <= min(request.timeout, request.remaining_ttl, ttl)
+                assert gateway.stats().get("expired", 0) == gateway.stats().get("clock_skew", 0) == 0
+            else:
+                assert result.status is DeliveryStatus.PERMANENT_FAILURE
+                assert not channel.calls
+                counter = "clock_skew" if reason == "relay_clock_skew" else "expired"
+                assert gateway.stats()[counter] == 1
+        finally:
+            await gateway.close()
+    #--------------------------------------------------------------------------------------------------------------
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Допуск часов не восстанавливает исчерпанное время запроса
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("timeout,remaining_ttl,elapsed", [(1, 10, 2), (10, 1, 2)])
+def test_gateway_elapsed_budget(
+    notification: Notification,
+    timeout: float,
+    remaining_ttl: float,
+    elapsed: float,
+    ) -> None:
+
+    """Reject spent relative budgets even with the maximum UTC allowance.
+
+    :param notification: Synthetic notification.
+    :type notification: Notification
+
+    :param timeout: Request processing budget.
+    :type timeout: float
+
+    :param remaining_ttl: Remaining sender lifetime.
+    :type remaining_ttl: float
+
+    :param elapsed: Already elapsed server processing time.
+    :type elapsed: float
+    """
+
+    # notification - событие с фиксированными датами.
+    # timeout/remaining_ttl - относительные сроки отправителя.
+    # elapsed - время, которое уже потратил сервер на приём запроса.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка вычисления остатка без таймеров и ожиданий
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """Model elapsed admission time directly at the dispatch boundary."""
+
+        channel = Channel()
+        gateway = Gateway(settings(notification, channel, clock_skew_tolerance=3600),
+            utc_now=lambda: notification.created_at)
+        # Wire требует timeout <= remaining_ttl. Для второй ветки проверяем
+        # защиту непосредственно на границе dispatch с уже истёкшим общим TTL.
+        request = replace(envelope(notification), timeout=min(timeout, remaining_ttl), remaining_ttl=remaining_ttl)
+        response = await gateway._dispatch(request, asyncio.get_running_loop().time() - elapsed)
+        assert decode_response(json.loads(response.body), request.delivery).reason_code == "relay_expired"
+        assert not channel.calls and gateway.stats()["expired"] == 1
+    #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
