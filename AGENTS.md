@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.8
+Version 1.1.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-122644
+Дата и время последнего изменения: 260930-123404
 
 ## Project Intent
 
@@ -125,6 +125,8 @@ outbound adapters; Matrix follows for chat and commands. MAX is out of scope.
 - When a design decision materially changes `ARCHITECTURE.md`, update the
   document or add an Architecture Decision Record in the same change.
 - Tooling is setuptools/build, pytest and Ruff; see docs/DEVELOPMENT.md and pyproject.toml.
+  GitHub Actions is manual-only by owner decision on 2026-09-30. Reserve CI runs
+  for substantial changes, not every push/commit; keep appropriate local checks.
   Python 3.10+ is the declared target; runtime checks cover Windows/Linux and Python 3.10/3.12 in successful CI jobs.
   Keep actual test results separate from unverified platforms and future features.
 - Configuration starts with typed Python objects; no required file format yet.
