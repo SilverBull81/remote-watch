@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.1.5
+Version 1.1.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-203816
+Дата и время последнего изменения: 260930-122644
 
 ## Project Intent
 
@@ -49,9 +49,20 @@ shared-alias coverage, and a mixed relay-Telegram/direct-ntfy field mode.
 Maintained tools validate a wheel built from sdist in clean core/extras environments.
 Windows and Linux Python 3.10/3.12 passed both modes in all eight GitHub Actions jobs
 for commit 0c750d4; docs/VALIDATION.md records the run and exact interpreter versions.
+Dev8 adds literal token or token_env in gateway JSON and typed provider/principal settings.
+JSON requires exactly one key; anonymous ntfy retains token_env=null. Secret fields
+are hidden from repr; fixed credential errors identify a known field and list index.
+Environment references resolve only at startup; parsing never writes process secrets.
 See docs/CI.md and docs/GATEWAY_OPERATIONS.md; VM autostart/proxy deployment is unverified.
 See docs/NTFY_DIAGNOSTIC.md for evidence and docs/REVIEW_0_1_0_2.md for remaining work.
-Long field validation remains pending. Real application migration is
+On 2026-09-30 the owner accepted basic direct delivery after about 12 hours:
+RU ntfy 26/26, LV Telegram and ntfy 26/26 each, all first-attempt provider acceptance.
+The owner confirmed the first 25 samples per host on Android; one delayed Telegram
+notification arrived later. Final summaries confirm closed runtime, no failures,
+no diagnostic drops and no shutdown losses after early interruption. Full 24 hours
+and powered-off phone were not verified; the owner waived both for this acceptance. Regional relay
+and VM deployment remain pending. WSL Ubuntu 24.04 is on a local Russian machine,
+not the intended gateway. See docs/FIELD_SMOKE.md. Real application migration is
 deferred until minimal inbound commands are ready. Keep these boundaries explicit.
 Do not describe registration metadata as enforced command authorization or execution.
 Legacy fin-data TelegramBot compatibility is not a requirement.

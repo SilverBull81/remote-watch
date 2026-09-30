@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-202056
+# Дата и время последнего изменения: 260930-122644
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -19,6 +19,7 @@
 # -> _invalid_constant(): Отклонение нестандартных чисел JSON.
 # -> _principal(): Создание точных прав одного приложения.
 # -> _destination(): Создание настроек выбранного адаптера без сети.
+# -> _credential_source(): Проверка явного выбора token либо token_env в JSON.
 #
 # Константы:
 # -> MAX_CONFIG_BYTES: Наибольший размер файла настроек, байт.
@@ -30,9 +31,11 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+from ._credentials import CREDENTIAL_HINTS, CredentialError
 from .config import Destination, RetryPolicy
 from .events import Identity
 from .gateway_config import GatewayConfig, GatewayPrincipal
@@ -56,6 +59,7 @@ class GatewayConfigError(ValueError):
         self,
         code: str,
         field: str,
+        reason: str | None = None,
         ) -> None:
 
         """Keep safe diagnostic labels without the source exception.
@@ -65,15 +69,25 @@ class GatewayConfigError(ValueError):
 
         :param field: Fixed schema group selected by the loader.
         :type field: str
+
+        :param reason: Optional fixed credential explanation.
+        :type reason: str | None
         """
 
         # code - категория, заданная загрузчиком, а не текстом JSON.
         # field - раздел известной схемы, без неизвестных ключей и значений.
+        # reason - фиксированное объяснение ошибки токена.
 
         self.code = code if code in ("config_read", "config_size", "config_json", "config_fields",
                                       "config_schema", "config_value") else "config_value"
         fields = ("config", "schema_version", "destinations", "principals", "gateway")
-        self.field = field if field in fields else "config"
+        # В подробном пути допустимы только известные поля и ограниченный индекс списка.
+        indexed = re.fullmatch(r"(destinations|principals)\[([0-9]{1,3})\](\.settings)?\.(token|token_env)", field)
+        safe_path = indexed is not None and (
+            indexed[1] == "destinations" and int(indexed[2]) < 64 and indexed[3] == ".settings"
+            or indexed[1] == "principals" and int(indexed[2]) < 256 and indexed[3] is None)
+        self.field = field if field in fields or safe_path else "config"
+        self.reason = reason if isinstance(reason, str) and reason in CREDENTIAL_HINTS else None
         super().__init__(f"Invalid gateway JSON configuration: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -118,19 +132,31 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
         # проверяют значения, точную Identity, права и единственность имён.
         # Имя этапа задаётся самим загрузчиком; неизвестный ключ из файла не печатается.
         code, field = "config_value", "destinations"
-        destinations = tuple(_destination(item) for item in _items(root["destinations"], 64))
+        destinations = []
+        for index, item in enumerate(_items(root["destinations"], 64)):
+            try:
+                destinations.append(_destination(item))
+            except CredentialError as error:
+                raise GatewayConfigError(code, f"destinations[{index}].settings.{error.field}", error.reason) from None
         field = "principals"
-        principals = tuple(_principal(item) for item in _items(root["principals"], 256))
+        principals = []
+        for index, item in enumerate(_items(root["principals"], 256)):
+            try:
+                principals.append(_principal(item))
+            except CredentialError as error:
+                raise GatewayConfigError(code, f"principals[{index}].{error.field}", error.reason) from None
         field = "gateway"
         options = _object(root.get("gateway", {}), {
             "capacity", "body_timeout", "attempt_timeout", "startup_timeout",
             "shutdown_timeout", "future_tolerance", "destination_interval",
         })
         return GatewayConfig(
-            destinations=destinations,
-            principals=principals,
+            destinations=tuple(destinations),
+            principals=tuple(principals),
             **options,
         )
+    except GatewayConfigError:
+        raise
     except (OSError, ValueError, TypeError, RecursionError):
         raise GatewayConfigError(code, field) from None
 #------------------------------------------------------------------------------------------------------------------
@@ -259,8 +285,9 @@ def _principal(value: Any) -> GatewayPrincipal:
 
     # value - значение, прочитанное из JSON.
 
-    settings = _object(value, {"name", "token_env", "identity", "aliases", "capacity", "min_interval"},
-                       {"name", "token_env", "identity", "aliases"}).copy()
+    settings = _object(value, {"name", "token", "token_env", "identity", "aliases", "capacity", "min_interval"},
+                       {"name", "identity", "aliases"}).copy()
+    _credential_source(settings)
     identity_fields = {"service", "environment", "region", "host", "instance_id"}
     settings["identity"] = Identity(**_object(settings["identity"], identity_fields, identity_fields))
     return GatewayPrincipal(**settings)
@@ -289,22 +316,48 @@ def _destination(value: Any) -> Destination:
 
     # JSON не выбирает импортируемый модуль или функцию. Произвольные адаптеры
     # остаются доступны через явно доверенную Python-фабрику. Здесь создаются
-    # только настройки: токены будут прочитаны позже, при запуске gateway.
+    # только настройки: literal-токены проверяются сразу, окружение читается при запуске.
     if settings["provider"] == "telegram":
         from .adapters.telegram import TelegramConfig
 
-        provider = TelegramConfig(**_object(settings["settings"], {
-            "token_env", "chat_id", "endpoint", "message_thread_id", "disable_notification", "allow_http",
-        }, {"token_env", "chat_id"}))
+        options = _object(settings["settings"], {
+            "token", "token_env", "chat_id", "endpoint", "message_thread_id", "disable_notification", "allow_http",
+        }, {"chat_id"})
+        _credential_source(options)
+        provider = TelegramConfig(**options)
     elif settings["provider"] == "ntfy":
         from .adapters.ntfy import NtfyConfig
 
-        provider = NtfyConfig(**_object(settings["settings"], {
-            "topic", "token_env", "endpoint", "title", "priority", "tags", "allow_http",
-        }, {"topic", "token_env"}))
+        options = _object(settings["settings"], {
+            "topic", "token", "token_env", "endpoint", "title", "priority", "tags", "allow_http",
+        }, {"topic"})
+        _credential_source(options)
+        provider = NtfyConfig(**options)
     else:
         raise ValueError("unsupported gateway provider")
     return provider.destination(settings["alias"], retry=retry)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Проверка явного выбора token либо token_env в JSON
+#------------------------------------------------------------------------------------------------------------------
+def _credential_source(settings: dict[str, Any]) -> None:
+
+    """Require one explicit credential key, preserving anonymous token_env=null.
+
+    :param settings: Validated settings object with known keys.
+    :type settings: dict[str, Any]
+    """
+
+    # settings - объект со стандартными ключами схемы.
+
+    # Проверяем наличие ключей, а не истинность значений: token вместе с token_env=null
+    # тоже неоднозначен. Пустая строка и token=null не включают анонимную отправку.
+    if ("token" in settings) == ("token_env" in settings):
+        raise CredentialError("token", "source")
+    if "token" in settings and settings["token"] is None:
+        raise CredentialError("token", "value")
 #------------------------------------------------------------------------------------------------------------------
 
 

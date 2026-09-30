@@ -2,6 +2,7 @@ include AGENTS.md ARCHITECTURE.md PROJECT_BRIEF.md
 include .gitattributes .gitignore
 recursive-include docs *.md
 include docs/examples/gateway_config.example.json
+include docs/examples/gateway_config.inline.example.json
 include docs/examples/gateway-nginx.conf
 recursive-include tests *.py
 recursive-include tools *.py

@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-203401
+# Дата и время последнего изменения: 260930-122644
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -56,7 +56,6 @@ import ipaddress
 import json
 import logging
 import math
-import os
 import re
 import signal
 import ssl
@@ -69,6 +68,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ._context import delivery_context
+from ._credentials import CREDENTIAL_HINTS, resolve_token
 from .channels import NotificationChannel
 from .delivery import DeliveryResult, DeliveryStatus, ResultSource
 from .gateway_config import GatewayConfig, GatewayPrincipal
@@ -281,12 +281,11 @@ class Gateway:
         self._start_task = asyncio.current_task()
         stage = "credentials"
         try:
-            # Токены читаются только при запуске. В памяти сервера для поиска остаются их хеши.
+            # Токен берётся из настроек либо читается из окружения при запуске.
+            # Для поиска используем хеши; literal-токен остаётся в переданном объекте config.
             seen = set()
             for principal in self._config.principals:
-                token = os.environ.get(principal.token_env, "")
-                if re.fullmatch(r"[A-Za-z0-9_-]{32,512}", token) is None:
-                    raise ValueError("missing or invalid gateway credential")
+                token = resolve_token(principal.token, principal.token_env, "gateway")
                 digest = hashlib.sha256(token.encode("ascii")).digest()
                 if digest in seen:
                     raise ValueError("gateway credentials must be distinct")
@@ -834,7 +833,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if bool(args.cert) != bool(args.key):
             raise ValueError("both certificate and key are required")
         if args.check_config:
-            print("Настройки gateway корректны. Токены, сертификаты и доступность сети не проверялись.")
+            print("Настройки gateway корректны. Значения переменных окружения, сертификаты и сеть не проверялись.")
             return 0
         context = None
         if args.cert:
@@ -862,7 +861,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             code, field = "dependency_missing", stage
         else:
             code, field = "operation_failed", stage
-        print(f"Ошибка gateway: code={code} field={field}. Значения и детали скрыты.", flush=True)
+        hint = CREDENTIAL_HINTS.get(error.reason, "") if isinstance(error, GatewayConfigError) else ""
+        print(f"Ошибка gateway: code={code} field={field}. {hint or 'Значения и детали скрыты.'}", flush=True)
         return 1
     return 0
 #------------------------------------------------------------------------------------------------------------------

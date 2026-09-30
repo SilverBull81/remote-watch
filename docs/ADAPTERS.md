@@ -1,10 +1,10 @@
 ﻿# Адаптеры Telegram и ntfy
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-192353
+Дата и время последнего изменения: 260930-122644
 
 ## Реализовано в 0.1.0
 
@@ -33,6 +33,17 @@ python -m pip install ".[telegram,ntfy]"
 Источники: [aiohttp client](https://docs.aiohttp.org/en/stable/client_reference.html),
 [логика повторов aiohttp](https://docs.aiohttp.org/en/stable/_modules/aiohttp/client.html),
 [HTTPX logging](https://www.python-httpx.org/logging/).
+
+## Токен в Python-настройках, начиная с 0.2.0.dev8
+
+TelegramConfig и NtfyConfig принимают token либо token_env. Значение token скрыто
+из repr и проверяется при создании настроек; окружение читается при open.
+Например, `TelegramConfig(token="123456:REPLACE_WITH_BOT_TOKEN", chat_id=123456789)`
+или `NtfyConfig(token="REPLACE_WITH_NTFY_TOKEN", topic="test-topic")`.
+Это вымышленные заглушки; реальные значения не помещайте в исходники репозитория.
+Два непустых источника одновременно запрещены. В Python None означает отсутствие
+источника; у ntfy оба None выбирают анонимную отправку. В gateway JSON требуется
+явный ключ, и анонимный режим задаётся только token_env=null.
 
 ## Настройка двух получателей
 
@@ -84,7 +95,7 @@ Runtime ограничивает всю попытку; адаптер отде�
 
 ## Telegram
 
-`TelegramConfig` принимает token_env, chat_id, endpoint, message_thread_id,
+`TelegramConfig` принимает token или token_env, chat_id, endpoint, message_thread_id,
 disable_notification и allow_http. Чат — ненулевой int, его строковое представление
 или @имя канала. Для темы группы-форума задаётся положительный message_thread_id.
 По умолчанию endpoint — https://api.telegram.org, тема не задана, звук включён.
@@ -98,7 +109,7 @@ disable_notification и allow_http. Чат — ненулевой int, его с
 
 ## ntfy
 
-`NtfyConfig` принимает topic, token_env, endpoint, title, priority, tags и allow_http.
+`NtfyConfig` принимает topic, token или token_env, endpoint, title, priority, tags и allow_http.
 По умолчанию endpoint — https://ntfy.sh, title — Remote Watch, priority — 3, tags — ().
 Приоритет задаётся числом 1–5. Допускается до 16 меток, каждая до 256 байт UTF-8;
 заголовок также ограничен 256 байтами. Topic содержит 1–64 ASCII-буквы, цифры, `_`, `-`.
@@ -121,8 +132,8 @@ Topic и отображаемые tags берутся из настройки к
 [transformBodyJSON](https://github.com/binwiederhier/ntfy/blob/main/server/server.go).
 Свой сервер с уменьшенными лимитами может отклонить и такой запрос.
 
-token_env указывается явно. Имя переменной включает Bearer-авторизацию;
-`token_env=None` сознательно выбирает анонимную публикацию. Для рабочего применения
+token либо token_env включает Bearer-авторизацию; оба None в Python-настройках
+выбирают анонимную публикацию. Для рабочего применения
 рекомендуется закрытый topic с отдельными правами отправителя и телефона.
 Basic Auth в этой версии не поддерживается; используйте access token.
 Источники: [ntfy authentication](https://docs.ntfy.sh/publish/#authentication),

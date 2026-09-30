@@ -1,10 +1,10 @@
 ﻿# Запуск, остановка и наблюдение gateway
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-203401
+Дата и время последнего изменения: 260930-123013
 
 ## Локальная диагностика, dev7
 
@@ -20,7 +20,16 @@ Version 1.0.1
 на телефоне и не сохраняется при принудительном убийстве процесса/отключении VM.
 Периодический вывод и публичный admin endpoint не добавлены.
 
-Ошибки CLI содержат только code и фиксированное field:
+Ошибки CLI содержат code и безопасное field; с dev8 ошибки токенов дополнены
+фиксированным объяснением. Например, при токене вместо имени переменной:
+
+```text
+Ошибка gateway: code=config_value field=destinations[0].settings.token_env. Ожидается имя переменной окружения, а не значение токена.
+```
+
+Индекс начинается с нуля; сами токены и имена переменных в ошибку не попадают.
+
+Основные категории:
 
 | code | field | Что проверить |
 | --- | --- | --- |
@@ -39,19 +48,20 @@ Version 1.0.1
 | operation_failed | configuration / startup | Фабрика, адрес/порт, TLS для внешнего адреса, stop-file или выполнение |
 
 Неизвестные имена ключей и значения из JSON не печатаются. field — безопасный
-раздел схемы, а не обязательно точное отдельное поле. Ошибки взаимных ссылок
+раздел схемы либо путь к token/token_env с индексом записи. Остальные ошибки
+пока не обязательно указывают точное отдельное поле. Ошибки взаимных ссылок
 и повторов имён относятся к итоговой проверке gateway. Исходные исключения скрыты.
 
 ## Windows: сначала ручной запуск
 
-Используйте отдельный каталог, например C:\RemoteWatch, и ту же учётную запись,
+Используйте отдельный каталог, например C:\Work\RemoteWatch, и ту же учётную запись,
 под которой затем будет работать задача. Python, venv, конфигурация и сертификаты
-должны задаваться абсолютными путями. Имена переменных токенов берутся из config;
-значения задаются отдельно по [GATEWAY_SERVER.md](GATEWAY_SERVER.md).
+должны задаваться абсолютными путями. В конфиге выберите token либо token_env
+по [GATEWAY_SERVER.md](GATEWAY_SERVER.md); при token переменные окружения не нужны.
 
 ```powershell
-C:\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\RemoteWatch\gateway_config.json --check-config
-C:\RemoteWatch\.venv\Scripts\python.exe -u -m remote_watch.gateway --config C:\RemoteWatch\gateway_config.json --host 127.0.0.1 --port 8765 --stop-file C:\RemoteWatch\control\gateway.stop
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\Work\RemoteWatch\gateway_config.json --check-config
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -u -m remote_watch.gateway --config C:\Work\RemoteWatch\gateway_config.json --host 127.0.0.1 --port 8765 --stop-file C:\Work\RemoteWatch\control\gateway.stop
 ```
 
 Это HTTP только для прокси на той же VM. Для подключения с другой машины нужны
@@ -63,7 +73,7 @@ C:\RemoteWatch\.venv\Scripts\python.exe -u -m remote_watch.gateway --config C:\R
 В другом PowerShell под той же учётной записью:
 
 ```powershell
-New-Item -ItemType File -Path C:\RemoteWatch\control\gateway.stop
+New-Item -ItemType File -Path C:\Work\RemoteWatch\control\gateway.stop
 ```
 
 Сервер замечает файл примерно за секунду, прекращает приём и выполняет ограниченную
@@ -71,7 +81,7 @@ New-Item -ItemType File -Path C:\RemoteWatch\control\gateway.stop
 Перед следующим запуском удалите только этот файл:
 
 ```powershell
-Remove-Item -LiteralPath C:\RemoteWatch\control\gateway.stop
+Remove-Item -LiteralPath C:\Work\RemoteWatch\control\gateway.stop
 ```
 
 В терминале работает и Ctrl+C; на Unix — SIGTERM. Stop-Process и кнопка «Завершить»
@@ -88,28 +98,40 @@ Remove-Item -LiteralPath C:\RemoteWatch\control\gateway.stop
 2. Триггер — при запуске компьютера с задержкой 30 секунд. Дополнительный триггер
    при входе пользователя нужен только для сознательно выбранного интерактивного режима.
 3. Действие — PowerShell с `-NoProfile -NonInteractive -WindowStyle Hidden -File`
-   и абсолютным путём локального launcher.ps1. Рабочий каталог — C:\RemoteWatch.
+   и абсолютным путём локального launcher.ps1. Рабочий каталог — C:\Work\RemoteWatch.
 4. В параметрах запретите параллельные экземпляры («Не запускать новый экземпляр»),
    отключите ограничение длительности задачи, разрешите конечное число перезапусков
    при ошибке, например три с интервалом в минуту. После успеха задача не перезапускается.
 5. Для планового обслуживания создайте stop-file, дождитесь окончания задачи,
    внесите изменения, удалите stop-file и запустите задачу вручную.
 
-Пример launcher.ps1 для случая прокси на той же VM:
+Если токены заданы через token в gateway_config.json, launcher не должен читать
+дополнительный файл секретов или задавать переменные:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$logPath = 'C:\Work\RemoteWatch\logs\gateway-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log'
+& 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\gateway_config.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
+exit $LASTEXITCODE
+```
+
+Каталоги logs/control создайте заранее; доступ к конфигу ограничьте учётной записью gateway.
+Следующий альтернативный launcher.ps1 предназначен только для token_env
+и случая прокси на той же VM:
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 $names = @()
 $gatewayExit = 1
 try {
-    $secretValues = Get-Content -LiteralPath 'C:\RemoteWatch\gateway_secrets.local.json' -Raw | ConvertFrom-Json
+    $secretValues = Get-Content -LiteralPath 'C:\Work\RemoteWatch\gateway_secrets.local.json' -Raw | ConvertFrom-Json
     foreach ($property in $secretValues.PSObject.Properties) {
         if ($property.Name -notmatch '^(RW|REMOTE_WATCH)_[A-Z0-9_]+$') { throw 'Invalid secret variable name' }
         [Environment]::SetEnvironmentVariable($property.Name, [string]$property.Value, 'Process')
         $names += $property.Name
     }
-    $logPath = 'C:\RemoteWatch\logs\gateway-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log'
-    & 'C:\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\RemoteWatch\gateway_config.json' --stop-file 'C:\RemoteWatch\control\gateway.stop' *>> $logPath
+    $logPath = 'C:\Work\RemoteWatch\logs\gateway-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log'
+    & 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\gateway_config.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
     $gatewayExit = $LASTEXITCODE
 } catch {
     Write-Output 'Gateway launcher failed; check local configuration and permissions.'

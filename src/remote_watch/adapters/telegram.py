@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 260930-122644
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -32,10 +32,11 @@ import re
 from dataclasses import dataclass, field, replace
 from functools import partial
 
+from .._credentials import resolve_token, validate_credentials
 from .._validation import require_int
 from ..config import Destination, RetryPolicy
 from ..delivery import Delivery, DeliveryResult, DeliveryStatus
-from ._common import http_failure, read_token, render, retry_after, truncate, validate_endpoint, validate_env
+from ._common import http_failure, render, retry_after, truncate, validate_endpoint
 from ._http import HttpSender
 
 #******************************************************************************************************************
@@ -48,9 +49,10 @@ from ._http import HttpSender
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TelegramConfig:
-    """Declare a direct Telegram destination using an environment token reference."""
+    """Declare a Telegram destination using a literal token or environment reference."""
 
-    token_env: str                              # Переменная окружения с токеном бота.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной с токеном; альтернатива token.
+    token: str | None = field(default=None, repr=False)      # Токен бота непосредственно в настройках.
     chat_id: int | str = field(repr=False)      # Числовой ID чата либо @имя канала.
     endpoint: str = "https://api.telegram.org"  # Корень официального или собственного Bot API.
     message_thread_id: int | None = None        # ID темы в группе-форуме; None — обычная отправка.
@@ -102,9 +104,7 @@ class TelegramConfig:
 
         """Validate static settings without reading credentials or importing aiohttp."""
 
-        validate_env(self.token_env)
-        if self.token_env is None:
-            raise ValueError("Telegram requires token_env")
+        validate_credentials(self.token, self.token_env, "telegram")
 
         validate_endpoint(self.endpoint, self.allow_http)
 
@@ -172,7 +172,7 @@ class TelegramChannel:
             await self._http.open()
             return
 
-        token = read_token(self._config.token_env, telegram=True)
+        token = resolve_token(self._config.token, self._config.token_env, "telegram")
         await self._http.open()
         self._url = f"{self._config.endpoint.rstrip('/')}/bot{token}/sendMessage"
     #--------------------------------------------------------------------------------------------------------------

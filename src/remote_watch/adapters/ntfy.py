@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-192353
+# Дата и время последнего изменения: 260930-122644
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -37,10 +37,11 @@ import re
 from dataclasses import dataclass, field, replace
 from functools import partial
 
+from .._credentials import resolve_token, validate_credentials
 from .._validation import require_int, require_text, text_tuple
 from ..config import Destination, RetryPolicy
 from ..delivery import Delivery, DeliveryResult, DeliveryStatus
-from ._common import http_failure, read_token, render, retry_after, truncate, validate_endpoint, validate_env
+from ._common import http_failure, render, retry_after, truncate, validate_endpoint
 from ._http import HttpSender
 
 #******************************************************************************************************************
@@ -56,7 +57,8 @@ class NtfyConfig:
     """Configure a fixed ntfy topic with explicit authenticated or anonymous access."""
 
     topic: str = field(repr=False)              # Тема на сервере ntfy; не тема маршрутизации.
-    token_env: str | None                       # Переменная с Bearer-токеном; None — без авторизации.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной; оба None — без авторизации.
+    token: str | None = field(default=None, repr=False)      # Bearer-токен непосредственно в настройках.
     endpoint: str = "https://ntfy.sh"           # Корень выбранного сервера ntfy.
     title: str = "Remote Watch"                 # Заголовок уведомления на телефоне.
     priority: int = 3                           # Приоритет ntfy от 1 до 5.
@@ -109,7 +111,7 @@ class NtfyConfig:
         """Validate a fixed topic and bounded display settings without side effects."""
 
         validate_endpoint(self.endpoint, self.allow_http)
-        validate_env(self.token_env)
+        validate_credentials(self.token, self.token_env, "ntfy")
 
         # Тема фиксирована для получателя. Значение из LogRecord не может перенаправить публикацию.
         if not isinstance(self.topic, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.topic) is None:
@@ -179,7 +181,7 @@ class NtfyChannel:
             await self._http.open()
             return
 
-        token = read_token(self._config.token_env)
+        token = resolve_token(self._config.token, self._config.token_env, "ntfy")
         await self._http.open()
         self._token = token
         self._opened = True

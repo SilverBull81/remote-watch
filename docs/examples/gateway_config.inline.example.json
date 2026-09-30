@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "destinations": [
+    {
+      "alias": "app1-telegram",
+      "provider": "telegram",
+      "settings": {
+        "token": "123456789:REPLACE_WITH_TELEGRAM_BOT_TOKEN",
+        "chat_id": 123456789
+      }
+    },
+    {
+      "alias": "app1-ntfy",
+      "provider": "ntfy",
+      "settings": {
+        "token": "REPLACE_WITH_NTFY_TOKEN",
+        "topic": "replace-with-your-topic"
+      }
+    }
+  ],
+  "principals": [
+    {
+      "name": "app1",
+      "token": "REPLACE_WITH_UNIQUE_RANDOM_GATEWAY_TOKEN",
+      "identity": {
+        "service": "app1",
+        "environment": "production",
+        "region": "ru",
+        "host": "ru-server-1",
+        "instance_id": "one"
+      },
+      "aliases": ["app1-telegram", "app1-ntfy"]
+    }
+  ]
+}

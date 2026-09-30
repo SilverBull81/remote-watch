@@ -1,10 +1,10 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-122613
+# Дата и время последнего изменения: 260930-122644
 #
 # Классы:
 # -> GatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
@@ -22,9 +22,9 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
+from ._credentials import validate_credentials
 from ._validation import require_int, require_number, text_tuple
 from .config import DeliveryMode, Destination
 from .events import Identity
@@ -39,7 +39,8 @@ class GatewayPrincipal:
     """Bind a service credential to one exact identity and a finite alias allowlist."""
 
     name: str                           # Локальное имя приложения для учёта доступа.
-    token_env: str = field(repr=False)  # Переменная с отдельным сервисным токеном.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной; альтернатива token.
+    token: str | None = field(default=None, repr=False)      # Отдельный сервисный токен приложения.
     identity: Identity                  # Единственная разрешённая принадлежность отправителя.
     aliases: tuple[str, ...]            # Разрешённые имена назначений на gateway.
     capacity: int = 4                   # Максимум одновременно принятых запросов приложения.
@@ -54,11 +55,8 @@ class GatewayPrincipal:
 
         validate_alias(self.name)
 
-        # Настройки содержат только имя переменной; само значение читается при start.
-        if not isinstance(self.token_env, str):
-            raise TypeError("token_env must be a string")
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.token_env) is None:
-            raise ValueError("invalid token environment name")
+        # Значение из файла проверяется сразу; переменная окружения читается при start.
+        validate_credentials(self.token, self.token_env, "gateway")
         if not isinstance(self.identity, Identity):
             raise TypeError("identity must be Identity")
 
