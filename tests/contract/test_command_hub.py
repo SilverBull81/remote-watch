@@ -1,10 +1,10 @@
 ﻿# Проверки маршрутизации, прав, сроков и отказов двух постоянных журналов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-203048
 #
 # Классы:
 # -> DirectTransport: Подставной транспорт с потерей уже записанного ответа.
@@ -697,7 +697,9 @@ def test_command_worker_cancellation(tmp_path: Path) -> None:
         """Block one store job and verify bounded rejection without blocking the loop."""
 
         rig = Rig(tmp_path)
-        worker = StoreWorker(rig.store, 0.05)
+        # Проверяем явную отмену caller, а не скорость создания базы или timeout.
+        # Подготовке нужен обычный конечный срок, достаточный для диска Windows CI.
+        worker = StoreWorker(rig.store, 10.0)
         await worker.open()
         entered = threading.Event()
         released = threading.Event()
@@ -711,15 +713,14 @@ def test_command_worker_cancellation(tmp_path: Path) -> None:
             """Simulate a storage operation whose caller may disappear."""
 
             entered.set()
-            released.wait(2)
+            released.wait(10)
         #----------------------------------------------------------------------------------------------------------
 
 
         pending = asyncio.create_task(worker.call(blocked))
 
         try:
-            while not entered.is_set():
-                await asyncio.sleep(0.001)
+            assert await asyncio.to_thread(entered.wait, 5)
             pending.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await pending
