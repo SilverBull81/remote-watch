@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -622,6 +622,10 @@ class SQLiteCommandStore:
                 # сигнал executor/сверки с приложением, а не результат истечения TTL.
                 db.execute("UPDATE commands SET running=0, revision=revision+1, retain_until=? WHERE sequence=?",
                            (now + self._limits.retention, row["sequence"]))
+                if self._role is StoreRole.CLIENT:
+                    # Квитанция UNKNOWN подтверждала только исход. Снятие занятости
+                    # нужно отдельно доставить hub; потеря ответа не должна потерять этот шаг.
+                    db.execute("UPDATE commands SET acknowledged=0 WHERE sequence=?", (row["sequence"],))
                 self._audit(db, AuditCode.EXECUTION_RELEASED, stored.record)
     #--------------------------------------------------------------------------------------------------------------
 

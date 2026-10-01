@@ -1,10 +1,10 @@
 ﻿# Исполнение опубликованных Python-примеров на подставных каналах без сети.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-165638
 #
 # Тесты:
 # -> test_documentation_examples(): Исполнение примеров из документации без сети.
@@ -25,7 +25,7 @@ import pytest
 # ТЕСТ : Исполнение примеров из документации без сети
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("document", [
-    "COMMANDS", "COMMAND_PROTOCOL", "COMMAND_TIME", "COMMAND_STORAGE",
+    "COMMANDS", "COMMAND_PROTOCOL", "COMMAND_TIME", "COMMAND_STORAGE", "COMMAND_EXECUTION",
     "RUNTIME", "ADAPTERS", "WATCHER", "RELAY", "GATEWAY_SERVER",
 ])
 def test_documentation_examples(document: str) -> None:

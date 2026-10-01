@@ -1,10 +1,10 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> ConsoleConfig: Настройки необязательного вывода в консоль.
@@ -21,11 +21,12 @@
 #
 # -> RemoteWatcher: Владелец фоновой доставки и выбранных локальных обработчиков.
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Создание объекта.
 #    Интерфейс:
-#    -> start(): Создание обработчиков и запуск фоновой доставки.
+#    -> command_stats(): Чтение состояния командного исполнителя.
+#    -> start(): Запуск объекта и подготовка состояния.
 #    -> astart(): Асинхронный запуск с откатом при отмене.
-#    -> stop(): Снятие обработчиков и завершение принятой работы.
+#    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов.
 #    -> astop(): Асинхронная остановка с завершением очистки.
 #    Специальные методы:
 #    -> __enter__(): Запуск при входе в контекст.
@@ -33,6 +34,8 @@
 #    -> __aenter__(): Асинхронный вход в контекст.
 #    -> __aexit__(): Асинхронный выход из контекста.
 #    Служебные методы:
+#    -> _start_notifications(): Создание обработчиков и запуск фоновой доставки.
+#    -> _stop_notifications(): Снятие обработчиков и завершение принятой работы.
 #    -> _check_context(): Запрет управления lifecycle из внутренних callback.
 #    -> _release_handlers(): Закрытие только принадлежащих объекту обработчиков.
 #    -> _call(): Выполнение lifecycle вне цикла приложения.
@@ -55,6 +58,9 @@ from pathlib import Path
 from typing import TextIO
 
 from remote_watch._validation import require_int
+from remote_watch.commands.client import CommandClient
+from remote_watch.commands.dispatcher import CommandDispatcher, DispatcherStats, command_context
+from remote_watch.commands.runtime import CommandRuntime
 from remote_watch.config import WatcherConfig
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.runtime import NotificationRuntime
@@ -180,6 +186,7 @@ class RemoteWatcher:
         console: ConsoleConfig | None = None,
         file: RotatingFileConfig | None = None,
         redactor: Callable[[str], str] | None = None,
+        command_client: CommandClient | None = None,
     ) -> None:
 
         """Prepare ownership without attaching handlers, opening files or starting threads.
@@ -198,6 +205,9 @@ class RemoteWatcher:
 
         :param redactor: Optional remote text redactor.
         :type redactor: Callable[[str], str] | None
+
+        :param command_client: Explicitly enabled command connection matching config identity and callbacks.
+        :type command_client: CommandClient | None
         """
 
         # config - настройки приложения и получателей.
@@ -205,6 +215,7 @@ class RemoteWatcher:
         # console - настройки дополнительного вывода в консоль.
         # file - настройки дополнительного журнала.
         # redactor - функция удаления секретов из удалённого текста.
+        # command_client — отдельный клиент команд; None сохраняет только исходящую доставку.
 
         if logger is not None and not isinstance(logger, (logging.Logger, logging.LoggerAdapter)):
             raise TypeError("logger must be Logger or LoggerAdapter")
@@ -214,6 +225,12 @@ class RemoteWatcher:
             raise TypeError("file must be RotatingFileConfig")
 
         self.runtime = NotificationRuntime(config, redactor=redactor)
+        self._commands = None
+        if command_client is not None:
+            if (type(command_client) is not CommandClient
+                    or command_client.registration.identity != config.identity):
+                raise ValueError("command client identity differs from watcher")
+            self._commands = CommandRuntime(CommandDispatcher(config.commands, command_client))
         self.logger = logger if logger is not None else logging.getLogger(config.identity.service)
         target = self.logger
         while isinstance(target, logging.LoggerAdapter):
@@ -227,79 +244,72 @@ class RemoteWatcher:
         self._closed = False
     #--------------------------------------------------------------------------------------------------------------
 
+
     #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Создание обработчиков и запуск фоновой доставки
+    # ИНТЕРФЕЙС : Чтение состояния командного исполнителя
+    #--------------------------------------------------------------------------------------------------------------
+    @property
+    def command_stats(self) -> DispatcherStats | None:
+
+        """Read command counters without exposing identities, arguments or callback exceptions.
+
+        :return: Command counters, or None when commands are not explicitly enabled.
+        :rtype: DispatcherStats | None
+        """
+
+        return None if self._commands is None else self._commands.dispatcher.stats
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
     def start(self) -> None:
 
-        """Open local files, start delivery and attach owned handlers atomically for lifecycle callers."""
+        """Start notification delivery and explicitly configured synchronous commands."""
 
         self._check_context()
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("a closed watcher cannot be restarted")
-            if self._started:
-                return
-
-            try:
-                # Локальные ошибки пути выявляются до запуска сетевых клиентов.
-                # Список владения заполняется сразу, чтобы откат закрывал даже частично созданный набор.
-                self._handlers.append(self.runtime.handler)
-                if self._console is not None:
-                    handler = logging.StreamHandler(self._console.stream)
-                    self._handlers.append(handler)
-                    handler.setLevel(self._console.level)
-                    handler.setFormatter(logging.Formatter(self._console.format))
-
-                if self._file is not None:
-                    handler = _OwnedRotatingFileHandler(self._file.path, maxBytes=self._file.max_bytes,
-                                                        backupCount=self._file.backup_count,
-                                                        encoding="utf-8", errors="backslashreplace")
-                    self._handlers.append(handler)
-                    handler.setLevel(self._file.level)
-                    handler.setFormatter(logging.Formatter(self._file.format))
-
-                self.runtime.start()
-                for handler in self._handlers:
-                    self._target.addHandler(handler)
-                self._started = True
-            except BaseException:
-                self._closed = True
-                try:
-                    self.runtime.stop()
-                finally:
-                    self._release_handlers()
-                raise
+        try:
+            self._start_notifications()
+            if self._commands is not None:
+                self._commands.start()
+        except BaseException:
+            self.stop()
+            raise
     #--------------------------------------------------------------------------------------------------------------
+
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронный запуск с откатом при отмене
     #--------------------------------------------------------------------------------------------------------------
     async def astart(self) -> None:
 
-        """Start off the application loop and roll back if the caller cancels."""
+        """Start notifications and bind asynchronous commands to the application loop."""
 
         self._check_context()
-        await self._call(self.start, stop_on_cancel=True)
+        try:
+            await self._call(self._start_notifications, stop_on_cancel=True)
+            if self._commands is not None:
+                await self._commands.astart()
+        except BaseException:
+            await self.astop()
+            raise
     #--------------------------------------------------------------------------------------------------------------
 
+
     #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Снятие обработчиков и завершение принятой работы
+    # ИНТЕРФЕЙС : Остановка приёма команд и принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
     def stop(self) -> None:
 
-        """Detach owned handlers, drain delivery and close only owned local resources."""
+        """Stop command admission before detaching owned notification handlers."""
 
         self._check_context()
-        with self._lock:
-            # Сначала прекращаем приём через logger, затем даём уже принятым сообщениям завершиться.
-            for handler in self._handlers:
-                self._target.removeHandler(handler)
-            self._closed = True
-            try:
-                self.runtime.stop()
-            finally:
-                self._release_handlers()
+        try:
+            if self._commands is not None:
+                self._commands.stop()
+        finally:
+            self._stop_notifications()
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -307,10 +317,32 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     async def astop(self) -> None:
 
-        """Finish cleanup even if the awaiting application task is cancelled."""
+        """Stop command admission before notification cleanup, retaining cancellation safety."""
 
         self._check_context()
-        await self._call(self.stop, stop_on_cancel=False)
+
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Остановка обоих runtime даже при отказе одного из них
+        #----------------------------------------------------------------------------------------------------------
+        async def cleanup() -> None:
+
+            """Close both owned runtimes even if command cleanup fails."""
+
+            try:
+                if self._commands is not None:
+                    await self._commands.astop()
+            finally:
+                await self._call(self._stop_notifications, stop_on_cancel=False)
+        #----------------------------------------------------------------------------------------------------------
+
+
+        task = asyncio.create_task(cleanup())
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await self._finish(task)
+            raise
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -382,6 +414,72 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Создание обработчиков и запуск фоновой доставки
+    #--------------------------------------------------------------------------------------------------------------
+    def _start_notifications(self) -> None:
+
+        """Open local files, start delivery and attach owned handlers atomically for lifecycle callers."""
+
+        self._check_context()
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("a closed watcher cannot be restarted")
+            if self._started:
+                return
+
+            try:
+                # Локальные ошибки пути выявляются до запуска сетевых клиентов.
+                # Список владения заполняется сразу, чтобы откат закрывал даже частично созданный набор.
+                self._handlers.append(self.runtime.handler)
+                if self._console is not None:
+                    handler = logging.StreamHandler(self._console.stream)
+                    self._handlers.append(handler)
+                    handler.setLevel(self._console.level)
+                    handler.setFormatter(logging.Formatter(self._console.format))
+
+                if self._file is not None:
+                    handler = _OwnedRotatingFileHandler(self._file.path, maxBytes=self._file.max_bytes,
+                                                        backupCount=self._file.backup_count,
+                                                        encoding="utf-8", errors="backslashreplace")
+                    self._handlers.append(handler)
+                    handler.setLevel(self._file.level)
+                    handler.setFormatter(logging.Formatter(self._file.format))
+
+                self.runtime.start()
+                for handler in self._handlers:
+                    self._target.addHandler(handler)
+                self._started = True
+            except BaseException:
+                self._closed = True
+                try:
+                    self.runtime.stop()
+                finally:
+                    self._release_handlers()
+                raise
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Снятие обработчиков и завершение принятой работы
+    #--------------------------------------------------------------------------------------------------------------
+    def _stop_notifications(self) -> None:
+
+        """Detach owned handlers, drain delivery and close only owned local resources."""
+
+        self._check_context()
+        with self._lock:
+            # Сначала прекращаем приём через logger, затем даём уже принятым сообщениям завершиться.
+            for handler in self._handlers:
+                self._target.removeHandler(handler)
+            self._closed = True
+            try:
+                self.runtime.stop()
+            finally:
+                self._release_handlers()
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Запрет управления lifecycle из внутренних callback
     #--------------------------------------------------------------------------------------------------------------
     def _check_context(self) -> None:
@@ -389,8 +487,8 @@ class RemoteWatcher:
         """Reject lifecycle calls from delivery or normalization callbacks before locking."""
 
         # Такой вызов мог бы ждать поток, который сейчас выполняет сам callback.
-        if delivery_context.get():
-            raise RuntimeError("watcher lifecycle cannot be called from delivery or redactor callbacks")
+        if delivery_context.get() or command_context.get():
+            raise RuntimeError("watcher lifecycle cannot be called from delivery, redactor or command callbacks")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -445,7 +543,7 @@ class RemoteWatcher:
             # Отмена ожидания не останавливает to_thread. Дожидаемся операции, включая повторную отмену.
             await self._finish(task)
             if stop_on_cancel:
-                await self._finish(asyncio.create_task(asyncio.to_thread(self.stop)))
+                await self._finish(asyncio.create_task(asyncio.to_thread(self._stop_notifications)))
             raise
     #--------------------------------------------------------------------------------------------------------------
 

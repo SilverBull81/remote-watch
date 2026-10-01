@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -18,6 +18,7 @@
 #    -> authenticate(): Проверка отдельных учётных данных приложения.
 #    -> register(): Регистрация точной цели без замены живой сессии.
 #    -> heartbeat(): Продление живой регистрации без продления команд.
+#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
 #    -> source_cursor(): Чтение подтверждённой позиции доверенного источника.
 #    -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
 #    -> poll(): Ожидание одной команды с одним waiter на сессию.
@@ -62,6 +63,7 @@ from remote_watch.commands.hub_config import CommandHubConfig, CommandPrincipal,
 from remote_watch.commands.protocol import (
     CommandClaim,
     CommandGrant,
+    CommandOutcome,
     CommandReceipt,
     CommandRef,
     CommandRegistration,
@@ -320,6 +322,59 @@ class CommandHub:
         entry = self._entry(token, session)
         entry.deadline = self._deadline(self.config.session_ttl)
         return self._session(entry)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Подтверждение фактического окончания ранее неизвестного исполнения
+    #--------------------------------------------------------------------------------------------------------------
+    async def release(
+        self,
+        token: str,
+        claim: CommandClaim,
+    ) -> CommandReceipt:
+
+        """Accept termination proof only from the owning application and original claim.
+
+        :param token: Command-only credential, never logged or echoed.
+        :type token: str
+
+        :param claim: Correlated request for a single execution permission.
+        :type claim: CommandClaim
+
+        :return: Receipt bound to the exact durably stored result digest.
+        :rtype: CommandReceipt
+        """
+
+        # token — отдельный секрет команд, не выводимый в сообщения и журнал.
+        # claim — запрос разрешения на единственное исполнение команды.
+
+        self._ref_entry(token, claim.ref, live=False)
+
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Проверка и запись решения в рабочем потоке журнала
+        #----------------------------------------------------------------------------------------------------------
+        def commit() -> CommandReceipt:
+
+            """Clear execution ownership without changing its retained terminal outcome.
+
+            :return: Receipt bound to the exact durably stored result digest.
+            :rtype: CommandReceipt
+            """
+
+            store = self._worker.store
+            stored = store.get(claim.ref)
+            if (stored is None or stored.record.result is None or stored.record.claim_id != claim.claim_id
+                    or message_digest(stored.record.request) != claim.request_digest):
+                raise CommandError("conflict")
+            store.release_execution(claim.ref, claim.claim_id)
+            return CommandReceipt(ref=claim.ref, claim_id=claim.claim_id,
+                                  result_digest=message_digest(stored.record.result))
+        #----------------------------------------------------------------------------------------------------------
+
+
+        return await self._worker.call(commit)
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -636,8 +691,12 @@ class CommandHub:
             else:
                 claim = CommandClaim(ref=result.ref, claim_id=result.claim_id,
                                      request_digest=message_digest(stored.record.request))
-                store.transition(result.ref, stored.revision, CommandAction.FINISH,
+                action = (CommandAction.REJECT if result.outcome is CommandOutcome.REJECTED
+                          else CommandAction.FINISH)
+                changed = store.transition(result.ref, stored.revision, action,
                                  session, claim, entry.deadline, result=result)
+                if changed.command.record.result != result:
+                    raise CommandError("outcome_conflict")
             return CommandReceipt(ref=result.ref, claim_id=result.claim_id, result_digest=message_digest(result))
         #----------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -912,6 +912,7 @@ def test_gateway_multiple_apps(
                             result = decode_response(json.loads(body), item.delivery)
                             assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
                         return response.status
+                #--------------------------------------------------------------------------------------------------
                 #--------------------------------------------------------------------------------------------------
 
                 # Даже знание чужого alias или Identity не расширяет права своего токена.

@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -54,6 +54,7 @@ def main() -> int:
     from remote_watch.commands import CommandRegistry
     from remote_watch.commands._confirmation import CommandChallenge
     from remote_watch.commands.client import CommandClient
+    from remote_watch.commands.dispatcher import CommandDispatcher, DispatcherStats
     from remote_watch.commands.hub import CommandHub
     from remote_watch.commands.protocol import CommandRegistration, decode_command
     from remote_watch.commands.sqlite_store import SQLiteCommandStore
@@ -81,6 +82,7 @@ def main() -> int:
     assert CommandRegistry is remote_watch.CommandRegistry
     assert PublicGateway is Gateway
     assert all(item is not None for item in (CommandClient, CommandHub, CommandHubServer, HttpsCommandTransport))
+    assert all(item is not None for item in (CommandDispatcher, DispatcherStats))
     for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):
         assert importlib.util.find_spec("remote_watch." + removed) is None
 

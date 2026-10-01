@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
@@ -19,6 +19,11 @@
 #    -> begin(): Однократная проверка права перед непосредственным вызовом callback.
 #    -> complete(): Сохранение результата callback и попытка его доставки.
 #    -> flush_results(): Повтор доставки сохранённых результатов без повторного исполнения.
+#    -> remaining(): Остаток срока для последней проверки в рабочем потоке.
+#    -> pending(): Чтение сохранённых записей для явного разбора неизвестных исходов.
+#    -> lookup(): Чтение одной записи, включая уже подтверждённый результат.
+#    -> reconcile(): Очистка заведомо неисполненных записей с сохранением UNKNOWN.
+#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
 #    Служебные методы:
 #    -> _check(): Проверка жизненного цикла и владельца event loop.
@@ -26,7 +31,11 @@
 #    -> _live(): Проверка оставшегося срока регистрации клиента.
 #    -> _install_session(): Проверка корреляции и сокращение срока на полный RTT.
 #    -> _send_result(): Подтверждение локального результата только после квитанции hub.
+#    -> _reject(): Фиксация отказа до получения разрешения на исполнение.
+#    -> _release_remote(): Доставка отдельного подтверждения фактической остановки.
+#    -> _reconcile_ticket(): Восстановление занятости в памяти по подтверждённой записи журнала.
 #    -> _keep_alive(): Последовательный heartbeat без накопления повторных запросов.
+#
 
 
 #******************************************************************************************************************
@@ -35,7 +44,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from secrets import token_hex
 from time import monotonic
@@ -45,14 +54,18 @@ from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.protocol import (
     CommandClaim,
     CommandGrant,
+    CommandOutcome,
+    CommandReason,
     CommandReceipt,
+    CommandRef,
     CommandRegistration,
+    CommandRequest,
     CommandResult,
     CommandSession,
     message_digest,
 )
 from remote_watch.commands.state import CommandAction, CommandDeadline
-from remote_watch.commands.storage import CommandStore
+from remote_watch.commands.storage import CommandStore, StoredCommand
 from remote_watch.commands.transport import CommandError, CommandOffer, CommandTransport
 
 
@@ -196,13 +209,21 @@ class CommandClient:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка команды и запись разрешения до callback
     #--------------------------------------------------------------------------------------------------------------
-    async def acquire(self) -> CommandTicket | None:
+    async def acquire(
+        self,
+        validate: Callable[[CommandRequest, float], Awaitable[CommandReason | None]] | None = None,
+    ) -> CommandTicket | None:
 
         """Persist the start permission before returning one command to the executor.
+
+        :param validate: Optional argument check before requesting the execution grant.
+        :type validate: Callable[[CommandRequest, float], Awaitable[CommandReason | None]] | None
 
         :return: Durably prepared execution ticket, or None when no start is allowed.
         :rtype: CommandTicket | None
         """
+
+        # validate — локальная проверка аргументов до выдачи разрешения hub.
 
         self._live()
 
@@ -260,6 +281,13 @@ class CommandClient:
             claim = await self._worker.call(prepare)
             if claim is None:
                 return None
+            if validate is not None:
+                remaining = min(deadline.remaining(self._now(), self.session.hub_epoch),
+                                lease.remaining(self._now(), self.session.hub_epoch))
+                reason = await validate(offer.request, remaining)
+                if reason is not None:
+                    await self._reject(claim, reason)
+                    return None
             sent = self._now()
             grant = await self._transport.exchange("claim", claim)
             if type(grant) is CommandResult:
@@ -330,12 +358,12 @@ class CommandClient:
 
         # ticket — тот же объект разрешения, который вернул этот клиент.
 
-        self._live()
+        self._check()
 
         if ticket is not self._active or self._begun:
             raise CommandError("conflict")
         self._begun = True
-        return ticket.deadline.remaining(self._now(), self.session.hub_epoch) > 0
+        return self.remaining(ticket) > 0
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -346,6 +374,7 @@ class CommandClient:
         self,
         ticket: CommandTicket,
         result: CommandResult,
+        execution_finished: bool = True,
     ) -> None:
 
         """Commit a completed callback result before attempting its delivery to the hub.
@@ -355,10 +384,14 @@ class CommandClient:
 
         :param result: Correlated terminal result whose exact contents must be retained.
         :type result: CommandResult
+
+        :param execution_finished: True only after the callback has actually stopped or was never invoked.
+        :type execution_finished: bool
         """
 
         # ticket — тот же объект разрешения, который вернул этот клиент.
         # result — точный итог выполнения с идентификаторами исходной команды.
+        # execution_finished — фактическое окончание, а не истечение timeout.
 
         self._check()
 
@@ -393,7 +426,9 @@ class CommandClient:
         await self._worker.call(finish)
         # С этого момента повторять можно только доставку результата. Локальная
         # фиксация выполнена даже при потере следующего HTTP-ответа.
-        self._active = None
+        if execution_finished:
+            await self._worker.call(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
+            self._active = None
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -406,15 +441,159 @@ class CommandClient:
         """Retry persisted results without replaying callbacks or old process sessions."""
 
         self._check()
+        await self.reconcile()
         rows = await self._worker.call(lambda: self._worker.store.pending(limit=1000))
 
         for stored in rows:
             result = stored.record.result
             if result is not None and not stored.acknowledged and result.ref.matches(self.session):
                 # Истёкшие до START команды сообщает сам hub; клиент не подменяет его итог.
-                if stored.record.phase.value not in ("completed", "unknown"):
+                if stored.record.phase.value not in ("completed", "unknown", "rejected"):
+                    await self._worker.call(lambda: self._worker.store.acknowledge(result))
                     continue
                 await self._send_result(result)
+        await self._worker.call(self._worker.store.prune)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Остаток срока для последней проверки в рабочем потоке
+    #--------------------------------------------------------------------------------------------------------------
+    def remaining(
+        self,
+        ticket: CommandTicket,
+    ) -> float:
+
+        """Read the conservative remaining execution budget, including from the callback worker.
+
+        :param ticket: Exact ticket returned by this client, never a reconstructed copy.
+        :type ticket: CommandTicket
+
+        :return: Remaining execution lifetime in seconds, or zero when invocation is forbidden.
+        :rtype: float
+        """
+
+        # ticket — тот же объект разрешения, который вернул этот клиент.
+
+        if self._closed or self._session is None or self._lease is None or self._failed_clock:
+            return 0.0
+        now = self._clock()
+        require_number(now, "execution clock", allow_zero=True)
+        if now < self._last:
+            return 0.0
+        return min(ticket.deadline.remaining(now, self._session.hub_epoch),
+                   self._lease.remaining(now, self._session.hub_epoch))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение сохранённых записей для явного разбора неизвестных исходов
+    #--------------------------------------------------------------------------------------------------------------
+    async def pending(self) -> tuple[StoredCommand, ...]:
+
+        """Expose retained records for explicit local reconciliation, without replaying them.
+
+        :return: Up to 1000 unacknowledged or still active local journal records.
+        :rtype: tuple[StoredCommand, ...]
+        """
+
+        self._check()
+        return await self._worker.call(lambda: self._worker.store.pending(limit=1000))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение одной записи, включая уже подтверждённый результат
+    #--------------------------------------------------------------------------------------------------------------
+    async def lookup(
+        self,
+        ref: CommandRef,
+    ) -> StoredCommand | None:
+
+        """Read one retained record, including an already acknowledged callback result.
+
+        :param ref: Exact identity, process session, hub epoch and command identifier.
+        :type ref: CommandRef
+
+        :return: Retained journal record, or None when absent.
+        :rtype: StoredCommand | None
+        """
+
+        # ref — точные Identity, сессия процесса, запуск hub и ID команды.
+
+        self._check()
+        return await self._worker.call(lambda: self._worker.store.get(ref))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Очистка заведомо неисполненных записей с сохранением UNKNOWN
+    #--------------------------------------------------------------------------------------------------------------
+    async def reconcile(self) -> None:
+
+        """Retire provably unexecuted expired records while retaining unknown executions for review."""
+
+        self._check()
+        await self._reconcile_ticket()
+        session = self.session
+        lease = self._lease
+
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Подтверждение истёкших записей без возможного callback
+        #----------------------------------------------------------------------------------------------------------
+        def retire() -> None:
+
+            """Acknowledge only records which cannot represent an executed callback."""
+
+            store = self._worker.store
+            for row in store.pending(limit=1000):
+                record = row.record
+                ref = record.request.ref
+                if (record.result is None and record.phase.value in ("ready", "claimed")
+                        and row.deadline is not None and ref.matches(session)):
+                    now = self._clock()
+                    if min(row.deadline.remaining(now, ref.hub_epoch), lease.remaining(now, ref.hub_epoch)) <= 0:
+                        claim = CommandClaim(ref=ref, claim_id=record.claim_id or token_hex(16),
+                                             request_digest=message_digest(record.request))
+                        changed = store.transition(ref, row.revision, CommandAction.CLAIM, session, claim, lease)
+                        record = changed.command.record
+                if record.result is not None and record.result.outcome is CommandOutcome.EXPIRED:
+                    store.acknowledge(record.result)
+            store.prune()
+        #----------------------------------------------------------------------------------------------------------
+
+
+        await self._worker.call(retire)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Подтверждение фактического окончания ранее неизвестного исполнения
+    #--------------------------------------------------------------------------------------------------------------
+    async def release(
+        self,
+        ticket: CommandTicket,
+    ) -> None:
+
+        """Release a timed-out execution only after the executor observed its actual termination.
+
+        :param ticket: Exact ticket returned by this client, never a reconstructed copy.
+        :type ticket: CommandTicket
+        """
+
+        # ticket — тот же объект разрешения, который вернул этот клиент.
+
+        self._check()
+        if ticket is not self._active:
+            raise CommandError("conflict")
+        stored = await self._worker.call(lambda: self._worker.store.get(ticket.grant.request.ref))
+        if stored is None or stored.record.result is None:
+            raise CommandError("conflict")
+        result = stored.record.result
+        await self._worker.call(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
+        self._active = None
+        await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -552,8 +731,117 @@ class CommandClient:
 
         if type(response) is not CommandReceipt or not response.matches(result):
             raise CommandError("invalid")
+        stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
+        if result.outcome is CommandOutcome.UNKNOWN and not stored.execution_active:
+            await self._release_remote(result)
         await self._worker.call(lambda: self._worker.store.acknowledge(result))
+        await self._reconcile_ticket()
         await self._worker.call(self._worker.store.prune)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Фиксация отказа до получения разрешения на исполнение
+    #--------------------------------------------------------------------------------------------------------------
+    async def _reject(
+        self,
+        claim: CommandClaim,
+        reason: CommandReason,
+    ) -> None:
+
+        """Persist a failed pre-execution validation before reporting it to the hub.
+
+        :param claim: Correlated request for a single execution permission.
+        :type claim: CommandClaim
+
+        :param reason: Fixed public failure reason, without exception details.
+        :type reason: CommandReason
+        """
+
+        # claim — запрос разрешения на единственное исполнение команды.
+        # reason — фиксированная причина без текста исключения.
+
+        if reason not in (CommandReason.DENIED, CommandReason.INVALID_ARGUMENTS):
+            raise CommandError("invalid")
+        result = CommandResult(ref=claim.ref, claim_id=claim.claim_id,
+                               outcome=CommandOutcome.REJECTED, reason=reason)
+
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Запись отказа без разрешения запускать callback
+        #----------------------------------------------------------------------------------------------------------
+        def reject() -> CommandResult:
+
+            """Record rejection without granting callback permission.
+
+            :return: Correlated bounded outcome without callback exception details.
+            :rtype: CommandResult
+            """
+
+            store = self._worker.store
+            stored = store.get(claim.ref)
+            if stored is None:
+                raise CommandError("invalid")
+            changed = store.transition(claim.ref, stored.revision, CommandAction.REJECT,
+                                       self._session, claim, self._lease, result=result)
+            return changed.command.record.result
+        #----------------------------------------------------------------------------------------------------------
+
+
+        saved = await self._worker.call(reject)
+        if saved.outcome is CommandOutcome.REJECTED:
+            await self._send_result(saved)
+        else:
+            # До grant callback не мог начаться. Истечение на hub завершится независимо;
+            # локальный ACK здесь означает лишь освобождение заведомо неисполненной записи.
+            await self._worker.call(lambda: self._worker.store.acknowledge(saved))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Доставка отдельного подтверждения фактической остановки
+    #--------------------------------------------------------------------------------------------------------------
+    async def _release_remote(
+        self,
+        result: CommandResult,
+    ) -> None:
+
+        """Confirm actual termination separately from the earlier UNKNOWN result.
+
+        :param result: Correlated terminal result whose exact contents must be retained.
+        :type result: CommandResult
+        """
+
+        # result — точный итог выполнения с идентификаторами исходной команды.
+
+        stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
+        if stored is None:
+            raise CommandError("invalid")
+        claim = CommandClaim(ref=result.ref, claim_id=result.claim_id,
+                             request_digest=message_digest(stored.record.request))
+        response = await self._transport.exchange("release", claim)
+        if type(response) is not CommandReceipt or not response.matches(result):
+            raise CommandError("outcome_conflict")
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Восстановление занятости в памяти по подтверждённой записи журнала
+    #--------------------------------------------------------------------------------------------------------------
+    async def _reconcile_ticket(self) -> None:
+
+        """Release stale in-memory ownership only after durable completion and acknowledgement."""
+
+        if self._active is None:
+            return
+        ticket = self._active
+        stored = await self._worker.call(lambda: self._worker.store.get(ticket.grant.request.ref))
+
+        # Запись результата/ACK могла завершиться, а ожидание её ответа — оборваться.
+        # Сверяем память до prune: UNKNOWN живого callback не удовлетворяет проверке.
+        if (stored is not None and stored.record.result is not None
+                and stored.acknowledged and not stored.execution_active):
+            self._active = None
     #--------------------------------------------------------------------------------------------------------------
 
 

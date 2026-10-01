@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.6
+Version 1.2.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-153531
+Дата и время последнего изменения: 261001-170744
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.3.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.3.4.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -40,8 +40,8 @@ do not claim those matrix runs were repeated for dev9. See docs/VALIDATION.md.
 Stages 0.3.1/0.3.2 provide command wire/state contracts and bounded SQLite journals.
 SQLite atomically persists source decisions/cursors, compares revisions before
 STARTED, recovers old generations, retains unknown running executions and keeps
-source high-water marks after payload cleanup. No auth, command endpoints,
-Telegram source or callback executor exists yet. See docs/COMMAND_STORAGE.md.
+source high-water marks after payload cleanup. See docs/COMMAND_STORAGE.md.
+Later stages add authenticated endpoints and callback execution as described below.
 The owner requires resume/suspend in a single message, without confirmation.
 TrustedClock uses an explicit trusted UTC interval, max age 120 seconds and
 monotonic remaining budgets. Optional HttpsDateTimeSource requires an explicitly
@@ -57,8 +57,12 @@ Dev2 passed 769 local tests and clean core/extras wheel checks on Windows Python
 origin, real command source or new CI matrix was exercised. See docs/VALIDATION.md.
 Stage 0.3.3 now provides command-only ACL, durable hub/client handshakes, heartbeat
 and HTTPS long polling. Fake callback execution over real local TLS is verified.
-Automatic application callback dispatch and the Telegram source remain stages
-0.3.4/0.3.5. Read docs/COMMAND_HUB.md before changing these boundaries.
+Stage 0.3.4 now provides CommandDispatcher and explicit RemoteWatcher(command_client=...).
+Sync callbacks/validators use one dedicated worker; async callbacks use the application's
+astart loop. Timed-out work retains its slot until actual termination; only result
+delivery is retried. Durable release proof and pre-grant rejection extend hub operations.
+Old unknown executions remain pinned for review. Telegram source/config/CLI remain 0.3.5.
+Read docs/COMMAND_HUB.md and docs/COMMAND_EXECUTION.md before changing these boundaries.
 The old root smoke/field_smoke/ntfy_diagnostic launchers are removed; diagnostics
 are launched only under remote_watch.diagnostics. Existing callback registration remains compatible. The owner explicitly requires both status/check_load and resume_load/suspend_load
 in the first usable version. All names/callbacks remain application-defined through
@@ -83,6 +87,11 @@ Production modules are grouped under notifications, commands, gateway, adapters 
 diagnostics. Public root exports and existing CLI entry points are preserved.
 Diagnostics ship in the wheel; developer tests and tooling remain outside it.
 See ARCHITECTURE.md for migration paths and docs/COMMAND_TIME.md for the time probe.
+
+Dev 0.3.4.dev1 passed 892 tests (2 live skips) on Windows Python 3.10.21;
+clean Windows Python 3.12.2 core/extras wheel checks passed 592/892 tests.
+All 93 Python files passed style checks. CI/Linux/live providers were not rerun.
+Exact results and command-execution limits: docs/VALIDATION.md and docs/COMMAND_EXECUTION.md.
 
 ## Read the Relevant Design Context
 

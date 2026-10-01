@@ -1,10 +1,10 @@
 ﻿# Контракт команд 0.3.1: сообщения, состояния и время
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-153531
+Дата и время последнего изменения: 261001-170744
 
 ## Реализовано в 0.3.0.dev1
 
@@ -18,7 +18,10 @@ Version 1.0.4
 Этот документ описывает контракт контура. В 0.3.0.dev2 реализованы
 [SQLite и транзакции](COMMAND_STORAGE.md), [свежесть без второго подтверждения](COMMAND_TIME.md).
 Права, hub и HTTPS endpoints реализованы в 0.3.3.dev1: [COMMAND_HUB.md](COMMAND_HUB.md).
-Автоматический executor и Telegram source относятся к 0.3.4/0.3.5.
+Исполнитель реализован в 0.3.4.dev1: [COMMAND_EXECUTION.md](COMMAND_EXECUTION.md).
+Telegram source относится к 0.3.5. Операция release использует существующий
+CommandClaim и возвращает CommandReceipt сохранённого терминального результата;
+schema_version остаётся 1. Обновлять командные hub и клиент нужно вместе.
 Создание CommandGrant или CommandContext само по себе не выдаёт права.
 Их происхождение, аутентификация и атомарная фиксация проверяются CommandHub/CommandClient.
 

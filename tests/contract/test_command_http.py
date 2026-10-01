@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -29,7 +29,15 @@ import pytest
 from remote_watch.adapters.command_http import HttpsCommandTransport
 from remote_watch.commands.client import CommandClient
 from remote_watch.commands.http_wire import decode_response, encode_response
-from remote_watch.commands.protocol import callback_result, encode_command
+from remote_watch.commands.protocol import (
+    CommandClaim,
+    CommandOutcome,
+    CommandReason,
+    CommandResult,
+    callback_result,
+    encode_command,
+    message_digest,
+)
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.gateway.command_server import CommandHubServer
 
@@ -111,6 +119,25 @@ def test_command_https_exchange(
             await client.complete(ticket, result)
             assert state["resumed"] and (await rig.hub.results(SOURCE_TOKEN))[0].record.result == result
             assert await client.acquire() is None
+
+            # Сохраняем UNKNOWN при ещё работающем обработчике и проверяем отдельный
+            # HTTPS release. Поддельный claim не должен снимать блокировку журнала.
+            request = rig.request(2)
+            await rig.submit(request)
+            ticket = await client.acquire()
+            assert ticket is not None and client.begin(ticket)
+            unknown = CommandResult(ref=request.ref, claim_id=ticket.grant.claim_id,
+                                    outcome=CommandOutcome.UNKNOWN, reason=CommandReason.TIMEOUT)
+            await client.complete(ticket, unknown, execution_finished=False)
+            assert rig.store.get(request.ref).execution_active
+            wrong = CommandClaim(ref=request.ref, claim_id="f" * 32, request_digest=message_digest(request))
+            with pytest.raises(CommandError, match="conflict"):
+                await transport.exchange("release", wrong)
+            assert rig.store.get(request.ref).execution_active
+            await client.release(ticket)
+            assert not rig.store.get(request.ref).execution_active
+            assert rig.store.get(request.ref).record.result == unknown
+            assert rig.local.get(request.ref).acknowledged
         finally:
             await client.close()
             await server.close()

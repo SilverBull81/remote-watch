@@ -1,10 +1,10 @@
 ﻿# Строгая упаковка ответа long poll поверх командного протокола.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Функции:
 # -> encode_response(): Кодирование сообщения либо предложения команды.
@@ -23,7 +23,7 @@ from remote_watch.commands.protocol import CommandMessage, CommandRequest, decod
 from remote_watch.commands.transport import CommandError, CommandOffer
 
 MAX_HTTP_BYTES = 70000
-OPERATIONS = frozenset({"register", "heartbeat", "poll", "claim", "result"})
+OPERATIONS = frozenset({"register", "heartbeat", "poll", "claim", "result", "release"})
 
 
 #------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками relay.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-165638
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
@@ -238,7 +238,8 @@ class CommandHubServer:
             body = await asyncio.wait_for(request.read(), 5)
             message = decode_command(body)
             expected = {"register": CommandRegistration, "heartbeat": CommandSession,
-                        "poll": CommandSession, "claim": CommandClaim, "result": CommandResult}[operation]
+                        "poll": CommandSession, "claim": CommandClaim, "result": CommandResult,
+                        "release": CommandClaim}[operation]
             if type(message) is not expected:
                 raise CommandError("invalid")
             method = self.hub.finish if operation == "result" else getattr(self.hub, operation)
