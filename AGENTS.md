@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.9
+Version 1.3.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-195509
+Дата и время последнего изменения: 261001-203700
 
 ## Project Intent
 
@@ -107,6 +107,15 @@ All 107 Python files passed style checks. CI/Linux/live command providers were
 not exercised. Source replay and transport-log isolation regressions are covered.
 Exact results: docs/VALIDATION.md. Templates live under docs/examples and ship
 in sdist; no real credentials or runtime journals belong in distribution artifacts.
+
+Dev 0.3.5.dev2 passed all eight Windows/Linux, Python 3.10/3.12, core/extras
+jobs in GitHub Actions run 36899958770, tested code commit 6bee643.
+Each core job passed 630 tests (30 optional-dependency skips, 2 live deselections);
+each extras job passed 951 tests (2 live deselections), without warnings.
+CI exposed and fixed Windows CLI encoding, floating-point grant-bound comparisons,
+and timing/observation problems in contract tests. Live command-provider smoke
+remains owner-run; CI does not read credentials or send provider messages.
+See docs/VALIDATION.md for exact Python versions, run link and local reports.
 
 ## Read the Relevant Design Context
 
