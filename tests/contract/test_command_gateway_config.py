@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261001-201702
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети.
@@ -222,11 +222,12 @@ def test_gateway_two_applications(tmp_path: Path) -> None:
         """Execute status, suspend and resume without crossing target or journal ownership."""
 
         raw = settings()
+        # Проверяем доставку, а не скорость диска CI: длинный poll будится новой командой.
+        raw["hub"]["poll_timeout"] = 5.0
         config = load_command_gateway(write_config(tmp_path / "gateway.local.json", raw))
         gateway = CommandGateway(config, time_source=FakeTime())
         provider = FakeProvider()
         gateway.sources[0].provider = provider
-        gateway.sources[0]._retry = 0.07
         watchers = []
         applications = []
 
@@ -243,15 +244,16 @@ def test_gateway_two_applications(tmp_path: Path) -> None:
                     write_config(tmp_path / (alias + ".local.json"), client_config), registry)
                 watcher = RemoteWatcher(WatcherConfig(identity=client.registration.identity, commands=registry),
                                         command_client=client)
-                watcher._commands.dispatcher._retry_interval = 0.05
                 await watcher.astart()
                 watchers.append(watcher)
                 applications.append(application)
+            # Считаем ответы с подтверждённым hub ACK. Повтор отправки после busy
+            # допустим и не означает, что следующая команда уже исполнилась.
             for number, name in enumerate(("status", "suspend_load", "status", "resume_load"), 1):
                 provider.events.append(SourceEvent(event_id=str(number), message_date=1000, actor_id="42",
                     conversation_id="-123", text=f"/rw one {name}"))
                 try:
-                    await until(lambda: len(provider.replies) >= number)
+                    await until(lambda: gateway.sources[0].stats.replies >= number, timeout=20)
                 except AssertionError:
                     raise AssertionError((gateway.stats(), [watcher.command_stats for watcher in watchers],
                                           [application.report() for application in applications])) from None
@@ -259,7 +261,7 @@ def test_gateway_two_applications(tmp_path: Path) -> None:
             assert applications[1].report()["callback_count"] == 0
             provider.events.append(SourceEvent(event_id="5", message_date=1000, actor_id="42",
                 conversation_id="-123", text="/rw two suspend_load"))
-            await until(lambda: len(provider.replies) >= 5)
+            await until(lambda: gateway.sources[0].stats.replies >= 5, timeout=20)
             assert applications[1].paused.is_set() and not applications[0].paused.is_set()
             assert all("id=" in text and "session=" in text for _, text in provider.replies)
             # Второй gateway обязан отказаться до открытия hub с новым поколением.

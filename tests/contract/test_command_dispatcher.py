@@ -1,10 +1,10 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261001-201702
 #
 # Тесты:
 # -> configured(): Подготовка согласованных прав, реестра и двух журналов.
@@ -54,7 +54,7 @@ from remote_watch.commands.protocol import (
 )
 from remote_watch.commands.registry import CommandContext
 from remote_watch.commands.sqlite_store import SQLiteCommandStore
-from remote_watch.commands.storage import StoreRole
+from remote_watch.commands.storage import StoreError, StoreRole
 from remote_watch.commands.transport import CommandError
 
 
@@ -97,22 +97,40 @@ def configured(
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конечное ожидание наблюдаемого результата теста
 #------------------------------------------------------------------------------------------------------------------
-async def until(predicate: Callable[[], bool]) -> None:
+async def until(
+    predicate: Callable[[], bool],
+    timeout: float = 10.0,
+) -> None:
 
     """Wait for an observable effect under a fixed test deadline.
 
-    :param predicate: Side-effect-free predicate observing test progress.
+    :param predicate: Thread-safe predicate observing test progress, possibly reading SQLite.
     :type predicate: Callable[[], bool]
+
+    :param timeout: Test observation budget, independent of command execution deadlines.
+    :type timeout: float
     """
 
-    # predicate — проверка наблюдаемого условия без побочных действий.
+    # predicate — потокобезопасная проверка, в том числе чтение постоянного журнала.
+    # timeout — предел ожидания теста, не разрешение продлевать срок самой команды.
 
-    deadline = monotonic() + 3
+    deadline = monotonic() + timeout
 
-    while not predicate():
+    # SQLite может ждать блокировку или диск. Наблюдение из event loop само
+    # задерживало обработку команд в медленном CI. Выносим чтение в поток и ждём
+    # его окончания; одновременно существует только одна такая проверка.
+    while True:
+        try:
+            if await asyncio.to_thread(predicate):
+                return
+        except StoreError as error:
+            # Повторяем только штатную занятость журнала. Ошибки данных и диска
+            # остаются ошибками теста, а не скрываются за общим timeout.
+            if error.args != ("store busy",):
+                raise
         if monotonic() >= deadline:
             raise AssertionError("dispatcher did not reach expected state")
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.02)
 #------------------------------------------------------------------------------------------------------------------
 
 
