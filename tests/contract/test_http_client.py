@@ -1,10 +1,10 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
@@ -52,7 +52,7 @@ def test_local_http(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    ) -> None:
+) -> None:
 
     """Verify the real session, cancellation, logging and absence of hidden POST retries.
 
@@ -99,7 +99,7 @@ def test_local_http(
         async def respond(
             reader: asyncio.StreamReader,
             writer: asyncio.StreamWriter,
-            ) -> None:
+        ) -> None:
 
             """Consume one POST and reproduce a selected server behavior.
 
@@ -197,7 +197,7 @@ def test_ntfy_wire_limits(
     message: str,
     rendered_size: int | None,
     large_metadata: bool,
-    ) -> None:
+) -> None:
 
     """Exercise actual aiohttp serialization against ntfy's two size limits.
 

@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -838,8 +838,14 @@ class SQLiteCommandStore:
             record = CommandRecord(
                 request=request, phase=CommandPhase(row["phase"]), claim_id=row["claim_id"], result=result,
             )
+            # Срок другого запуска не восстанавливается даже для терминальной записи.
+            deadline = None
+            if row["generation"] == self._generation:
+                deadline = CommandDeadline(hub_epoch=request.ref.hub_epoch, sent_at=row["sent"],
+                                           received_at=row["received"], expires_at=row["expires"])
             return StoredCommand(record=record, revision=row["revision"], sequence=row["sequence"],
-                                 acknowledged=bool(row["acknowledged"]), execution_active=bool(row["running"]))
+                                 acknowledged=bool(row["acknowledged"]), execution_active=bool(row["running"]),
+                                 deadline=deadline)
         except (ValueError, TypeError):
             self._failed = True
             raise StoreError("invalid stored command") from None

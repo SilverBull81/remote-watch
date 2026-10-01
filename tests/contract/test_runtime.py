@@ -1,10 +1,10 @@
 ﻿# Сквозные проверки logging, фоновой отправки, очередей и остановки без сети.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> RecordingChannel: Тестовый канал с управляемыми отказами и задержкой.
@@ -123,7 +123,7 @@ class RecordingChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Record an attempt and optionally block, log recursively or fail.
 
@@ -189,7 +189,7 @@ def make_runtime(
     *,
     capacity: int = 16,
     timeout: float = 1.0,
-    ) -> NotificationRuntime:
+) -> NotificationRuntime:
 
     """Configure single-attempt fake destinations with bounded queues.
 
@@ -254,7 +254,7 @@ def logger() -> Iterator[logging.Logger]:
 #------------------------------------------------------------------------------------------------------------------
 def wait_for_routing(
     runtime: NotificationRuntime,
-    ) -> None:
+) -> None:
 
     """Synchronize a test with the worker after already admitted events are dispatched.
 
@@ -295,7 +295,7 @@ def test_logging_end_to_end(
     identity: Identity,
     logger: logging.Logger,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Preserve console/file logging while a LoggerAdapter reaches two channels.
 
@@ -351,7 +351,7 @@ def test_logging_end_to_end(
 def test_local_survives_bad_metadata_and_formatting(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Contain normalization failures and continue delivery of later valid records.
 
@@ -391,7 +391,7 @@ def test_local_survives_bad_metadata_and_formatting(
 def test_slow_destination_and_shutdown(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Keep a healthy destination independent and count a cancelled send as unknown.
 
@@ -434,7 +434,7 @@ def test_slow_destination_and_shutdown(
 def test_ingress_and_wakeups_are_bounded(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Fill ingress while a controlled worker barrier prevents consumer progress.
 
@@ -490,7 +490,7 @@ def test_adapter_failures_and_recursive_logging(
     identity: Identity,
     logger: logging.Logger,
     failure: str,
-    ) -> None:
+) -> None:
 
     """Contain adapter failures and prevent channel logs from feeding another runtime.
 
@@ -532,7 +532,7 @@ def test_adapter_failures_and_recursive_logging(
 def test_lifecycle_and_open_failure(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Handle inactive logging, idempotent lifecycle and rollback after a failed open.
 
@@ -581,7 +581,7 @@ def test_lifecycle_and_open_failure(
 def test_redaction_and_size_limits(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Redact before truncation and reject metadata exceeding the total budget.
 
@@ -618,7 +618,7 @@ def test_redaction_and_size_limits(
 #------------------------------------------------------------------------------------------------------------------
 def test_default_retry_configuration(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Accept the default retry policy once retry scheduling is available.
 
@@ -645,7 +645,7 @@ def test_default_retry_configuration(
 def test_levels_filters_and_hierarchy(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Respect standard logger filtering and preserve parent propagation.
 
@@ -685,7 +685,7 @@ def test_levels_filters_and_hierarchy(
 def test_internal_namespace_and_redactor_recursion(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Suppress internal names and recursive records emitted during normalization.
 
@@ -705,7 +705,7 @@ def test_internal_namespace_and_redactor_recursion(
     #--------------------------------------------------------------------------------------------------------------
     def redact(
         text: str,
-        ) -> str:
+    ) -> str:
 
         """Log once from the redactor without recursive notification delivery.
 
@@ -741,7 +741,7 @@ def test_internal_namespace_and_redactor_recursion(
 def test_multiple_producers(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Keep concurrent producers accounted for without losing wakeups.
 
@@ -795,7 +795,7 @@ def test_multiple_producers(
 def test_shutdown_counts_queued_deliveries(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Distinguish a cancelled active attempt from work that never started.
 
@@ -832,7 +832,7 @@ def test_shutdown_counts_queued_deliveries(
 def test_stop_from_channel(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Allow a channel to request shutdown without joining its own worker.
 
@@ -854,7 +854,7 @@ def test_stop_from_channel(
     #--------------------------------------------------------------------------------------------------------------
     async def send_and_stop(
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Request stop from the worker and finish the active send.
 
@@ -887,7 +887,7 @@ def test_stop_from_channel(
 #------------------------------------------------------------------------------------------------------------------
 def test_startup_timeout_cleans_up(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Cancel a cooperative open and retain time for closing the partial client.
 
@@ -934,7 +934,7 @@ def test_startup_timeout_cleans_up(
 def test_expiry_and_attempt_timeout(
     identity: Identity,
     logger: logging.Logger,
-    ) -> None:
+) -> None:
 
     """Skip an already expired event and cancel a cooperative send at its attempt deadline.
 
@@ -973,7 +973,7 @@ def test_expiry_and_attempt_timeout(
 #------------------------------------------------------------------------------------------------------------------
 def test_no_worker_or_logging_changes_on_construction(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Leave global logging and application event loops untouched during construction.
 

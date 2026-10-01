@@ -1,10 +1,10 @@
 ﻿# Проверки простых значений и сигнатур без вызова пользовательского кода.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-123443
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> require_text(): Проверка текстового значения и размера текста в байтах UTF-8.
@@ -35,7 +35,7 @@ def require_text(
     name: str,
     max_bytes: int = 256,
     allow_empty: bool = False,
-    ) -> None:
+) -> None:
 
     """Validate a bounded UTF-8 string without disclosing its contents.
 
@@ -81,7 +81,7 @@ def require_int(
     value: object,
     name: str,
     minimum: int = 1,
-    ) -> None:
+) -> None:
 
     """Validate an integer, excluding bool.
 
@@ -115,7 +115,7 @@ def require_number(
     value: object,
     name: str,
     allow_zero: bool = False,
-    ) -> None:
+) -> None:
 
     """Validate a finite positive numeric value, excluding bool.
 
@@ -153,7 +153,7 @@ def require_number(
 def text_tuple(
     value: object,
     name: str,
-    ) -> tuple[str, ...]:
+) -> tuple[str, ...]:
 
     """Copy a list or tuple of unique bounded strings.
 
@@ -196,7 +196,7 @@ def require_callback(
     positional_count: int,
     name: str,
     allow_async: bool = True,
-    ) -> None:
+) -> None:
 
     """Check a callable signature without invoking the callable.
 

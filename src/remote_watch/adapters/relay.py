@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -84,7 +84,7 @@ class RelayConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-        ) -> Destination:
+    ) -> Destination:
 
         """Create a relay-mode destination whose retries remain owned by the application runtime.
 
@@ -136,7 +136,7 @@ class RelayConfig:
     def _check_policy(
         self,
         policy: RetryPolicy,
-        ) -> None:
+    ) -> None:
 
         """Require room for a gateway result within the client's attempt deadline.
 
@@ -168,7 +168,7 @@ class RelayChannel:
         config: RelayConfig,
         *,
         retry: RetryPolicy | None = None,
-        ) -> None:
+    ) -> None:
 
         """Prepare lazy HTTP ownership without accessing the network or credentials.
 
@@ -216,7 +216,7 @@ class RelayChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Perform one request with conservative expiry and correlated result validation.
 

@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки.
@@ -90,7 +90,7 @@ class Provider:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Retain identity and correlation until the test releases the provider.
 
@@ -130,7 +130,7 @@ def test_cli_summary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Emit one bounded summary after cleanup for every managed lifecycle outcome.
 
@@ -169,7 +169,7 @@ def test_cli_summary(
         def __init__(
             self,
             config: object,
-            ) -> None:
+        ) -> None:
 
             """Accept the synthetic configuration.
 
@@ -188,7 +188,7 @@ def test_cli_summary(
         async def start(
             self,
             **kwargs: object,
-            ) -> None:
+        ) -> None:
 
             """Exercise normal start, cancellation and a sanitized startup failure.
 
@@ -222,7 +222,7 @@ def test_cli_summary(
 
             """Return counters only after cleanup.
 
-            :return: The value described by this operation.
+            :return: Synthetic aggregate counters consumed by the shutdown summary.
             :rtype: dict[str, int]
             """
 
@@ -260,7 +260,7 @@ def test_config_categories(
     field: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Expose only predefined error codes and schema groups, never arbitrary JSON keys.
 
@@ -325,7 +325,7 @@ def test_cli_private_arguments(capsys: pytest.CaptureFixture[str]) -> None:
 def test_shared_alias(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Keep two principals isolated while contending for one provider destination.
 
@@ -370,7 +370,7 @@ def test_shared_alias(
             delivery: Delivery,
             env: str,
             alias: str = 'shared',
-            ) -> tuple[int, dict]:
+        ) -> tuple[int, dict]:
 
             """Submit a correlated relay envelope with the selected principal token.
 
@@ -510,7 +510,7 @@ def test_mixed_field(
     notification: Notification,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Run the mixed CLI through real relay HTTP and direct ntfy without Telegram credentials.
 
@@ -545,7 +545,7 @@ def test_mixed_field(
         config: field_smoke.FieldConfig,
         destinations: tuple[Destination, ...],
         output: Path,
-        ) -> int:
+    ) -> int:
 
         """Accelerate sample scheduling while leaving the real delivery worker untouched.
 
@@ -558,7 +558,7 @@ def test_mixed_field(
         :param output: New local output path.
         :type output: Path
 
-        :return: The value described by this operation.
+        :return: Exit code returned by the diagnostic under the injected test clock.
         :rtype: int
         """
 
@@ -608,7 +608,7 @@ def test_mixed_field(
             :param request: Local HTTP request.
             :type request: web.Request
 
-            :return: The value described by this operation.
+            :return: Synthetic HTTP response to the recorded publication attempt.
             :rtype: web.Response
             """
 

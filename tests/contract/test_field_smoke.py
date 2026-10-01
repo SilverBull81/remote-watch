@@ -1,10 +1,10 @@
 ﻿# Полевой сценарий с подставными каналами, ускоренным временем и безопасным отчётом.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> RecordingChannel: Подставной канал для полевой проверки.
@@ -88,7 +88,7 @@ class RecordingChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Return a configured safe provider result.
 
@@ -141,7 +141,7 @@ class FastClock:
 
         """Read the current synthetic sample time.
 
-        :return: The value described by this operation.
+        :return: Current virtual monotonic time in seconds.
         :rtype: float
         """
 
@@ -154,7 +154,7 @@ class FastClock:
     def sleep(
         self,
         delay: float,
-        ) -> None:
+    ) -> None:
 
         """Advance the sample timer without simulating provider or retry time.
 
@@ -177,7 +177,7 @@ class FastClock:
 def test_field_run(
     identity: Identity,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Exercise all four sample types through two channels, logging and shutdown.
 
@@ -225,7 +225,7 @@ def test_field_failure_and_interrupt(
     identity: Identity,
     tmp_path: Path,
     interrupted: bool,
-    ) -> None:
+) -> None:
 
     """Preserve a summary and distinguish unavailable providers from user interruption.
 
@@ -267,7 +267,7 @@ def test_field_bounds(
     identity: Identity,
     duration: float,
     interval: float,
-    ) -> None:
+) -> None:
 
     """Reject unbounded or overly frequent workloads before reading credentials.
 
@@ -313,7 +313,7 @@ def test_cli_credentials_cleanup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Resolve both local credential sections and erase temporary environment entries on failure.
 
@@ -343,7 +343,7 @@ def test_cli_credentials_cleanup(
         provider: str,
         settings: dict[str, object],
         token_env: str,
-        ) -> Destination:
+    ) -> Destination:
 
         """Verify temporary ownership before simulating a configuration failure.
 
@@ -383,7 +383,7 @@ def test_cli_credentials_cleanup(
 def test_report_is_exclusive(
     identity: Identity,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Never replace an earlier report when a path is reused.
 

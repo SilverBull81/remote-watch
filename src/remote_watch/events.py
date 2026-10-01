@@ -1,10 +1,10 @@
 ﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> Identity: Сведения о приложении и его размещении.
@@ -182,7 +182,7 @@ class Notification:
         payload: Mapping[str, object],
         *,
         limits: SnapshotLimits | None = None,
-        ) -> Notification:
+    ) -> Notification:
 
         """Validate a schema-1 payload using local size limits.
 

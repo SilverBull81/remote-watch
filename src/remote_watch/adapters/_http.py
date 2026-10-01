@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -58,7 +58,7 @@ class HttpSender:
         response_limit: int = 65536,
         json_decoder: Callable[[bytes], object] = json.loads,
         json_encoder: Callable[[object], str] = json.dumps,
-        ) -> None:
+    ) -> None:
 
         """Store request budgets without importing or creating a network client.
 
@@ -151,7 +151,7 @@ class HttpSender:
         url: str,
         payload: dict[str, object],
         token: str | None = None,
-        ) -> tuple[int, dict[str, str], object] | DeliveryResult:
+    ) -> tuple[int, dict[str, str], object] | DeliveryResult:
 
         """Send exactly one POST with bounded response storage and sanitized failures.
 

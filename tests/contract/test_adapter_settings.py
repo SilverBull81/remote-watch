@@ -1,10 +1,10 @@
 ﻿# Проверка границ настройки адаптеров и освобождения частично созданного клиента.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_invalid_settings(): Отклонение неверных настроек до чтения токена.
@@ -49,7 +49,7 @@ from remote_watch.adapters.telegram import TelegramConfig
 def test_invalid_settings(
     provider: str,
     settings: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Reject invalid settings before any client or secret is accessed.
 

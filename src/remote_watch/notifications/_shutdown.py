@@ -1,10 +1,10 @@
 ﻿# Ограниченная остановка активных runtime при нормальном завершении процесса.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> register(): Добавление runtime в реестр активных объектов.
@@ -41,7 +41,7 @@ _lock = threading.Lock()
 #------------------------------------------------------------------------------------------------------------------
 def register(
     runtime: NotificationRuntime,
-    ) -> None:
+) -> None:
 
     """Track a started runtime without extending its lifetime.
 
@@ -61,7 +61,7 @@ def register(
 #------------------------------------------------------------------------------------------------------------------
 def unregister(
     runtime: NotificationRuntime,
-    ) -> None:
+) -> None:
 
     """Forget a finished runtime.
 

@@ -1,10 +1,10 @@
 ﻿# Подготовка независимых данных уведомления и ограничение размера текста.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> truncate_text(): Усечение текста по размеру UTF-8 с видимым маркером.
@@ -36,7 +36,7 @@ from remote_watch.events import Identity, Notification, SnapshotLimits
 def truncate_text(
     text: str,
     limit: int,
-    ) -> tuple[str, bool]:
+) -> tuple[str, bool]:
 
     """Truncate UTF-8 text with a visible ASCII marker.
 
@@ -78,7 +78,7 @@ def prepare_notification(
     now: datetime,
     formatter: logging.Formatter,
     redactor: Callable[[str], str] | None,
-    ) -> Notification:
+) -> Notification:
 
     """Render a detached notification without mutating the input record.
 

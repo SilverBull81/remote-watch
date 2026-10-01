@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -36,7 +36,7 @@ def main() -> int:
 
     """Build a wheel from sdist and test it in a new isolated virtual environment.
 
-    :return: The value described by this operation.
+    :return: Zero on success, otherwise a documented nonzero process exit code.
     :rtype: int
     """
 
@@ -66,7 +66,7 @@ def main() -> int:
     def run(
         stage: str,
         command: list[str],
-        ) -> None:
+    ) -> None:
 
         """Run one bounded validation stage and retain its local diagnostic log.
 
@@ -127,7 +127,7 @@ def main() -> int:
 
         venv.EnvBuilder(with_pip=True).create(output / "env")
         python = output / "env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        suffix = "[telegram,ntfy,relay,gateway]" if args.mode == "extras" else ""
+        suffix = "[telegram,ntfy,relay,gateway,commands]" if args.mode == "extras" else ""
         run("install", [str(python), "-I", "-m", "pip", "install", str(wheel) + suffix])
         run("installed", [str(python), "-I", str(root / "tools/check_installed.py"), args.mode, version])
         run("test-dependencies", [str(python), "-I", "-m", "pip", "install", "pytest>=8", "cryptography>=43"])

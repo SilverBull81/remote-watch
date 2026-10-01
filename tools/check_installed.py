@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -33,7 +33,7 @@ def main() -> int:
 
     """Check an isolated installed distribution before adding test dependencies.
 
-    :return: The value described by this operation.
+    :return: Zero on success, otherwise a documented nonzero process exit code.
     :rtype: int
     """
 
@@ -45,6 +45,7 @@ def main() -> int:
 
     # -I и отдельный venv исключают src и пользовательские site-packages.
     import remote_watch
+    from remote_watch.adapters.command_http import HttpsCommandTransport
     from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
     from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
@@ -52,12 +53,15 @@ def main() -> int:
     from remote_watch.adapters.timeapi import TimeApiTimeSource
     from remote_watch.commands import CommandRegistry
     from remote_watch.commands._confirmation import CommandChallenge
+    from remote_watch.commands.client import CommandClient
+    from remote_watch.commands.hub import CommandHub
     from remote_watch.commands.protocol import CommandRegistration, decode_command
     from remote_watch.commands.sqlite_store import SQLiteCommandStore
     from remote_watch.commands.state import CommandRecord
     from remote_watch.commands.storage import CommandStore
     from remote_watch.commands.time import TrustedClock
     from remote_watch.gateway import Gateway as PublicGateway
+    from remote_watch.gateway.command_server import CommandHubServer
     from remote_watch.gateway.json_config import load_gateway_config
     from remote_watch.gateway.server import Gateway
 
@@ -76,11 +80,14 @@ def main() -> int:
     assert TimeApiTimeSource()._accuracy == 1.0
     assert CommandRegistry is remote_watch.CommandRegistry
     assert PublicGateway is Gateway
+    assert all(item is not None for item in (CommandClient, CommandHub, CommandHubServer, HttpsCommandTransport))
+    for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):
+        assert importlib.util.find_spec("remote_watch." + removed) is None
 
-    # Проверяем новые и прежние точки запуска именно из установленного wheel.
+    # Проверяем только действующие точки запуска именно из установленного wheel.
     # --help не читает credentials и не выполняет сетевых запросов даже без extras.
     for module in (
-        "gateway", "smoke", "field_smoke", "ntfy_diagnostic",
+        "gateway",
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
         "diagnostics.time_probe",
     ):

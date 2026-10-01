@@ -1,10 +1,10 @@
 ﻿# Проверки повторов, ограничений работы и асинхронного управления runtime без сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> VirtualClock: Тестовые часы с мгновенным продвижением времени.
@@ -121,7 +121,7 @@ class VirtualClock:
     async def sleep(
         self,
         delay: float,
-        ) -> None:
+    ) -> None:
 
         """Advance time and allow other channel tasks to run.
 
@@ -161,7 +161,7 @@ class PausedClock(VirtualClock):
     async def sleep(
         self,
         delay: float,
-        ) -> None:
+    ) -> None:
 
         """Hold this destination without blocking the worker loop.
 
@@ -190,7 +190,7 @@ class ScriptedChannel:
     def __init__(
         self,
         results: tuple[object, ...] = (),
-        ) -> None:
+    ) -> None:
 
         """Prepare scripted results and synchronization barriers.
 
@@ -232,7 +232,7 @@ class ScriptedChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Return the next scripted result or raise the next scripted exception.
 
@@ -289,7 +289,7 @@ def make_runtime(
     policy: RetryPolicy | None = None,
     capacity: int = 16,
     random_source: Callable[[], float] = lambda: 1.0,
-    ) -> tuple[NotificationRuntime, logging.Logger]:
+) -> tuple[NotificationRuntime, logging.Logger]:
 
     """Build an isolated runtime with injectable retry time and randomness.
 
@@ -340,7 +340,7 @@ def make_runtime(
 #------------------------------------------------------------------------------------------------------------------
 def finish_deliveries(
     runtime: NotificationRuntime,
-    ) -> None:
+) -> None:
 
     """Wait for admitted deliveries through a finite test barrier without stopping runtime.
 
@@ -381,7 +381,7 @@ def finish_deliveries(
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_ids_and_full_jitter(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Keep event and delivery identity stable while attempts advance and clocks are virtual.
 
@@ -418,7 +418,7 @@ def test_retry_ids_and_full_jitter(
 def test_terminal_results(
     identity: Identity,
     failure: DeliveryStatus,
-    ) -> None:
+) -> None:
 
     """Distinguish permanent failure from exhaustion of bounded retryable outcomes.
 
@@ -455,7 +455,7 @@ def test_retry_after_and_expiry(
     retry_after: float,
     expected_calls: int,
     expected_sleeps: list[float],
-    ) -> None:
+) -> None:
 
     """Honor retry-after without scheduling an attempt at or beyond expiry.
 
@@ -494,7 +494,7 @@ def test_retry_after_and_expiry(
 def test_adapter_error_can_retry(
     identity: Identity,
     failure: object,
-    ) -> None:
+) -> None:
 
     """Treat exceptions, spontaneous cancellation and malformed replies as retryable unknowns.
 
@@ -524,7 +524,7 @@ def test_adapter_error_can_retry(
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_keeps_capacity_and_neighbor_progress(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Retain an outstanding slot during retry wait without delaying a healthy destination.
 
@@ -560,7 +560,7 @@ def test_retry_keeps_capacity_and_neighbor_progress(
 #------------------------------------------------------------------------------------------------------------------
 def test_async_context_and_cancelled_start(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Keep the application loop responsive and clean up a repeatedly cancelled start.
 
@@ -612,7 +612,7 @@ def test_async_context_and_cancelled_start(
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_order_and_scheduler_error(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Keep retries before the next queued event and recover from a bad random source.
 
@@ -648,7 +648,7 @@ def test_retry_order_and_scheduler_error(
 #------------------------------------------------------------------------------------------------------------------
 def test_blocking_adapter_exceeds_stop_budget(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Report FAILED when a foreign adapter blocks the loop instead of claiming successful stop.
 
@@ -666,7 +666,7 @@ def test_blocking_adapter_exceeds_stop_budget(
     #--------------------------------------------------------------------------------------------------------------
     async def blocked_send(
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Deliberately block the worker to verify the caller's bounded stop wait.
 
@@ -709,7 +709,7 @@ def test_blocking_adapter_exceeds_stop_budget(
 #------------------------------------------------------------------------------------------------------------------
 def test_atexit_cleanup(
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Close an omitted explicit-stop runtime at normal process exit without network activity.
 
@@ -744,7 +744,7 @@ runtime.start()
 #------------------------------------------------------------------------------------------------------------------
 def test_cancelled_async_stop(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Finish owned shutdown before propagating cancellation of astop.
 
@@ -799,7 +799,7 @@ def test_cancelled_async_stop(
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_burst_remains_bounded(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Bound simultaneous retry waits, retained deliveries and task count during a burst.
 
@@ -858,7 +858,7 @@ def test_retry_burst_remains_bounded(
 #------------------------------------------------------------------------------------------------------------------
 def test_astop_from_channel(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Request async shutdown from a channel without offloading a self-join.
 
@@ -884,7 +884,7 @@ def test_astop_from_channel(
         #----------------------------------------------------------------------------------------------------------
         async def stop_and_send(
             delivery: Delivery,
-            ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
             """Request stop and return the active attempt result.
 

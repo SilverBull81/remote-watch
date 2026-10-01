@@ -1,10 +1,10 @@
 ﻿# Проверки владения logger, локальными файлами и жизненным циклом RemoteWatcher.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> MemoryChannel: Тестовый канал с управляемым запуском и закрытием.
@@ -103,7 +103,7 @@ class MemoryChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Record an attempt and optionally call back into the owner.
 
@@ -145,7 +145,7 @@ class MemoryChannel:
 def configuration(
     identity: Identity,
     channel: MemoryChannel,
-    ) -> WatcherConfig:
+) -> WatcherConfig:
 
     """Configure one bounded destination and an ERROR route.
 
@@ -155,7 +155,7 @@ def configuration(
     :param channel: Fake delivery channel.
     :type channel: MemoryChannel
 
-    :return: The value described by this operation.
+    :return: Configuration using only explicit synthetic test identities and destinations.
     :rtype: WatcherConfig
     """
 
@@ -175,7 +175,7 @@ def configuration(
 def test_owned_handlers(
     identity: Identity,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Preserve foreign handlers and adapters while draining and rotating owned output.
 
@@ -233,7 +233,7 @@ def test_owned_handlers(
 def test_failure_rolls_back(
     identity: Identity,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Clean up a failed channel or file initialization without mutating the caller logger.
 
@@ -360,7 +360,7 @@ def test_hierarchy_and_callback_lifecycle(identity: Identity) -> None:
 def test_invalid_local_settings(
     settings: dict[str, object],
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Reject unbounded rotation and malformed local configuration before side effects.
 
@@ -412,7 +412,7 @@ def test_unstarted_and_named_logger(identity: Identity) -> None:
 def test_closed_file_cannot_reopen(
     identity: Identity,
     tmp_path: Path,
-    ) -> None:
+) -> None:
 
     """Prevent a concurrent logger call that already selected the file handler from reopening it.
 
@@ -469,7 +469,7 @@ def test_slow_close_does_not_starve_other_channels(identity: Identity) -> None:
 #------------------------------------------------------------------------------------------------------------------
 def test_cancelled_stop(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Finish channel cleanup despite repeated cancellation of asynchronous stop.
 

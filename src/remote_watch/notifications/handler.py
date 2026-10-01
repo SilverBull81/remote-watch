@@ -1,10 +1,10 @@
 ﻿# Подключение стандартного logging к очереди уведомлений без сетевых операций.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> NotificationHandler: Обработчик logging для очереди уведомлений.
@@ -50,7 +50,7 @@ class NotificationHandler(logging.Handler):
         runtime: NotificationRuntime,
         *,
         redactor: Callable[[str], str] | None = None,
-        ) -> None:
+    ) -> None:
 
         """Bind one runtime and an optional text redactor.
 
@@ -79,7 +79,7 @@ class NotificationHandler(logging.Handler):
     def emit(
         self,
         record: logging.LogRecord,
-        ) -> None:
+    ) -> None:
 
         """Normalize and submit a record, containing failures inside the handler.
 

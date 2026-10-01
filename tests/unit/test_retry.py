@@ -1,10 +1,10 @@
 ﻿# Воспроизводимые проверки задержек повторов без ожидания реального времени.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_full_jitter(): Рост задержки, случайная доля и верхний предел.
@@ -34,7 +34,7 @@ def test_full_jitter(
     attempt: int,
     upper: float,
     fraction: float,
-    ) -> None:
+) -> None:
 
     """Apply exponential full jitter without exceeding the local cap.
 
@@ -62,7 +62,7 @@ def test_full_jitter(
 @pytest.mark.parametrize("fraction", [-1, 2, True, float("nan"), float("inf")])
 def test_invalid_random_value(
     fraction: object,
-    ) -> None:
+) -> None:
 
     """Reject malformed injected randomness instead of creating an unbounded delay.
 

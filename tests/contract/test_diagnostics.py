@@ -1,10 +1,10 @@
 ﻿# Проверки безопасной диагностики ntfy, совместимости relay и пределов уведомления.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_diagnostic_values(): Отклонение недопустимых значений диагностики.
@@ -60,7 +60,7 @@ pytest.importorskip("aiohttp")
 def test_diagnostic_values(
     field: str,
     value: Any,
-    ) -> None:
+) -> None:
 
     """Keep diagnostic fields bounded and reject text or bool values.
 
@@ -86,7 +86,7 @@ def test_diagnostic_values(
 def test_response_versions(
     notification: Notification,
     schema_version: int,
-    ) -> None:
+) -> None:
 
     """Preserve v1 shape and strictly correlate v2 diagnostic replies.
 
@@ -126,7 +126,7 @@ def test_response_versions(
 def test_relay_limits(
     notification: Notification,
     size: int,
-    ) -> None:
+) -> None:
 
     """Apply the receiver's fixed limits even when the sender allows larger local snapshots.
 
@@ -159,7 +159,7 @@ def test_relay_limits(
 def test_relay_rejects_before_post(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Classify an oversized outgoing event as permanent without invoking HTTP.
 
@@ -194,7 +194,7 @@ def test_relay_rejects_before_post(
         async def post(
             *args: Any,
             **kwargs: Any,
-            ) -> None:
+        ) -> None:
 
             """Fail the test if any HTTP request is attempted.
 
@@ -235,7 +235,7 @@ def test_ntfy_diagnostics(
     code: Any,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    ) -> None:
+) -> None:
 
     """Preserve safe numbers through ntfy, gateway v1/v2 and the field journal.
 
@@ -284,7 +284,7 @@ def test_ntfy_diagnostics(
             :param request: Incoming loopback HTTP request.
             :type request: web.Request
 
-            :return: The value described by this operation.
+            :return: Synthetic HTTP response to the recorded publication attempt.
             :rtype: web.Response
             """
 

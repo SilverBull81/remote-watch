@@ -1,10 +1,10 @@
 ﻿# Локальная регистрация пользовательских команд без удалённого приёма и исполнения.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> CommandContext: Данные запроса для обработчика команды.
@@ -213,7 +213,7 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     def from_callbacks(
         cls,
         callbacks: Mapping[str, CommandCallback],
-        ) -> CommandRegistry:
+    ) -> CommandRegistry:
 
         """Register zero-argument functions or partials with conservative defaults.
 
@@ -269,7 +269,7 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     def __getitem__(
         self,
         name: str,
-        ) -> CommandSpec:
+    ) -> CommandSpec:
 
         """Look up a command specification without invoking it.
 

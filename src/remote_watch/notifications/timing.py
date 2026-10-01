@@ -1,10 +1,10 @@
 ﻿# Монотонные часы доставки и отменяемые ожидания для повторных попыток.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> DeliveryClock: Интерфейс времени доставки и отменяемого ожидания.
@@ -58,7 +58,7 @@ class DeliveryClock(Protocol):
     async def sleep(
         self,
         delay: float,
-        ) -> None:
+    ) -> None:
 
         """Wait without blocking the caller's loop and cooperate with cancellation.
 
@@ -99,7 +99,7 @@ class SystemDeliveryClock:
     async def sleep(
         self,
         delay: float,
-        ) -> None:
+    ) -> None:
 
         """Yield the loop for a cancellable retry delay.
 

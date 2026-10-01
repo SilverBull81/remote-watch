@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> document(): Синтетический файл настроек без секретов.
@@ -41,7 +41,7 @@ def document() -> dict[str, Any]:
 
     """Build a small configuration containing no real credentials.
 
-    :return: The value described by this operation.
+    :return: Mutable synthetic JSON configuration with placeholders for credentials.
     :rtype: dict[str, Any]
     """
 
@@ -65,7 +65,7 @@ def test_json_valid(
     tmp_path: Path,
     provider: str,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Create typed destinations without reading provider or service credentials.
 
@@ -117,7 +117,7 @@ def test_json_valid(
 def test_json_rejects(
     tmp_path: Path,
     case: str,
-    ) -> None:
+) -> None:
 
     """Reject ambiguous, unsafe or oversized documents without echoing their contents.
 
@@ -197,7 +197,7 @@ def test_json_cli(
     monkeypatch: pytest.MonkeyPatch,
     factory: bool,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Preserve Python factories and validate JSON without starting the server.
 
@@ -239,7 +239,7 @@ def test_json_cli(
         host: str,
         port: int,
         context: Any,
-        ) -> None:
+    ) -> None:
 
         """Capture the configuration instead of opening a socket.
 
@@ -297,7 +297,7 @@ def test_json_cli_exclusive(arguments: list[str]) -> None:
 def test_json_cli_private_error(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Report invalid local configuration without leaking field values.
 

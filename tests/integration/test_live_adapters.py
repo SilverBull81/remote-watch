@@ -1,10 +1,10 @@
 ﻿# Явно включаемая проверка доставки одного синтетического сообщения реальному сервису.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_live_notification(): Явно разрешённая отправка реальному сервису.
@@ -41,7 +41,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.skipif(
 def test_live_notification(
     provider: str,
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Send one synthetic notification only when live execution is explicitly enabled.
 

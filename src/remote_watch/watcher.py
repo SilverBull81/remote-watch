@@ -1,10 +1,10 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> ConsoleConfig: Настройки необязательного вывода в консоль.
@@ -137,7 +137,7 @@ class _OwnedRotatingFileHandler(RotatingFileHandler):
     def emit(
         self,
         record: logging.LogRecord,
-        ) -> None:
+    ) -> None:
 
         """Write only while open; logging.Handler.handle already holds the handler lock.
 
@@ -180,7 +180,7 @@ class RemoteWatcher:
         console: ConsoleConfig | None = None,
         file: RotatingFileConfig | None = None,
         redactor: Callable[[str], str] | None = None,
-        ) -> None:
+    ) -> None:
 
         """Prepare ownership without attaching handlers, opening files or starting threads.
 
@@ -334,7 +334,7 @@ class RemoteWatcher:
     def __exit__(
         self,
         *args: object,
-        ) -> None:
+    ) -> None:
 
         """Stop on normal completion or an application exception.
 
@@ -368,7 +368,7 @@ class RemoteWatcher:
     async def __aexit__(
         self,
         *args: object,
-        ) -> None:
+    ) -> None:
 
         """Drain without blocking the application loop.
 
@@ -424,7 +424,7 @@ class RemoteWatcher:
         action: Callable[[], None],
         *,
         stop_on_cancel: bool,
-        ) -> None:
+    ) -> None:
 
         """Shield the finite synchronous lifecycle operation and complete cancellation cleanup.
 
@@ -455,7 +455,7 @@ class RemoteWatcher:
     async def _finish(
         self,
         task: asyncio.Task[None],
-        ) -> None:
+    ) -> None:
 
         """Wait through repeated cancellation and consume a cleanup task's exception.
 

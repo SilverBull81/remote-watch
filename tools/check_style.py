@@ -1,10 +1,10 @@
 ﻿# Проверка формальных правил оформления Python-файлов проекта без изменения исходников.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> main(): Проверка файлов src, tests и tools с ненулевым кодом при нарушении.
@@ -108,6 +108,21 @@ def _check_file(path: Path) -> list[tuple[int, str]]:
             issues.extend(_check_function(node, lines))
         elif isinstance(node, ast.ClassDef):
             issues.extend(_check_class(node, lines))
+
+    # Несколько вложенных объявлений могут заканчиваться одной строкой AST.
+    # В таком случае сначала закрывается метод, затем содержащий его класс.
+    endings: dict[int, list[int]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            endings.setdefault(node.end_lineno, []).append(node.col_offset)
+    for end, indents in endings.items():
+        index = end
+        for indent in sorted(indents, reverse=True):
+            while index < len(lines) and not lines[index].strip():
+                index += 1
+            if index >= len(lines) or not re.fullmatch(" " * indent + r"#-{8,}", lines[index]):
+                issues.append((index + 1, "closing_divider_order"))
+            index += 1
     return issues
 #------------------------------------------------------------------------------------------------------------------
 
@@ -159,6 +174,13 @@ def _check_function(
         issues.append((node.lineno, "return_documentation"))
     if ":return: " + doc.splitlines()[0] in doc:
         issues.append((node.lineno, "repeated_return_description"))
+    if "The value described by this operation." in doc:
+        issues.append((node.lineno, "vague_return_description"))
+    for index in range(node.lineno - 1, first.lineno - 1):
+        if lines[index].lstrip().startswith(") -> "):
+            indent = len(lines[index]) - len(lines[index].lstrip())
+            if indent != node.col_offset:
+                issues.append((index + 1, "signature_closing_indent"))
 
     if explicit and len(node.body) > 1:
         comments = "\n".join(lines[first.end_lineno:node.body[1].lineno - 1])

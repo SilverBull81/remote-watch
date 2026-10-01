@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -83,7 +83,7 @@ class Channel:
     def __init__(
         self,
         mode: str = 'success',
-        ) -> None:
+    ) -> None:
 
         """Prepare a selectable provider outcome.
 
@@ -124,7 +124,7 @@ class Channel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Return one outcome or remain cancellably active until released.
 
@@ -177,7 +177,7 @@ def settings(
     notification: Notification,
     channel: Channel,
     **changes: Any,
-    ) -> GatewayConfig:
+) -> GatewayConfig:
 
     """Create exact grants and a one-attempt destination for tests.
 
@@ -190,7 +190,7 @@ def settings(
     :param changes: Explicit configuration overrides.
     :type changes: Any
 
-    :return: The value described by this operation.
+    :return: Gateway settings with isolated test destinations and credentials.
     :rtype: GatewayConfig
     """
 
@@ -215,7 +215,7 @@ def envelope(notification: Notification) -> RelayRequest:
     :param notification: Synthetic notification fixture.
     :type notification: Notification
 
-    :return: The value described by this operation.
+    :return: Synthetic relay request with bounded lifetime and exact test identity.
     :rtype: RelayRequest
     """
 
@@ -254,7 +254,7 @@ def test_gateway_requests(
     notification: Notification,
     case: str,
     caplog: pytest.LogCaptureFixture,
-    ) -> None:
+) -> None:
 
     """Check authentication, exact grants, bounds and expiry before provider dispatch.
 
@@ -362,7 +362,7 @@ def test_gateway_requests(
 def test_gateway_attempt_outcomes(
     notification: Notification,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Return safe classified outcomes without adding provider retries.
 
@@ -414,7 +414,7 @@ def test_gateway_attempt_outcomes(
 def test_gateway_overload(
     notification: Notification,
     limit: str,
-    ) -> None:
+) -> None:
 
     """Reject excess requests promptly instead of accumulating waiting tasks.
 
@@ -512,7 +512,7 @@ def test_gateway_body_deadline(notification: Notification) -> None:
 def test_gateway_lifecycle(
     notification: Notification,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Clean partial startup and bound shutdown without skipping other providers.
 
@@ -579,7 +579,7 @@ def test_gateway_lifecycle(
 def test_gateway_mixed_runtime(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Deliver Telegram through the real gateway and ntfy directly from one watcher.
 
@@ -619,7 +619,7 @@ def test_gateway_mixed_runtime(
             :param request: Incoming HTTP request.
             :type request: web.Request
 
-            :return: The value described by this operation.
+            :return: Synthetic provider response for the selected acceptance scenario.
             :rtype: web.Response
             """
 
@@ -676,7 +676,7 @@ def test_gateway_start_guards(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     case: str,
-    ) -> None:
+) -> None:
 
     """Fail closed on invalid credentials and unsafe binds; preserve cleanup on caller cancellation.
 
@@ -784,7 +784,7 @@ def test_gateway_lost_reply(notification: Notification) -> None:
 def test_gateway_rate_and_chunked(
     notification: Notification,
     case: str,
-    ) -> None:
+) -> None:
 
     """Enforce bounded rates and body sizes independently of Content-Length.
 
@@ -843,7 +843,7 @@ def test_gateway_rate_and_chunked(
 def test_gateway_multiple_apps(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Route four applications through one listener while enforcing separate grants.
 
@@ -881,7 +881,7 @@ def test_gateway_multiple_apps(
                     index: int,
                     alias: str,
                     impersonate: bool = False,
-                    ) -> int:
+                ) -> int:
 
                     """Send one correlated request using an application's own token.
 
@@ -972,7 +972,7 @@ def test_gateway_clock_tolerance(
     ttl: int,
     future: int,
     reason: str | None,
-    ) -> None:
+) -> None:
 
     """Check clock skew, unchanged timestamps and bounded provider work over HTTP.
 
@@ -1057,7 +1057,7 @@ def test_gateway_elapsed_budget(
     timeout: float,
     remaining_ttl: float,
     elapsed: float,
-    ) -> None:
+) -> None:
 
     """Reject spent relative budgets even with the maximum UTC allowance.
 

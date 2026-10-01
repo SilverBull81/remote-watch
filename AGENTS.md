@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.5
+Version 1.2.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-120148
+Дата и время последнего изменения: 261001-153531
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.0.dev3; no stable 0.2.0 tag is implied.
+The package version is 0.3.3.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -55,7 +55,12 @@ because its timeout elapsed. The old confirmation helper is an unused prototype.
 Dev2 passed 769 local tests and clean core/extras wheel checks on Windows Python
 3.12.2. Real local TLS and abrupt subprocess crashes were tested; no live time
 origin, real command source or new CI matrix was exercised. See docs/VALIDATION.md.
-Existing command registration remains compatible; remote execution does not exist. The owner explicitly requires both status/check_load and resume_load/suspend_load
+Stage 0.3.3 now provides command-only ACL, durable hub/client handshakes, heartbeat
+and HTTPS long polling. Fake callback execution over real local TLS is verified.
+Automatic application callback dispatch and the Telegram source remain stages
+0.3.4/0.3.5. Read docs/COMMAND_HUB.md before changing these boundaries.
+The old root smoke/field_smoke/ntfy_diagnostic launchers are removed; diagnostics
+are launched only under remote_watch.diagnostics. Existing callback registration remains compatible. The owner explicitly requires both status/check_load and resume_load/suspend_load
 in the first usable version. All names/callbacks remain application-defined through
 mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole
 milestone. ADR 0009 records the overall scope; ADR 0010 defines the implemented contract.

@@ -1,10 +1,10 @@
 ﻿# Общий интерфейс отправки уведомлений без зависимости от конкретного сервиса.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> NotificationChannel: Подготовка, отправка и закрытие канала.
@@ -56,7 +56,7 @@ class NotificationChannel(Protocol):
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Attempt delivery once and return a classified, sanitized result.
 

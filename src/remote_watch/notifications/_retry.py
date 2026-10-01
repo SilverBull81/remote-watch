@@ -1,10 +1,10 @@
 ﻿# Расчёт задержки повторной отправки с ограничением и учётом ответа сервиса.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> retry_delay(): Расчёт задержки повторной отправки с ограничением и учётом ответа сервиса.
@@ -33,7 +33,7 @@ def retry_delay(
     failed_attempt: int,
     retry_after: float | None,
     random_value: float,
-    ) -> float:
+) -> float:
 
     """Calculate capped exponential full jitter with a provider-imposed lower bound.
 

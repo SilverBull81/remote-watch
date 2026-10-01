@@ -1,10 +1,10 @@
 ﻿# Короткая проверка разных размеров ntfy с безопасным отчётом о каждой попытке.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> _delivery(): Подготовка уведомления с точным размером текста.
@@ -49,7 +49,7 @@ def _delivery(
     size: int,
     sample: int,
     run_id: str,
-    ) -> Delivery:
+) -> Delivery:
 
     """Construct an exact rendered UTF-8 size before the adapter applies truncation.
 
@@ -65,7 +65,7 @@ def _delivery(
     :param run_id: Synthetic run identifier.
     :type run_id: str
 
-    :return: The value described by this operation.
+    :return: Synthetic bounded delivery for the selected ntfy payload size.
     :rtype: Delivery
     """
 
@@ -92,7 +92,7 @@ async def _run(
     settings: dict[str, object],
     output: Path,
     interval: float,
-    ) -> int:
+) -> int:
 
     """Send a finite series with no retries and retain only approved diagnostic fields.
 
@@ -105,7 +105,7 @@ async def _run(
     :param interval: Seconds between attempts.
     :type interval: float
 
-    :return: The value described by this operation.
+    :return: Zero when the diagnostic completes successfully, otherwise its failure exit code.
     :rtype: int
     """
 
@@ -186,7 +186,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     :param argv: Explicit command arguments or None.
     :type argv: Sequence[str] | None
 
-    :return: The value described by this operation.
+    :return: Zero on success, otherwise a documented nonzero process exit code.
     :rtype: int
     """
 

@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки.
@@ -127,7 +127,7 @@ class _Journal:
     def record(
         self,
         record: dict[str, object],
-        ) -> None:
+    ) -> None:
 
         """Append one sanitized diagnostic or count its loss without waiting for disk.
 
@@ -150,7 +150,7 @@ class _Journal:
     def flush(
         self,
         stream: TextIO,
-        ) -> None:
+    ) -> None:
 
         """Drain a snapshot of diagnostics outside the worker and its buffer lock.
 
@@ -183,7 +183,7 @@ class _ObservedChannel:
         factory: Callable[[], NotificationChannel],
         journal: _Journal,
         provider: str,
-        ) -> None:
+    ) -> None:
 
         """Create the actual channel lazily in the runtime worker.
 
@@ -222,7 +222,7 @@ class _ObservedChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Observe one attempt without adding retries or swallowing cancellation.
 
@@ -275,7 +275,7 @@ def _utc() -> str:
 
     """Return an explicit UTC timestamp for cross-server comparison.
 
-    :return: The value described by this operation.
+    :return: Current UTC timestamp in ISO 8601 format.
     :rtype: str
     """
 
@@ -289,7 +289,7 @@ def _utc() -> str:
 def _write(
     stream: TextIO,
     record: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Write a complete JSONL record and flush it for inspection during the run.
 
@@ -318,7 +318,7 @@ def _redact(text: str) -> str:
     :param text: Text to shorten.
     :type text: str
 
-    :return: The value described by this operation.
+    :return: Text with local credential values replaced.
     :rtype: str
     """
 
@@ -335,7 +335,7 @@ def _sample(
     logger: logging.Logger,
     run_id: str,
     number: int,
-    ) -> str:
+) -> str:
 
     """Exercise local-only records and one remote-eligible record per sample.
 
@@ -348,7 +348,7 @@ def _sample(
     :param number: One-based sample number.
     :type number: int
 
-    :return: The value described by this operation.
+    :return: Synthetic message body for the selected field-test scenario.
     :rtype: str
     """
 
@@ -392,7 +392,7 @@ def _run(
     *,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-    ) -> int:
+) -> int:
 
     """Run a finite real runtime scenario and persist a sanitized attempt journal.
 
@@ -411,7 +411,7 @@ def _run(
     :param sleep: Application wait function.
     :type sleep: Callable[[float], None]
 
-    :return: The value described by this operation.
+    :return: Zero when the diagnostic completes successfully, otherwise its failure exit code.
     :rtype: int
     """
 
@@ -503,7 +503,7 @@ def _destination(
     provider: str,
     settings: dict[str, object],
     token_env: str,
-    ) -> Destination:
+) -> Destination:
 
     """Build provider settings using the same local credential aliases as one-message smoke.
 
@@ -516,7 +516,7 @@ def _destination(
     :param token_env: Temporary service credential environment name.
     :type token_env: str
 
-    :return: The value described by this operation.
+    :return: Configured destination with delivery observations enabled.
     :rtype: Destination
     """
 
@@ -562,7 +562,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     :param argv: Explicit command arguments or None for process arguments.
     :type argv: Sequence[str] | None
 
-    :return: The value described by this operation.
+    :return: Zero on success, otherwise a documented nonzero process exit code.
     :rtype: int
     """
 

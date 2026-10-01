@@ -1,10 +1,10 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> configuration(): Конфигурация без запуска фабрики канала.
@@ -42,7 +42,7 @@ def configuration(identity: Identity) -> GatewayConfig:
     :param identity: Exact synthetic application identity.
     :type identity: Identity
 
-    :return: The value described by this operation.
+    :return: Configuration using only explicit synthetic test identities and destinations.
     :rtype: GatewayConfig
     """
 
@@ -66,7 +66,7 @@ def configuration(identity: Identity) -> GatewayConfig:
 def test_config_bounds(
     identity: Identity,
     changes: dict[str, Any],
-    ) -> None:
+) -> None:
 
     """Reject invalid or unbounded server settings before resources exist.
 
@@ -93,7 +93,7 @@ def test_config_bounds(
 def test_config_grants(
     identity: Identity,
     case: str,
-    ) -> None:
+) -> None:
 
     """Reject ambiguous credentials, unauthorized aliases and relay cascades.
 

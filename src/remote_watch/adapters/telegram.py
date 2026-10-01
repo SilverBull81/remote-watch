@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -74,7 +74,7 @@ class TelegramConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-        ) -> Destination:
+    ) -> Destination:
 
         """Bind the same retry policy to the runtime and its lazy channel factory.
 
@@ -145,7 +145,7 @@ class TelegramChannel:
         config: TelegramConfig,
         *,
         retry: RetryPolicy | None = None,
-        ) -> None:
+    ) -> None:
 
         """Retain validated settings without resolving tokens or starting network work.
 
@@ -189,7 +189,7 @@ class TelegramChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Perform one sendMessage call and classify its sanitized result.
 

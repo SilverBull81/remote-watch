@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -68,7 +68,7 @@ class _Parser(argparse.ArgumentParser):
     def error(
         self,
         message: str,
-        ) -> None:
+    ) -> None:
 
         """Reject invalid arguments without printing the original parser message.
 
@@ -94,7 +94,7 @@ class _Parser(argparse.ArgumentParser):
 def _load_settings(
     path: Path,
     provider: str,
-    ) -> dict[str, object]:
+) -> dict[str, object]:
 
     """Read a bounded local JSON document and select one provider section.
 
@@ -170,7 +170,7 @@ def _notification() -> Notification:
 async def _send(
     provider: str,
     settings: dict[str, object],
-    ) -> DeliveryResult:
+) -> DeliveryResult:
 
     """Send once through the selected adapter and remove temporary authentication.
 

@@ -1,10 +1,10 @@
 ﻿# Детерминированные фикстуры контрактных тестов без сети и ключей доступа.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 #
@@ -51,7 +51,7 @@ def identity() -> Identity:
 @pytest.fixture
 def notification(
     identity: Identity,
-    ) -> Notification:
+) -> Notification:
 
     """Create a reproducible notification without consulting a clock.
 

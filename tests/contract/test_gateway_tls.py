@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -87,7 +87,7 @@ class Provider:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Accept one synthetic notification.
 
@@ -121,7 +121,7 @@ class Provider:
 def certificates(
     tmp_path: Path,
     mode: str,
-    ) -> tuple[Path, Path, Path]:
+) -> tuple[Path, Path, Path]:
 
     """Generate a fresh CA and leaf certificate without modifying system trust stores.
 
@@ -131,7 +131,7 @@ def certificates(
     :param mode: Selected failure or success scenario.
     :type mode: str
 
-    :return: The value described by this operation.
+    :return: Paths to the temporary CA certificate, server certificate and private key.
     :rtype: tuple[Path, Path, Path]
     """
 
@@ -181,7 +181,7 @@ def test_gateway_tls_cli(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Exercise CLI certificate loading and actual TLS verification on both endpoints.
 
@@ -225,7 +225,7 @@ def test_gateway_tls_cli(
         :param kwargs: Captured request or client keyword arguments.
         :type kwargs: Any
 
-        :return: The value described by this operation.
+        :return: HTTP connector using the temporary test certificate trust context.
         :rtype: aiohttp.TCPConnector
         """
 
@@ -247,7 +247,7 @@ def test_gateway_tls_cli(
         host: str,
         port: int,
         context: ssl.SSLContext | None,
-        ) -> None:
+    ) -> None:
 
         """Replace the endless CLI wait with one real HTTPS relay attempt.
 
@@ -306,7 +306,7 @@ def test_gateway_tls_bad_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Reject incomplete or invalid TLS configuration before starting the listener.
 

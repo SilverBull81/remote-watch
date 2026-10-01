@@ -1,10 +1,10 @@
 ﻿# Проверки независимости уведомления от LogRecord и усечения текста UTF-8.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_detached_record(): Независимость уведомления от изменяемых данных и кеша Formatter.
@@ -34,7 +34,7 @@ from remote_watch.notifications.normalization import prepare_notification, trunc
 #------------------------------------------------------------------------------------------------------------------
 def test_detached_record(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Render mutable arguments and exception data without modifying the original record.
 
@@ -79,7 +79,7 @@ def test_detached_record(
 @pytest.mark.parametrize("limit", [1, 2, 3, 4, 5, 6, 17])
 def test_utf8_truncation(
     limit: int,
-    ) -> None:
+) -> None:
 
     """Keep a visible marker without splitting a multibyte character.
 

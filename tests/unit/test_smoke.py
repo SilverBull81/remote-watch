@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -61,7 +61,7 @@ class FakeChannel:
         config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
         *,
         retry: RetryPolicy,
-        ) -> None:
+    ) -> None:
 
         """Keep the real validated configuration but skip the HTTP client.
 
@@ -104,7 +104,7 @@ class FakeChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Record one attempt or propagate cancellation to the smoke owner.
 
@@ -146,7 +146,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
 
-    :return: The value described by this operation.
+    :return: Fake notification channels opened by the tested smoke lifecycle.
     :rtype: list[FakeChannel]
     """
 
@@ -161,7 +161,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
         *,
         retry: RetryPolicy,
-        ) -> FakeChannel:
+    ) -> FakeChannel:
 
         """Capture a channel constructed by the smoke command.
 
@@ -171,7 +171,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
 
-        :return: The value described by this operation.
+        :return: New fake instance retained for assertions by the test.
         :rtype: FakeChannel
         """
 
@@ -201,7 +201,7 @@ def test_smoke_command(
     tmp_path: Path,
     channels: list[FakeChannel],
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Use one provider from the local file, send fresh data and remove its temporary token.
 
@@ -263,7 +263,7 @@ def test_bad_credentials(
     content: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Report invalid local data without printing its values or JSON parser details.
 
@@ -295,7 +295,7 @@ def test_default_path_and_missing_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     channels: list[FakeChannel],
-    ) -> None:
+) -> None:
 
     """Read only the current directory by default and fail before network access if absent.
 
@@ -331,7 +331,7 @@ def test_default_path_and_missing_file(
 def test_cleanup_on_failure(
     mode: str,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Remove the temporary token and close the adapter for every failure outcome.
 
@@ -354,7 +354,7 @@ def test_cleanup_on_failure(
         config: telegram.TelegramConfig,
         *,
         retry: RetryPolicy,
-        ) -> FakeChannel:
+    ) -> FakeChannel:
 
         """Prepare one selected failure mode.
 
@@ -364,7 +364,7 @@ def test_cleanup_on_failure(
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
 
-        :return: The value described by this operation.
+        :return: New fake instance retained for assertions by the test.
         :rtype: FakeChannel
         """
 
@@ -434,7 +434,7 @@ def test_failure_diagnostics(
     reason: str | None,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Expose only allowlisted reasons and validated numeric diagnostics.
 
@@ -457,7 +457,7 @@ def test_failure_diagnostics(
     async def send(
         provider: str,
         settings: dict[str, object],
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Return a controlled failure without accessing a provider.
 

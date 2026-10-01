@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -203,7 +203,7 @@ class NotificationRuntime:
         clock: Callable[[], datetime] = utc_now,
         delivery_clock: DeliveryClock | None = None,
         random_source: Callable[[], float] = random.random,
-        ) -> None:
+    ) -> None:
 
         """Prepare local state without starting threads or constructing channels.
 
@@ -290,7 +290,7 @@ class NotificationRuntime:
     def stats(
         self,
         destination_id: str | None = None,
-        ) -> RuntimeStats:
+    ) -> RuntimeStats:
 
         """Read independent cumulative counters safely from any thread.
 
@@ -433,7 +433,7 @@ class NotificationRuntime:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-        ) -> None:
+    ) -> None:
 
         """Stop the context without suppressing application exceptions.
 
@@ -475,7 +475,7 @@ class NotificationRuntime:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-        ) -> None:
+    ) -> None:
 
         """Stop without suppressing application exceptions.
 
@@ -500,7 +500,7 @@ class NotificationRuntime:
     async def _finish_lifecycle(
         self,
         task: asyncio.Task[None],
-        ) -> None:
+    ) -> None:
 
         """Wait for an owned lifecycle operation despite repeated caller cancellation.
 
@@ -527,7 +527,7 @@ class NotificationRuntime:
         operation: Callable[[], None],
         *,
         stop_on_cancel: bool,
-        ) -> None:
+    ) -> None:
 
         """Offload a bounded blocking operation and preserve ownership on cancellation.
 
@@ -572,7 +572,7 @@ class NotificationRuntime:
         amount: int = 1,
         *,
         destination_id: str | None = None,
-        ) -> None:
+    ) -> None:
 
         """Increment a fixed internal counter.
 
@@ -617,7 +617,7 @@ class NotificationRuntime:
         self,
         notification: Notification,
         received_at: float,
-        ) -> None:
+    ) -> None:
 
         """Admit a prepared event or count a drop without waiting for space.
 
@@ -685,7 +685,7 @@ class NotificationRuntime:
         self,
         *,
         deadline: float | None = None,
-        ) -> None:
+    ) -> None:
 
         """Close admission and wake the worker without joining it.
 
@@ -909,7 +909,7 @@ class NotificationRuntime:
     async def _send_loop(
         self,
         state: _DestinationState,
-        ) -> None:
+    ) -> None:
 
         """Send sequentially for one destination without blocking other destinations.
 
@@ -941,7 +941,7 @@ class NotificationRuntime:
         state: _DestinationState,
         delivery: Delivery,
         timeout: float,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Perform one attempt, converting adapter failures into an unknown outcome.
 
@@ -999,7 +999,7 @@ class NotificationRuntime:
         state: _DestinationState,
         delivery: Delivery,
         deadline: float,
-        ) -> None:
+    ) -> None:
 
         """Keep a delivery at the queue head through bounded attempts and retry waits.
 
@@ -1147,7 +1147,7 @@ class NotificationRuntime:
         self,
         state: _DestinationState,
         deadline: float,
-        ) -> None:
+    ) -> None:
 
         """Close an independent channel without consuming another channel's opportunity to close.
 

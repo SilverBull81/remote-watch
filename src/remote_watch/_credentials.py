@@ -1,10 +1,10 @@
 ﻿# Проверка источника токена и чтение секретов без раскрытия значений в ошибках.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> CredentialError: Фиксированное поле и безопасное объяснение ошибки.
@@ -51,7 +51,7 @@ class CredentialError(ValueError):
         self,
         field: str,
         reason: str,
-        ) -> None:
+    ) -> None:
 
         """Restrict diagnostic labels to known constants.
 
@@ -79,7 +79,7 @@ def validate_credentials(
     token: str | None,
     token_env: str | None,
     kind: Literal["telegram", "ntfy", "gateway"],
-    ) -> None:
+) -> None:
 
     """Validate literal credentials immediately and defer environment resolution.
 
@@ -124,7 +124,7 @@ def resolve_token(
     token: str | None,
     token_env: str | None,
     kind: Literal["telegram", "ntfy", "gateway"],
-    ) -> str | None:
+) -> str | None:
 
     """Read a referenced secret only at resource startup.
 

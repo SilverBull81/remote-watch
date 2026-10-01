@@ -1,10 +1,10 @@
 ﻿# Проверка структурного async-контракта на fake-канале без наследования.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> MemoryChannel: Тестовая реализация без provider dependencies.
@@ -72,7 +72,7 @@ class MemoryChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Record exactly one delivery attempt in the owner loop.
 
@@ -115,7 +115,7 @@ class MemoryChannel:
 async def exercise_channel(
     channel: NotificationChannel,
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Exercise async lifecycle using only the structural protocol.
 
@@ -151,7 +151,7 @@ async def exercise_channel(
 #------------------------------------------------------------------------------------------------------------------
 def test_structural_async_channel_contract(
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Use a class factory and exercise the protocol without provider dependencies.
 

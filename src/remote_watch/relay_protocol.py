@@ -1,10 +1,10 @@
 ﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> RelayRequest: Версионированный запрос одной попытки через gateway.
@@ -96,7 +96,7 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     :param pairs: JSON object key/value pairs.
     :type pairs: list[tuple[str, object]]
 
-    :return: The value described by this operation.
+    :return: JSON object with distinct field names.
     :rtype: dict[str, object]
     """
 
@@ -117,7 +117,7 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 def _decode(
     data: bytes,
     limit: int,
-    ) -> dict[str, object]:
+) -> dict[str, object]:
 
     """Parse bounded UTF-8 JSON with one unambiguous object at its root.
 
@@ -127,7 +127,7 @@ def _decode(
     :param limit: Maximum accepted body size in bytes.
     :type limit: int
 
-    :return: The value described by this operation.
+    :return: Validated JSON object within the requested byte limit.
     :rtype: dict[str, object]
     """
 
@@ -152,7 +152,7 @@ def _decode(
 def _keys(
     payload: dict[str, object],
     expected: set[str],
-    ) -> None:
+) -> None:
 
     """Require an exact envelope shape and a supported integer schema version.
 
@@ -193,7 +193,7 @@ class RelayRequest:
 
         """Create a JSON-ready request with no provider or service credentials.
 
-        :return: The value described by this operation.
+        :return: JSON-compatible request fields without transport credentials.
         :rtype: dict[str, object]
         """
 
@@ -209,14 +209,14 @@ class RelayRequest:
     def from_bytes(
         cls,
         data: bytes,
-        ) -> RelayRequest:
+    ) -> RelayRequest:
 
         """Decode a bounded request; authentication, ACL and expiry checks belong to the gateway.
 
         :param data: Bounded UTF-8 JSON bytes.
         :type data: bytes
 
-        :return: The value described by this operation.
+        :return: Validated relay request reconstructed from its wire fields.
         :rtype: RelayRequest
         """
 
@@ -271,7 +271,7 @@ def encode_response(
     result: DeliveryResult,
     *,
     schema_version: int = 1,
-    ) -> bytes:
+) -> bytes:
 
     """Encode a correlated relay response without arbitrary provider error text.
 
@@ -284,7 +284,7 @@ def encode_response(
     :param schema_version: Version explicitly selected by the request.
     :type schema_version: int
 
-    :return: The value described by this operation.
+    :return: UTF-8 JSON response describing the delivery outcome.
     :rtype: bytes
     """
 
@@ -316,7 +316,7 @@ def decode_response(
     delivery: Delivery,
     *,
     schema_version: int = 1,
-    ) -> DeliveryResult:
+) -> DeliveryResult:
 
     """Require an exact versioned response correlated to the attempted delivery.
 
@@ -329,7 +329,7 @@ def decode_response(
     :param schema_version: Version selected for this attempt, without automatic fallback.
     :type schema_version: int
 
-    :return: The value described by this operation.
+    :return: Validated delivery outcome from the relay response.
     :rtype: DeliveryResult
     """
 

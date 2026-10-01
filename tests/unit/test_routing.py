@@ -1,10 +1,10 @@
 ﻿# Проверки условий выбора получателей и объединения подходящих правил.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-131628
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_matching_rules(): Объединение правил и проверка обязательных условий.
@@ -43,7 +43,7 @@ def test_matching_rules(
     notification: Notification,
     changes: dict[str, object],
     expected: tuple[str, ...],
-    ) -> None:
+) -> None:
 
     """Combine conditions and deduplicate matching destination identifiers.
 
@@ -73,7 +73,7 @@ def test_matching_rules(
 def test_identity_conditions(
     notification: Notification,
     name: str,
-    ) -> None:
+) -> None:
 
     """Keep identity conditions mandatory even with notify=True.
 

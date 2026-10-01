@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -60,7 +60,7 @@ class GatewayConfigError(ValueError):
         code: str,
         field: str,
         reason: str | None = None,
-        ) -> None:
+    ) -> None:
 
         """Keep safe diagnostic labels without the source exception.
 
@@ -171,7 +171,7 @@ def _object(
     value: Any,
     allowed: set[str],
     required: set[str] | None = None,
-    ) -> dict[str, Any]:
+) -> dict[str, Any]:
 
     """Reject unknown fields and missing required fields in a JSON object.
 
@@ -184,7 +184,7 @@ def _object(
     :param required: Required field names or None.
     :type required: set[str] | None
 
-    :return: The value described by this operation.
+    :return: Dictionary containing only allowed fields and all required fields.
     :rtype: dict[str, Any]
     """
 
@@ -206,7 +206,7 @@ def _object(
 def _items(
     value: Any,
     maximum: int,
-    ) -> list[Any]:
+) -> list[Any]:
 
     """Accept only a nonempty bounded JSON array.
 
@@ -216,7 +216,7 @@ def _items(
     :param maximum: Maximum number of entries.
     :type maximum: int
 
-    :return: The value described by this operation.
+    :return: Validated nonempty list within the configured item limit.
     :rtype: list[Any]
     """
 
@@ -239,7 +239,7 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     :param pairs: Ordered JSON key-value pairs.
     :type pairs: list[tuple[str, Any]]
 
-    :return: The value described by this operation.
+    :return: Decoded object with distinct JSON keys.
     :rtype: dict[str, Any]
     """
 
@@ -281,7 +281,7 @@ def _principal(value: Any) -> GatewayPrincipal:
     :param value: Decoded JSON value.
     :type value: Any
 
-    :return: The value described by this operation.
+    :return: Validated application credential and exact relay permissions.
     :rtype: GatewayPrincipal
     """
 
@@ -306,7 +306,7 @@ def _destination(value: Any) -> Destination:
     :param value: Decoded JSON value.
     :type value: Any
 
-    :return: The value described by this operation.
+    :return: Destination configured with a lazy factory for an allowed provider.
     :rtype: Destination
     """
 

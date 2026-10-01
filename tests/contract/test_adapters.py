@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов.
@@ -104,14 +104,14 @@ class FakeResponse:
     async def iter_chunked(
         self,
         size: int,
-        ) -> AsyncIterator[bytes]:
+    ) -> AsyncIterator[bytes]:
 
         """Yield response bytes or wait for cancellation after headers arrive.
 
         :param size: Maximum chunk size in bytes.
         :type size: int
 
-        :return: The value described by this operation.
+        :return: Successive byte chunks of the synthetic HTTP response.
         :rtype: AsyncIterator[bytes]
         """
 
@@ -131,7 +131,7 @@ class FakeResponse:
 
         """Enter a request or reproduce a connection failure.
 
-        :return: The value described by this operation.
+        :return: This fake response for use by the asynchronous context manager.
         :rtype: FakeResponse
         """
 
@@ -147,7 +147,7 @@ class FakeResponse:
     async def __aexit__(
         self,
         *args: object,
-        ) -> None:
+    ) -> None:
 
         """Record response cleanup after success, cancellation or malformed data.
 
@@ -174,7 +174,7 @@ class FakeSession:
     def __init__(
         self,
         **settings: Any,
-        ) -> None:
+    ) -> None:
 
         """Keep the actual connector for checking ownership and cleanup.
 
@@ -197,7 +197,7 @@ class FakeSession:
         self,
         url: str,
         **kwargs: Any,
-        ) -> FakeResponse:
+    ) -> FakeResponse:
 
         """Record exactly one request without retries or redirects.
 
@@ -247,7 +247,7 @@ def sessions(monkeypatch: pytest.MonkeyPatch) -> list[FakeSession]:
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
 
-    :return: The value described by this operation.
+    :return: Fake HTTP sessions created during this test.
     :rtype: list[FakeSession]
     """
 
@@ -265,7 +265,7 @@ def sessions(monkeypatch: pytest.MonkeyPatch) -> list[FakeSession]:
         :param kwargs: Captured request or client keyword arguments.
         :type kwargs: Any
 
-        :return: The value described by this operation.
+        :return: New fake instance retained for assertions by the test.
         :rtype: FakeSession
         """
 
@@ -293,7 +293,7 @@ def make_channel(provider: str) -> TelegramChannel | NtfyChannel:
     :param provider: Provider selected by the test.
     :type provider: str
 
-    :return: The value described by this operation.
+    :return: Configured provider adapter using only synthetic test settings.
     :rtype: TelegramChannel | NtfyChannel
     """
 
@@ -317,7 +317,7 @@ def accepted_body(provider: str) -> dict[str, object]:
     :param provider: Provider selected by the test.
     :type provider: str
 
-    :return: The value described by this operation.
+    :return: Synthetic provider response representing successful acceptance.
     :rtype: dict[str, object]
     """
 
@@ -342,7 +342,7 @@ def test_success_and_lifecycle(
     provider: str,
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Verify rendering, limits, authentication, request budgets and owned cleanup.
 
@@ -426,7 +426,7 @@ def test_http_errors(
     expected: str,
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Classify HTTP failures without returning their sensitive response bodies.
 
@@ -491,7 +491,7 @@ def test_invalid_success(
     body: object,
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Treat ambiguous success as unknown instead of claiming delivery.
 
@@ -544,7 +544,7 @@ def test_interrupted_requests(
     mode: str,
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Verify unknown outcomes, response bounds and propagation of cancellation.
 
@@ -612,7 +612,7 @@ def test_interrupted_requests(
 def test_telegram_envelope_retry(
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Respect Telegram parameters and refuse automatic chat migration.
 
@@ -660,7 +660,7 @@ def test_telegram_envelope_retry(
 def test_retry_after_values(
     value: object,
     expected: float | None,
-    ) -> None:
+) -> None:
 
     """Parse delay fields without accepting nonfinite values or booleans.
 
@@ -709,7 +709,7 @@ def test_endpoint_validation(endpoint: str) -> None:
 def test_token_resolution_and_policy(
     monkeypatch: pytest.MonkeyPatch,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Resolve secrets at open and use identical timeout policies on both boundaries.
 
@@ -759,7 +759,7 @@ def test_token_resolution_and_policy(
 def test_runtime_with_both_adapters(
     notification: Notification,
     sessions: list[FakeSession],
-    ) -> None:
+) -> None:
 
     """Exercise logger routing and two managed adapters in the actual worker thread.
 

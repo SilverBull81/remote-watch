@@ -1,10 +1,10 @@
 ﻿# Проверки неизменяемости, сериализации и границ размера уведомлений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 #
@@ -44,7 +44,7 @@ from remote_watch import Identity, Notification, SnapshotLimits
 #------------------------------------------------------------------------------------------------------------------
 def test_snapshot_is_detached(
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Keep notification data immutable across caller and payload mutations.
 
@@ -73,7 +73,7 @@ def test_snapshot_is_detached(
 #------------------------------------------------------------------------------------------------------------------
 def test_json_round_trip(
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Round-trip complete optional metadata and normalize timestamps to UTC.
 
@@ -110,7 +110,7 @@ def test_json_round_trip(
 def test_payload_rejects_invalid_schema(
     notification: Notification,
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Reject untrusted schema extensions and malformed payload fields.
 
@@ -141,7 +141,7 @@ def test_payload_rejects_invalid_schema(
 def test_snapshot_rejects_invalid_fields(
     notification: Notification,
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Reject mutable objects, invalid Unicode and ambiguous metadata.
 
@@ -165,7 +165,7 @@ def test_snapshot_rejects_invalid_fields(
 #------------------------------------------------------------------------------------------------------------------
 def test_utf8_and_serialized_limits(
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Enforce text, metadata and full-payload byte limits independently.
 
@@ -218,7 +218,7 @@ def test_identity_errors_do_not_echo_values() -> None:
                                      {"message_max_bytes": 20000}])
 def test_invalid_limits(
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Reject noninteger, nonpositive and contradictory size budgets.
 

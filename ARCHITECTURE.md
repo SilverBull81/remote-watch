@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.2.1
+Version 1.2.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-112704
+Дата и время последнего изменения: 261001-153531
 
 ## Статус и границы
 
@@ -19,13 +19,17 @@ Telegram smoke подтверждён владельцем на телефоне
 и постоянный журнал SQLite. Обязательного подтверждения resume/suspend нет.
 Возраст ограничен 120 с по умолчанию, учитываются погрешность, дрейф и срок годности
 показания. В dev3 владелец выбрал TimeAPI; доступность HTTPS API подтверждена на LV VM.
-Погрешность источника остаётся явным допущением, командный hub ещё не подключён.
+Погрешность источника остаётся явным допущением. В 0.3.3.dev1 источник подключается
+к hub явно; проверка возраста закрывается при утрате достоверного времени.
 Журнал атомарно сохраняет команду/cursor, сравнивает версии, восстанавливает UNKNOWN
 и не очищает возможное активное исполнение по одному timeout. Подробности:
 [время](docs/COMMAND_TIME.md), [хранение](docs/COMMAND_STORAGE.md),
 [ADR 0011](docs/adr/0011-command-time-and-durable-journal.md).
-Авторизация, сетевые endpoints и исполнитель ещё не реализованы.
-Сетевое исполнение команд ещё не реализовано.
+В 0.3.3.dev1 реализованы отдельные credentials/ACL, CommandHub и CommandClient,
+регистрация, heartbeat, HTTPS long polling и постоянный handshake разрешения
+на callback. На loopback проверен путь до подставного callback и результата.
+Автоматический dispatcher и Telegram source относятся к 0.3.4/0.3.5.
+Контракт, пределы и семантика отказов: [COMMAND_HUB.md](docs/COMMAND_HUB.md).
 
 В dev8 gateway JSON поддерживает token как альтернативу token_env у провайдеров
 и principals. Типизированные TelegramConfig/NtfyConfig/GatewayPrincipal также
@@ -102,8 +106,11 @@ Core не импортирует конкретные адаптеры. `command
 
 Основные импорты `from remote_watch import ...` и регистрация через
 `remote_watch.commands` сохранены. `python -m remote_watch.gateway` работает через
-`gateway.__main__`; старые smoke/field_smoke/ntfy_diagnostic в корне — небольшие
-совместимые точки запуска. Новые инструкции используют `remote_watch.diagnostics`.
+`gateway.__main__`. В 0.3.3.dev1 старые smoke/field_smoke/ntfy_diagnostic
+из корня удалены по решению владельца; запуск только через `remote_watch.diagnostics`.
+В корне пакета остаются семь Python-файлов. CommandHub/CommandClient находятся
+в `commands`, их HTTPS-транспорт — в `adapters.command_http`, отдельный сервер —
+в `gateway.command_server`. Core не импортирует эти сетевые реализации.
 Прямые импорты перенесённых модулей нужно обновить: например,
 `remote_watch.gateway_config` → `remote_watch.gateway.config`,
 `remote_watch.command_time` → `remote_watch.commands.time`. Это намеренная смена

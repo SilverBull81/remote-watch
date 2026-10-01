@@ -1,10 +1,10 @@
 ﻿# Выбор получателей уведомления по уровню, меткам и сведениям о приложении.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> PolicyRouter: Выбор получателей по настроенным правилам.
@@ -39,7 +39,7 @@ class PolicyRouter:
     def __init__(
         self,
         routes: tuple[Route, ...],
-        ) -> None:
+    ) -> None:
 
         """Copy validated routing rules.
 
@@ -61,7 +61,7 @@ class PolicyRouter:
     def select(
         self,
         notification: Notification,
-        ) -> tuple[str, ...]:
+    ) -> tuple[str, ...]:
 
         """Apply AND within each rule and union across matching rules.
 

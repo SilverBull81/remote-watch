@@ -1,10 +1,10 @@
 ﻿# Проверки конфигурации, ленивых фабрик и результатов доставки.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 #
@@ -79,7 +79,7 @@ def unused_factory() -> NotificationChannel:
 #------------------------------------------------------------------------------------------------------------------
 def test_configuration_is_lazy_and_detached(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Keep provider factories lazy and configuration collections immutable.
 
@@ -110,7 +110,7 @@ def test_configuration_is_lazy_and_detached(
 #------------------------------------------------------------------------------------------------------------------
 def test_configuration_rejects_invalid_references(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Reject duplicate IDs, missing targets and exceeded destination budgets.
 
@@ -150,7 +150,7 @@ def test_configuration_rejects_invalid_references(
 ])
 def test_finite_policy_bounds(
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Reject nonfinite, incorrectly typed and contradictory retry policies.
 
@@ -219,7 +219,7 @@ def test_delivery_results() -> None:
 ])
 def test_invalid_delivery_result(
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Prevent impossible combinations and unsafe provider result data.
 
@@ -239,7 +239,7 @@ def test_invalid_delivery_result(
 #------------------------------------------------------------------------------------------------------------------
 def test_delivery_retry_preserves_ids(
     notification: Notification,
-    ) -> None:
+) -> None:
 
     """Model another attempt without changing event or delivery identity.
 

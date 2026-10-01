@@ -1,10 +1,10 @@
 ﻿# Проверки конечного ntfy-сценария, безопасного отчёта и очистки при ошибках.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> test_diagnostic_run(): Серия точных размеров и очистка при отказах.
@@ -39,7 +39,7 @@ def test_diagnostic_run(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     mode: str,
-    ) -> None:
+) -> None:
 
     """Check exact sizes, one attempt per sample, early stop and secret cleanup.
 
@@ -80,7 +80,7 @@ def test_diagnostic_run(
             config: Any,
             *,
             retry: Any,
-            ) -> None:
+        ) -> None:
 
             """Verify the diagnostic owns a single-attempt channel.
 
@@ -116,7 +116,7 @@ def test_diagnostic_run(
         async def send(
             self,
             delivery: Delivery,
-            ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
             """Record each exact-size input and optionally fail without retrying.
 
@@ -202,7 +202,7 @@ def test_diagnostic_bounds(
     tmp_path: Path,
     interval: str,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Reject invalid schedules before creating reports or attempting network access.
 
@@ -236,7 +236,7 @@ def test_diagnostic_bounds(
 def test_diagnostic_exclusive(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Preserve an existing report and leave no temporary credentials behind.
 

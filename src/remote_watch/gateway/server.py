@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -84,7 +84,7 @@ def _utc_now() -> datetime:
 
     """Read aware UTC time for expiry validation.
 
-    :return: The value described by this operation.
+    :return: Current timezone-aware UTC datetime.
     :rtype: datetime
     """
 
@@ -104,7 +104,7 @@ class _GatewayParser(argparse.ArgumentParser):
     def error(
         self,
         message: str,
-        ) -> None:
+    ) -> None:
 
         """Replace argparse details with a fixed safe category.
 
@@ -131,7 +131,7 @@ class GatewayStartupError(RuntimeError):
     def __init__(
         self,
         stage: str,
-        ) -> None:
+    ) -> None:
 
         """Keep the fixed startup stage for local diagnostics.
 
@@ -161,7 +161,7 @@ class Gateway:
         config: GatewayConfig,
         *,
         utc_now: Callable[[], datetime] = _utc_now,
-        ) -> None:
+    ) -> None:
 
         """Store validated configuration without reading tokens or starting channels.
 
@@ -204,7 +204,7 @@ class Gateway:
 
         """Return the listening TCP port after a successful start.
 
-        :return: The value described by this operation.
+        :return: Actual port assigned to the running listener.
         :rtype: int
         """
 
@@ -220,7 +220,7 @@ class Gateway:
 
         """Return aggregate counters without credentials, bodies or remote identifiers.
 
-        :return: The value described by this operation.
+        :return: Copy of aggregate counters without identities, tokens or message text.
         :rtype: dict[str, int]
         """
 
@@ -237,7 +237,7 @@ class Gateway:
         host: str = '127.0.0.1',
         port: int = 8765,
         ssl_context: ssl.SSLContext | None = None,
-        ) -> None:
+    ) -> None:
 
         """Open providers, then listen; plaintext is restricted to numeric loopback addresses.
 
@@ -370,14 +370,14 @@ class Gateway:
     async def _expect(
         self,
         request: web.Request,
-        ) -> web.StreamResponse:
+    ) -> web.StreamResponse:
 
         """Reject Expect before reading a body or acknowledging an unauthenticated request.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
 
-        :return: The value described by this operation.
+        :return: Early rejection or continuation response for the Expect header.
         :rtype: web.StreamResponse
         """
 
@@ -394,7 +394,7 @@ class Gateway:
         status: int,
         reason: str,
         retry_after: float = 1.0,
-        ) -> web.Response:
+    ) -> web.Response:
 
         """Return a fixed safe error and close rather than drain an untrusted body.
 
@@ -407,7 +407,7 @@ class Gateway:
         :param retry_after: Minimum delay before another attempt, in seconds.
         :type retry_after: float
 
-        :return: The value described by this operation.
+        :return: Bounded HTTP response containing only the fixed failure code.
         :rtype: web.Response
         """
 
@@ -429,14 +429,14 @@ class Gateway:
     def _authenticate(
         self,
         request: web.Request,
-        ) -> GatewayPrincipal | None:
+    ) -> GatewayPrincipal | None:
 
         """Compare bounded bearer hashes without accepting alternate credential locations.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
 
-        :return: The value described by this operation.
+        :return: Matching configured application policy, or None on authentication failure.
         :rtype: GatewayPrincipal | None
         """
 
@@ -459,14 +459,14 @@ class Gateway:
     async def _handle(
         self,
         request: web.Request,
-        ) -> web.Response:
+    ) -> web.Response:
 
         """Authenticate and reserve capacity before bounded body reading and dispatch.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
 
-        :return: The value described by this operation.
+        :return: Bounded relay response after authentication and request validation.
         :rtype: web.Response
         """
 
@@ -539,14 +539,14 @@ class Gateway:
     async def _read_body(
         self,
         request: web.Request,
-        ) -> bytes | None:
+    ) -> bytes | None:
 
         """Read at most the wire limit plus one small chunk without decompression.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
 
-        :return: The value described by this operation.
+        :return: Bounded request bytes, or None after recording a read rejection.
         :rtype: bytes | None
         """
 
@@ -567,7 +567,7 @@ class Gateway:
         self,
         envelope: RelayRequest,
         started: float,
-        ) -> web.Response:
+    ) -> web.Response:
 
         """Authorize one direct attempt with server, expiry and elapsed-time budgets.
 
@@ -577,7 +577,7 @@ class Gateway:
         :param started: Monotonic request admission time.
         :type started: float
 
-        :return: The value described by this operation.
+        :return: Correlated HTTP response describing the single provider attempt.
         :rtype: web.Response
         """
 
@@ -692,7 +692,7 @@ class Gateway:
     async def _close_channel(
         self,
         channel: NotificationChannel,
-        ) -> None:
+    ) -> None:
 
         """Close one channel without exposing transport exception details.
 
@@ -737,7 +737,7 @@ async def _serve(
     port: int,
     context: ssl.SSLContext | None,
     stop_file: Path | None = None,
-    ) -> None:
+) -> None:
 
     """Run the configured gateway until the process is interrupted.
 
@@ -808,7 +808,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     :param argv: Explicit CLI arguments or None.
     :type argv: Sequence[str] | None
 
-    :return: The value described by this operation.
+    :return: Zero on success, otherwise a documented nonzero process exit code.
     :rtype: int
     """
 

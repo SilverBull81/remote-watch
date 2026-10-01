@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -42,7 +42,7 @@ from remote_watch.notifications.delivery import Delivery, DeliveryResult, Delive
 def validate_endpoint(
     endpoint: str,
     allow_http: bool,
-    ) -> None:
+) -> None:
 
     """Reject credentials, redirects encoded in paths and ambiguous base URLs.
 
@@ -102,7 +102,7 @@ def validate_env(name: str | None) -> None:
 def read_token(
     name: str | None,
     telegram: bool = False,
-    ) -> str | None:
+) -> str | None:
 
     """Resolve a credential only while opening a channel.
 
@@ -138,7 +138,7 @@ def truncate(
     text: str,
     limit: int,
     encoding: str = 'utf-8',
-    ) -> str:
+) -> str:
 
     """Shorten text at a complete Unicode boundary and append a visible marker.
 
@@ -205,7 +205,7 @@ def render(delivery: Delivery) -> str:
 def retry_after(
     value: object,
     now: datetime | None = None,
-    ) -> float | None:
+) -> float | None:
 
     """Parse finite Retry-After seconds or an HTTP date without exposing response text.
 
@@ -251,7 +251,7 @@ def retry_after(
 def http_failure(
     status: int,
     delay: float | None,
-    ) -> DeliveryResult:
+) -> DeliveryResult:
 
     """Classify an HTTP rejection using fixed reason codes only.
 

@@ -1,10 +1,10 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> document(): Конфигурация с вымышленными токенами.
@@ -81,7 +81,7 @@ def test_inline_check(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Keep check-config offline, environment-free and safe for object representations.
 
@@ -159,7 +159,7 @@ def test_credential_errors(
     notification: Notification,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    ) -> None:
+) -> None:
 
     """Reject malformed sources without echoing any credential or variable name.
 
@@ -251,7 +251,7 @@ def test_inline_delivery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    ) -> None:
+) -> None:
 
     """Authenticate and deliver over real loopback HTTP with either credential source.
 
@@ -378,7 +378,7 @@ def test_duplicate_credentials(
     notification: Notification,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Reject duplicate resolved credentials before opening any provider.
 

@@ -1,10 +1,10 @@
 ﻿# Контракт relay-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
@@ -64,7 +64,7 @@ def fresh_delivery(notification: Notification) -> Delivery:
     :param notification: Immutable notification fixture.
     :type notification: Notification
 
-    :return: The value described by this operation.
+    :return: Delivery whose timestamps are fresh for the current test exchange.
     :rtype: Delivery
     """
 
@@ -110,7 +110,7 @@ def test_wire_roundtrip(notification: Notification) -> None:
 def test_invalid_wire(
     notification: Notification,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Reject ambiguous envelopes and unsafe or inconsistent budgets.
 
@@ -153,7 +153,7 @@ def test_invalid_wire(
 def test_invalid_response(
     notification: Notification,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Do not accept a mismatched or contradictory gateway receipt.
 
@@ -215,7 +215,7 @@ def test_relay_http(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-    ) -> None:
+) -> None:
 
     """Exercise the real HTTP client against a temporary loopback gateway stub.
 
@@ -255,7 +255,7 @@ def test_relay_http(
             :param request: Incoming loopback HTTP request.
             :type request: web.Request
 
-            :return: The value described by this operation.
+            :return: Synthetic relay response for the selected validation scenario.
             :rtype: web.Response
             """
 
@@ -320,7 +320,7 @@ def test_relay_http(
 def test_no_request_after_budget_expiry(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Do not start a request when the remaining runtime budget cannot cover the network margin.
 
@@ -364,7 +364,7 @@ def test_no_request_after_budget_expiry(
 def test_runtime_budget_and_mixed_modes(
     identity: Identity,
     monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+) -> None:
 
     """Keep retries in runtime while direct and relay destinations receive one event independently.
 
@@ -402,7 +402,7 @@ def test_runtime_budget_and_mixed_modes(
         async def send(
             self,
             delivery: Delivery,
-            ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
             """Fail the first relay attempt and accept its runtime-owned retry.
 

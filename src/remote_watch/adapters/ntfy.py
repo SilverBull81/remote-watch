@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -80,7 +80,7 @@ class NtfyConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-        ) -> Destination:
+    ) -> Destination:
 
         """Create a destination whose channel and runtime share one timeout policy.
 
@@ -153,7 +153,7 @@ class NtfyChannel:
         config: NtfyConfig,
         *,
         retry: RetryPolicy | None = None,
-        ) -> None:
+    ) -> None:
 
         """Keep settings locally until the channel is opened by the runtime.
 
@@ -199,7 +199,7 @@ class NtfyChannel:
     async def send(
         self,
         delivery: Delivery,
-        ) -> DeliveryResult:
+    ) -> DeliveryResult:
 
         """Publish a fixed-topic JSON message and validate the acknowledgement.
 
@@ -284,7 +284,7 @@ def _encode_json(payload: object) -> str:
 def _publish_payload(
     config: NtfyConfig,
     message: str,
-    ) -> dict[str, object]:
+) -> dict[str, object]:
 
     """Bound message bytes and serialized JSON bytes independently.
 

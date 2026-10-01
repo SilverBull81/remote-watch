@@ -1,10 +1,10 @@
 ﻿# Проверки регистрации команд, partial и неизменяемого контекста.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-131902
 #
 # Тесты:
 #
@@ -61,7 +61,7 @@ from remote_watch import (
 def set_stop(
     *,
     load_stop_event: Event,
-    ) -> None:
+) -> None:
 
     """Set application-owned state when explicitly called.
 
@@ -80,7 +80,7 @@ def set_stop(
 #------------------------------------------------------------------------------------------------------------------
 def context_status(
     context: CommandContext,
-    ) -> str:
+) -> str:
 
     """Return the addressed instance name.
 
@@ -117,7 +117,7 @@ async def async_status() -> str:
 #------------------------------------------------------------------------------------------------------------------
 def validate_count(
     arguments: Mapping[str, str],
-    ) -> None:
+) -> None:
 
     """Require one positive integer argument.
 
@@ -142,7 +142,7 @@ def validate_count(
 #------------------------------------------------------------------------------------------------------------------
 def test_partial_callbacks_are_not_invoked_by_registration(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Preserve the user's partial/Event pattern without registration side effects.
 
@@ -230,7 +230,7 @@ def test_registry_copies_specs_and_rejects_duplicates() -> None:
 ])
 def test_invalid_command_specs(
     changes: dict[str, object],
-    ) -> None:
+) -> None:
 
     """Fail registration for invalid command declarations.
 
@@ -250,7 +250,7 @@ def test_invalid_command_specs(
 #------------------------------------------------------------------------------------------------------------------
 def test_context_copies_arguments(
     identity: Identity,
-    ) -> None:
+) -> None:
 
     """Detach request arguments from caller-owned mutable state.
 
@@ -282,7 +282,7 @@ def test_context_copies_arguments(
 def test_context_rejects_unbounded_arguments(
     identity: Identity,
     arguments: object,
-    ) -> None:
+) -> None:
 
     """Reject invalid types and both individual and aggregate argument overflow.
 
