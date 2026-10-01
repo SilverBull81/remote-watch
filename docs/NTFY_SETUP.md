@@ -1,10 +1,10 @@
 ﻿# Настройка закрытого канала ntfy
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-184554
+Дата и время последнего изменения: 261001-112704
 
 ## Текущее состояние проверки
 
@@ -35,7 +35,7 @@ Version 1.0.1
 5. В том же файле задайте `ntfy.endpoint` равным `https://ntfy.sh`, а `ntfy.topic`
    — точному имени зарезервированной темы.
 6. В Android-приложении ntfy добавьте доступ к этой учётной записи и подписку
-   на тот же сервер/topic. Затем запустите `python -m remote_watch.smoke ntfy`.
+   на тот же сервер/topic. Затем запустите `python -m remote_watch.diagnostics.smoke ntfy`.
 
 Наличие резервирования проверяйте в своём аккаунте; тариф и покупку эта инструкция
 не выбирает. Источники: [резервирование в веб-приложении](https://docs.ntfy.sh/subscribe/web/),
@@ -81,7 +81,7 @@ ntfy token add --label=remote-watch rw-publisher
 Из корня Remote Watch:
 
 ```powershell
-python -m remote_watch.smoke ntfy
+python -m remote_watch.diagnostics.smoke ntfy
 ```
 
 После сообщения о приёме проверьте телефон. Затем проверьте тему без авторизации:

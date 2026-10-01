@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164712
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -15,7 +15,7 @@
 #    -> send(): Одна управляемая попытка отправки.
 #    -> close(): Ограниченное завершение и очистка.
 #
-# Функции и тесты:
+# Тесты:
 # -> settings(): Настройки точных прав тестового отправителя.
 # -> envelope(): Запрос с заданным сроком и идентификатором доставки.
 # -> credential(): Временный вымышленный токен.
@@ -60,12 +60,12 @@ from remote_watch import (
     Route,
     WatcherConfig,
 )
-from remote_watch._context import delivery_context
 from remote_watch.adapters.relay import RelayChannel, RelayConfig
-from remote_watch.gateway import Gateway
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway_json import load_gateway_config
-from remote_watch.relay import RelayRequest, decode_response
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.json_config import load_gateway_config
+from remote_watch.gateway.server import Gateway
+from remote_watch.notifications._context import delivery_context
+from remote_watch.relay_protocol import RelayRequest, decode_response
 
 aiohttp = pytest.importorskip("aiohttp")
 TOKEN = "synthetic_gateway_credential_1234567890"

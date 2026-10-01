@@ -1,10 +1,10 @@
 ﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> Identity: Сведения о приложении и его размещении.
@@ -34,7 +34,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from typing import ClassVar
 
-from ._validation import require_int, require_text, text_tuple
+from remote_watch._validation import require_int, require_text, text_tuple
 
 #******************************************************************************************************************
 # КЛАССЫ

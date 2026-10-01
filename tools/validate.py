@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-202056
+# Дата и время последнего изменения: 261001-112704
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -99,6 +99,7 @@ def main() -> int:
 
     try:
         # Проверяется исходный архив, а устанавливается wheel, заново построенный из него.
+        run("style", [sys.executable, str(root / "tools/check_style.py")])
         run("build", [sys.executable, "-m", "build", "--outdir", str(output / "dist"), str(root)])
         sdist = next((output / "dist").glob("*.tar.gz"))
         with tarfile.open(sdist) as archive:
@@ -114,6 +115,11 @@ def main() -> int:
         with zipfile.ZipFile(wheel) as archive:
             assert all(name.startswith(("remote_watch/", f"remote_watch-{version}.dist-info/"))
                        for name in archive.namelist())
+            # После переноса модулей в wheel не должны остаться старые копии из build.
+            expected_python = {path.relative_to(root / "src").as_posix()
+                               for path in (root / "src/remote_watch").rglob("*.py")}
+            installed_python = {name for name in archive.namelist() if name.endswith(".py")}
+            assert installed_python == expected_python
             for name in archive.namelist():
                 source = root / "src" / name
                 if source.is_file():

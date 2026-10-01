@@ -1,12 +1,12 @@
 ﻿# Проверки атомарности, аварийного восстановления и пределов журнала SQLite.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Тесты:
 # -> request(): Подготовка подставной команды.
 #
 # -> options(): Согласованные данные разрешения и сессии.
@@ -40,7 +40,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ from pathlib import Path
 import pytest
 
 from remote_watch import Identity
-from remote_watch.command_protocol import (
+from remote_watch.commands.protocol import (
     CommandClaim,
     CommandGrant,
     CommandRef,
@@ -64,9 +64,16 @@ from remote_watch.command_protocol import (
     callback_result,
     message_digest,
 )
-from remote_watch.command_state import CommandAction, CommandDeadline, CommandPhase
-from remote_watch.command_storage import AuditCode, StoreConflict, StoreError, StoreFull, StoreLimits, StoreRole
-from remote_watch.sqlite_command_store import SQLiteCommandStore
+from remote_watch.commands.sqlite_store import SQLiteCommandStore
+from remote_watch.commands.state import CommandAction, CommandDeadline, CommandPhase
+from remote_watch.commands.storage import (
+    AuditCode,
+    StoreConflict,
+    StoreError,
+    StoreFull,
+    StoreLimits,
+    StoreRole,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -85,14 +92,15 @@ def request(
     :param epoch: Synthetic hub incarnation.
     :type epoch: str
 
-    :return: Build deterministic synthetic requests without real actor or provider credentials.
+    :return: Synthetic command bound to the test identity and session.
     :rtype: CommandRequest
     """
 
     # number — номер подставной команды.
     # epoch — подставной ID запуска hub.
 
-    ref = CommandRef(identity=Identity(service="loader", environment="test", region="ru", host="vm", instance_id="one"),
+    ref = CommandRef(identity=Identity(
+        service="loader", environment="test", region="ru", host="vm", instance_id="one"),
                      session_id="b" * 32, hub_epoch=epoch, command_id=f"{number:032x}")
     return CommandRequest(ref=ref, source_id="telegram", source_event_id=str(number), actor_id="42",
                           conversation_id="123", name="resume_load")
@@ -115,7 +123,7 @@ def options(
     :param now: Current local monotonic observation.
     :type now: float
 
-    :return: Build consistent session, claim, grant and relative deadlines.
+    :return: Configuration keyword arguments for the test store.
     :rtype: dict
     """
 
@@ -162,7 +170,7 @@ def opened(
     :param role: Hub or application-side journal role.
     :type role: StoreRole
 
-    :return: Open an isolated journal with deterministic monotonic time.
+    :return: Opened SQLite store using the requested test settings.
     :rtype: SQLiteCommandStore
     """
 
@@ -243,14 +251,16 @@ def test_atomic_start_and_result_replay(tmp_path: Path) -> None:
             :param store: Journal instance participating in the test.
             :type store: SQLiteCommandStore
 
-            :return: Race the same persisted revision through separate SQLite connections.
+            :return: True if this contender committed the permission to start.
             :rtype: bool
             """
 
             # store — проверяемый экземпляр журнала.
 
             try:
-                return store.transition(event.ref, claimed.command.revision, CommandAction.START, **data).start_callback
+                return store.transition(
+                    event.ref, claimed.command.revision, CommandAction.START, **data,
+                ).start_callback
             except StoreConflict:
                 return False
         #----------------------------------------------------------------------------------------------------------
@@ -262,7 +272,9 @@ def test_atomic_start_and_result_replay(tmp_path: Path) -> None:
         result = callback_result(event.ref, data["claim"].claim_id, "done")
         done = first.transition(event.ref, running.revision, CommandAction.FINISH, result=result, **data)
         assert done.command.record.phase is CommandPhase.COMPLETED
-        assert not first.transition(event.ref, done.command.revision, CommandAction.FINISH, result=result, **data).start_callback
+        assert not first.transition(
+            event.ref, done.command.revision, CommandAction.FINISH, result=result, **data,
+        ).start_callback
         first.acknowledge(result)
         first.acknowledge(result)
         with pytest.raises(StoreConflict):
@@ -298,12 +310,16 @@ def test_restart_fences_old_handles_and_work(tmp_path: Path) -> None:
     now[0] = 1
     new = opened(tmp_path / "commands.db", now, "d" * 32)
     try:
-        assert [row.record.phase for row in new.pending()] == [CommandPhase.EXPIRED, CommandPhase.EXPIRED, CommandPhase.UNKNOWN]
+        assert [row.record.phase for row in new.pending()] == [
+            CommandPhase.EXPIRED, CommandPhase.EXPIRED, CommandPhase.UNKNOWN,
+        ]
         assert new.cursor("source") == 3
         with pytest.raises(StoreConflict):
             old.cursor("source")
         with pytest.raises(StoreConflict):
-            new.transition(events[2].ref, new.get(events[2].ref).revision, CommandAction.START, **options(events[2]))
+            new.transition(
+                events[2].ref, new.get(events[2].ref).revision, CommandAction.START, **options(events[2]),
+            )
         assert new.prune() == 0
     finally:
         old.close()
@@ -373,7 +389,9 @@ def test_delayed_grant_cannot_renew_original_lifetime(tmp_path: Path) -> None:
         running = store.transition(event.ref, 1, CommandAction.START, **options(event, now[0]))
         assert running.start_callback
         now[0] = 220
-        stopped = store.transition(event.ref, running.command.revision, CommandAction.CLAIM, **options(event, now[0]))
+        stopped = store.transition(
+            event.ref, running.command.revision, CommandAction.CLAIM, **options(event, now[0]),
+        )
         assert stopped.command.record.phase is CommandPhase.UNKNOWN
         assert not stopped.start_callback
     finally:
@@ -384,7 +402,9 @@ def test_delayed_grant_cannot_renew_original_lifetime(tmp_path: Path) -> None:
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие подтверждения источнику при отказе записи
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("case", ["cursor", "command", "source", "session", "stream_limit", "bytes", "future", "rollback"])
+@pytest.mark.parametrize("case", [
+    "cursor", "command", "source", "session", "stream_limit", "bytes", "future", "rollback",
+])
 def test_failed_admission_keeps_cursor(
     tmp_path: Path,
     case: str,
@@ -404,7 +424,8 @@ def test_failed_admission_keeps_cursor(
 
     now = [100.0]
     store = opened(tmp_path / "commands.db", now,
-                   limits=StoreLimits(streams=1, payload_bytes=65536 if case == "bytes" else 33554432, retention=300))
+                   limits=StoreLimits(
+                       streams=1, payload_bytes=65536 if case == "bytes" else 33554432, retention=300))
     try:
         if case == "bytes":
             with pytest.raises(StoreFull):
@@ -582,7 +603,7 @@ def test_commit_failure_does_not_authorize_callback(
         :param kwargs: Arguments forwarded to the original test connection factory.
         :type kwargs: object
 
-        :return: Create only instrumented test connections.
+        :return: SQLite connection used by the failure-injection scenario.
         :rtype: sqlite3.Connection
         """
 
@@ -704,7 +725,9 @@ def _crash_worker(
 
             exists = self.execute("SELECT 1 FROM sqlite_master WHERE name='commands'").fetchone()
             row = self.execute("SELECT phase, acknowledged FROM commands").fetchone() if exists else None
-            position = self.execute("SELECT position FROM streams WHERE name='source'").fetchone() if exists else None
+            position = (
+                self.execute("SELECT position FROM streams WHERE name='source'").fetchone() if exists else None
+            )
             hit = ((row is not None and row[0] == phase)
                    or (phase == "acknowledged" and row is not None and row[1] == 1)
                    or (phase == "pruned" and row is None and position is not None))
@@ -732,7 +755,7 @@ def _crash_worker(
         :param kwargs: Arguments forwarded to the original test connection factory.
         :type kwargs: object
 
-        :return: Use the instrumented connection only inside the test subprocess.
+        :return: SQLite connection used by the failure-injection scenario.
         :rtype: sqlite3.Connection
         """
 
@@ -766,7 +789,9 @@ def _crash_worker(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление после аварийной остановки процесса
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("phase", ["ready", "claimed", "started", "completed", "unknown", "acknowledged", "pruned"])
+@pytest.mark.parametrize("phase", [
+    "ready", "claimed", "started", "completed", "unknown", "acknowledged", "pruned",
+])
 @pytest.mark.parametrize("moment", ["before", "after"])
 def test_process_crash_boundaries(
     tmp_path: Path,
@@ -824,7 +849,9 @@ def test_process_crash_boundaries(
             assert not store.admit("source", 1, -1, None).inserted
         else:
             expected = (CommandPhase.COMPLETED if phase == "completed" and moment == "after" else
-                        CommandPhase.UNKNOWN if phase in ("completed", "unknown") or (phase == "started" and moment == "after")
+                        CommandPhase.UNKNOWN if (
+                            phase in ("completed", "unknown") or (phase == "started" and moment == "after")
+                        )
                         else CommandPhase.EXPIRED)
             assert rows[0].record.phase is expected
             assert store.cursor("source") == 1
@@ -843,5 +870,5 @@ def test_process_crash_boundaries(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль tests.unit.test_sqlite_command_store не предназначен для прямого запуска.")
+    print("Модуль tests.unit.test_sqlite_command_store не предназначен для прямого запуска. Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

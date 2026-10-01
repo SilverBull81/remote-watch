@@ -1,10 +1,10 @@
 ﻿# Ограниченная остановка активных runtime при нормальном завершении процесса.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-180519
+# Дата и время последнего изменения: 261001-112704
 #
 # Функции:
 # -> register(): Добавление runtime в реестр активных объектов.
@@ -24,7 +24,7 @@ import weakref
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .runtime import NotificationRuntime
+    from remote_watch.notifications.runtime import NotificationRuntime
 
 
 _runtimes: weakref.WeakSet[NotificationRuntime] = weakref.WeakSet()
@@ -109,6 +109,6 @@ atexit.register(shutdown)
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch._shutdown не предназначен для прямого запуска.',
+        'Модуль remote_watch.notifications._shutdown не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Модели и строгий wire-контракт команд без сети и исполнения callbacks.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 261001-112704
 #
 # Константы и типы:
 # -> MAX_COMMAND_BYTES, MAX_COMMAND_TEXT_BYTES: Пределы wire и текста ответа, байт UTF-8.
@@ -77,7 +77,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -89,9 +89,9 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import TypeAlias
 
-from ._validation import require_number, require_text
-from .commands import CommandContext, CommandRegistry
-from .events import Identity
+from remote_watch._validation import require_number, require_text
+from remote_watch.commands.registry import CommandContext, CommandRegistry
+from remote_watch.events import Identity
 
 MAX_COMMAND_BYTES = 65536
 MAX_COMMAND_TEXT_BYTES = 4096
@@ -139,6 +139,8 @@ def _identifier(value: str) -> None:
     :type value: str
     """
 
+    # value — непустой идентификатор с ограниченной длиной.
+
     if not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value) is None:
         raise ValueError("invalid command identifier")
 #------------------------------------------------------------------------------------------------------------------
@@ -154,6 +156,8 @@ def _nonce(value: str) -> None:
     :param value: Value to validate or normalize.
     :type value: str
     """
+
+    # value — случайный идентификатор из 32 шестнадцатеричных символов.
 
     if not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{32}", value) is None:
         raise ValueError("invalid command nonce")
@@ -171,6 +175,8 @@ def _digest(value: str) -> None:
     :type value: str
     """
 
+    # value — контрольная сумма сообщения в шестнадцатеричном виде.
+
     if not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None:
         raise ValueError("invalid command digest")
 #------------------------------------------------------------------------------------------------------------------
@@ -186,6 +192,8 @@ def _seconds(value: float) -> None:
     :param value: Value to validate or normalize.
     :type value: float
     """
+
+    # value — проверяемый срок действия, секунды.
 
     require_number(value, "command interval")
     if value > MAX_COMMAND_SECONDS:
@@ -234,7 +242,7 @@ class CommandRegistration:
 
     identity: Identity      # Полная принадлежность приложения.
     session_id: str         # Новый случайный ID при каждом запуске клиента.
-    capabilities: tuple[CommandCapability, ...]    # Только метаданные, без функций и состояния приложения.
+    capabilities: tuple[CommandCapability, ...]     # Только метаданные, без функций и состояния приложения.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
@@ -311,9 +319,11 @@ class CommandRef:
         :param session: Current authenticated session metadata; liveness is checked separately.
         :type session: CommandSession
 
-        :return: Check exact target binding without claiming authentication or liveness.
+        :return: True when all required correlation fields agree.
         :rtype: bool
         """
+
+        # session — текущая регистрация запущенного приложения.
 
         return (type(session) is CommandSession and self.identity == session.identity
                 and self.session_id == session.session_id and self.hub_epoch == session.hub_epoch)
@@ -347,7 +357,7 @@ class CommandRequest:
     actor_id: str = field(repr=False)       # Проверенный ID пользователя, без display name.
     conversation_id: str = field(repr=False)    # Проверенный ID беседы или чата.
     name: str                               # Пользовательское имя зарегистрированного callback.
-    arguments: Mapping[str, str] = field(default_factory=dict, repr=False)    # Проверяемые именованные строки.
+    arguments: Mapping[str, str] = field(default_factory=dict, repr=False)      # Проверяемые именованные строки.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка контекста без исполнения и выдачи прав
@@ -356,7 +366,7 @@ class CommandRequest:
 
         """Build callback metadata without executing or authorizing the callback.
 
-        :return: Build callback metadata without executing or authorizing the callback.
+        :return: Application context copied from the admitted command.
         :rtype: CommandContext
         """
 
@@ -438,9 +448,11 @@ class CommandGrant:
         :param claim: Expected claim for one exact request.
         :type claim: CommandClaim
 
-        :return: Check request correlation including its immutable argument digest.
+        :return: True when all required correlation fields agree.
         :rtype: bool
         """
+
+        # claim — запрос клиента на получение разрешения выполнить команду.
 
         return (type(claim) is CommandClaim and self.request.ref == claim.ref
                 and self.claim_id == claim.claim_id and message_digest(self.request) == claim.request_digest)
@@ -474,7 +486,7 @@ class CommandResult:
     ref: CommandRef                         # Команда и целевая сессия.
     claim_id: str | None                    # ID попытки; None допустим только до начала исполнения.
     outcome: CommandOutcome                 # Завершение callback, отказ, истечение или неизвестный исход.
-    text: str | None = field(default=None, repr=False)    # Явный ответ приложения, максимум 4096 байт UTF-8.
+    text: str | None = field(default=None, repr=False)      # Явный ответ приложения, максимум 4096 байт UTF-8.
     reason: CommandReason | None = None     # Фиксированная причина; исключения и traceback не передаются.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -534,9 +546,11 @@ class CommandReceipt:
         :param result: Correlated callback result.
         :type result: CommandResult
 
-        :return: Check acknowledgment of the exact result, not just its command identifier.
+        :return: True when all required correlation fields agree.
         :rtype: bool
         """
+
+        # result — результат выполнения с идентификаторами исходной команды.
 
         return (type(result) is CommandResult and self.ref == result.ref and self.claim_id == result.claim_id
                 and self.result_digest == message_digest(result))
@@ -582,9 +596,11 @@ def describe_commands(registry: CommandRegistry) -> tuple[CommandCapability, ...
     :param registry: Application-owned immutable command registry.
     :type registry: CommandRegistry
 
-    :return: Export finite command metadata without serializing or invoking callbacks.
+    :return: Immutable command metadata without callback references.
     :rtype: tuple[CommandCapability, ...]
     """
+
+    # registry — реестр команд, зарегистрированных приложением.
 
     if type(registry) is not CommandRegistry or not 1 <= len(registry) <= MAX_CAPABILITIES:
         raise ValueError("invalid command registry size")
@@ -614,7 +630,7 @@ def callback_result(
     :param value: Value to validate or normalize.
     :type value: object
 
-    :return: Normalize an already returned value without calling user-defined string conversion.
+    :return: Correlated result with a validated outcome and bounded text.
     :rtype: CommandResult
     """
 
@@ -640,9 +656,11 @@ def _plain(value: object) -> object:
     :param value: Value to validate or normalize.
     :type value: object
 
-    :return: Convert only explicitly allowed protocol types to JSON data.
+    :return: JSON-compatible values with nested protocol objects expanded.
     :rtype: object
     """
+
+    # value — объект, преобразуемый в обычные JSON-совместимые значения.
 
     if type(value) in (*_KINDS.values(), CommandRef, CommandCapability, Identity):
         return {item.name: _plain(getattr(value, item.name)) for item in fields(value)}
@@ -666,14 +684,17 @@ def encode_command(message: CommandMessage) -> bytes:
     :param message: Validated command protocol message.
     :type message: CommandMessage
 
-    :return: Encode one exact versioned envelope with a fixed UTF-8 byte limit.
+    :return: Canonical UTF-8 JSON bytes within the wire size limit.
     :rtype: bytes
     """
+
+    # message — проверяемое сообщение командного протокола.
 
     try:
         kind = next(name for name, model in _KINDS.items() if type(message) is model)
         body = json.dumps({"schema_version": 1, "kind": kind, "payload": _plain(message)},
-                          ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+                          ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":"), allow_nan=False).encode("utf-8")
         if len(body) > MAX_COMMAND_BYTES:
             raise ValueError("command wire size exceeded")
         return body
@@ -692,9 +713,11 @@ def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     :param pairs: JSON object key/value pairs.
     :type pairs: list[tuple[str, object]]
 
-    :return: Reject repeated JSON keys at every nesting level.
+    :return: Decoded object with unique field names.
     :rtype: dict[str, object]
     """
+
+    # pairs — пары ключей и значений одного JSON-объекта.
 
     result = {}
     for key, value in pairs:
@@ -716,6 +739,8 @@ def _constant(value: str) -> None:
     :type value: str
     """
 
+    # value — нестандартная числовая константа JSON, которую нужно отклонить.
+
     raise ValueError("invalid command JSON number")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -736,9 +761,12 @@ def _model(
     :param value: Value to validate or normalize.
     :type value: object
 
-    :return: Decode exact field sets using a closed model registry.
+    :return: An instance of the requested validated message model.
     :rtype: object
     """
+
+    # model — ожидаемый класс сообщения протокола.
+    # value — словарь полей входящего сообщения.
 
     if type(value) is not dict or set(value) != {item.name for item in fields(model)}:
         raise ValueError("invalid command payload fields")
@@ -768,9 +796,11 @@ def decode_command(data: bytes) -> CommandMessage:
     :param data: Bounded UTF-8 JSON bytes.
     :type data: bytes
 
-    :return: Decode a bounded closed schema without exposing malformed input in errors.
+    :return: Validated command message of the declared wire kind.
     :rtype: CommandMessage
     """
+
+    # data — полученные байты JSON; размер проверяется до разбора.
 
     try:
         if type(data) is not bytes or len(data) > MAX_COMMAND_BYTES:
@@ -798,9 +828,11 @@ def message_digest(message: CommandMessage) -> str:
     :param message: Validated command protocol message.
     :type message: CommandMessage
 
-    :return: Bind correlation to canonical data; this hash is not an authentication signature.
+    :return: SHA-256 hexadecimal digest of the canonical message bytes.
     :rtype: str
     """
+
+    # message — проверяемое сообщение командного протокола.
 
     return hashlib.sha256(encode_command(message)).hexdigest()
 #------------------------------------------------------------------------------------------------------------------
@@ -810,5 +842,5 @@ def message_digest(message: CommandMessage) -> str:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.command_protocol не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands.protocol не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

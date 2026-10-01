@@ -1,10 +1,10 @@
 ﻿# Повторное ревью этапов 0.1 и 0.2
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171719
+Дата и время последнего изменения: 261001-112704
 
 ## Итог на 30.09.2026 после регионального relay smoke
 
@@ -188,9 +188,9 @@ HTTP-ошибка сама по себе также не доказывает о
 
 ### 2. Явные ограничения уведомления для relay — средний приоритет
 
-[RelayRequest](../src/remote_watch/relay.py) на отправителе принимает Notification
+[RelayRequest](../src/remote_watch/relay_protocol.py) на отправителе принимает Notification
 с пользовательскими SnapshotLimits, но from_bytes создаёт Notification со стандартными
-ограничениями. [GatewayConfig](../src/remote_watch/gateway_config.py) не позволяет
+ограничениями. [GatewayConfig](../src/remote_watch/gateway/config.py) не позволяет
 настроить эти пределы, а документация relay описывает прежде всего 64 KiB всего запроса.
 
 Локально воспроизведено без сети: message из 10 000 ASCII-символов,

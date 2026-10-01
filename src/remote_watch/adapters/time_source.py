@@ -1,12 +1,12 @@
 ﻿# Необязательный HTTPS-источник времени с проверкой TLS и ограничением ожидания.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Классы:
 # -> HttpsDateTimeSource: Получение времени от явно доверенного HTTPS-сервера.
 #    Конструктор:
 #    -> __init__(): Создание объекта.
@@ -18,7 +18,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ from secrets import token_hex
 from time import monotonic
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
-from .._validation import require_number, require_text
-from ..command_time import TimeSample, TimeUnavailable
+from remote_watch._validation import require_number, require_text
+from remote_watch.commands.time import TimeSample, TimeUnavailable
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -105,7 +105,7 @@ class HttpsDateTimeSource:
 
         """Fetch one uncached HEAD response with no redirects, retries or environment proxy.
 
-        :return: Fetch one uncached HEAD response with no redirects, retries or environment proxy.
+        :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
         """
 
@@ -127,13 +127,13 @@ class HttpsDateTimeSource:
 
         """Bound response headers and translate second-resolution Date to an interval.
 
-        :return: Bound response headers and translate second-resolution Date to an interval.
+        :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
         """
 
         import aiohttp
 
-        # Уникальный URL и запрет кеша относятся к явно доверенному origin.
+        # Уникальный URL и запрет кеша относятся к явно выбранному серверу источника.
         # Date произвольного сайта не является доказательством точности его часов.
         url = urlunsplit(self._url._replace(query=urlencode({"remote_watch_nonce": token_hex(16)})))
         started = self._clock()
@@ -145,8 +145,10 @@ class HttpsDateTimeSource:
             timeout=aiohttp.ClientTimeout(total=self._timeout, ceil_threshold=float("inf")),
             max_line_size=2048, max_field_size=2048,
         ) as session:
-            async with session.head(url, ssl=context, allow_redirects=False,
-                                    headers={"Cache-Control": "no-cache, no-store", "Accept-Encoding": "identity"}) as response:
+            async with session.head(
+                url, ssl=context, allow_redirects=False,
+                headers={"Cache-Control": "no-cache, no-store", "Accept-Encoding": "identity"},
+            ) as response:
                 received = self._clock()
                 dates = response.headers.getall("Date", [])
                 if (response.status not in (200, 204) or len(dates) != 1 or "Age" in response.headers

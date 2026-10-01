@@ -1,12 +1,12 @@
 ﻿# Проверки конечного ntfy-сценария, безопасного отчёта и очистки при ошибках.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> test_diagnostic_run(): Серия точных размеров и очистка при отказах.
 # -> test_diagnostic_bounds(): Отказ от неверного расписания до сети.
 # -> test_diagnostic_exclusive(): Сохранение существующего отчёта.
@@ -26,8 +26,8 @@ from typing import Any
 import pytest
 
 from remote_watch import Delivery, DeliveryResult, DeliveryStatus
-from remote_watch import ntfy_diagnostic as diagnostic
 from remote_watch.adapters._common import render
+from remote_watch.diagnostics import ntfy_diagnostic as diagnostic
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -265,6 +265,6 @@ def test_diagnostic_exclusive(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.unit.test_ntfy_diagnostic не предназначен для прямого запуска.",
+        "Модуль tests.unit.test_ntfy_diagnostic не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

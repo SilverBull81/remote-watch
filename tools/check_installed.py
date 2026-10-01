@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -20,6 +20,7 @@ import asyncio
 import importlib.metadata
 import importlib.util
 import logging
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -48,14 +49,17 @@ def main() -> int:
     from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
     from remote_watch.adapters.time_source import HttpsDateTimeSource
-    from remote_watch.command_freshness import CommandChallenge
-    from remote_watch.command_protocol import CommandRegistration, decode_command
-    from remote_watch.command_state import CommandRecord
-    from remote_watch.command_storage import CommandStore
-    from remote_watch.command_time import TrustedClock
-    from remote_watch.gateway import Gateway
-    from remote_watch.gateway_json import load_gateway_config
-    from remote_watch.sqlite_command_store import SQLiteCommandStore
+    from remote_watch.adapters.timeapi import TimeApiTimeSource
+    from remote_watch.commands import CommandRegistry
+    from remote_watch.commands._confirmation import CommandChallenge
+    from remote_watch.commands.protocol import CommandRegistration, decode_command
+    from remote_watch.commands.sqlite_store import SQLiteCommandStore
+    from remote_watch.commands.state import CommandRecord
+    from remote_watch.commands.storage import CommandStore
+    from remote_watch.commands.time import TrustedClock
+    from remote_watch.gateway import Gateway as PublicGateway
+    from remote_watch.gateway.json_config import load_gateway_config
+    from remote_watch.gateway.server import Gateway
 
     assert Path(sys.prefix).resolve() in Path(remote_watch.__file__).resolve().parents
     assert Path(remote_watch.__file__).with_name("py.typed").is_file()
@@ -69,6 +73,22 @@ def main() -> int:
 
     assert all(item is not None for item in (CommandChallenge, CommandRegistration, decode_command, CommandRecord))
     assert all(item is not None for item in (CommandStore, SQLiteCommandStore, TrustedClock, HttpsDateTimeSource))
+    assert TimeApiTimeSource()._accuracy == 1.0
+    assert CommandRegistry is remote_watch.CommandRegistry
+    assert PublicGateway is Gateway
+
+    # Проверяем новые и прежние точки запуска именно из установленного wheel.
+    # --help не читает credentials и не выполняет сетевых запросов даже без extras.
+    for module in (
+        "gateway", "smoke", "field_smoke", "ntfy_diagnostic",
+        "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
+        "diagnostics.time_probe",
+    ):
+        result = subprocess.run(
+            [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],
+            capture_output=True, timeout=15, check=False,
+        )
+        assert result.returncode == 0, module
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
     assert all(item is not None for item in (RelayChannel, RelayConfig, TelegramChannel,

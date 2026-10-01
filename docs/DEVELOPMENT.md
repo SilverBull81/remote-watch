@@ -1,10 +1,10 @@
 ﻿# Разработка и работа с репозиторием
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-203816
+Дата и время последнего изменения: 261001-112704
 
 ## Принятые ориентиры
 
@@ -69,6 +69,7 @@ Core не имеет runtime-зависимостей; полный набор �
 
 ```powershell
 python -m ruff check .
+python tools/check_style.py
 python -m pytest -q
 python -m build
 ```

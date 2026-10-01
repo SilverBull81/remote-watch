@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -32,12 +32,18 @@ import re
 from dataclasses import dataclass, field, replace
 from functools import partial
 
-from .._credentials import resolve_token, validate_credentials
-from .._validation import require_int
-from ..config import Destination, RetryPolicy
-from ..delivery import Delivery, DeliveryResult, DeliveryStatus
-from ._common import http_failure, render, retry_after, truncate, validate_endpoint
-from ._http import HttpSender
+from remote_watch._credentials import resolve_token, validate_credentials
+from remote_watch._validation import require_int
+from remote_watch.adapters._common import (
+    http_failure,
+    render,
+    retry_after,
+    truncate,
+    validate_endpoint,
+)
+from remote_watch.adapters._http import HttpSender
+from remote_watch.config import Destination, RetryPolicy
+from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 
 #******************************************************************************************************************
 # КЛАССЫ
@@ -51,8 +57,8 @@ from ._http import HttpSender
 class TelegramConfig:
     """Declare a Telegram destination using a literal token or environment reference."""
 
-    token_env: str | None = field(default=None, repr=False)  # Имя переменной с токеном; альтернатива token.
-    token: str | None = field(default=None, repr=False)      # Токен бота непосредственно в настройках.
+    token_env: str | None = field(default=None, repr=False)     # Имя переменной с токеном; альтернатива token.
+    token: str | None = field(default=None, repr=False)         # Токен бота непосредственно в настройках.
     chat_id: int | str = field(repr=False)      # Числовой ID чата либо @имя канала.
     endpoint: str = "https://api.telegram.org"  # Корень официального или собственного Bot API.
     message_thread_id: int | None = None        # ID темы в группе-форуме; None — обычная отправка.

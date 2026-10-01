@@ -1,12 +1,12 @@
 ﻿# Переходы состояний команд и относительные сроки без постоянного хранилища.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Классы:
 # -> CommandPhase: Состояния исполнения в постоянном журнале.
 #
 # -> CommandAction: Явные действия над состоянием команды.
@@ -32,15 +32,15 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
 
-from ._validation import require_number
-from .command_protocol import (
+from remote_watch._validation import require_number
+from remote_watch.commands.protocol import (
     MAX_COMMAND_SECONDS,
     CommandClaim,
     CommandGrant,
@@ -121,9 +121,14 @@ class CommandDeadline:
         :param hub_epoch: Identifier of the current hub incarnation.
         :type hub_epoch: str
 
-        :return: Conservatively subtract the complete round trip from a remote remaining budget.
+        :return: Local deadline shortened by the complete round-trip delay.
         :rtype: CommandDeadline
         """
+
+        # remaining_ttl — остаток срока, сообщённый hub при формировании ответа, секунды.
+        # sent_at — монотонное время начала запроса, секунды.
+        # received_at — монотонное время полного получения ответа, секунды.
+        # hub_epoch — идентификатор текущего запуска hub.
 
         require_number(remaining_ttl, "remaining_ttl")
         if remaining_ttl > MAX_COMMAND_SECONDS:
@@ -153,9 +158,12 @@ class CommandDeadline:
         :param hub_epoch: Identifier of the current hub incarnation.
         :type hub_epoch: str
 
-        :return: Return zero for expiry, clock rollback or another hub incarnation.
+        :return: Nonnegative remaining lifetime in seconds; zero also signals invalidation.
         :rtype: float
         """
+
+        # now — текущее показание монотонных часов, секунды.
+        # hub_epoch — идентификатор текущего запуска hub.
 
         require_number(now, "now", allow_zero=True)
         if hub_epoch != self.hub_epoch or now < self.received_at:
@@ -267,9 +275,13 @@ def _finish(
     :param reason: Fixed safe reason for the terminal state.
     :type reason: CommandReason
 
-    :return: Create a correlated terminal record without arbitrary diagnostic text.
+    :return: Command record with the required terminal or recovered state.
     :rtype: CommandRecord
     """
+
+    # record — текущее неизменяемое состояние команды.
+    # outcome — итог, который требуется сохранить.
+    # reason — фиксированная причина завершения команды.
 
     result = CommandResult(ref=record.request.ref, claim_id=record.claim_id, outcome=outcome, reason=reason)
     return replace(record, phase=CommandPhase(outcome.value), result=result)
@@ -286,9 +298,11 @@ def recover_command(record: CommandRecord) -> CommandRecord:
     :param record: Current immutable journal snapshot.
     :type record: CommandRecord
 
-    :return: Fence pre-restart work instead of granting it a fresh lifetime or another execution.
+    :return: Command record with the required terminal or recovered state.
     :rtype: CommandRecord
     """
+
+    # record — текущее неизменяемое состояние команды.
 
     if type(record) is not CommandRecord:
         raise TypeError("record must be CommandRecord")
@@ -344,9 +358,19 @@ def advance_command(
     :param result: Correlated callback result.
     :type result: CommandResult | None
 
-    :return: Propose one fenced transition; a storage transaction must commit it before any side effect.
+    :return: Validated next state and its execution or reply decision.
     :rtype: CommandTransition
     """
+
+    # record — текущее неизменяемое состояние команды.
+    # action — запрашиваемый переход состояния.
+    # session — текущая регистрация запущенного приложения.
+    # claim — запрос клиента на получение разрешения выполнить команду.
+    # command_deadline — исходный срок действия команды на монотонных часах.
+    # session_deadline — срок действия текущей регистрации приложения.
+    # now — текущее показание монотонных часов, секунды.
+    # grant — разрешение hub, привязанное к конкретному запросу клиента.
+    # result — результат выполнения с идентификаторами исходной команды.
 
     if type(record) is not CommandRecord or type(action) is not CommandAction:
         raise TypeError("invalid command transition input")
@@ -425,5 +449,5 @@ def advance_command(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.command_state не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands.state не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

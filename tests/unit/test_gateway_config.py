@@ -1,12 +1,12 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164512
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> configuration(): Конфигурация без запуска фабрики канала.
 # -> test_config_bounds(): Отклонение неверных ограничений до запуска.
 # -> test_config_grants(): Запрет каскадов relay и неоднозначных прав.
@@ -23,8 +23,13 @@ from typing import Any
 
 import pytest
 
-from remote_watch import DeliveryMode, Destination, Identity, RetryPolicy
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
+from remote_watch import (
+    DeliveryMode,
+    Destination,
+    Identity,
+    RetryPolicy,
+)
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -155,6 +160,6 @@ def test_config_copy(identity: Identity) -> None:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.unit.test_gateway_config не предназначен для прямого запуска.",
+        "Модуль tests.unit.test_gateway_config не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

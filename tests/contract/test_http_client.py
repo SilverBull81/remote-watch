@@ -1,12 +1,12 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-192353
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
 # -> test_ntfy_wire_limits(): Размер фактически отправленного JSON и текста ntfy.
 
@@ -23,7 +23,12 @@ from dataclasses import replace
 
 import pytest
 
-from remote_watch import Delivery, DeliveryStatus, Notification, RetryPolicy
+from remote_watch import (
+    Delivery,
+    DeliveryStatus,
+    Notification,
+    RetryPolicy,
+)
 from remote_watch.adapters._common import render
 from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
 from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
@@ -315,6 +320,6 @@ def test_ntfy_wire_limits(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.contract.test_http_client не предназначен для прямого запуска.",
+        "Модуль tests.contract.test_http_client не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

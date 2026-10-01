@@ -1,12 +1,12 @@
 ﻿# Контракт relay-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
 # -> test_wire_roundtrip(): Сохранение identity и корреляции при передаче JSON.
 # -> test_invalid_wire(): Отклонение неоднозначных и неверных запросов.
@@ -46,7 +46,12 @@ from remote_watch import (
     WatcherConfig,
 )
 from remote_watch.adapters.relay import RelayChannel, RelayConfig
-from remote_watch.relay import MAX_REQUEST_BYTES, RelayRequest, decode_response, encode_response
+from remote_watch.relay_protocol import (
+    MAX_REQUEST_BYTES,
+    RelayRequest,
+    decode_response,
+    encode_response,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------

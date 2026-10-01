@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -29,9 +29,9 @@ import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from .._validation import require_int
-from ..config import RetryPolicy
-from ..delivery import DeliveryResult, DeliveryStatus
+from remote_watch._validation import require_int
+from remote_watch.config import RetryPolicy
+from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus
 
 if TYPE_CHECKING:
     import aiohttp

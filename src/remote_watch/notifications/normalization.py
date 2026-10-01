@@ -1,10 +1,10 @@
 ﻿# Подготовка независимых данных уведомления и ограничение размера текста.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-131628
+# Дата и время последнего изменения: 261001-112704
 #
 # Функции:
 # -> truncate_text(): Усечение текста по размеру UTF-8 с видимым маркером.
@@ -22,8 +22,8 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from ._validation import require_text, text_tuple
-from .events import Identity, Notification, SnapshotLimits
+from remote_watch._validation import require_text, text_tuple
+from remote_watch.events import Identity, Notification, SnapshotLimits
 
 #******************************************************************************************************************
 # ФУНКЦИИ
@@ -186,6 +186,6 @@ def prepare_notification(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch.normalization не предназначен для прямого запуска.',
+        'Модуль remote_watch.notifications.normalization не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

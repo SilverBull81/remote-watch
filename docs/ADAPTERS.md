@@ -1,10 +1,10 @@
 ﻿# Адаптеры Telegram и ntfy
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-122644
+Дата и время последнего изменения: 261001-112704
 
 ## Реализовано в 0.1.0
 
@@ -183,8 +183,8 @@ Redirect, cookies, proxy из окружения и автоматическая
 Для ручной проверки теперь достаточно одной команды из корня проекта:
 
 ```powershell
-python -m remote_watch.smoke telegram
-python -m remote_watch.smoke ntfy
+python -m remote_watch.diagnostics.smoke telegram
+python -m remote_watch.diagnostics.smoke ntfy
 ```
 
 Запускайте нужную строку отдельно: каждая отправляет одно сообщение выбранному сервису.

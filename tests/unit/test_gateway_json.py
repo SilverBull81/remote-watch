@@ -1,12 +1,12 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164512
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> document(): Синтетический файл настроек без секретов.
 # -> test_json_valid(): Создание настроек обоих провайдеров без токенов.
 # -> test_json_rejects(): Отклонение неверных и неоднозначных настроек.
@@ -30,8 +30,8 @@ from typing import Any
 import pytest
 
 from remote_watch import DeliveryMode
-from remote_watch.gateway import main
-from remote_watch.gateway_json import MAX_CONFIG_BYTES, load_gateway_config
+from remote_watch.gateway.json_config import MAX_CONFIG_BYTES, load_gateway_config
+from remote_watch.gateway.server import main
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -264,7 +264,7 @@ def test_json_cli(
         calls.append((config, host, port, context))
     #--------------------------------------------------------------------------------------------------------------
 
-    monkeypatch.setattr("remote_watch.gateway._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
     assert main(arguments) == 0
     assert calls[0][0].principals[0].name == "app"
     assert calls[0][1:] == ("127.0.0.1", 8765, None)
@@ -338,6 +338,6 @@ def test_json_example() -> None:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.unit.test_gateway_json не предназначен для прямого запуска.",
+        "Модуль tests.unit.test_gateway_json не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.4
+Version 1.2.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-221931
+Дата и время последнего изменения: 261001-120148
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.0.dev2; no stable 0.2.0 tag is implied.
+The package version is 0.3.0.dev3; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -45,7 +45,10 @@ Telegram source or callback executor exists yet. See docs/COMMAND_STORAGE.md.
 The owner requires resume/suspend in a single message, without confirmation.
 TrustedClock uses an explicit trusted UTC interval, max age 120 seconds and
 monotonic remaining budgets. Optional HttpsDateTimeSource requires an explicitly
-trusted HTTPS origin and declared accuracy; no public source is selected by default.
+trusted HTTPS origin and declared accuracy. In dev3 the owner selected TimeAPI.io;
+TimeApiTimeSource reads its UTC JSON with an explicit one-second accuracy assumption.
+LV HTTPS reachability was verified; this is not a provider clock-accuracy guarantee.
+No alternate public source or automatic fallback is enabled.
 See docs/COMMAND_TIME.md and ADR 0011. Never reuse a journal generation after process
 restart, reset source cursors to replay events, or release unknown execution merely
 because its timeout elapsed. The old confirmation helper is an unused prototype.
@@ -64,6 +67,17 @@ Real application migration remains deferred until this command path is ready.
 Legacy fin-data TelegramBot API compatibility is not required. The target phone is
 Android; ntfy uses a free account without topic reservation. Telegram is the first
 command source; Matrix follows. MAX and public distribution remain out of scope.
+
+Dev3 passed 808 local tests (2 opt-in skips), clean core/extras wheel checks,
+and all 39 TimeAPI tests on Python 3.10.21 after fixing fractional-second parsing,
+and the formatting audit of 83 Python files. A live TimeAPI probe accepted 3/3
+samples through TrustedClock in the development environment. No new CI run or
+command hub integration was performed. See docs/VALIDATION.md.
+
+Production modules are grouped under notifications, commands, gateway, adapters and
+diagnostics. Public root exports and existing CLI entry points are preserved.
+Diagnostics ship in the wheel; developer tests and tooling remain outside it.
+See ARCHITECTURE.md for migration paths and docs/COMMAND_TIME.md for the time probe.
 
 ## Read the Relevant Design Context
 

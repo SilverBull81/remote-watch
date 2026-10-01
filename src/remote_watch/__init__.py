@@ -1,10 +1,10 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-184554
+# Дата и время последнего изменения: 261001-112704
 #
 # Экспорт:
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
@@ -21,35 +21,35 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
-from .channels import NotificationChannel as NotificationChannel
-from .commands import ArgumentValidator as ArgumentValidator
-from .commands import CommandCallback as CommandCallback
-from .commands import CommandContext as CommandContext
-from .commands import CommandRegistry as CommandRegistry
-from .commands import CommandSpec as CommandSpec
-from .config import DeliveryMode as DeliveryMode
-from .config import Destination as Destination
-from .config import RetryPolicy as RetryPolicy
-from .config import Route as Route
-from .config import RuntimeConfig as RuntimeConfig
-from .config import WatcherConfig as WatcherConfig
-from .delivery import Delivery as Delivery
-from .delivery import DeliveryResult as DeliveryResult
-from .delivery import DeliveryStatus as DeliveryStatus
-from .delivery import ResultSource as ResultSource
-from .events import Identity as Identity
-from .events import Notification as Notification
-from .events import SnapshotLimits as SnapshotLimits
-from .logging_handler import NotificationHandler as NotificationHandler
-from .routing import PolicyRouter as PolicyRouter
-from .runtime import NotificationRuntime as NotificationRuntime
-from .runtime import RuntimeState as RuntimeState
-from .runtime import RuntimeStats as RuntimeStats
-from .timing import DeliveryClock as DeliveryClock
-from .timing import SystemDeliveryClock as SystemDeliveryClock
-from .watcher import ConsoleConfig as ConsoleConfig
-from .watcher import RemoteWatcher as RemoteWatcher
-from .watcher import RotatingFileConfig as RotatingFileConfig
+from remote_watch.commands.registry import ArgumentValidator as ArgumentValidator
+from remote_watch.commands.registry import CommandCallback as CommandCallback
+from remote_watch.commands.registry import CommandContext as CommandContext
+from remote_watch.commands.registry import CommandRegistry as CommandRegistry
+from remote_watch.commands.registry import CommandSpec as CommandSpec
+from remote_watch.config import DeliveryMode as DeliveryMode
+from remote_watch.config import Destination as Destination
+from remote_watch.config import RetryPolicy as RetryPolicy
+from remote_watch.config import Route as Route
+from remote_watch.config import RuntimeConfig as RuntimeConfig
+from remote_watch.config import WatcherConfig as WatcherConfig
+from remote_watch.events import Identity as Identity
+from remote_watch.events import Notification as Notification
+from remote_watch.events import SnapshotLimits as SnapshotLimits
+from remote_watch.notifications.channels import NotificationChannel as NotificationChannel
+from remote_watch.notifications.delivery import Delivery as Delivery
+from remote_watch.notifications.delivery import DeliveryResult as DeliveryResult
+from remote_watch.notifications.delivery import DeliveryStatus as DeliveryStatus
+from remote_watch.notifications.delivery import ResultSource as ResultSource
+from remote_watch.notifications.handler import NotificationHandler as NotificationHandler
+from remote_watch.notifications.routing import PolicyRouter as PolicyRouter
+from remote_watch.notifications.runtime import NotificationRuntime as NotificationRuntime
+from remote_watch.notifications.runtime import RuntimeState as RuntimeState
+from remote_watch.notifications.runtime import RuntimeStats as RuntimeStats
+from remote_watch.notifications.timing import DeliveryClock as DeliveryClock
+from remote_watch.notifications.timing import SystemDeliveryClock as SystemDeliveryClock
+from remote_watch.watcher import ConsoleConfig as ConsoleConfig
+from remote_watch.watcher import RemoteWatcher as RemoteWatcher
+from remote_watch.watcher import RotatingFileConfig as RotatingFileConfig
 
 #------------------------------------------------------------------------------------------------------------------
 

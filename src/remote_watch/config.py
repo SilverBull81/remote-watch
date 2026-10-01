@@ -1,10 +1,10 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> DeliveryMode: Отправка напрямую или через будущий шлюз.
@@ -41,10 +41,16 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ._validation import require_callback, require_int, require_number, require_text, text_tuple
-from .channels import NotificationChannel
-from .commands import CommandCallback, CommandRegistry
-from .events import Identity, SnapshotLimits
+from remote_watch._validation import (
+    require_callback,
+    require_int,
+    require_number,
+    require_text,
+    text_tuple,
+)
+from remote_watch.commands.registry import CommandCallback, CommandRegistry
+from remote_watch.events import Identity, SnapshotLimits
+from remote_watch.notifications.channels import NotificationChannel
 
 #******************************************************************************************************************
 # КЛАССЫ

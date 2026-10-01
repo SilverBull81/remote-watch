@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway: настройка и запуск
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171854
+Дата и время последнего изменения: 261001-112704
 
 ## Реализовано в 0.2.0.dev3
 
@@ -155,7 +155,7 @@ null имя переменной с токеном ntfy. Публичная те
 ```python
 from remote_watch import Identity, RetryPolicy
 from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 
 
 def build_config() -> GatewayConfig:
@@ -182,7 +182,7 @@ def build_config() -> GatewayConfig:
     )
 ```
 
-Пример специально разрешает Identity одноразового `remote_watch.smoke relay`.
+Пример специально разрешает Identity одноразового `remote_watch.diagnostics.smoke relay`.
 Для рабочего приложения добавьте отдельный GatewayPrincipal с его **точными пятью
 полями Identity** и отдельным токеном. Имена хоста или приложения из текста сообщения
 не дают прав. Session ID может меняться при перезапуске, identity остаётся привязанной
@@ -345,7 +345,7 @@ Remote Watch. Сторонний адаптер сам отвечает за о�
 ## Проверка с приложений
 
 На клиенте заполните секцию relay в `credentials.local.json` по [RELAY.md](RELAY.md)
-и запустите `python -m remote_watch.smoke relay`. В примере выше smoke должен пройти
+и запустите `python -m remote_watch.diagnostics.smoke relay`. В примере выше smoke должен пройти
 точную проверку Identity. Для смешанного режима передайте в WatcherConfig одно
 RelayConfig.destination и одно NtfyConfig.destination: вызовы logger остаются прежними.
 

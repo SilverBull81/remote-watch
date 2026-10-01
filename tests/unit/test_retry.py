@@ -1,10 +1,10 @@
 ﻿# Воспроизводимые проверки задержек повторов без ожидания реального времени.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-142747
+# Дата и время последнего изменения: 261001-112704
 #
 # Тесты:
 # -> test_full_jitter(): Рост задержки, случайная доля и верхний предел.
@@ -18,7 +18,7 @@
 import pytest
 
 from remote_watch import RetryPolicy
-from remote_watch._retry import retry_delay
+from remote_watch.notifications._retry import retry_delay
 
 #******************************************************************************************************************
 # ТЕСТЫ

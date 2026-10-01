@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -28,8 +28,8 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
-from .._validation import require_text
-from ..delivery import Delivery, DeliveryResult, DeliveryStatus
+from remote_watch._validation import require_text
+from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 
 #******************************************************************************************************************
 # ФУНКЦИИ

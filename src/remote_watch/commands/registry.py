@@ -1,10 +1,10 @@
 ﻿# Локальная регистрация пользовательских команд без удалённого приёма и исполнения.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-180519
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> CommandContext: Данные запроса для обработчика команды.
@@ -39,8 +39,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TypeAlias
 
-from ._validation import require_callback, require_number, require_text
-from .events import Identity
+from remote_watch._validation import require_callback, require_number, require_text
+from remote_watch.events import Identity
 
 #******************************************************************************************************************
 # КОНСТАНТЫ
@@ -320,6 +320,6 @@ class CommandRegistry(Mapping[str, CommandSpec]):
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch.commands не предназначен для прямого запуска.',
+        'Модуль remote_watch.commands.registry не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

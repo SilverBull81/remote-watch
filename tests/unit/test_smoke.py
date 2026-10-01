@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164712
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -15,7 +15,7 @@
 #    -> send(): Одна попытка отправки и проверка ответа.
 #    -> close(): Закрытие клиента и освобождение ресурсов.
 #
-# Функции и тесты:
+# Тесты:
 # -> channels(): Подмена каналов без запуска сети.
 # -> test_smoke_command(): Выбор одного сервиса, свежие данные и очистка временного токена.
 # -> test_bad_credentials(): Безопасная ошибка при неверном локальном файле.
@@ -37,8 +37,14 @@ from pathlib import Path
 
 import pytest
 
-from remote_watch import Delivery, DeliveryResult, DeliveryStatus, RetryPolicy, smoke
+from remote_watch import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    RetryPolicy,
+)
 from remote_watch.adapters import ntfy, relay, telegram
+from remote_watch.diagnostics import smoke as smoke
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -487,6 +493,6 @@ def test_failure_diagnostics(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.unit.test_smoke не предназначен для прямого запуска.",
+        "Модуль tests.unit.test_smoke не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

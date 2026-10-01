@@ -1,10 +1,10 @@
 ﻿# Постоянный журнал команд: этап 0.3.2
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-221931
+Дата и время последнего изменения: 261001-112704
 
 ## Реализовано в 0.3.0.dev2
 
@@ -13,8 +13,8 @@ CommandStore — типизированный синхронный проток�
 источников, аудит, восстановление и очистка. Журнал может обслуживать hub либо
 приложение; их файлы и владельцы раздельны. Callback внутри хранилища не вызывается.
 
-Новые модули доступны через remote_watch.command_storage и
-remote_watch.sqlite_command_store. Сетевых endpoints, executor и Telegram polling
+Новые модули доступны через remote_watch.commands.storage и
+remote_watch.commands.sqlite_store. Сетевых endpoints, executor и Telegram polling
 пока нет. Не следует выдавать эти компоненты за готовое удалённое управление.
 
 ## Пример приёма свежей команды
@@ -24,10 +24,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from remote_watch import Identity
-from remote_watch.command_protocol import CommandRef, CommandRequest
-from remote_watch.command_storage import StoreRole
-from remote_watch.command_time import TimeSample, TrustedClock
-from remote_watch.sqlite_command_store import SQLiteCommandStore
+from remote_watch.commands.protocol import CommandRef, CommandRequest
+from remote_watch.commands.storage import StoreRole
+from remote_watch.commands.time import TimeSample, TrustedClock
+from remote_watch.commands.sqlite_store import SQLiteCommandStore
 
 epoch = "a" * 32  # В настоящем запуске: secrets.token_hex(16), новый при каждом старте.
 identity = Identity(service="loader", environment="test", region="ru", host="vm", instance_id="one")

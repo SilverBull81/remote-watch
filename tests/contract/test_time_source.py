@@ -1,12 +1,12 @@
 ﻿# Проверки источника времени через настоящий локальный HTTPS без внешней сети.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Тесты:
 # -> test_verified_https_time(): Настоящий TLS и недопустимые ответы источника времени.
 #
 # -> test_time_source_configuration(): Проверка адреса до открытия сетевого клиента.
@@ -14,7 +14,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from aiohttp import web
 from test_gateway_tls import certificates
 
 from remote_watch.adapters.time_source import HttpsDateTimeSource
-from remote_watch.command_time import TimeUnavailable, TrustedClock
+from remote_watch.commands.time import TimeUnavailable, TrustedClock
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -57,7 +57,9 @@ def test_verified_https_time(
     ca, cert, key = certificates(tmp_path, case)
     server_ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     server_ssl.load_cert_chain(cert, key)
-    client_ssl = ssl.create_default_context(cafile=str(ca)) if case != "untrusted" else ssl.create_default_context()
+    client_ssl = (
+        ssl.create_default_context(cafile=str(ca)) if case != "untrusted" else ssl.create_default_context()
+    )
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Локальный TLS-сценарий проверки источника времени
@@ -75,14 +77,14 @@ def test_verified_https_time(
 
             """Return the selected protocol failure without forwarding to another server.
 
-            :param request: Validated command intent, or None for a rejected source event.
+            :param request: Incoming request to the local HTTPS test server.
             :type request: web.Request
 
-            :return: Return the selected protocol failure without forwarding to another server.
+            :return: Synthetic HTTP response for the selected test case.
             :rtype: web.Response
             """
 
-            # request — команда либо отсутствие принятой команды.
+            # request — HTTP-запрос к локальному тестовому серверу.
 
             seen.append(request.query["remote_watch_nonce"])
             assert request.method == "HEAD"
@@ -139,7 +141,9 @@ def test_verified_https_time(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка адреса до открытия сетевого клиента
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("url", ["http://host/time", "https://user:pass@host/time", "https://host/time#x", "https://host/time?q=secret"])
+@pytest.mark.parametrize("url", [
+    "http://host/time", "https://user:pass@host/time", "https://host/time#x", "https://host/time?q=secret",
+])
 def test_time_source_configuration(url: str) -> None:
 
     """Reject unsafe endpoints before creating a network client.
@@ -159,5 +163,5 @@ def test_time_source_configuration(url: str) -> None:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль tests.contract.test_time_source не предназначен для прямого запуска.")
+    print("Модуль tests.contract.test_time_source не предназначен для прямого запуска. Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

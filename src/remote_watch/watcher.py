@@ -1,10 +1,10 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-184929
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> ConsoleConfig: Настройки необязательного вывода в консоль.
@@ -54,10 +54,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TextIO
 
-from ._context import delivery_context
-from ._validation import require_int
-from .config import WatcherConfig
-from .runtime import NotificationRuntime
+from remote_watch._validation import require_int
+from remote_watch.config import WatcherConfig
+from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications.runtime import NotificationRuntime
 
 
 #------------------------------------------------------------------------------------------------------------------

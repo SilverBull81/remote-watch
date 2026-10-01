@@ -1,10 +1,10 @@
-﻿# Версионированные данные одной попытки доставки через будущий gateway.
+﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> RelayRequest: Версионированный запрос одной попытки через gateway.
@@ -33,9 +33,14 @@ import json
 import re
 from dataclasses import dataclass
 
-from ._validation import require_number
-from .delivery import Delivery, DeliveryResult, DeliveryStatus, ResultSource
-from .events import Notification
+from remote_watch._validation import require_number
+from remote_watch.events import Notification
+from remote_watch.notifications.delivery import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    ResultSource,
+)
 
 SCHEMA_VERSION = 1
 MAX_REQUEST_BYTES = 65536
@@ -363,6 +368,6 @@ def decode_response(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.relay не предназначен для прямого запуска.",
+        "Модуль remote_watch.relay_protocol не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

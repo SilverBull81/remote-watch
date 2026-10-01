@@ -1,10 +1,10 @@
 ﻿# Подключение стандартного logging к очереди уведомлений без сетевых операций.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-142747
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> NotificationHandler: Обработчик logging для очереди уведомлений.
@@ -23,12 +23,12 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from ._context import delivery_context
-from ._validation import require_callback
-from .normalization import prepare_notification
+from remote_watch._validation import require_callback
+from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications.normalization import prepare_notification
 
 if TYPE_CHECKING:
-    from .runtime import NotificationRuntime
+    from remote_watch.notifications.runtime import NotificationRuntime
 
 
 #******************************************************************************************************************
@@ -137,6 +137,6 @@ class NotificationHandler(logging.Handler):
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch.logging_handler не предназначен для прямого запуска.',
+        'Модуль remote_watch.notifications.handler не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Длительная полевая проверка серверов и Android
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171854
+Дата и время последнего изменения: 261001-112704
 
 ## Принятая полевая проверка базовой доставки, 30.09.2026
 
@@ -75,7 +75,7 @@ service=remote-watch-field, environment=field-test и region/host/instance_id и
 для схемы 2; схема 1 задаётся явно при проверке старого сервера.
 
 ```powershell
-python -m remote_watch.field_smoke mixed --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-mixed-quick.jsonl
+python -m remote_watch.diagnostics.field_smoke mixed --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-mixed-quick.jsonl
 ```
 
 Для длительного запуска уберите --duration и задайте --interval 1800, как ниже.
@@ -98,7 +98,7 @@ python -m remote_watch.field_smoke mixed --region ru --host server-ru --instance
 Обычные attempt-записи field_smoke с этой версии также содержат http_status,
 provider_code, message_bytes и request_bytes без приватных данных ответа.
 
-`python -m remote_watch.field_smoke` проверяет путь обычный logger → RemoteWatcher →
+`python -m remote_watch.diagnostics.field_smoke` проверяет путь обычный logger → RemoteWatcher →
 очереди/retry → Telegram/ntfy. Команда появилась в 0.2.0.dev1 как инструмент полевой
 проверки возможностей 0.1. Она запускается только явно и не входит в обычные тесты.
 Реальные credentials читаются из того же локального файла, что у [smoke](SMOKE.md).
@@ -129,7 +129,7 @@ service/environment/region/host/instance, event/session/delivery IDs и врем
 
 ```sh
 python -m pip install "remote-watch[telegram,ntfy] @ git+ssh://git@github.com/OWNER/REPOSITORY.git@REVISION"
-python -m remote_watch.field_smoke --help
+python -m remote_watch.diagnostics.field_smoke --help
 python -c "from importlib.metadata import version; import remote_watch; print(version('remote-watch')); print(remote_watch.__file__)"
 ```
 
@@ -148,15 +148,15 @@ OWNER/REPOSITORY/REVISION — заменяемые значения. На все
 Сначала можно пройти все четыре случая за четыре минуты:
 
 ```sh
-python -m remote_watch.field_smoke both --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-ru-quick.jsonl
+python -m remote_watch.diagnostics.field_smoke both --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-ru-quick.jsonl
 ```
 
 Для суточного наблюдения, по одной команде в окружении каждого сервера:
 
 ```sh
-python -m remote_watch.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --interval 1800 --output runs/field-ru-day1.jsonl
-python -m remote_watch.field_smoke ntfy --region ru --host server-ru2 --instance-id ru-02 --interval 1800 --output runs/field-ru2-day1.jsonl
-python -m remote_watch.field_smoke both --region lv --host server-lv --instance-id lv-01 --interval 1800 --output runs/field-lv-day1.jsonl
+python -m remote_watch.diagnostics.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --interval 1800 --output runs/field-ru-day1.jsonl
+python -m remote_watch.diagnostics.field_smoke ntfy --region ru --host server-ru2 --instance-id ru-02 --interval 1800 --output runs/field-ru2-day1.jsonl
+python -m remote_watch.diagnostics.field_smoke both --region lv --host server-lv --instance-id lv-01 --interval 1800 --output runs/field-lv-day1.jsonl
 ```
 
 Замените region/host/instance-id своими явными обозначениями. По умолчанию длительность
@@ -221,8 +221,8 @@ ASCII-экранированием мог превысить 8192 байта п�
 общий сбой ntfy. После обновления повторите четыре случая с новым именем отчёта:
 
 ```sh
-python -m remote_watch.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-ru-recheck.jsonl
-python -m remote_watch.field_smoke both --region lv --host server-lv --instance-id lv-01 --duration 240 --interval 60 --output runs/field-lv-recheck.jsonl
+python -m remote_watch.diagnostics.field_smoke ntfy --region ru --host server-ru --instance-id ru-01 --duration 240 --interval 60 --output runs/field-ru-recheck.jsonl
+python -m remote_watch.diagnostics.field_smoke both --region lv --host server-lv --instance-id lv-01 --duration 240 --interval 60 --output runs/field-lv-recheck.jsonl
 ```
 
 На второй российской машине задайте собственные host/instance-id и имя отчёта.

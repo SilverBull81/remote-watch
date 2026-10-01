@@ -1,12 +1,12 @@
 ﻿# Проверки безопасной диагностики ntfy, совместимости relay и пределов уведомления.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> test_diagnostic_values(): Отклонение недопустимых значений диагностики.
 # -> test_response_versions(): Совместимость прежнего ответа и новой диагностики.
 # -> test_relay_limits(): Единые ограничения уведомления на обеих сторонах relay.
@@ -28,13 +28,26 @@ from typing import Any
 
 import pytest
 
-from remote_watch import Delivery, DeliveryResult, DeliveryStatus, Notification, RetryPolicy, SnapshotLimits
+from remote_watch import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    Notification,
+    RetryPolicy,
+    SnapshotLimits,
+)
 from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
 from remote_watch.adapters.relay import RelayChannel, RelayConfig
-from remote_watch.field_smoke import _Journal, _ObservedChannel
-from remote_watch.gateway import Gateway
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
-from remote_watch.relay import DIAGNOSTIC_FIELDS, RelayRequest, decode_response, encode_json, encode_response
+from remote_watch.diagnostics.field_smoke import _Journal, _ObservedChannel
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.server import Gateway
+from remote_watch.relay_protocol import (
+    DIAGNOSTIC_FIELDS,
+    RelayRequest,
+    decode_response,
+    encode_json,
+    encode_response,
+)
 
 pytest.importorskip("aiohttp")
 
@@ -344,6 +357,6 @@ def test_ntfy_diagnostics(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.contract.test_diagnostics не предназначен для прямого запуска.",
+        "Модуль tests.contract.test_diagnostics не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

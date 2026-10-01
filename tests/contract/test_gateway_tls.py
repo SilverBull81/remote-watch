@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -15,7 +15,7 @@
 #    -> send(): Одна попытка отправки и проверка ответа.
 #    -> close(): Закрытие клиента и освобождение ресурсов.
 #
-# Функции и тесты:
+# Тесты:
 # -> certificates(): Создание временного центра сертификации и сертификата сервера.
 # -> test_gateway_tls_cli(): Настоящее TLS-соединение с сертификатами из CLI.
 # -> test_gateway_tls_bad_files(): Отказ запуска при неверных файлах TLS.
@@ -41,11 +41,17 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
-from remote_watch import Delivery, DeliveryResult, DeliveryStatus, Destination, RetryPolicy
+from remote_watch import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    Destination,
+    RetryPolicy,
+)
 from remote_watch.adapters.relay import RelayChannel, RelayConfig
-from remote_watch.gateway import Gateway, main
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
-from remote_watch.smoke import _notification
+from remote_watch.diagnostics.smoke import _notification
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.server import Gateway, main
 
 aiohttp = pytest.importorskip("aiohttp")
 
@@ -279,7 +285,7 @@ def test_gateway_tls_cli(
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------
 
-    monkeypatch.setattr("remote_watch.gateway._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
     assert main(["synthetic_tls_settings:build_config", "--port", "0",
                  "--cert", str(cert_path), "--key", str(key_path)]) == 0
     assert len(outcomes) == 1
@@ -334,7 +340,7 @@ def test_gateway_tls_bad_files(
     if mode != "missing_key":
         arguments += ["--key", str(key_path)]
     serve = AsyncMock()
-    monkeypatch.setattr("remote_watch.gateway._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
     assert main(arguments) == 1
     serve.assert_not_awaited()
 #------------------------------------------------------------------------------------------------------------------
@@ -345,6 +351,6 @@ def test_gateway_tls_bad_files(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.contract.test_gateway_tls не предназначен для прямого запуска.",
+        "Модуль tests.contract.test_gateway_tls не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

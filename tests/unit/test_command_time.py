@@ -1,12 +1,12 @@
 ﻿# Проверки свежести команд при независимых часах и ошибках источника времени.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Тесты:
 # -> test_vm_clocks_do_not_authorize_commands(): Независимость допуска команды от UTC машин.
 #
 # -> test_untrusted_time_fails_closed(): Отказ при истечении, дрейфе и возврате времени назад.
@@ -18,7 +18,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -27,7 +27,13 @@ from dataclasses import replace
 
 import pytest
 
-from remote_watch.command_time import FreshnessPolicy, FreshnessReason, TimeSample, TimeUnavailable, TrustedClock
+from remote_watch.commands.time import (
+    FreshnessPolicy,
+    FreshnessReason,
+    TimeSample,
+    TimeUnavailable,
+    TrustedClock,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -120,7 +126,7 @@ def test_refresh_failure_invalidates_old_anchor() -> None:
 
             """Raise an error containing synthetic private detail.
 
-            :return: Raise an error containing synthetic private detail.
+            :return: UTC bounds associated with a local monotonic observation.
             :rtype: TimeSample
             """
 
@@ -171,5 +177,5 @@ def test_time_policy_limits(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль tests.unit.test_command_time не предназначен для прямого запуска.")
+    print("Модуль tests.unit.test_command_time не предназначен для прямого запуска. Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

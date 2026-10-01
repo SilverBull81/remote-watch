@@ -1,12 +1,12 @@
 ﻿# Проверки повторов, рестартов, сроков и свежести команд без сети.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Тесты:
 # -> scenario(): Данные сценария с фиксированными сроками.
 # -> test_single_start_and_result_replay(): Одно начало исполнения при повторных запросах.
 # -> test_fencing_before_execution(): Защита от чужой цели и подмены аргументов.
@@ -20,7 +20,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ from typing import Any
 import pytest
 
 from remote_watch import Identity
-from remote_watch.command_freshness import CommandChallenge, confirm_command
-from remote_watch.command_protocol import (
+from remote_watch.commands._confirmation import CommandChallenge, confirm_command
+from remote_watch.commands.protocol import (
     CommandClaim,
     CommandGrant,
     CommandOutcome,
@@ -43,7 +43,7 @@ from remote_watch.command_protocol import (
     callback_result,
     message_digest,
 )
-from remote_watch.command_state import (
+from remote_watch.commands.state import (
     CommandAction,
     CommandDeadline,
     CommandPhase,
@@ -63,12 +63,15 @@ def scenario(identity: Identity) -> tuple[CommandRecord, dict[str, Any]]:
     :param identity: Synthetic application identity.
     :type identity: Identity
 
-    :return: Prepare an immutable intent and deterministic relative deadlines.
+    :return: Initial record and arguments for subsequent state transitions.
     :rtype: tuple[CommandRecord, dict[str, Any]]
     """
 
+    # identity — явно заданные сведения о тестовом приложении.
+
     ref = CommandRef(identity=identity, session_id="1" * 32, hub_epoch="2" * 32, command_id="3" * 32)
-    event = CommandRequest(ref=ref, source_id="telegram", source_event_id="1001", actor_id="42", conversation_id="-123",
+    event = CommandRequest(ref=ref, source_id="telegram", source_event_id="1001",
+                           actor_id="42", conversation_id="-123",
                            name="resume_load")
     claim = CommandClaim(ref=ref, claim_id="4" * 32, request_digest=message_digest(event))
     options = {
@@ -94,6 +97,8 @@ def test_single_start_and_result_replay(identity: Identity) -> None:
     :param identity: Synthetic application identity.
     :type identity: Identity
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
 
     initial, options = scenario(identity)
     current = advance_command(initial, CommandAction.CLAIM, **options).record
@@ -133,6 +138,9 @@ def test_fencing_before_execution(
     :param field: Selected field for a substitution attempt.
     :type field: str
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # field — поле, подменяемое для проверки отказа.
 
     record, options = scenario(identity)
     record = advance_command(record, CommandAction.CLAIM, **options).record
@@ -176,6 +184,10 @@ def test_expiry_and_restart(
     :type case: str
     """
 
+    # identity — явно заданные сведения о тестовом приложении.
+    # phase — состояние команды перед проверяемым переходом.
+    # case — выбранный сценарий проверки.
+
     record, options = scenario(identity)
     if phase is not CommandPhase.READY:
         record = advance_command(record, CommandAction.CLAIM, **options).record
@@ -218,6 +230,9 @@ def test_relative_clock_budget(
     :type rtt: float
     """
 
+    # origin — начальное показание подставных монотонных часов.
+    # rtt — полное время обмена запросом и ответом, секунды.
+
     deadline = CommandDeadline.from_response(10, origin, origin + rtt, "2" * 32)
     assert deadline.remaining(origin + rtt, "2" * 32) == max(0, 10 - rtt)
     assert deadline.remaining(origin + rtt + 5, "2" * 32) == max(0, 5 - rtt)
@@ -249,7 +264,7 @@ def test_no_wall_clock_dependency(
 
         """Fail if command processing tries to consult either machine's UTC.
 
-        :return: Fail if command processing tries to consult either machine's UTC.
+        :return: Synthetic wall-clock value; this path must not authorize a command.
         :rtype: float
         """
 
@@ -282,6 +297,9 @@ def test_invalid_transitions(
     :param case: Selected boundary or failure scenario.
     :type case: str
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # case — выбранный сценарий проверки.
 
     record, options = scenario(identity)
     result = callback_result(record.request.ref, options["claim"].claim_id, "ok")
@@ -330,6 +348,9 @@ def test_confirmation_freshness(
     :type case: str
     """
 
+    # identity — явно заданные сведения о тестовом приложении.
+    # case — выбранный сценарий проверки.
+
     record, _ = scenario(identity)
     # Намерение могло прийти через сутки. Hub начинает новое окно подтверждения
     # сейчас, но старое сообщение само по себе не даёт разрешения на действие.
@@ -370,6 +391,8 @@ def test_deadline_validation(case: str) -> None:
     :type case: str
     """
 
+    # case — выбранный сценарий проверки.
+
     values = {"interval": (301, 0, 1), "backwards": (10, 2, 1), "infinity": (10, float("inf"), 1),
               "negative": (10, -1, 1), "zero": (0, 0, 1), "bool": (True, 0, 1)}
     with pytest.raises((ValueError, TypeError)):
@@ -387,6 +410,8 @@ def test_rejection_and_late_result(identity: Identity) -> None:
     :param identity: Synthetic application identity.
     :type identity: Identity
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
 
     record, options = scenario(identity)
     rejected = callback_result(record.request.ref, options["claim"].claim_id, None)

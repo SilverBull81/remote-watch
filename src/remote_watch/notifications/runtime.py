@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -72,17 +72,22 @@ from enum import Enum
 from types import TracebackType
 from uuid import uuid4
 
-from ._context import delivery_context
-from ._retry import retry_delay
-from ._shutdown import register, unregister
-from ._validation import require_callback
-from .channels import NotificationChannel
-from .config import DeliveryMode, Destination, WatcherConfig
-from .delivery import Delivery, DeliveryResult, DeliveryStatus, ResultSource
-from .events import Notification
-from .logging_handler import NotificationHandler
-from .routing import PolicyRouter
-from .timing import DeliveryClock, SystemDeliveryClock
+from remote_watch._validation import require_callback
+from remote_watch.config import DeliveryMode, Destination, WatcherConfig
+from remote_watch.events import Notification
+from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications._retry import retry_delay
+from remote_watch.notifications._shutdown import register, unregister
+from remote_watch.notifications.channels import NotificationChannel
+from remote_watch.notifications.delivery import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    ResultSource,
+)
+from remote_watch.notifications.handler import NotificationHandler
+from remote_watch.notifications.routing import PolicyRouter
+from remote_watch.notifications.timing import DeliveryClock, SystemDeliveryClock
 
 #******************************************************************************************************************
 # КЛАССЫ
@@ -1169,6 +1174,6 @@ class NotificationRuntime:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch.runtime не предназначен для прямого запуска.',
+        'Модуль remote_watch.notifications.runtime не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

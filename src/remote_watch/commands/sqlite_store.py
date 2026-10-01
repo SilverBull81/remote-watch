@@ -1,12 +1,12 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
 #    Конструктор:
 #    -> __init__(): Создание объекта.
@@ -37,7 +37,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ from dataclasses import asdict
 from pathlib import Path
 from time import monotonic
 
-from ._validation import require_int, require_number, require_text
-from .command_protocol import (
+from remote_watch._validation import require_int, require_number, require_text
+from remote_watch.commands.protocol import (
     MAX_COMMAND_BYTES,
     CommandClaim,
     CommandGrant,
@@ -63,7 +63,7 @@ from .command_protocol import (
     decode_command,
     encode_command,
 )
-from .command_state import (
+from remote_watch.commands.state import (
     CommandAction,
     CommandDeadline,
     CommandPhase,
@@ -71,7 +71,7 @@ from .command_state import (
     advance_command,
     recover_command,
 )
-from .command_storage import (
+from remote_watch.commands.storage import (
     Admission,
     AuditCode,
     AuditEntry,
@@ -204,10 +204,12 @@ class SQLiteCommandStore:
                     raise StoreError("store configuration mismatch")
                 if meta["settings"] != settings:
                     # После остановки владельца лимиты можно увеличить, чтобы выйти
-                    # из переполнения. Соседний handle того же запуска менять их не может.
+                    # из переполнения. Другое соединение того же запуска менять их не может.
                     previous_limits = json.loads(meta["settings"])
                     if meta["generation"] == self._generation or any(
-                        value < previous_limits[key] for key, value in asdict(self._limits).items() if key != "lock_timeout"
+                        value < previous_limits[key]
+                        for key, value in asdict(self._limits).items()
+                        if key != "lock_timeout"
                     ):
                         raise StoreError("store configuration mismatch")
                     db_settings = json.dumps(asdict(self._limits), sort_keys=True)
@@ -225,7 +227,9 @@ class SQLiteCommandStore:
                             self._save(connection, row, recovered, now)
                             self._audit(connection, AuditCode.RECOVERED, recovered)
                     connection.execute("UPDATE commands SET retain_until=?", (now + self._limits.retention,))
-                    connection.execute("UPDATE metadata SET generation=?, last_now=? WHERE id=1", (self._generation, now))
+                    connection.execute(
+                        "UPDATE metadata SET generation=?, last_now=? WHERE id=1", (self._generation, now),
+                    )
                 elif now < meta["last_now"]:
                     raise StoreError("store clock rollback")
             connection.commit()
@@ -270,7 +274,7 @@ class SQLiteCommandStore:
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
 
-        :return: Return the persisted high-water mark for one ordered source.
+        :return: Committed source position, or -1 for an unseen stream.
         :rtype: int
         """
 
@@ -315,7 +319,7 @@ class SQLiteCommandStore:
         :param rejection: Fixed audit code for a source decision without a command.
         :type rejection: AuditCode
 
-        :return: Persist a source decision and its cursor together before acknowledging the source.
+        :return: Committed source cursor and the command, if one was admitted.
         :rtype: Admission
         """
 
@@ -339,13 +343,24 @@ class SQLiteCommandStore:
         with self._transaction() as (db, now):
             row = db.execute("SELECT position FROM streams WHERE name=?", (stream,)).fetchone()
             current = -1 if row is None else row[0]
-            # После очистки payload позиция остаётся навсегда. Старый update или
+
+            # После очистки данных команды позиция остаётся навсегда. Старое событие или
             # повтор доставки клиенту уже не сможет создать новую команду.
             if position <= current:
-                previous = db.execute("SELECT * FROM commands WHERE stream=? AND position=?", (stream, position)).fetchone()
-                if previous is not None and request is not None and self._stored(previous).record.request != request:
+                previous = db.execute(
+                    "SELECT * FROM commands WHERE stream=? AND position=?", (stream, position),
+                ).fetchone()
+                if (
+                    previous is not None and request is not None
+                    and self._stored(previous).record.request != request
+                ):
                     raise StoreConflict("source event conflict")
-                return Admission(cursor=current, command=None if previous is None else self._stored(previous), inserted=False)
+                return Admission(
+                    cursor=current, command=None if previous is None else self._stored(previous), inserted=False,
+                )
+
+            # Новое событие принимается только относительно известной клиенту позиции.
+            # Несовпадение означает конкурирующее изменение, а не повод пропустить данные.
             if current != expected_cursor:
                 raise StoreConflict("source cursor conflict")
             if row is None and db.execute("SELECT count(*) FROM streams").fetchone()[0] >= self._limits.streams:
@@ -357,27 +372,35 @@ class SQLiteCommandStore:
                 if type(deadline) is not CommandDeadline or deadline.remaining(now, request.ref.hub_epoch) <= 0:
                     raise StoreConflict("command deadline expired")
                 body = encode_command(request)
+
                 # Резерв результата учитывается заранее: заполненная очередь новых
                 # запросов не должна съедать логическую ёмкость для их завершения.
                 reserved = len(body) + MAX_COMMAND_BYTES
                 count, size = db.execute("SELECT count(*), coalesce(sum(reserved), 0) FROM commands").fetchone()
                 if count >= self._limits.records or size + reserved > self._limits.payload_bytes:
                     raise StoreFull("store capacity exceeded")
-                if db.execute("SELECT 1 FROM commands WHERE command_id=? OR (source=? AND source_event=?)",
-                              (request.ref.command_id, request.source_id, request.source_event_id)).fetchone() is not None:
+                if db.execute(
+                    "SELECT 1 FROM commands WHERE command_id=? OR (source=? AND source_event=?)",
+                    (request.ref.command_id, request.source_id, request.source_event_id),
+                ).fetchone() is not None:
                     raise StoreConflict("command identity conflict")
                 db.execute("INSERT INTO commands (command_id, stream, position, source, source_event, generation, "
-                           "request, phase, revision, acknowledged, reserved, sent, received, expires, retain_until) "
+                           "request, phase, revision, acknowledged, reserved, sent, received, "
+                           "expires, retain_until) "
                            "VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', 0, 0, ?, ?, ?, ?, ?)",
                            (request.ref.command_id, stream, position, request.source_id, request.source_event_id,
-                            self._generation, body, reserved, deadline.sent_at, deadline.received_at, deadline.expires_at,
+                            self._generation, body, reserved, deadline.sent_at,
+                            deadline.received_at, deadline.expires_at,
                             now + self._limits.retention))
                 created = self._row(db, request.ref)
                 stored = self._stored(created)
                 self._audit(db, AuditCode.ACCEPTED, stored.record)
             else:
                 self._audit(db, rejection, None)
-            db.execute("INSERT INTO streams VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET position=excluded.position",
+            # Позиция и решение о приёме фиксируются одной транзакцией. После сбоя
+            # нельзя подтвердить событие источнику, потеряв соответствующую команду.
+            db.execute("INSERT INTO streams VALUES (?, ?) "
+                       "ON CONFLICT(name) DO UPDATE SET position=excluded.position",
                        (stream, position))
             return Admission(cursor=position, command=stored, inserted=stored is not None)
     #--------------------------------------------------------------------------------------------------------------
@@ -395,7 +418,7 @@ class SQLiteCommandStore:
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
 
-        :return: Read only an exact reference, including old terminal results.
+        :return: Stored command, or None when the identifier is absent.
         :rtype: StoredCommand | None
         """
 
@@ -451,7 +474,7 @@ class SQLiteCommandStore:
         :param grant_deadline: Local grant deadline after subtracting the entire round trip.
         :type grant_deadline: CommandDeadline | None
 
-        :return: Apply a state transition under revision comparison and return only after commit.
+        :return: Committed revision and permission for the next execution step.
         :rtype: CommittedTransition
         """
 
@@ -529,7 +552,8 @@ class SQLiteCommandStore:
             if stored.record.result != result:
                 raise StoreConflict("command result conflict")
             if not stored.acknowledged:
-                db.execute("UPDATE commands SET acknowledged=1, revision=revision+1, retain_until=? WHERE sequence=?",
+                db.execute("UPDATE commands SET acknowledged=1, revision=revision+1, "
+                           "retain_until=? WHERE sequence=?",
                            (now + self._limits.retention, row["sequence"]))
                 self._audit(db, AuditCode.ACKNOWLEDGED, stored.record)
     #--------------------------------------------------------------------------------------------------------------
@@ -551,7 +575,7 @@ class SQLiteCommandStore:
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Page through unacknowledged records without loading the full journal.
+        :return: Unacknowledged or still-running commands in delivery order.
         :rtype: tuple[StoredCommand, ...]
         """
 
@@ -561,7 +585,8 @@ class SQLiteCommandStore:
         self._page(after, limit)
         with self._transaction() as (db, _):
             return tuple(self._stored(row) for row in db.execute(
-                "SELECT * FROM commands WHERE sequence>? AND (acknowledged=0 OR running=1) ORDER BY sequence LIMIT ?",
+                "SELECT * FROM commands WHERE sequence>? AND (acknowledged=0 OR running=1) "
+                "ORDER BY sequence LIMIT ?",
                 (after, limit)))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -617,7 +642,7 @@ class SQLiteCommandStore:
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Read a bounded page without command text or actor details.
+        :return: Retained audit entries in insertion order.
         :rtype: tuple[AuditEntry, ...]
         """
 
@@ -644,7 +669,7 @@ class SQLiteCommandStore:
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Delete acknowledged terminal payloads after retention, keeping stream high-water marks.
+        :return: Number of acknowledged terminal records removed after retention.
         :rtype: int
         """
 
@@ -668,7 +693,7 @@ class SQLiteCommandStore:
 
         """Serialize bounded operations and fence handles from an earlier owner generation.
 
-        :return: Serialize bounded operations and fence handles from an earlier owner generation.
+        :return: Locked transaction connection and its monotonic observation.
         :rtype: Iterator[tuple[sqlite3.Connection, float]]
         """
 
@@ -693,7 +718,9 @@ class SQLiteCommandStore:
             # Занятая БД допускает повтор операции после отката: START не был
             # подтверждён. Для Python 3.10 предусмотрены точные стандартные тексты.
             code = getattr(error, "sqlite_errorcode", None)
-            if code in (5, 6) or (code is None and error.args in (("database is locked",), ("database table is locked",))):
+            if code in (5, 6) or (
+                code is None and error.args in (("database is locked",), ("database table is locked",))
+            ):
                 raise StoreError("store busy") from None
             self._failed = True
             raise StoreError("store unavailable") from None
@@ -713,7 +740,7 @@ class SQLiteCommandStore:
 
         """Detect local clock rollback before touching retention or authorization.
 
-        :return: Detect local clock rollback before touching retention or authorization.
+        :return: Validated current monotonic time in seconds.
         :rtype: float
         """
 
@@ -768,7 +795,7 @@ class SQLiteCommandStore:
         :param required: Whether absence is a conflict.
         :type required: bool
 
-        :return: Fetch and verify full command correlation instead of trusting its ID alone.
+        :return: Matching database row, or None if absent.
         :rtype: sqlite3.Row | None
         """
 
@@ -799,7 +826,7 @@ class SQLiteCommandStore:
         :param row: Persisted SQLite row.
         :type row: sqlite3.Row
 
-        :return: Validate bounded persisted wire before returning a journal record.
+        :return: Immutable command state reconstructed from the database row.
         :rtype: StoredCommand
         """
 
@@ -808,7 +835,9 @@ class SQLiteCommandStore:
         try:
             request = decode_command(row["request"])
             result = None if row["result"] is None else decode_command(row["result"])
-            record = CommandRecord(request=request, phase=CommandPhase(row["phase"]), claim_id=row["claim_id"], result=result)
+            record = CommandRecord(
+                request=request, phase=CommandPhase(row["phase"]), claim_id=row["claim_id"], result=result,
+            )
             return StoredCommand(record=record, revision=row["revision"], sequence=row["sequence"],
                                  acknowledged=bool(row["acknowledged"]), execution_active=bool(row["running"]))
         except (ValueError, TypeError):
@@ -852,7 +881,8 @@ class SQLiteCommandStore:
         if record.result is not None and (record.phase is CommandPhase.COMPLETED
                 or record.result.reason.value in ("callback_error", "invalid_result")):
             running = False
-        db.execute("UPDATE commands SET phase=?, claim_id=?, result=?, running=?, revision=revision+1, retain_until=? "
+        db.execute("UPDATE commands SET phase=?, claim_id=?, result=?, running=?, "
+                   "revision=revision+1, retain_until=? "
                    "WHERE sequence=?", (record.phase.value, record.claim_id, body,
                                          int(running), now + self._limits.retention, row["sequence"]))
     #--------------------------------------------------------------------------------------------------------------
@@ -886,7 +916,8 @@ class SQLiteCommandStore:
         db.execute("INSERT INTO audit (code, command_id, phase) VALUES (?, ?, ?)",
                    (code.value, None if record is None else record.request.ref.command_id,
                     None if record is None else record.phase.value))
-        db.execute("DELETE FROM audit WHERE sequence NOT IN (SELECT sequence FROM audit ORDER BY sequence DESC LIMIT ?)",
+        db.execute("DELETE FROM audit WHERE sequence NOT IN "
+                   "(SELECT sequence FROM audit ORDER BY sequence DESC LIMIT ?)",
                    (self._limits.audit,))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -959,10 +990,12 @@ class SQLiteCommandStore:
             "CREATE TABLE commands (sequence INTEGER PRIMARY KEY AUTOINCREMENT, command_id TEXT UNIQUE NOT NULL, "
             "stream TEXT NOT NULL, position INTEGER NOT NULL, source TEXT NOT NULL, source_event TEXT NOT NULL, "
             "generation TEXT NOT NULL, request BLOB NOT NULL, phase TEXT NOT NULL, claim_id TEXT, result BLOB, "
-            "revision INTEGER NOT NULL, acknowledged INTEGER NOT NULL, running INTEGER NOT NULL DEFAULT 0, reserved INTEGER NOT NULL, "
+            "revision INTEGER NOT NULL, acknowledged INTEGER NOT NULL, "
+            "running INTEGER NOT NULL DEFAULT 0, reserved INTEGER NOT NULL, "
             "sent REAL NOT NULL, received REAL NOT NULL, expires REAL NOT NULL, retain_until REAL NOT NULL, "
             "UNIQUE(stream, position), UNIQUE(source, source_event))",
-            "CREATE TABLE audit (sequence INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, command_id TEXT, phase TEXT)",
+            "CREATE TABLE audit (sequence INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "code TEXT NOT NULL, command_id TEXT, phase TEXT)",
             "PRAGMA user_version=1",
         )
         for statement in statements:
@@ -975,5 +1008,5 @@ class SQLiteCommandStore:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.sqlite_command_store не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands.sqlite_store не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

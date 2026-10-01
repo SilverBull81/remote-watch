@@ -1,10 +1,10 @@
 ﻿# Полевой сценарий с подставными каналами, ускоренным временем и безопасным отчётом.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-222548
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> RecordingChannel: Подставной канал для полевой проверки.
@@ -22,7 +22,7 @@
 #    -> monotonic(): Чтение управляемого времени расписания.
 #    -> sleep(): Продвижение расписания без реального ожидания.
 #
-# Функции и тесты:
+# Тесты:
 # -> test_field_run(): Полный полевой сценарий через два подставных канала.
 # -> test_field_failure_and_interrupt(): Отчёт при отказе сервиса и прерывании пользователем.
 # -> test_field_bounds(): Ограничения длительности и числа сообщений.
@@ -43,7 +43,15 @@ from pathlib import Path
 
 import pytest
 
-from remote_watch import Delivery, DeliveryResult, DeliveryStatus, Destination, Identity, RetryPolicy, field_smoke
+from remote_watch import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    Destination,
+    Identity,
+    RetryPolicy,
+)
+from remote_watch.diagnostics import field_smoke as field_smoke
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -404,6 +412,6 @@ def test_report_is_exclusive(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.contract.test_field_smoke не предназначен для прямого запуска.",
+        "Модуль tests.contract.test_field_smoke не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164512
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -59,7 +59,6 @@ import math
 import re
 import signal
 import ssl
-import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -67,12 +66,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ._context import delivery_context
-from ._credentials import CREDENTIAL_HINTS, resolve_token
-from .channels import NotificationChannel
-from .delivery import DeliveryResult, DeliveryStatus, ResultSource
-from .gateway_config import GatewayConfig, GatewayPrincipal
-from .relay import MAX_REQUEST_BYTES, RelayRequest, encode_response
+from remote_watch._credentials import CREDENTIAL_HINTS, resolve_token
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications.channels import NotificationChannel
+from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus, ResultSource
+from remote_watch.relay_protocol import MAX_REQUEST_BYTES, RelayRequest, encode_response
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -834,7 +833,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Фабрика остаётся альтернативой для пользовательских адаптеров и выполняется
         # как доверенный код, в том числе при --check-config.
         if args.config is not None:
-            from .gateway_json import load_gateway_config
+            from remote_watch.gateway.json_config import load_gateway_config
 
             config = load_gateway_config(args.config)
         else:
@@ -864,7 +863,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as error:
-        from .gateway_json import GatewayConfigError
+        from remote_watch.gateway.json_config import GatewayConfigError
 
         # Выбираем только заранее известные категории. Не печатаем str(error), traceback
         # или аргументы пользователя: в них могут оказаться токены и частные адреса.
@@ -884,13 +883,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТОЧКА ВХОДА : Запуск исходящего gateway отдельным процессом
+# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Для отдельного CLI-процесса формат консоли и перенаправленных журналов — UTF-8.
-    # Иначе cp1252 на англоязычной Windows превращает русское сообщение в ошибку
-    # запуска сервера. Импорт библиотеки не меняет потоки вызывающего приложения.
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
-    raise SystemExit(main())
+    print("Модуль remote_watch.gateway.server не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

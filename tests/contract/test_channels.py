@@ -1,10 +1,10 @@
 ﻿# Проверка структурного async-контракта на fake-канале без наследования.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-140516
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> MemoryChannel: Тестовая реализация без provider dependencies.
@@ -14,6 +14,9 @@
 #    -> open(): Зафиксировать loop владельца.
 #    -> send(): Одна тестовая попытка.
 #    -> close(): Завершение тестового клиента.
+#
+# Тесты:
+# -> test_structural_async_channel_contract(): Проверка канала без наследования.
 
 
 #******************************************************************************************************************
@@ -21,7 +24,14 @@
 #******************************************************************************************************************
 import asyncio
 
-from remote_watch import Delivery, DeliveryResult, DeliveryStatus, Destination, Notification, NotificationChannel
+from remote_watch import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    Destination,
+    Notification,
+    NotificationChannel,
+)
 
 #******************************************************************************************************************
 # КЛАССЫ

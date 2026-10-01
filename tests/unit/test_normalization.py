@@ -1,10 +1,10 @@
 ﻿# Проверки независимости уведомления от LogRecord и усечения текста UTF-8.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-131628
+# Дата и время последнего изменения: 261001-112704
 #
 # Тесты:
 # -> test_detached_record(): Независимость уведомления от изменяемых данных и кеша Formatter.
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 import pytest
 
 from remote_watch import Identity, SnapshotLimits
-from remote_watch.normalization import prepare_notification, truncate_text
+from remote_watch.notifications.normalization import prepare_notification, truncate_text
 
 #******************************************************************************************************************
 # ТЕСТЫ

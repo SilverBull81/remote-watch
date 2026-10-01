@@ -1,15 +1,15 @@
 ﻿# Одноразовое подтверждение изменяющего намерения без доверия к UTC машин.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 261001-112704
 #
 # Константы:
 # -> MAX_CONFIRMATION_SECONDS: Максимальный срок одноразового подтверждения, секунды.
 #
-# Состав модуля:
+# Классы:
 # -> CommandChallenge: Одноразовое подтверждение точного намерения.
 #    Специальные методы:
 #    -> __post_init__(): Проверка полей и согласованности объекта.
@@ -22,15 +22,15 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
 import hmac
 from dataclasses import dataclass, field, replace
 
-from .command_protocol import CommandRequest, _nonce, message_digest
-from .command_state import CommandDeadline
+from remote_watch.commands.protocol import CommandRequest, _nonce, message_digest
+from remote_watch.commands.state import CommandDeadline
 
 MAX_CONFIRMATION_SECONDS = 30
 
@@ -131,9 +131,18 @@ def confirm_command(
     :param now: Current local monotonic time.
     :type now: float
 
-    :return: Check freshness without comparing provider, client or hub wall clocks.
+    :return: Confirmation decision and whether the challenge was consumed.
     :rtype: ConfirmationDecision
     """
+
+    # challenge — ранее выданное одноразовое предложение подтвердить команду.
+    # request — исходная команда приложения.
+    # nonce — одноразовое значение из подтверждения пользователя.
+    # source_id — идентификатор источника входящих сообщений.
+    # actor_id — идентификатор отправителя сообщения у провайдера.
+    # conversation_id — идентификатор чата у провайдера.
+    # hub_epoch — идентификатор текущего запуска hub.
+    # now — текущее показание монотонных часов, секунды.
 
     if type(challenge) is not CommandChallenge or type(request) is not CommandRequest:
         raise TypeError("invalid command confirmation input")
@@ -145,7 +154,8 @@ def confirm_command(
 
     # Метаданные actor/chat должны поступать из аутентифицированного source,
     # а не из текста сообщения. Сам helper не реализует Telegram auth или ACL.
-    matches = (type(nonce) is str and len(nonce) == 32 and nonce.isascii() and hmac.compare_digest(challenge.nonce, nonce)
+    matches = (type(nonce) is str and len(nonce) == 32 and nonce.isascii()
+               and hmac.compare_digest(challenge.nonce, nonce)
                and source_id == challenge.request.source_id and actor_id == challenge.request.actor_id
                and conversation_id == challenge.request.conversation_id
                and message_digest(request) == message_digest(challenge.request))
@@ -159,5 +169,5 @@ def confirm_command(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.command_freshness не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands._confirmation не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

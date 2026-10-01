@@ -1,12 +1,12 @@
 ﻿# Контракты ограниченного постоянного хранения команд и результатов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Классы:
 # -> StoreError: Ошибка хранилища без вывода его содержимого.
 #
 # -> StoreConflict: Конфликт версии или принадлежности команды.
@@ -46,7 +46,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -54,9 +54,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from ._validation import require_int, require_number
-from .command_protocol import CommandClaim, CommandGrant, CommandRef, CommandRequest, CommandResult, CommandSession
-from .command_state import CommandAction, CommandDeadline, CommandRecord
+from remote_watch._validation import require_int, require_number
+from remote_watch.commands.protocol import (
+    CommandClaim,
+    CommandGrant,
+    CommandRef,
+    CommandRequest,
+    CommandResult,
+    CommandSession,
+)
+from remote_watch.commands.state import CommandAction, CommandDeadline, CommandRecord
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -239,7 +246,7 @@ class CommandStore(Protocol):
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
 
-        :return: Read the last committed source position, or -1 before the first event.
+        :return: Committed source position, or -1 for an unseen stream.
         :rtype: int
         """
 
@@ -281,7 +288,7 @@ class CommandStore(Protocol):
         :param rejection: Fixed audit code for a source decision without a command.
         :type rejection: AuditCode
 
-        :return: Atomically record a source decision and advance its ordered cursor.
+        :return: Committed source cursor and the command, if one was admitted.
         :rtype: Admission
         """
 
@@ -308,7 +315,7 @@ class CommandStore(Protocol):
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
 
-        :return: Look up an exact command reference.
+        :return: Stored command, or None when the identifier is absent.
         :rtype: StoredCommand | None
         """
 
@@ -362,7 +369,7 @@ class CommandStore(Protocol):
         :param grant_deadline: Local grant deadline after subtracting the entire round trip.
         :type grant_deadline: CommandDeadline | None
 
-        :return: Compare revision and commit a legal transition before authorizing a side effect.
+        :return: Committed revision and permission for the next execution step.
         :rtype: CommittedTransition
         """
 
@@ -439,7 +446,7 @@ class CommandStore(Protocol):
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Read a bounded page of records still awaiting acknowledgment.
+        :return: Unacknowledged or still-running commands in delivery order.
         :rtype: tuple[StoredCommand, ...]
         """
 
@@ -466,7 +473,7 @@ class CommandStore(Protocol):
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Read a bounded page of safe audit metadata.
+        :return: Retained audit entries in insertion order.
         :rtype: tuple[AuditEntry, ...]
         """
 
@@ -489,7 +496,7 @@ class CommandStore(Protocol):
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
 
-        :return: Remove eligible acknowledged terminal records without deleting source cursors.
+        :return: Number of acknowledged terminal records removed after retention.
         :rtype: int
         """
 
@@ -504,5 +511,5 @@ class CommandStore(Protocol):
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.command_storage не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands.storage не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

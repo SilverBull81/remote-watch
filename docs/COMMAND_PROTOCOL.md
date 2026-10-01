@@ -1,10 +1,10 @@
 ﻿# Контракт команд 0.3.1: сообщения, состояния и время
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-220144
+Дата и время последнего изменения: 261001-112704
 
 ## Реализовано в 0.3.0.dev1
 
@@ -79,7 +79,7 @@ from secrets import token_hex
 from threading import Event
 
 from remote_watch import CommandRegistry, Identity
-from remote_watch.command_protocol import (
+from remote_watch.commands.protocol import (
     CommandClaim, CommandGrant, CommandRef, CommandRegistration, CommandRequest,
     CommandSession, decode_command, describe_commands, encode_command, message_digest,
 )
@@ -124,7 +124,7 @@ expires_at = t_send + B. В момент t остаток равен max(0, expi
 времени раньше t_receive дают нулевой остаток.
 
 ```python
-from remote_watch.command_state import CommandDeadline
+from remote_watch.commands.state import CommandDeadline
 
 deadline = CommandDeadline.from_response(10, 100, 103, hub_epoch)
 assert deadline.remaining(103, hub_epoch) == 7

@@ -1,12 +1,12 @@
 ﻿# Проверки регистрации команд, partial и неизменяемого контекста.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260928-121352
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции:
+# Тесты:
 #
 # -> set_stop(): Обработчик приложения с привязанным Event.
 #
@@ -42,7 +42,13 @@ from threading import Event
 
 import pytest
 
-from remote_watch import CommandContext, CommandRegistry, CommandSpec, Identity, WatcherConfig
+from remote_watch import (
+    CommandContext,
+    CommandRegistry,
+    CommandSpec,
+    Identity,
+    WatcherConfig,
+)
 
 #******************************************************************************************************************
 # ФУНКЦИИ

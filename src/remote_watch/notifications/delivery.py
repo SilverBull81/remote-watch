@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -29,8 +29,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from ._validation import require_int, require_number, require_text
-from .events import Notification
+from remote_watch._validation import require_int, require_number, require_text
+from remote_watch.events import Notification
 
 #******************************************************************************************************************
 # КЛАССЫ
@@ -182,6 +182,6 @@ class DeliveryResult:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        'Модуль remote_watch.delivery не предназначен для прямого запуска.',
+        'Модуль remote_watch.notifications.delivery не предназначен для прямого запуска.',
     )
 #------------------------------------------------------------------------------------------------------------------

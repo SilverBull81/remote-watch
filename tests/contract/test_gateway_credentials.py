@@ -1,12 +1,12 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-122644
+# Дата и время последнего изменения: 261001-112704
 #
-# Функции и тесты:
+# Тесты:
 # -> document(): Конфигурация с вымышленными токенами.
 # -> test_inline_check(): Проверка JSON без чтения окружения и раскрытия токенов.
 # -> test_credential_errors(): Точное поле ошибки без приватных значений.
@@ -36,10 +36,10 @@ import pytest
 from remote_watch import Delivery, Notification
 from remote_watch.adapters.ntfy import NtfyConfig
 from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.gateway import Gateway, GatewayStartupError, main
-from remote_watch.gateway_config import GatewayPrincipal
-from remote_watch.gateway_json import GatewayConfigError, load_gateway_config
-from remote_watch.relay import RelayRequest
+from remote_watch.gateway.config import GatewayPrincipal
+from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
+from remote_watch.gateway.server import Gateway, GatewayStartupError, main
+from remote_watch.relay_protocol import RelayRequest
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -111,7 +111,10 @@ def test_inline_check(
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Запрет чтения переменных при проверке конфига
     #--------------------------------------------------------------------------------------------------------------
-    def forbidden(*args: Any, **kwargs: Any) -> None:
+    def forbidden(
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
 
         """Fail on environment reads during configuration validation.
 
@@ -121,6 +124,9 @@ def test_inline_check(
         :param kwargs: Unexpected keyword arguments.
         :type kwargs: Any
         """
+
+        # args — неожиданные позиционные аргументы подставного вызова.
+        # kwargs — неожиданные именованные аргументы подставного вызова.
 
         raise AssertionError("check-config must not read environment secrets")
     #--------------------------------------------------------------------------------------------------------------
@@ -423,7 +429,10 @@ def test_duplicate_credentials(
 # ТЕСТ : Конфликт источников в публичных Python-настройках
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["telegram", "ntfy", "gateway"])
-def test_typed_sources(kind: str, notification: Notification) -> None:
+def test_typed_sources(
+    kind: str,
+    notification: Notification,
+) -> None:
 
     """Validate direct model usage independently of JSON parsing.
 
@@ -473,5 +482,6 @@ def test_inline_example() -> None:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль tests.contract.test_gateway_credentials не предназначен для прямого запуска.")
+    print("Модуль tests.contract.test_gateway_credentials не предназначен для прямого запуска. "
+          "Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

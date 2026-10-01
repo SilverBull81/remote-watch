@@ -1,10 +1,10 @@
 ﻿# Relay-клиент и первая итерация 0.2
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171854
+Дата и время последнего изменения: 261001-112704
 
 ## Готовность
 
@@ -137,7 +137,7 @@ relay_expired означает истёкший срок; relay_clock_skew — c
 
 ## Одноразовый smoke
 
-Для relay также подготовлена команда `python -m remote_watch.smoke relay`.
+Для relay также подготовлена команда `python -m remote_watch.diagnostics.smoke relay`.
 Она работает с сервером 0.2.0.dev3; его principal должен разрешать синтетическую
 Identity smoke, как в GATEWAY_SERVER.md. В локальном credentials-файле нужна отдельная секция:
 

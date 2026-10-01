@@ -1,23 +1,23 @@
 ﻿# Ручная проверка доставки одной командой
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-164943
+Дата и время последнего изменения: 261001-112704
 
 ## Запуск
 
 После установки `python -m pip install -e ".[telegram,ntfy]"` из корня проекта:
 
 ```powershell
-python -m remote_watch.smoke telegram
+python -m remote_watch.diagnostics.smoke telegram
 ```
 
 Либо, когда настроен ntfy:
 
 ```powershell
-python -m remote_watch.smoke ntfy
+python -m remote_watch.diagnostics.smoke ntfy
 ```
 
 Каждая команда отправляет **одно** синтетическое сообщение только выбранному сервису.
@@ -29,7 +29,7 @@ Smoke не читает рабочие логи и не повторяет за�
 Произвольный поиск файла в родительских каталогах не выполняется. Другой путь:
 
 ```powershell
-python -m remote_watch.smoke telegram --credentials C:\Private\remote-watch.local.json
+python -m remote_watch.diagnostics.smoke telegram --credentials C:\Private\remote-watch.local.json
 ```
 
 Результат в терминале не содержит токен, chat/topic, endpoint или содержимое файла.
@@ -81,7 +81,7 @@ Endpoint по умолчанию: официальный Bot API для Telegram
 
 ## Relay, начиная с 0.2.0.dev1
 
-Для совместимого gateway добавлена команда `python -m remote_watch.smoke relay`.
+Для совместимого gateway добавлена команда `python -m remote_watch.diagnostics.smoke relay`.
 Она использует extra relay и отдельную секцию credentials `relay` с endpoint, alias
 и сервисным token. Сервер 0.2.0.dev3 настраивается по [GATEWAY_SERVER.md](GATEWAY_SERVER.md);
 нужно разрешить точную синтетическую Identity smoke. Схема и границы готовности

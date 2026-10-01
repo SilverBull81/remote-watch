@@ -1,10 +1,10 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164512
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> GatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
@@ -24,11 +24,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ._credentials import validate_credentials
-from ._validation import require_int, require_number, text_tuple
-from .config import DeliveryMode, Destination
-from .events import Identity
-from .relay import validate_alias
+from remote_watch._credentials import validate_credentials
+from remote_watch._validation import require_int, require_number, text_tuple
+from remote_watch.config import DeliveryMode, Destination
+from remote_watch.events import Identity
+from remote_watch.relay_protocol import validate_alias
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -39,8 +39,8 @@ class GatewayPrincipal:
     """Bind a service credential to one exact identity and a finite alias allowlist."""
 
     name: str                           # Локальное имя приложения для учёта доступа.
-    token_env: str | None = field(default=None, repr=False)  # Имя переменной; альтернатива token.
-    token: str | None = field(default=None, repr=False)      # Отдельный сервисный токен приложения.
+    token_env: str | None = field(default=None, repr=False)     # Имя переменной; альтернатива token.
+    token: str | None = field(default=None, repr=False)         # Отдельный сервисный токен приложения.
     identity: Identity                  # Единственная разрешённая принадлежность отправителя.
     aliases: tuple[str, ...]            # Разрешённые имена назначений на gateway.
     capacity: int = 4                   # Максимум одновременно принятых запросов приложения.
@@ -150,6 +150,6 @@ class GatewayConfig:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.gateway_config не предназначен для прямого запуска.",
+        "Модуль remote_watch.gateway.config не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

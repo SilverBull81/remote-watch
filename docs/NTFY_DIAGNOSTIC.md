@@ -1,10 +1,10 @@
 ﻿# Короткая диагностика длинных уведомлений ntfy
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-202056
+Дата и время последнего изменения: 261001-112704
 
 ## Назначение
 
@@ -28,7 +28,7 @@ Version 1.0.2
 сообщений на телефоне и не расходовать общую квоту одновременно.
 
 ```powershell
-python -m remote_watch.ntfy_diagnostic --output runs/ntfy-size-ru-02.jsonl
+python -m remote_watch.diagnostics.ntfy_diagnostic --output runs/ntfy-size-ru-02.jsonl
 ```
 
 Каждый повтор требует **нового** имени отчёта. Существующий файл не перезаписывается.

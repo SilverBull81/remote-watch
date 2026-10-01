@@ -1,12 +1,12 @@
 ﻿# Проверка возраста команд по достоверному времени без зависимости от часов VM.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-220144
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Классы:
 # -> TimeUnavailable: Отказ при отсутствии достоверного времени.
 #
 # -> TimeSample: Границы UTC в момент получения показания.
@@ -39,7 +39,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -49,9 +49,9 @@ from enum import Enum
 from time import monotonic
 from typing import Protocol
 
-from ._validation import require_int, require_number
-from .command_protocol import MAX_COMMAND_SECONDS
-from .command_state import CommandDeadline
+from remote_watch._validation import require_int, require_number
+from remote_watch.commands.protocol import MAX_COMMAND_SECONDS
+from remote_watch.commands.state import CommandDeadline
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ class TimeSource(Protocol):
 
         """Obtain a bounded fresh sample or raise TimeUnavailable.
 
-        :return: Obtain a bounded fresh sample or raise TimeUnavailable.
+        :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
         """
 
@@ -279,7 +279,7 @@ class TrustedClock:
 
         """Return conservative current bounds or invalidate an expired estimate.
 
-        :return: Return conservative current bounds or invalidate an expired estimate.
+        :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
         """
 
@@ -318,7 +318,7 @@ class TrustedClock:
         :param hub_epoch: Current hub incarnation identifier.
         :type hub_epoch: str
 
-        :return: Check provider seconds and preserve only the remaining original lifetime.
+        :return: Remaining command lifetime or a fixed rejection reason.
         :rtype: FreshnessDecision
         """
 
@@ -348,5 +348,5 @@ class TrustedClock:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.command_time не предназначен для прямого запуска.")
+    print("Модуль remote_watch.commands.time не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

@@ -1,12 +1,12 @@
 ﻿# Проверки моделей, сериализации и результатов команд без сети.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-193650
+# Дата и время последнего изменения: 261001-112704
 #
-# Состав модуля:
+# Тесты:
 # -> request(): Детерминированный запрос с вымышленными аргументами.
 # -> test_command_wire_roundtrip(): Передача всех моделей через строгий JSON.
 # -> test_command_wire_rejects(): Отказ на неоднозначных и слишком больших данных.
@@ -20,7 +20,7 @@
 
 
 #******************************************************************************************************************
-# ИМПОРТ И ОПРЕДЕЛЕНИЯ
+# ИМПОРТ
 #******************************************************************************************************************
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from functools import partial
 import pytest
 
 from remote_watch import CommandRegistry, CommandSpec, Identity
-from remote_watch.command_protocol import (
+from remote_watch.commands.protocol import (
     MAX_COMMAND_BYTES,
     CommandCapability,
     CommandClaim,
@@ -62,9 +62,11 @@ def request(identity: Identity) -> CommandRequest:
     :param identity: Synthetic application identity.
     :type identity: Identity
 
-    :return: Build a deterministic command with synthetic private arguments.
+    :return: Synthetic command bound to the test identity and session.
     :rtype: CommandRequest
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
 
     return CommandRequest(ref=CommandRef(identity=identity, session_id="1" * 32,
         hub_epoch="2" * 32, command_id="3" * 32), source_id="telegram-main", source_event_id="1001", actor_id="42",
@@ -89,6 +91,9 @@ def test_command_wire_roundtrip(
     :param kind: Selected protocol message kind.
     :type kind: str
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # kind — проверяемый вид сообщения.
 
     event = request(identity)
     claim = CommandClaim(ref=event.ref, claim_id="4" * 32, request_digest=message_digest(event))
@@ -132,6 +137,9 @@ def test_command_wire_rejects(
     :param case: Selected boundary or failure scenario.
     :type case: str
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # case — выбранный сценарий проверки.
 
     body = json.loads(encode_command(request(identity)))
     payload = body["payload"]
@@ -200,6 +208,9 @@ def test_command_interval_bounds(
     :type value: object
     """
 
+    # identity — явно заданные сведения о тестовом приложении.
+    # value — проверяемое недопустимое значение срока.
+
     with pytest.raises((ValueError, TypeError)):
         CommandSession(identity=identity, session_id="1" * 32, hub_epoch="2" * 32, remaining_ttl=value)
     with pytest.raises((ValueError, TypeError)):
@@ -217,6 +228,8 @@ def test_command_snapshots_and_metadata(identity: Identity) -> None:
     :param identity: Synthetic application identity.
     :type identity: Identity
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
 
     calls: list[str] = []
     registry = CommandRegistry.from_callbacks({"suspend_load": partial(calls.append, "suspend")})
@@ -257,6 +270,9 @@ def test_registration_bounds(
     :type case: str
     """
 
+    # identity — явно заданные сведения о тестовом приложении.
+    # case — выбранный сценарий проверки.
+
     capability = CommandCapability(name="status", required_scope="read")
     values = {"empty": [], "too_many": [capability] * 65,
               "duplicate": [capability, capability], "bad_type": [object()]}
@@ -275,6 +291,8 @@ def test_command_correlation(identity: Identity) -> None:
     :param identity: Synthetic application identity.
     :type identity: Identity
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
 
     event = request(identity)
     claim = CommandClaim(ref=event.ref, claim_id="4" * 32, request_digest=message_digest(event))
@@ -308,6 +326,9 @@ def test_callback_result_contract(
     :param value: Value to validate or normalize.
     :type value: object
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # value — возвращаемое обработчиком значение.
 
     result = callback_result(request(identity).ref, "4" * 32, value)
     valid = value is None or type(value) is str and value != "\ud800" and len(value) <= 2048
@@ -343,7 +364,7 @@ def test_callback_result_never_stringifies(identity: Identity) -> None:
 
             """Fail if normalization attempts user-defined string conversion.
 
-            :return: Fail if normalization attempts user-defined string conversion.
+            :return: String representation used to exercise result validation.
             :rtype: str
             """
 
@@ -374,6 +395,9 @@ def test_semantic_rejection(
     :param case: Selected boundary or failure scenario.
     :type case: str
     """
+
+    # identity — явно заданные сведения о тестовом приложении.
+    # case — выбранный сценарий проверки.
 
     event = request(identity)
     with pytest.raises((ValueError, TypeError)):

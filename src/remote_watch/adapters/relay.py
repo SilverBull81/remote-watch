@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-185913
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -34,12 +34,30 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 
-from .._validation import require_number
-from ..config import DeliveryMode, Destination, RetryPolicy
-from ..delivery import Delivery, DeliveryResult, DeliveryStatus, ResultSource
-from ..relay import MAX_RESPONSE_BYTES, RelayRequest, _decode, decode_response, encode_json, validate_alias
-from ._common import http_failure, read_token, retry_after, validate_endpoint, validate_env
-from ._http import HttpSender
+from remote_watch._validation import require_number
+from remote_watch.adapters._common import (
+    http_failure,
+    read_token,
+    retry_after,
+    validate_endpoint,
+    validate_env,
+)
+from remote_watch.adapters._http import HttpSender
+from remote_watch.config import DeliveryMode, Destination, RetryPolicy
+from remote_watch.notifications.delivery import (
+    Delivery,
+    DeliveryResult,
+    DeliveryStatus,
+    ResultSource,
+)
+from remote_watch.relay_protocol import (
+    MAX_RESPONSE_BYTES,
+    RelayRequest,
+    _decode,
+    decode_response,
+    encode_json,
+    validate_alias,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------

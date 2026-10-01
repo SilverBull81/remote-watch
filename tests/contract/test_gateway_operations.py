@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260929-203401
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки.
@@ -15,7 +15,7 @@
 #    -> send(): Одна попытка с сохранением принадлежности и результата.
 #    -> close(): Завершение и освобождение ресурсов.
 #
-# Функции и тесты:
+# Тесты:
 # -> test_cli_summary(): Единственная сводка после завершения CLI.
 # -> test_config_categories(): Безопасные категории ошибок JSON.
 # -> test_cli_private_arguments(): Отсутствие приватных аргументов в ошибке CLI.
@@ -47,13 +47,13 @@ from remote_watch import (
     Destination,
     Notification,
     RetryPolicy,
-    field_smoke,
 )
-from remote_watch import gateway as cli
-from remote_watch.gateway import Gateway
-from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway_json import GatewayConfigError, load_gateway_config
-from remote_watch.relay import RelayRequest, decode_response
+from remote_watch.diagnostics import field_smoke as field_smoke
+from remote_watch.gateway import server as cli
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
+from remote_watch.gateway.server import Gateway
+from remote_watch.relay_protocol import RelayRequest, decode_response
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -438,7 +438,10 @@ def test_shared_alias(
 # ТЕСТ : Штатная остановка настоящего дочернего процесса
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("output_encoding", ["utf-8", "cp1252"])
-def test_cli_process_stop(tmp_path: Path, output_encoding: str) -> None:
+def test_cli_process_stop(
+    tmp_path: Path,
+    output_encoding: str,
+) -> None:
 
     """Stop a real gateway child process through the local file on Windows and Unix.
 
@@ -456,7 +459,7 @@ def test_cli_process_stop(tmp_path: Path, output_encoding: str) -> None:
     factory = tmp_path / "synthetic_factory.py"
     factory.write_text(
         "from remote_watch import Destination, Identity, RetryPolicy\n"
-        "from remote_watch.gateway_config import GatewayConfig, GatewayPrincipal\n"
+        "from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal\n"
         "class Channel:\n"
         "    async def open(self): pass\n"
         "    async def close(self): pass\n"
@@ -470,7 +473,7 @@ def test_cli_process_stop(tmp_path: Path, output_encoding: str) -> None:
     # должна сохраняться и при таком окружении, а не завершать работающий gateway.
     environment = dict(os.environ, GW_PROCESS_TEST="synthetic_process_" + "x" * 32,
                        PYTHONIOENCODING=output_encoding,
-                       PYTHONPATH=os.pathsep.join((str(tmp_path), str(Path(cli.__file__).resolve().parents[1]))))
+                       PYTHONPATH=os.pathsep.join((str(tmp_path), str(Path(cli.__file__).resolve().parents[2]))))
     stop = tmp_path / "gateway.stop"
     output = tmp_path / "process.log"
     with output.open("wb") as stream:
@@ -668,6 +671,6 @@ def test_mixed_field(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль tests.contract.test_gateway_operations не предназначен для прямого запуска.",
+        "Модуль tests.contract.test_gateway_operations не предназначен для прямого запуска. Используйте pytest.",
     )
 #------------------------------------------------------------------------------------------------------------------

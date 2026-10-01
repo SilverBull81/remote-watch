@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 260930-164512
+# Дата и время последнего изменения: 261001-112704
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -35,10 +35,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ._credentials import CREDENTIAL_HINTS, CredentialError
-from .config import Destination, RetryPolicy
-from .events import Identity
-from .gateway_config import GatewayConfig, GatewayPrincipal
+from remote_watch._credentials import CREDENTIAL_HINTS, CredentialError
+from remote_watch.config import Destination, RetryPolicy
+from remote_watch.events import Identity
+from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 
 #******************************************************************************************************************
 # КОНСТАНТЫ
@@ -137,7 +137,9 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             try:
                 destinations.append(_destination(item))
             except CredentialError as error:
-                raise GatewayConfigError(code, f"destinations[{index}].settings.{error.field}", error.reason) from None
+                raise GatewayConfigError(
+                    code, f"destinations[{index}].settings.{error.field}", error.reason,
+                ) from None
         field = "principals"
         principals = []
         for index, item in enumerate(_items(root["principals"], 256)):
@@ -318,7 +320,7 @@ def _destination(value: Any) -> Destination:
     # остаются доступны через явно доверенную Python-фабрику. Здесь создаются
     # только настройки: literal-токены проверяются сразу, окружение читается при запуске.
     if settings["provider"] == "telegram":
-        from .adapters.telegram import TelegramConfig
+        from remote_watch.adapters.telegram import TelegramConfig
 
         options = _object(settings["settings"], {
             "token", "token_env", "chat_id", "endpoint", "message_thread_id", "disable_notification", "allow_http",
@@ -326,7 +328,7 @@ def _destination(value: Any) -> Destination:
         _credential_source(options)
         provider = TelegramConfig(**options)
     elif settings["provider"] == "ntfy":
-        from .adapters.ntfy import NtfyConfig
+        from remote_watch.adapters.ntfy import NtfyConfig
 
         options = _object(settings["settings"], {
             "topic", "token", "token_env", "endpoint", "title", "priority", "tags", "allow_http",
@@ -366,6 +368,6 @@ def _credential_source(settings: dict[str, Any]) -> None:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.gateway_json не предназначен для прямого запуска.",
+        "Модуль remote_watch.gateway.json_config не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------
