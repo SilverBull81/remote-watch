@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261001-202420
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -83,6 +83,12 @@ def test_command_https_exchange(
         rig = Rig(tmp_path)
         server = CommandHubServer(rig.hub)
         await server.start(ssl_context=server_ssl)
+        # Здесь вручную проверяется один HTTPS-обмен без dispatcher и его повторов.
+        # На медленном диске периодический sweep успевал занять worker между шагами.
+        # Убираем только этот таймер; настоящие SQLite/TLS и проверки прав сохраняются.
+        # Конкуренцию фонового обслуживания проверяют сценарии gateway с dispatcher.
+        rig.hub._refresh.cancel()
+        await asyncio.gather(rig.hub._refresh, return_exceptions=True)
         transport = HttpsCommandTransport(f"https://127.0.0.1:{server.port}", APP_TOKEN, ssl_context=client_ssl)
         client = CommandClient(rig.registration, transport, rig.local, clock=lambda: rig.now)
 
