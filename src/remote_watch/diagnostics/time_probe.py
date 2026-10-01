@@ -1,10 +1,10 @@
 ﻿# Явная проверка TimeAPI и допуска показаний через TrustedClock без отправки уведомлений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-195308
 #
 # Функции:
 # -> main(): Разбор параметров и запуск конечной серии запросов.
@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from time import monotonic
@@ -115,5 +116,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 # ТОЧКА ВХОДА : Явная проверка доступности и пригодности времени
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Русская справка и результат должны читаться и при перенаправлении вывода в файл.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())
 #------------------------------------------------------------------------------------------------------------------

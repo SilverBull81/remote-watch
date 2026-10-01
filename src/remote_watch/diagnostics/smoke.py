@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-195308
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -299,5 +300,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 # ТОЧКА ВХОДА : Явный запуск smoke через python -m remote_watch.diagnostics.smoke
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Русская справка и результат должны читаться и при перенаправлении вывода в файл.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())
 #------------------------------------------------------------------------------------------------------------------

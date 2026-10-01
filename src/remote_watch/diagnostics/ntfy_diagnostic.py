@@ -1,10 +1,10 @@
 ﻿# Короткая проверка разных размеров ntfy с безопасным отчётом о каждой попытке.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-195308
 #
 # Функции:
 # -> _delivery(): Подготовка уведомления с точным размером текста.
@@ -24,6 +24,7 @@ import asyncio
 import json
 import os
 import platform
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from importlib.metadata import version
@@ -214,5 +215,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 # ТОЧКА ВХОДА : Явный запуск диагностики ntfy
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Русская справка и результат должны читаться и при перенаправлении вывода в файл.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())
 #------------------------------------------------------------------------------------------------------------------

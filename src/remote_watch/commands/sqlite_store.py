@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261001-195347
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -500,10 +500,12 @@ class SQLiteCommandStore:
                                        received_at=row["received"], expires_at=row["expires"])
             # Срок START дополнительно сужается timeout разрешения, но никогда
             # не создаётся заново при повторном запросе. База хранит исходный предел.
+            # Сравнение с суммой повторяет округление при создании срока;
+            # дополнительный допуск, способный продлить grant, не нужен.
             if action is CommandAction.START and stored.record.phase is not CommandPhase.STARTED:
                 if (type(grant) is not CommandGrant or type(grant_deadline) is not CommandDeadline
                         or grant_deadline.hub_epoch != ref.hub_epoch
-                        or grant_deadline.expires_at - grant_deadline.sent_at > grant.execution_timeout):
+                        or grant_deadline.expires_at > grant_deadline.sent_at + grant.execution_timeout):
                     raise StoreConflict("invalid grant deadline")
                 if deadline.expires_at > grant_deadline.sent_at:
                     deadline = CommandDeadline(hub_epoch=ref.hub_epoch, sent_at=grant_deadline.sent_at,

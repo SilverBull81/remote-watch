@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261001-195347
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -103,7 +103,19 @@ def main() -> int:
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],
             capture_output=True, timeout=15, check=False,
         )
-        assert result.returncode == 0, module
+        assert result.returncode == 0, (module, result.stderr.decode("utf-8", errors="replace"))
+
+        # Воспроизводим западную системную кодировку Windows и на Linux.
+        # -I исключает влияние PYTHONIOENCODING; CLI обязан настроить свой вывод.
+        bootstrap = ("import runpy,sys; sys.stdout.reconfigure(encoding='cp1252'); "
+                     "sys.stderr.reconfigure(encoding='cp1252'); sys.argv=[sys.argv[1], '--help']; "
+                     "runpy.run_module(sys.argv[0], run_name='__main__')")
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", bootstrap, "remote_watch." + module],
+            capture_output=True, timeout=15, check=False,
+        )
+        assert result.returncode == 0, (module, result.stderr.decode("utf-8", errors="replace"))
+        assert "--help" in result.stdout.decode("utf-8")
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
     assert all(item is not None for item in (RelayChannel, RelayConfig, TelegramChannel,

@@ -1,10 +1,10 @@
 ﻿# Переходы состояний команд и относительные сроки без постоянного хранилища.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-195347
 #
 # Классы:
 # -> CommandPhase: Состояния исполнения в постоянном журнале.
@@ -437,7 +437,9 @@ def advance_command(
 
         # Проверяем, что caller не подменил локальный срок более длинным. Срок
         # получен из этого ответа и не может превышать присланный execution_timeout.
-        if command_deadline.expires_at - command_deadline.sent_at > grant.execution_timeout:
+        # Сравниваем абсолютные пределы: обратное вычитание float способно
+        # дать срок чуть больше исходного даже без его реального продления.
+        if command_deadline.expires_at > command_deadline.sent_at + grant.execution_timeout:
             raise ValueError("command deadline exceeds grant")
         return CommandTransition(record=replace(record, phase=CommandPhase.STARTED), start_callback=True)
 

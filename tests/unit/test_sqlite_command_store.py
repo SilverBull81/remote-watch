@@ -1,12 +1,14 @@
 ﻿# Проверки атомарности, аварийного восстановления и пределов журнала SQLite.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261001-195308
 #
 # Тесты:
+# -> test_grant_rounding(): Корректный дробный срок и отказ при его реальном увеличении.
+#
 # -> request(): Подготовка подставной команды.
 #
 # -> options(): Согласованные данные разрешения и сессии.
@@ -44,6 +46,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 import subprocess
@@ -65,7 +68,13 @@ from remote_watch.commands.protocol import (
     message_digest,
 )
 from remote_watch.commands.sqlite_store import SQLiteCommandStore
-from remote_watch.commands.state import CommandAction, CommandDeadline, CommandPhase
+from remote_watch.commands.state import (
+    CommandAction,
+    CommandDeadline,
+    CommandPhase,
+    CommandRecord,
+    advance_command,
+)
 from remote_watch.commands.storage import (
     AuditCode,
     StoreConflict,
@@ -861,6 +870,76 @@ def test_process_crash_boundaries(
         assert (effect.read_bytes() if effect.exists() else b"") == (
             b"1" if phase in ("completed", "acknowledged", "pruned") else b""
         )
+    finally:
+        store.close()
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Корректный дробный срок и отказ при его реальном увеличении
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize(("origin", "duration"), [(100.0, 0.2), (1020.0000000000003, 10.0)])
+@pytest.mark.parametrize("extended", [False, True])
+def test_grant_rounding(
+    tmp_path: Path,
+    origin: float,
+    duration: float,
+    extended: bool,
+) -> None:
+
+    """Accept rounded absolute bounds while rejecting even a one-ULP extension.
+
+    :param tmp_path: Isolated journal directory.
+    :type tmp_path: Path
+
+    :param origin: Deterministic local clock origin exposing cancellation error.
+    :type origin: float
+
+    :param duration: Valid execution budget in seconds.
+    :type duration: float
+
+    :param extended: Whether to forge the next representable deadline after the valid bound.
+    :type extended: bool
+    """
+
+    # tmp_path — временный каталог журнала без реальных настроек.
+    # origin — начало отсчёта, при котором обратное вычитание даёт погрешность.
+    # duration — разрешённый срок исполнения в секундах.
+    # extended — попытка продлить срок на минимальный представимый шаг float.
+
+    event = request()
+    data = options(event, origin)
+    data["grant"] = replace(data["grant"], execution_timeout=duration)
+    deadline = CommandDeadline.from_response(duration, origin, origin, event.ref.hub_epoch)
+    assert deadline.expires_at - origin > duration
+    if extended:
+        deadline = replace(deadline, expires_at=math.nextafter(deadline.expires_at, math.inf))
+    data["grant_deadline"] = deadline
+
+    # Проверяем и чистую модель, и транзакционную запись: ни одна из границ
+    # не должна отбрасывать честный срок или разрешать подменённый более длинный.
+    record = CommandRecord(request=event, phase=CommandPhase.CLAIMED, claim_id=data["claim"].claim_id)
+    state_options = {key: value for key, value in data.items() if key != "grant_deadline"}
+    state_options.update(command_deadline=deadline, now=origin)
+    if extended:
+        with pytest.raises(ValueError, match="deadline exceeds grant"):
+            advance_command(record, CommandAction.START, **state_options)
+    else:
+        assert advance_command(record, CommandAction.START, **state_options).start_callback
+
+    store = opened(tmp_path / "rounding.sqlite", [origin])
+    try:
+        admit(store, event, origin)
+        claimed = store.transition(event.ref, 0, CommandAction.CLAIM, **data)
+        if extended:
+            with pytest.raises(StoreConflict, match="invalid grant deadline"):
+                store.transition(event.ref, claimed.command.revision, CommandAction.START, **data)
+            assert store.get(event.ref).record.phase is CommandPhase.CLAIMED
+        else:
+            started = store.transition(event.ref, claimed.command.revision, CommandAction.START, **data)
+            assert started.start_callback
+            replay = store.transition(event.ref, started.command.revision, CommandAction.START, **data)
+            assert not replay.start_callback
     finally:
         store.close()
 #------------------------------------------------------------------------------------------------------------------
