@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261001-185745
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -20,6 +20,9 @@
 #    -> heartbeat(): Продление живой регистрации без продления команд.
 #    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
 #    -> source_cursor(): Чтение подтверждённой позиции доверенного источника.
+#    -> skip_source(): Фиксация пропуска события до подтверждения провайдеру.
+#    -> source_cutoff(): Консервативная граница очистки по доверенному времени.
+#    -> commands_for(): Разрешённые команды живого приложения для автора и чата.
 #    -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
 #    -> poll(): Ожидание одной команды с одним waiter на сессию.
 #    -> claim(): Запись CLAIMED и STARTED до выдачи разрешения приложению.
@@ -399,6 +402,118 @@ class CommandHub:
 
         source = self._source_policy(token)
         return await self._worker.call(lambda: self._worker.store.cursor(source.source_id))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Фиксация пропуска события до подтверждения провайдеру
+    #--------------------------------------------------------------------------------------------------------------
+    async def skip_source(
+        self,
+        token: str,
+        *,
+        position: int,
+        expected_cursor: int,
+    ) -> Admission:
+
+        """Persist a non-command provider event before advancing its external checkpoint.
+
+        :param token: Command-only credential, never logged or echoed.
+        :type token: str
+
+        :param position: Monotonically increasing local source position.
+        :type position: int
+
+        :param expected_cursor: Previously committed source position.
+        :type expected_cursor: int
+
+        :return: Committed source cursor and optional admitted command.
+        :rtype: Admission
+        """
+
+        # token — отдельный секрет команд, не выводимый в сообщения и журнал.
+        # position — собственная возрастающая позиция источника.
+        # expected_cursor — предыдущая подтверждённая позиция источника.
+
+        source = self._source_policy(token)
+        return await self._worker.call(lambda: self._worker.store.admit(
+            source.source_id, position, expected_cursor, None))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Консервативная граница очистки по доверенному времени
+    #--------------------------------------------------------------------------------------------------------------
+    def source_cutoff(
+        self,
+        token: str,
+    ) -> int | None:
+
+        """Return a conservative replay-pruning boundary only while trusted time is available.
+
+        :param token: Command-only credential, never logged or echoed.
+        :type token: str
+
+        :return: Conservative UTC pruning boundary, or None without trusted time.
+        :rtype: int | None
+        """
+
+        # token — отдельный секрет команд, не выводимый в сообщения и журнал.
+
+        self._source_policy(token)
+        try:
+            sample = self._trusted.bounds()
+        except Exception:
+            return None
+        return max(0, int(sample.lower_utc - self._trusted.policy.max_age - 2))
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Разрешённые команды живого приложения для автора и чата
+    #--------------------------------------------------------------------------------------------------------------
+    def commands_for(
+        self,
+        token: str,
+        identity: Identity,
+        actor_id: str,
+        conversation_id: str,
+    ) -> tuple[str, ...]:
+
+        """List only the live target's commands permitted to this exact provider actor and chat.
+
+        :param token: Command-only credential, never logged or echoed.
+        :type token: str
+
+        :param identity: Exact application identity, without wildcard fields.
+        :type identity: Identity
+
+        :param actor_id: Provider-authenticated sender or configured private-topic principal.
+        :type actor_id: str
+
+        :param conversation_id: Authenticated chat ID or configured private command topic.
+        :type conversation_id: str
+
+        :return: Command names currently permitted to the exact actor and conversation.
+        :rtype: tuple[str, ...]
+        """
+
+        # token — отдельный секрет команд, не выводимый в сообщения и журнал.
+        # identity — точные сведения о приложении без шаблонов и догадок.
+        # actor_id — удостоверенный отправитель либо владелец закрытого топика.
+        # conversation_id — проверенный ID чата либо закрытый топик команд.
+
+        source = self._source_policy(token)
+        entry = self._targets.get(identity)
+        if entry is None:
+            raise CommandError("stale_session")
+        self._session(entry)
+        scopes = frozenset(scope for rule in source.access
+                           if rule.identity == identity and rule.actor_id == actor_id
+                           and rule.conversation_id == conversation_id for scope in rule.scopes)
+        if not scopes:
+            raise CommandError("denied")
+        return tuple(cap.name for cap in entry.registration.capabilities if cap.required_scope in scopes)
     #--------------------------------------------------------------------------------------------------------------
 
 

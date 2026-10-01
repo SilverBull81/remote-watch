@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "service": "command-smoke",
+    "environment": "test",
+    "region": "ru",
+    "host": "ru-vm",
+    "instance_id": "one"
+  },
+  "endpoint": "https://REPLACE-LV-ADDRESS:8766",
+  "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_ONE_32_PLUS",
+  "state_file": "data/command-client-one.sqlite",
+  "owner_id": "command-client-one",
+  "ca_file": "secrets/root-ca.crt"
+}

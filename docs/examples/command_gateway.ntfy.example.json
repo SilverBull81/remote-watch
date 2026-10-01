@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "state_dir": "data/commands",
+  "targets": {
+    "one": {
+      "service": "command-smoke",
+      "environment": "test",
+      "region": "ru",
+      "host": "ru-vm",
+      "instance_id": "one"
+    },
+    "two": {
+      "service": "command-smoke",
+      "environment": "test",
+      "region": "ru",
+      "host": "ru-vm",
+      "instance_id": "two"
+    }
+  },
+  "principals": [
+    {
+      "name": "one",
+      "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_ONE_32_PLUS",
+      "targets": [
+        "one"
+      ],
+      "scopes": [
+        "command:status",
+        "command:check_load",
+        "command:suspend_load",
+        "command:resume_load"
+      ]
+    },
+    {
+      "name": "two",
+      "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_TWO_32_PLUS",
+      "targets": [
+        "two"
+      ],
+      "scopes": [
+        "command:status",
+        "command:check_load",
+        "command:suspend_load",
+        "command:resume_load"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "ntfy",
+      "provider": "ntfy",
+      "settings": {
+        "endpoint": "https://ntfy.sh",
+        "topic": "REPLACE-private-commands",
+        "reply_topic": "REPLACE-private-replies",
+        "actor_id": "owner",
+        "private_topic_confirmed": true,
+        "token": "REPLACE_WITH_YOUR_PRIVATE_NTFY_TOKEN"
+      },
+      "access": [
+        {
+          "actor_id": "owner",
+          "conversation_id": "REPLACE-private-commands",
+          "targets": [
+            "one",
+            "two"
+          ],
+          "scopes": [
+            "command:status",
+            "command:check_load",
+            "command:suspend_load",
+            "command:resume_load"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.2.7
+Version 1.2.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-170744
+Дата и время последнего изменения: 261001-185629
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.4.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.3.5.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -61,7 +61,16 @@ Stage 0.3.4 now provides CommandDispatcher and explicit RemoteWatcher(command_cl
 Sync callbacks/validators use one dedicated worker; async callbacks use the application's
 astart loop. Timed-out work retains its slot until actual termination; only result
 delivery is retried. Durable release proof and pre-grant rejection extend hub operations.
-Old unknown executions remain pinned for review. Telegram source/config/CLI remain 0.3.5.
+Old unknown executions remain pinned for review. Stage 0.3.5 now provides Telegram
+and private-topic ntfy sources, strict command JSON, a separate gateway.commands CLI
+and diagnostics.command_smoke. Source decisions bind the original session before
+hub submission. Source SQLite retains opaque provider IDs, a pending decision and
+an irreversible pruning cutoff. Local OS locks prevent a second deployment owner.
+The owner explicitly selected ntfy commands for private topics; the existing free
+unreserved notification topic must not authorize commands. Provider write ACL is
+an operator prerequisite; anonymous read probes alone do not prove it.
+Read docs/COMMAND_SOURCES.md and docs/REVIEW_0_1_0_3.md before changing this boundary.
+Live command acceptance and real application migration remain pending.
 Read docs/COMMAND_HUB.md and docs/COMMAND_EXECUTION.md before changing these boundaries.
 The old root smoke/field_smoke/ntfy_diagnostic launchers are removed; diagnostics
 are launched only under remote_watch.diagnostics. Existing callback registration remains compatible. The owner explicitly requires both status/check_load and resume_load/suspend_load
@@ -74,8 +83,7 @@ retry a possibly executed callback automatically. Outbound grants do not enable 
 
 Real application migration remains deferred until this command path is ready.
 Legacy fin-data TelegramBot API compatibility is not required. The target phone is
-Android; ntfy uses a free account without topic reservation. Telegram is the first
-command source; Matrix follows. MAX and public distribution remain out of scope.
+Android; ntfy uses a free account without topic reservation. Telegram and explicitly private ntfy topics are command sources; Matrix follows. MAX and public distribution remain out of scope.
 
 Dev3 passed 808 local tests (2 opt-in skips), clean core/extras wheel checks,
 and all 39 TimeAPI tests on Python 3.10.21 after fixing fractional-second parsing,
@@ -92,6 +100,13 @@ Dev 0.3.4.dev1 passed 892 tests (2 live skips) on Windows Python 3.10.21;
 clean Windows Python 3.12.2 core/extras wheel checks passed 592/892 tests.
 All 93 Python files passed style checks. CI/Linux/live providers were not rerun.
 Exact results and command-execution limits: docs/VALIDATION.md and docs/COMMAND_EXECUTION.md.
+
+Dev 0.3.5.dev1 passed 947 tests (2 live skips) on Windows Python 3.10.21;
+clean Windows Python 3.12.2 core/extras wheel checks passed 626/947 tests.
+All 107 Python files passed style checks. CI/Linux/live command providers were
+not exercised. Source replay and transport-log isolation regressions are covered.
+Exact results: docs/VALIDATION.md. Templates live under docs/examples and ship
+in sdist; no real credentials or runtime journals belong in distribution artifacts.
 
 ## Read the Relevant Design Context
 

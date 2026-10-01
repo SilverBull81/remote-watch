@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-184110
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
@@ -31,6 +31,7 @@ from remote_watch.commands.http_wire import MAX_HTTP_BYTES, OPERATIONS, decode_r
 from remote_watch.commands.hub_config import _token
 from remote_watch.commands.protocol import CommandMessage, encode_command
 from remote_watch.commands.transport import CommandError, CommandOffer
+from remote_watch.notifications._context import delivery_context
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -169,6 +170,9 @@ class HttpsCommandTransport:
         if not self._ssl.check_hostname or self._ssl.verify_mode != ssl.CERT_REQUIRED:
             raise CommandError("unavailable")
         self._active += 1
+        # Ошибки HTTP-библиотеки не должны стать удалёнными уведомлениями приложения.
+        # За пределами одного обмена сохраняется прежний контекст пользовательского кода.
+        context_token = delivery_context.set(True)
 
         try:
             # Два места нужны для poll и heartbeat. При переполнении нет скрытой очереди.
@@ -197,6 +201,7 @@ class HttpsCommandTransport:
             raise CommandError("unavailable") from None
         finally:
             self._active -= 1
+            delivery_context.reset(context_token)
     #--------------------------------------------------------------------------------------------------------------
 
 

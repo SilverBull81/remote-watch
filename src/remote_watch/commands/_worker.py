@@ -1,12 +1,17 @@
 ﻿# Последовательные операции постоянного журнала с ограниченным ожиданием.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261001-184110
 #
 # Классы:
+# -> StoreLifecycle: Контракт ресурсов рабочего потока хранения.
+#    Интерфейс:
+#    -> open(): Открытие принадлежащего журналу ресурса.
+#    -> close(): Закрытие ресурса после последней операции.
+#
 # -> StoreWorker: Последовательное хранение без блокировки цикла событий.
 #    Конструктор:
 #    -> __init__(): Создание объекта.
@@ -27,18 +32,49 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import TypeVar
+from typing import Generic, Protocol, TypeVar
 
-from remote_watch.commands.storage import CommandStore, StoreConflict, StoreError, StoreFull
+from remote_watch.commands.storage import StoreConflict, StoreError, StoreFull
 from remote_watch.commands.transport import CommandError
 
 T = TypeVar("T")
 
 
 #------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Контракт ресурсов рабочего потока хранения
+#------------------------------------------------------------------------------------------------------------------
+class StoreLifecycle(Protocol):
+    """Describe the resources owned by a bounded storage worker."""
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Открытие принадлежащего журналу ресурса
+    #--------------------------------------------------------------------------------------------------------------
+    def open(self) -> None:
+
+        """Open the journal on the worker's thread."""
+
+        ...
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Закрытие ресурса после последней операции
+    #--------------------------------------------------------------------------------------------------------------
+    def close(self) -> None:
+
+        """Close the journal after the last submitted operation."""
+
+        ...
+    #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+S = TypeVar("S", bound=StoreLifecycle)
+
+
+#------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Последовательное хранение без блокировки цикла событий
 #------------------------------------------------------------------------------------------------------------------
-class StoreWorker:
+class StoreWorker(Generic[S]):
     """Run at most one synchronous store operation without blocking the command loop."""
 
 
@@ -47,14 +83,14 @@ class StoreWorker:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        store: CommandStore,
+        store: S,
         timeout: float,
     ) -> None:
 
         """Configure a single storage lane without creating threads.
 
         :param store: Owned bounded persistent journal with a matching generation.
-        :type store: CommandStore
+        :type store: S
 
         :param timeout: Finite wait limit in seconds.
         :type timeout: float

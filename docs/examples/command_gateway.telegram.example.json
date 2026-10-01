@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "state_dir": "data/commands",
+  "targets": {
+    "one": {
+      "service": "command-smoke",
+      "environment": "test",
+      "region": "ru",
+      "host": "ru-vm",
+      "instance_id": "one"
+    },
+    "two": {
+      "service": "command-smoke",
+      "environment": "test",
+      "region": "ru",
+      "host": "ru-vm",
+      "instance_id": "two"
+    }
+  },
+  "principals": [
+    {
+      "name": "one",
+      "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_ONE_32_PLUS",
+      "targets": [
+        "one"
+      ],
+      "scopes": [
+        "command:status",
+        "command:check_load",
+        "command:suspend_load",
+        "command:resume_load"
+      ]
+    },
+    {
+      "name": "two",
+      "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_TWO_32_PLUS",
+      "targets": [
+        "two"
+      ],
+      "scopes": [
+        "command:status",
+        "command:check_load",
+        "command:suspend_load",
+        "command:resume_load"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "telegram",
+      "provider": "telegram",
+      "settings": {
+        "token": "12345:REPLACE_WITH_YOUR_TELEGRAM_BOT_TOKEN"
+      },
+      "access": [
+        {
+          "actor_id": "123456789",
+          "conversation_id": "123456789",
+          "targets": [
+            "one",
+            "two"
+          ],
+          "scopes": [
+            "command:status",
+            "command:check_load",
+            "command:suspend_load",
+            "command:resume_load"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261001-184110
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -47,8 +47,10 @@ def main() -> int:
     import remote_watch
     from remote_watch.adapters.command_http import HttpsCommandTransport
     from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
+    from remote_watch.adapters.ntfy_commands import NtfyCommandProvider
     from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+    from remote_watch.adapters.telegram_commands import TelegramCommandProvider
     from remote_watch.adapters.time_source import HttpsDateTimeSource
     from remote_watch.adapters.timeapi import TimeApiTimeSource
     from remote_watch.commands import CommandRegistry
@@ -57,12 +59,14 @@ def main() -> int:
     from remote_watch.commands.dispatcher import CommandDispatcher, DispatcherStats
     from remote_watch.commands.hub import CommandHub
     from remote_watch.commands.protocol import CommandRegistration, decode_command
+    from remote_watch.commands.source import CommandSourceRunner
     from remote_watch.commands.sqlite_store import SQLiteCommandStore
     from remote_watch.commands.state import CommandRecord
     from remote_watch.commands.storage import CommandStore
     from remote_watch.commands.time import TrustedClock
     from remote_watch.gateway import Gateway as PublicGateway
     from remote_watch.gateway.command_server import CommandHubServer
+    from remote_watch.gateway.command_service import CommandGateway
     from remote_watch.gateway.json_config import load_gateway_config
     from remote_watch.gateway.server import Gateway
 
@@ -83,6 +87,8 @@ def main() -> int:
     assert PublicGateway is Gateway
     assert all(item is not None for item in (CommandClient, CommandHub, CommandHubServer, HttpsCommandTransport))
     assert all(item is not None for item in (CommandDispatcher, DispatcherStats))
+    assert all(item is not None for item in (
+        CommandSourceRunner, TelegramCommandProvider, NtfyCommandProvider, CommandGateway))
     for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):
         assert importlib.util.find_spec("remote_watch." + removed) is None
 
@@ -91,7 +97,7 @@ def main() -> int:
     for module in (
         "gateway",
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
-        "diagnostics.time_probe",
+        "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands",
     ):
         result = subprocess.run(
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],

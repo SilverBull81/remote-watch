@@ -1,10 +1,10 @@
 ﻿# Пользовательские команды
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-170744
+Дата и время последнего изменения: 261001-185629
 
 ## Объём первой рабочей 0.3
 
@@ -141,5 +141,6 @@ required_scope проверяется hub по отдельным ACL; timeout �
 но не убивает sync-поток. read_only/idempotent остаются заявлениями приложения:
 конструктор не может доказать свойства функции. Повтор callback запрещён даже
 при idempotent=True. Есть polling, SQLite, выполнение и доставка результата hub;
-ответ в настоящий чат появится вместе с Telegram source в 0.3.5.
+ответ в Telegram или закрытый reply topic ntfy доставляют sources из 0.3.5.
+Настройка и проверка: [COMMAND_SOURCES.md](COMMAND_SOURCES.md).
 Подключение, UNKNOWN и остановка: [COMMAND_EXECUTION.md](COMMAND_EXECUTION.md).

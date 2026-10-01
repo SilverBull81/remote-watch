@@ -4,6 +4,9 @@ recursive-include docs *.md
 include docs/examples/gateway_config.example.json
 include docs/examples/gateway_config.inline.example.json
 include docs/examples/gateway-nginx.conf
+include docs/examples/command_gateway.telegram.example.json
+include docs/examples/command_gateway.ntfy.example.json
+include docs/examples/command_client.example.json
 recursive-include tests *.py
 recursive-include tools *.py
 include .github/workflows/validation.yml
