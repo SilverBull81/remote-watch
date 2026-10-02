@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261002-143102
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд.
@@ -147,11 +147,25 @@ class CommandGateway:
 
         """Return aggregate counters and fixed error codes without source names or identities.
 
-        :return: Validated configuration, synthetic provider object or aggregate service counters.
+        :return: Local readiness, fixed failure reasons and aggregate source counters.
         :rtype: dict[str, Any]
         """
 
-        return {"closed": self._closed, "sources": [asdict(source.stats) for source in self.sources]}
+        hub = self.hub.health()
+        sources = [asdict(source.stats) for source in self.sources]
+        stopped = any(source["closed"] for source in sources)
+        reason = hub["reason"]
+        if self._closed:
+            reason = "closed"
+        elif stopped:
+            reason = "source_stopped"
+        elif not self._started:
+            reason = "not_started"
+        # Открытый listener сам по себе не означает пригодность времени и источников.
+        # Статистика не запускает сетевых проб и не открывает журнал вторым владельцем.
+        return {"closed": self._closed, "ready": reason is None, "reason": reason,
+                "fatal": hub["fatal"] or (self._started and not self._closed and stopped),
+                "hub": hub, "sources": sources}
     #--------------------------------------------------------------------------------------------------------------
 
 

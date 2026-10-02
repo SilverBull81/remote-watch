@@ -1,10 +1,10 @@
 ﻿# Конечная проверка команд с телефона на безопасном тестовом состоянии.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261002-143102
 #
 # Классы:
 # -> SmokeApplication: Безопасное приложение для проверки команд с телефона.
@@ -37,7 +37,7 @@ from pathlib import Path
 from time import monotonic, sleep
 
 from remote_watch import CommandRegistry, RemoteWatcher, WatcherConfig
-from remote_watch.gateway.command_config import load_command_client
+from remote_watch.gateway.command_config import CommandConfigError, load_command_client
 from remote_watch.gateway.commands import CommandParser
 
 
@@ -241,6 +241,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_smoke(args.config, args.duration, args.report)
     except KeyboardInterrupt:
         return 130
+    except CommandConfigError as error:
+        print(f"Command smoke: code={error.code} field={error.field}. {error.hint}", flush=True)
+        return 2
     except Exception:
         print("Command smoke: операция не завершена; значения и детали скрыты.", flush=True)
         return 2

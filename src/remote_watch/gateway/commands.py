@@ -1,10 +1,10 @@
 ﻿# Запуск отдельного командного gateway из JSON без пользовательского Python-кода.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261002-143102
 #
 # Классы:
 # -> CommandParser: Разбор CLI без раскрытия ошибочных значений.
@@ -51,11 +51,11 @@ class CommandParser(argparse.ArgumentParser):
 
         """Reject invalid arguments without including their content in stderr.
 
-        :param message: Typed request for the selected command operation.
+        :param message: Argument parser error text, deliberately omitted from public output.
         :type message: str
         """
 
-        # message — типизированное сообщение выбранной командной операции.
+        # message — исходная ошибка argparse; она может содержать приватный аргумент.
 
         self.exit(2, "Неверные параметры командного gateway. Используйте --help.\n")
     #--------------------------------------------------------------------------------------------------------------
@@ -118,11 +118,19 @@ async def serve(
             pass
         await gateway.start(host=host, port=port, ssl_context=context, allow_loopback_http=allow_loopback_http)
         print(f"Command gateway запущен, TCP-порт {gateway.server.port}. Остановка: Ctrl+C.", flush=True)
+        previous = None
         while not stop.is_set():
             if stop_file is not None and stop_file.exists():
                 break
-            if any(source.stats.closed for source in gateway.sources):
-                raise RuntimeError("command source stopped")
+            stats = gateway.stats()
+            status = {key: stats[key] for key in ("ready", "reason", "fatal")}
+            # Печатаем только смену состояния, а не очередную строку каждую секунду.
+            # Временная потеря UTC оставляет loop обновления активным для восстановления.
+            if status != previous:
+                print(json.dumps({"kind": "command_gateway_status", **status}, sort_keys=True), flush=True)
+                previous = status
+            if stats["fatal"]:
+                raise RuntimeError("command service stopped")
             try:
                 await asyncio.wait_for(stop.wait(), 1)
             except asyncio.TimeoutError:
@@ -189,8 +197,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
     except Exception as error:
         field = error.field if isinstance(error, CommandConfigError) else stage
-        code = "dependency_missing" if isinstance(error, ImportError) else "operation_failed"
-        print(f"Ошибка command gateway: code={code} field={field}. Значения и детали скрыты.", flush=True)
+        code = (error.code if isinstance(error, CommandConfigError)
+                else "dependency_missing" if isinstance(error, ImportError) else "operation_failed")
+        hint = error.hint if isinstance(error, CommandConfigError) else "Значения и детали скрыты."
+        print(f"Ошибка command gateway: code={code} field={field}. {hint}", flush=True)
         return 1
 #------------------------------------------------------------------------------------------------------------------
 

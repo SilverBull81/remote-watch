@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-185745
+# Дата и время последнего изменения: 261002-143102
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -15,6 +15,7 @@
 #    Интерфейс:
 #    -> start(): Запуск объекта и подготовка состояния.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> health(): Готовность обслуживания и доверенного времени без обращения к сети.
 #    -> authenticate(): Проверка отдельных учётных данных приложения.
 #    -> register(): Регистрация точной цели без замены живой сессии.
 #    -> heartbeat(): Продление живой регистрации без продления команд.
@@ -42,6 +43,7 @@
 #    -> _offer(): Выбор первой непросроченной команды этой сессии.
 #    -> _update_time(): Обновление достоверного времени с конечным ожиданием.
 #    -> _refresh_time(): Периодическое обслуживание времени и просроченных команд.
+#    -> _maintenance_finished(): Учёт неожиданного завершения обслуживания hub.
 #
 # Функции:
 # -> _matches(): Сравнение хешей секретов без выдачи исходных значений.
@@ -77,7 +79,7 @@ from remote_watch.commands.protocol import (
 )
 from remote_watch.commands.state import CommandAction, CommandDeadline, CommandPhase
 from remote_watch.commands.storage import Admission, AuditCode, CommandStore, StoredCommand
-from remote_watch.commands.time import TimeSource, TrustedClock
+from remote_watch.commands.time import TimeSource, TimeUnavailable, TrustedClock
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.events import Identity
 
@@ -166,6 +168,8 @@ class CommandHub:
         self._closed = False
         self._last = 0.0
         self._refresh: asyncio.Task | None = None
+        self._maintenance_failed = False
+        self._maintenance_error: str | None = None
         self._failed_clock = False
     #--------------------------------------------------------------------------------------------------------------
 
@@ -186,6 +190,7 @@ class CommandHub:
             if self._source is not None:
                 await self._update_time()
             self._refresh = asyncio.create_task(self._refresh_time())
+            self._refresh.add_done_callback(self._maintenance_finished)
         except BaseException:
             await self.close()
             raise
@@ -212,6 +217,45 @@ class CommandHub:
 
         if self._refresh is not None:
             await asyncio.wait({self._refresh}, timeout=0)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Готовность обслуживания и доверенного времени без обращения к сети
+    #--------------------------------------------------------------------------------------------------------------
+    def health(self) -> dict[str, bool | str | None]:
+
+        """Read local readiness on the owning loop without probing storage or refreshing UTC.
+
+        :return: Fixed health flags and a nonsecret reason; readiness is not a delivery guarantee.
+        :rtype: dict[str, bool | str | None]
+        """
+
+        # Задача могла закончиться перед выполнением её done callback. Учитываем
+        # отказ сразу, чтобы следующий запрос не получил новое разрешение в этом окне.
+        if self._refresh is not None and self._refresh.done():
+            self._maintenance_finished(self._refresh)
+        running = self._refresh is not None and not self._refresh.done() and not self._closed
+        time_ready = False
+
+        try:
+            self._trusted.bounds()
+            time_ready = True
+        except TimeUnavailable:
+            pass
+
+        if self._maintenance_failed:
+            reason = "maintenance_failed"
+        elif self._closed:
+            reason = "closed"
+        elif not running:
+            reason = "not_started"
+        elif not time_ready:
+            reason = "time_unavailable"
+        else:
+            reason = self._maintenance_error
+        return {"ready": reason is None, "reason": reason, "fatal": self._maintenance_failed,
+                "maintenance_running": running, "time_ready": time_ready}
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -979,6 +1023,10 @@ class CommandHub:
 
         if self._closed or self._loop is None or asyncio.get_running_loop() is not self._loop:
             raise CommandError("closed")
+        if self._refresh is not None and self._refresh.done():
+            self._maintenance_finished(self._refresh)
+        if self._maintenance_failed:
+            raise CommandError("unavailable")
         self._now()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1254,9 +1302,39 @@ class CommandHub:
                 refreshed = self._clock()
             try:
                 await self.sweep()
-            except CommandError:
-                # Занятая запись не создаёт очередь обслуживания; следующий проход позже.
-                pass
+                self._maintenance_error = None
+            except CommandError as error:
+                # Занятость не означает отказ журнала и не создаёт очередь повторов.
+                # Ошибка хранения видна до следующего успешного обслуживания.
+                if error.code == "busy":
+                    continue
+                if error.code not in ("unavailable", "capacity"):
+                    raise
+                self._maintenance_error = "storage_" + error.code
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Учёт неожиданного завершения обслуживания hub
+    #--------------------------------------------------------------------------------------------------------------
+    def _maintenance_finished(
+        self,
+        task: asyncio.Task,
+    ) -> None:
+
+        """Consume private exceptions and fence the hub after any unexpected maintenance termination.
+
+        :param task: Completed owned maintenance task, including cancellation or an early return.
+        :type task: asyncio.Task
+        """
+
+        # task — завершённая задача обслуживания; её исключение не попадает в лог asyncio.
+        if not task.cancelled():
+            task.exception()
+        if not self._closed:
+            self._maintenance_failed = True
+            for entry in self._issued.values():
+                entry.changed.set()
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

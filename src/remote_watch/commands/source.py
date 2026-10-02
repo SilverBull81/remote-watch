@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-185745
+# Дата и время последнего изменения: 261002-143102
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных.
@@ -154,6 +154,9 @@ class CommandSourceRunner:
         :rtype: SourceStats
         """
 
+        for task in self._tasks:
+            if task.done():
+                self._finished(task)
         return SourceStats(accepted=self._accepted, ignored=self._ignored, replies=self._replies,
                            closed=self._stopping, last_error=self._error)
     #--------------------------------------------------------------------------------------------------------------
@@ -462,7 +465,11 @@ class CommandSourceRunner:
 
         # task — завершённая асинхронная задача, принадлежащая источнику.
 
-        if not task.cancelled() and task.exception() is not None:
+        if not task.cancelled():
+            task.exception()
+        # Штатная остановка заранее устанавливает _stopping. Во всех остальных
+        # случаях даже отмена или обычный ранний return означают потерю одного loop.
+        if not self._stopping:
             self._error = "unavailable"
             self._stopping = True
     #--------------------------------------------------------------------------------------------------------------

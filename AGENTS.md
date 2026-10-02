@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.1
+Version 1.3.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261002-140102
+Дата и время последнего изменения: 261002-174542
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.5.dev2; no stable 0.2.0 tag is implied.
+The package version is 0.3.6.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -133,6 +133,24 @@ proposed 0.4 adds gateway_server, deployment resources, doctor and OS service su
 Read docs/GATEWAY_OPERATIONS_PLAN.md before implementing these proposals. They are
 not existing CLIs or settled wire schemas. Preserve current command journal/CA state,
 separate component credentials and single-owner provider semantics during migration.
+
+Stage 0.3.6.dev1 now closes review R1/R2/R3 and the noted code-comment part of R6:
+hub/source task failures, unexpected cancellation and early returns are observed;
+subsequent hub calls fail closed after maintenance failure. Local health exposes
+trusted-time readiness and maintenance storage errors without network/storage probes.
+The command CLI emits readiness transitions and exits on fatal failure; no automatic
+restart or public health endpoint is added. Config errors expose fixed codes, schema
+paths/indices and Russian hints, never supplied values. Old schemas and UNKNOWN
+semantics remain intact. Read docs/COMMAND_SOURCES.md for these local health APIs;
+R4/R5 and the proposed service/deploy/doctor remain 0.4 work. Validation below is
+historical unless explicitly recorded for dev1 in docs/VALIDATION.md.
+
+Dev 0.3.6.dev1 passed 985 local tests (2 live deselections) on Windows Python
+3.12.2. Clean wheel-from-sdist validation passed core 648 tests (46 optional skips,
+2 live deselections) and extras 985 tests (2 live deselections), without pytest
+warnings. Ruff and all 108 Python files passed style checks. No new CI, Linux,
+Python 3.10 or live-provider run was performed. See docs/VALIDATION.md and
+build/validation-0361-core / build/validation-0361-extras for exact results.
 
 ## Read the Relevant Design Context
 
