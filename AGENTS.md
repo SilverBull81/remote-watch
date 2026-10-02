@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.0
+Version 1.3.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-203700
+Дата и время последнего изменения: 261002-140102
 
 ## Project Intent
 
@@ -70,7 +70,12 @@ The owner explicitly selected ntfy commands for private topics; the existing fre
 unreserved notification topic must not authorize commands. Provider write ACL is
 an operator prerequisite; anonymous read probes alone do not prove it.
 Read docs/COMMAND_SOURCES.md and docs/REVIEW_0_1_0_3.md before changing this boundary.
-Live command acceptance and real application migration remain pending.
+On 2026-10-02 the owner confirmed Telegram command smoke with one and two
+concurrent synthetic applications via RU -> LV Caddy:8443. Evidence is the chat,
+not newly inspected report files; do not infer exact counts, exit codes or recovery
+scenarios. Live private-topic ntfy command testing is deferred indefinitely by the
+owner and does not block Telegram deployment; outbound ntfy acceptance is unchanged.
+Real application migration and unattended recovery testing remain pending.
 Read docs/COMMAND_HUB.md and docs/COMMAND_EXECUTION.md before changing these boundaries.
 The old root smoke/field_smoke/ntfy_diagnostic launchers are removed; diagnostics
 are launched only under remote_watch.diagnostics. Existing callback registration remains compatible. The owner explicitly requires both status/check_load and resume_load/suspend_load
@@ -116,6 +121,18 @@ CI exposed and fixed Windows CLI encoding, floating-point grant-bound comparison
 and timing/observation problems in contract tests. Live command-provider smoke
 remains owner-run; CI does not read credentials or send provider messages.
 See docs/VALIDATION.md for exact Python versions, run link and local reports.
+
+A fresh review on 2026-10-02 found open operational gaps: hub maintenance task
+failure is not directly supervised, trusted-time readiness is absent from gateway
+stats, and command configuration errors are too coarse. Synthetic fault injection
+confirmed the first two; no runtime fix was made in that documentation change.
+The current source suite passed 951 tests (2 live deselections) on Windows Python
+3.12.2; Ruff/style passed (107 files). No new CI/build was run. See the updated
+docs/REVIEW_0_1_0_3.md and docs/VALIDATION.md. Proposed step 0.3.6 fixes observability;
+proposed 0.4 adds gateway_server, deployment resources, doctor and OS service support.
+Read docs/GATEWAY_OPERATIONS_PLAN.md before implementing these proposals. They are
+not existing CLIs or settled wire schemas. Preserve current command journal/CA state,
+separate component credentials and single-owner provider semantics during migration.
 
 ## Read the Relevant Design Context
 
