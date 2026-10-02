@@ -1,10 +1,10 @@
 ﻿# Команды из Telegram и закрытых топиков ntfy
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-185629
+Дата и время последнего изменения: 261002-120415
 
 В 0.3.5.dev1 реализован путь «сообщение → командный gateway → конкретный запуск
 приложения → пользовательский callback → ответ». Telegram и ntfy используют общий
@@ -54,7 +54,7 @@ Version 1.0.0
 Установить одинаковую версию пакета на gateway и клиентах:
 
 ```powershell
-python -m pip install "remote-watch[commands] @ git+https://github.com/SilverBull81/remote-watch.git"
+python -m pip install "remote-watch[commands,gateway,telegram,ntfy] @ git+https://github.com/SilverBull81/remote-watch.git"
 ```
 
 Команда установит версию из удалённой ветки после публикации соответствующего
@@ -77,6 +77,22 @@ wheel либо `python -m pip install ".[commands]"` из checkout.
 и не секрет outbound relay. Имена `*.local.json` игнорируются Git; ограничьте доступ
 к этим файлам средствами ОС. Не отправляйте их содержимое в чат.
 
+Для `one` и `two` задайте **разные** значения `principals[].token`.
+У каждого клиента его `token` совпадает с токеном своего principal на LV.
+Не копируйте Telegram-токен в эти поля: он находится только в
+`sources[].settings.token`. Сгенерировать два секрета на своей машине:
+
+```powershell
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -c "import secrets; print('one:', secrets.token_hex(32)); print('two:', secrets.token_hex(32))"
+```
+
+Полученные значения сохраняются в локальных настройках и не отправляются в чат.
+Одинаковые токены у двух principals вызывают `operation_failed field=hub` в
+0.3.5.dev2. Этот код обозначает общую проверку связей и пределов конфигурации,
+а не обязательно ошибку одноимённого раздела. Раздел `hub` необязателен;
+добавлять его для исправления повторяющихся токенов не нужно. Сам код может
+означать и другие несогласованные настройки; он не устанавливает причину однозначно.
+
 Пути `state_dir`, `state_file`, `ca_file` считаются относительно файла JSON.
 Каждый перезапуск создаёт новую session/epoch, но продолжает использовать прежние
 файлы журналов. Поля Identity клиента должны точно совпадать с записью targets
@@ -86,13 +102,41 @@ owner_id и другой state_file. Приложение может наход�
 Проверка структуры не запускает сеть и не читает переменные окружения:
 
 ```powershell
-python -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --check-config
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --check-config
 ```
 
-Сервер с непосредственным TLS, порт команд 8766:
+### Основной вариант для VM владельца: Caddy и два gateway
+
+Уже работающий HTTPS-вход Caddy на LV, порт 8443, можно использовать и для
+уведомлений, и для команд. На LV работают один Caddy и два Python-процесса:
+исходящий gateway на `127.0.0.1:8765` и командный на `127.0.0.1:8766`.
+Командный сервер запускается так:
 
 ```powershell
-python -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --host 0.0.0.0 --port 8766 --cert C:\Work\RemoteWatch\secrets\gateway.crt --key C:\Work\RemoteWatch\secrets\gateway.key
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --host 127.0.0.1 --port 8766 --allow-loopback-http
+```
+
+Имя после `--config` должно совпадать с вашим файлом, например
+`command_gateway.json`. `--cert` и `--key` здесь не нужны: TLS обслуживает Caddy.
+В его существующем блоке сайта маршрут `/v1/commands/*` направляется на 8766,
+остальные запросы — на 8765. Клиент RU использует `https://АДРЕС_LV:8443` и
+`ca_file` с уже проверенным корневым сертификатом Caddy. Закрытые `.key` остаются
+на LV; новый сертификат для второго gateway не нужен.
+
+Пошаговые команды, Caddyfile, расположение `root.crt` и устранение ошибки
+`localhost:2019 — connection refused`: [GATEWAY_TLS.md](GATEWAY_TLS.md).
+`caddy validate` проверяет конфиг, `caddy run` запускает процесс,
+`caddy reload` меняет настройки уже работающего процесса. Для smoke команд
+исходящий gateway необязателен; он нужен для параллельной доставки уведомлений.
+
+### Альтернатива: непосредственный TLS в Python без Caddy
+
+Следующая команда предназначена для отдельного HTTPS-listener команд на 8766.
+Для описанного выше общего входа Caddy она не нужна:
+
+
+```powershell
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --host 0.0.0.0 --port 8766 --cert C:\Work\RemoteWatch\secrets\gateway.crt --key C:\Work\RemoteWatch\secrets\gateway.key
 ```
 
 Имена файлов сертификата здесь примерные: подставьте пути уже проверенной TLS-схемы.
@@ -103,9 +147,11 @@ python -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gat
 не говорит о новом порте. Внешняя защита TCP/TLS и настройки Windows Firewall
 описаны в [GATEWAY_TLS.md](GATEWAY_TLS.md). Не отключайте проверку сертификата.
 
-Для одного компьютера или TLS reverse proxy на этой же VM допустим явный
-`--host 127.0.0.1 --allow-loopback-http`; клиенту при HTTP также нужен
+Для отдельного теста на одном компьютере допустим явный
+`--host 127.0.0.1 --allow-loopback-http` и HTTP endpoint клиента с
 `"allow_loopback_http": true`. Между VM этот режим не разрешён.
+При использовании Caddy этот флаг нужен лишь локальному Python-серверу:
+клиент обращается к Caddy по HTTPS.
 Сервер останавливается Ctrl+C или появлением файла, указанного через `--stop-file`;
 до запуска этот файл должен отсутствовать. Отказ одного источника с постоянным
 кодом завершает командный CLI, не затрагивая отдельный outbound gateway.
@@ -116,6 +162,14 @@ python -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gat
 числовой `actor_id` пользователя Telegram и `conversation_id` чата. Display name,
 username и текст сообщения не являются удостоверением отправителя. Не узнавайте
 ID через пересылку приватных данных неизвестному стороннему bot.
+
+`actor_id` отвечает на вопрос «кто отправил команду», `conversation_id` —
+«в каком чате». В Telegram это `message.from.id` и `message.chat.id` соответственно.
+В личном диалоге пользователя с ботом оба ID совпадают с числовым `chat_id`
+этого диалога; в группе ID чата отрицательный, а ID пользователя положительный.
+В JSON оба значения указываются строками. Gateway проверяет их совместно:
+знания адреса приложения или участия в чате недостаточно для исполнения команды.
+[Идентификаторы Telegram](https://core.telegram.org/api/bots/ids).
 
 Если ID ещё неизвестны, остановите получатели этого bot, отправьте ему личное
 сообщение и посмотрите только `message.from.id` и `message.chat.id` в его
