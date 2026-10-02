@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195347
+# Дата и время последнего изменения: 261002-184007
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -97,7 +97,7 @@ def main() -> int:
     for module in (
         "gateway",
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
-        "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands",
+        "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands", "gateway_server",
     ):
         result = subprocess.run(
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],

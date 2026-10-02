@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.2
+Version 1.3.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261002-174542
+Дата и время последнего изменения: 261002-185330
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.3.6.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev1; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -151,6 +151,23 @@ Dev 0.3.6.dev1 passed 985 local tests (2 live deselections) on Windows Python
 warnings. Ruff and all 108 Python files passed style checks. No new CI, Linux,
 Python 3.10 or live-provider run was performed. See docs/VALIDATION.md and
 build/validation-0361-core / build/validation-0361-extras for exact results.
+
+Stage 0.4.1 provides typed deployment configuration, read-only linked-file validation
+through remote_watch.gateway_server --check-config and a finite per-component
+RestartBudget. Real process supervision/start/stop/status is the next step 0.4.2;
+deploy, doctor and OS service installation are not implemented. Read
+docs/GATEWAY_DEPLOYMENT.md and ADR 0012 before changing ownership/recovery.
+Keep existing component config paths, journals and Caddy CA storage. External
+Caddy is never owned or stopped. Configuration checks do not open journals,
+resolve environment credentials, launch processes or query providers.
+Current command clients do not automatically re-register after a hub restart;
+server readiness does not prove restored application command routing. Preserve
+new-session lifecycle and UNKNOWN records; do not silently replay callbacks.
+Dev 0.4.1.dev1 passed 1058 local tests (2 live deselections) on Windows Python
+3.12.2. Clean core/extras wheels passed 721/1058 tests; all 114 Python files
+passed style checks and all eight installed CLIs passed help/encoding checks.
+No new CI/Linux/Python 3.10 or live provider checks were run. Actual process
+supervision and recovery remain unimplemented; see docs/VALIDATION.md.
 
 ## Read the Relevant Design Context
 

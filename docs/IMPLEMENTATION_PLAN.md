@@ -1,10 +1,10 @@
 ﻿# План реализации
 
-Version 1.2.7
+Version 1.2.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261002-174542
+Дата и время последнего изменения: 261002-185330
 
 ## Текущее состояние
 
@@ -308,14 +308,19 @@ CLI сообщает смену состояния, при фатальном о
 
 ## 0.4 — серверное приложение и эксплуатация
 
-Предложенный порядок: контракт deployment/health → gateway_server → deploy →
+Согласованный порядок: контракт deployment/health → gateway_server → deploy →
 doctor → служба ОС и приёмка восстановления. Один управляющий процесс,
 изолированные процессы notifications/commands, external/managed Caddy,
 общий конфиг со ссылками на два существующих конфига компонентов.
 
 Подробный план и критерии каждого шага:
-[GATEWAY_OPERATIONS_PLAN.md](GATEWAY_OPERATIONS_PLAN.md). Эти CLI ещё не существуют.
-Номер версии пакета изменится при реализации; stable tag сейчас не создаётся.
+[GATEWAY_OPERATIONS_PLAN.md](GATEWAY_OPERATIONS_PLAN.md).
+**0.4.1 реализован в 0.4.1.dev1**: [ADR 0012](adr/0012-gateway-deployment-and-supervision.md),
+typed deployment config, проверка связанных файлов без ресурсов и ограниченный
+RestartBudget. Доступен только `python -m remote_watch.gateway_server --check-config --config ...`.
+Схема и ограничения: [GATEWAY_DEPLOYMENT.md](GATEWAY_DEPLOYMENT.md).
+Следующий шаг 0.4.2 — реальные процессы, ownership, heartbeat, start/stop/status
+и fault injection. Deploy/doctor/служба ещё не реализованы; stable tag не создаётся.
 Интеграция одного настоящего приложения выполняется отдельной задачей после
 минимального эксплуатационного слоя или раньше по явному выбору владельца.
 

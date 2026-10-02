@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.2.6
+Version 1.2.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261002-174542
+Дата и время последнего изменения: 261002-185330
 
 ## Статус и границы
 
@@ -526,7 +526,7 @@ broadcast или распределённого выбора владельца.
 
 Лимиты, настройка, восстановление и полевая проверка: [COMMAND_SOURCES.md](docs/COMMAND_SOURCES.md).
 
-## Предложение эксплуатационного слоя после Telegram smoke
+## Эксплуатационный слой после Telegram smoke
 
 В 0.3.6.dev1 реализована предварительная наблюдаемость: CommandHub.health и
 CommandGateway.stats различают запуск, пригодность UTC, отказ обслуживания и
@@ -539,9 +539,18 @@ CommandGateway.stats различают запуск, пригодность UTC
 
 Базовый Telegram command smoke с одним и двумя тестовыми приложениями подтверждён
 владельцем 02.10.2026. Live ntfy commands отложены; исходящая доставка не меняется.
-Для следующего этапа предложены единый управляющий gateway_server, отдельные
+Владелец согласовал этап 0.4: единый управляющий gateway_server, отдельные
 процессы notifications/commands, external/managed Caddy, подготовка deployment
-и безопасная диагностика. Это план, не реализованная смена архитектуры:
-[GATEWAY_OPERATIONS_PLAN.md](docs/GATEWAY_OPERATIONS_PLAN.md).
-Перед кодом зафиксировать ADR по process ownership, readiness, перезапускам,
-конфигам и сохранению журналов/CA. Сам supervisor не заменяет менеджер служб ОС.
+и безопасная диагностика. В 0.4.1.dev1 реализованы настройки, локальная проверка
+связанных конфигов и ограниченный RestartBudget. Пакет `gateway_server` добавлен
+рядом с `gateway`; импорты не запускают процессы и не требуют extras.
+Общий JSON сохраняет прежние конфиги и базы относительных путей, не объединяет
+секреты или outbound/command grants. Внутренние listeners только loopback.
+
+[ADR 0012](docs/adr/0012-gateway-deployment-and-supervision.md) фиксирует ownership,
+readiness, перезапуски, shutdown и сохранение журналов/CA. Схема:
+[GATEWAY_DEPLOYMENT.md](docs/GATEWAY_DEPLOYMENT.md). Управление процессами — 0.4.2,
+а deploy/doctor/служба ОС остаются последующими шагами
+[плана](docs/GATEWAY_OPERATIONS_PLAN.md). Supervisor не заменяет службу ОС.
+Перезапуск hub не регистрирует клиентские сессии автоматически; восстановление
+командного пути приложения требует отдельной проверки и согласованного lifecycle.
