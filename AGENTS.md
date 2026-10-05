@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.7
+Version 1.3.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-180651
+Дата и время последнего изменения: 261005-202646
 
 ## Project Intent
 
@@ -13,13 +13,19 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev4; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev6; no stable 0.2.0 tag is implied.
 RelayConfig now accepts either a private literal token or token_env, exclusively.
 Both use the gateway credential validator; neither value nor reference is exposed in repr.
 Local validation: 1099 passed, 2 live deselected; 33 relay contract cases, no live providers.
-Synchronous command startup now preserves the worker exception as CommandError.__cause__.
-HTTP rejections carry a numeric http_status. Applications must classify causes without
-logging arbitrary exception text or tracebacks. SpamBot's field root cause remains unconfirmed.
+Synchronous command startup now copies only a safe known exception category into
+CommandError.__cause__, never the original message, traceback, notes or chain.
+Exact CommandError causes retain validated code/http_status. HTTP errors accept only
+a bounded single-code JSON envelope matching the status; stale_session survives HTTPS.
+Unknown bodies keep the status fallback, and body failures retain an observed http_status.
+See docs/COMMAND_EXECUTION.md. SpamBot's field root cause remains unconfirmed.
+Dev6 passed 1148 local tests (2 live deselections), plus clean Windows Python 3.12.2
+core/extras wheel checks: 768/1148 passed. Ruff/style: 116 Python files, no issues.
+No new CI/Linux/live-provider run. Pilot wishes remain planned; only R1/R2 are fixed.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server

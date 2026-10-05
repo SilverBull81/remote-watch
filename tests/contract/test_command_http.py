@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-153416
+# Дата и время последнего изменения: 261005-200546
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -107,6 +107,11 @@ def test_command_https_exchange(
                 assert rig.store.pending() == ()
                 return
             await client.start()
+            # Просроченная/чужая сессия должна оставаться stale_session на настоящем
+            # HTTP/TLS-пути. Общий conflict лишает приложение нужной классификации.
+            with pytest.raises(CommandError, match="^stale_session$") as stale:
+                await transport.exchange("heartbeat", replace(client.session, session_id="e" * 32))
+            assert stale.value.http_status == 409
             await rig.submit(rig.request())
             ticket = await client.acquire()
             assert ticket is not None and client.begin(ticket)

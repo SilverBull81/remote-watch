@@ -1,10 +1,10 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-153416
+# Дата и время последнего изменения: 261005-200546
 #
 # Тесты:
 # -> test_sync_startup_cause(): Сохранение первичной ошибки синхронного старта.
@@ -24,6 +24,7 @@
 # -> test_dispatcher_final_worker_deadline(): Запрет callback после истечения срока перед входом в поток.
 # -> test_dispatcher_recovered_journal(): Разбор старых записей без повторного callback.
 # -> test_dispatcher_result_persisted_before_release_failure(): Восстановление слота после отказа очистки.
+# -> test_sync_startup_cause(): Безопасная причина старта без исходной цепочки исключений.
 
 
 #******************************************************************************************************************
@@ -32,7 +33,10 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+import ssl
 import threading
+import traceback
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from functools import partial
@@ -1197,20 +1201,21 @@ def test_dispatcher_result_persisted_before_release_failure(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Сохранение первичной ошибки синхронного старта
+# ТЕСТ : Безопасная причина старта без исходной цепочки исключений
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("mode", ["dependency", "denied"])
+@pytest.mark.parametrize("mode", ["dependency", "import", "denied", "certificate", "tls", "timeout",
+                                  "connection", "sqlite", "store", "os", "value", "unknown", "mutated", "custom"])
 def test_sync_startup_cause(
     tmp_path: Path,
     mode: str,
 ) -> None:
 
-    """Preserve worker startup failure as a cause while retaining the existing public code.
+    """Retain safe startup classification without leaking the original exception chain.
 
     :param tmp_path: Isolated command journal directory.
     :type tmp_path: Path
 
-    :param mode: Missing dependency or denied registration in the command worker.
+    :param mode: Selected worker failure category or corrupted public error attributes.
     :type mode: str
     """
 
@@ -1219,15 +1224,37 @@ def test_sync_startup_cause(
 
     registry = CommandRegistry.from_callbacks({"status": lambda: "ready"})
     rig, _ = configured(tmp_path, registry)
-    failure = (ModuleNotFoundError("PRIVATE", name="aiohttp") if mode == "dependency"
+    # Подставной маркер имитирует секрет сразу в тексте, notes и вложенной причине.
+    # Проверяем стандартный traceback целиком, а не только str верхней ошибки.
+    categories = {"dependency": ModuleNotFoundError, "import": ImportError,
+                  "certificate": ssl.SSLCertVerificationError, "tls": ssl.SSLError,
+                  "timeout": TimeoutError, "connection": ConnectionError,
+                  "sqlite": sqlite3.Error, "store": StoreError, "os": OSError,
+                  "value": ValueError, "unknown": RuntimeError}
+    failure = (categories[mode]("PRIVATE") if mode in categories
                else CommandError("denied", http_status=403))
+    if mode == "custom":
+        failure = type("PRIVATE_CLASS", (RuntimeError,), {})("PRIVATE")
+    failure.__cause__ = RuntimeError("PRIVATE_CHAIN")
+    if hasattr(failure, "add_note"):
+        failure.add_note("PRIVATE_NOTE")
+    if mode == "mutated":
+        failure.code = ["PRIVATE"]
+        failure.http_status = "PRIVATE"
+        failure.args = ("PRIVATE",)
     rig.client.start = AsyncMock(side_effect=failure)
     watcher = RemoteWatcher(WatcherConfig(identity=rig.identity, commands=registry), command_client=rig.client)
 
     with pytest.raises(CommandError, match="unavailable") as caught:
         watcher.start()
-    assert caught.value.__cause__ is failure
-    assert "PRIVATE" not in str(caught.value)
+    cause = caught.value.__cause__
+    assert cause is not failure and type(cause) is (RuntimeError if mode == "custom" else type(failure))
+    assert cause.__cause__ is None and cause.__context__ is None and cause.__traceback__ is None
+    formatted = "".join(traceback.format_exception(type(caught.value), caught.value, caught.value.__traceback__))
+    assert "PRIVATE" not in formatted
+    if mode in {"denied", "mutated"}:
+        assert cause.code == ("denied" if mode == "denied" else "unavailable")
+        assert cause.http_status == (403 if mode == "denied" else None)
     assert watcher.logger.handlers == []
     watcher.stop()
 #------------------------------------------------------------------------------------------------------------------

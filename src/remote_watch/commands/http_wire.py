@@ -1,14 +1,15 @@
 ﻿# Строгая упаковка ответа long poll поверх командного протокола.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-200546
 #
 # Функции:
 # -> encode_response(): Кодирование сообщения либо предложения команды.
 # -> decode_response(): Строгий разбор ограниченного ответа.
+# -> decode_error(): Проверка безопасного кода отказа и его HTTP-статуса.
 # -> _unique(): Запрет повторных ключей во всех объектах JSON.
 
 
@@ -23,6 +24,14 @@ from remote_watch.commands.protocol import CommandMessage, CommandRequest, decod
 from remote_watch.commands.transport import CommandError, CommandOffer
 
 MAX_HTTP_BYTES = 70000
+MAX_HTTP_ERROR_BYTES = 256
+# Одна таблица для сервера и клиента: код нельзя принимать при чужом HTTP-статусе.
+ERROR_HTTP_STATUS = {
+    "denied": 403, "invalid": 400, "busy": 429,
+    "conflict": 409, "stale_session": 409, "already_started": 409,
+    "outcome_conflict": 409, "expired": 409,
+    "unavailable": 503, "capacity": 503, "closed": 503,
+}
 OPERATIONS = frozenset({"register", "heartbeat", "poll", "claim", "result", "release"})
 
 
@@ -84,6 +93,45 @@ def decode_response(data: bytes) -> CommandMessage | CommandOffer:
 
 
 #------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Проверка безопасного кода отказа и его HTTP-статуса
+#------------------------------------------------------------------------------------------------------------------
+def decode_error(
+    data: bytes,
+    status: int,
+) -> CommandError:
+
+    """Accept only a bounded error envelope matching the server status contract.
+
+    :param data: Bounded UTF-8 body, or empty bytes when the response cannot be trusted.
+    :type data: bytes
+
+    :param status: Observed HTTP response status.
+    :type status: int
+
+    :return: Safe error with a known code and the observed numeric status.
+    :rtype: CommandError
+    """
+
+    # data — тело без доверия к произвольным полям; status — уже полученный HTTP-статус.
+    # Пустое/чужое тело сохраняет прежнюю классификацию, включая ответы reverse proxy.
+    code = {401: "denied", 403: "denied", 409: "conflict", 429: "busy"}.get(status, "unavailable")
+
+    try:
+        if type(data) is not bytes or len(data) > MAX_HTTP_ERROR_BYTES:
+            raise ValueError("invalid error response size")
+        value = json.loads(data.decode("utf-8"), object_pairs_hook=_unique)
+        if (type(value) is dict and set(value) == {"code"} and type(value["code"]) is str
+                and ERROR_HTTP_STATUS.get(value["code"]) == status):
+            code = value["code"]
+    except (ValueError, TypeError, RecursionError):
+        # Ни текст JSON, ни исключение декодера не становятся причиной публичной ошибки.
+        pass
+
+    return CommandError(code, http_status=status)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запрет повторных ключей во всех объектах JSON
 #------------------------------------------------------------------------------------------------------------------
 def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -107,6 +155,7 @@ def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result[key] = value
     return result
 #------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла

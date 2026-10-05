@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-153416
+# Дата и время последнего изменения: 261005-200546
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
@@ -27,7 +27,13 @@ import ssl
 from urllib.parse import urlsplit
 
 from remote_watch._validation import require_number
-from remote_watch.commands.http_wire import MAX_HTTP_BYTES, OPERATIONS, decode_response
+from remote_watch.commands.http_wire import (
+    MAX_HTTP_BYTES,
+    MAX_HTTP_ERROR_BYTES,
+    OPERATIONS,
+    decode_error,
+    decode_response,
+)
 from remote_watch.commands.hub_config import _token
 from remote_watch.commands.protocol import CommandMessage, encode_command
 from remote_watch.commands.transport import CommandError, CommandOffer
@@ -173,6 +179,7 @@ class HttpsCommandTransport:
         # Ошибки HTTP-библиотеки не должны стать удалёнными уведомлениями приложения.
         # За пределами одного обмена сохраняется прежний контекст пользовательского кода.
         context_token = delivery_context.set(True)
+        status: int | None = None
 
         try:
             # Два места нужны для poll и heartbeat. При переполнении нет скрытой очереди.
@@ -181,24 +188,40 @@ class HttpsCommandTransport:
                 data=encode_command(message), allow_redirects=False,
                 headers={"Authorization": "Bearer " + self._token, "Content-Type": "application/json"},
             ) as response:
+                status = response.status
                 if response.status == 204 and operation == "poll":
                     return None
-                if response.status != 200:
-                    code = {401: "denied", 403: "denied", 409: "conflict", 429: "busy"}.get(
-                        response.status, "unavailable")
-                    raise CommandError(code, http_status=response.status)
+                # При отказе читаем только малую оболочку с известным кодом. Чужой
+                # Content-Type, сжатие или слишком большое тело оставляют классификацию
+                # по статусу; произвольный текст reverse proxy никогда не выводится.
+                rejected = status != 200
                 if response.content_type != "application/json" or response.headers.get("Content-Encoding"):
-                    raise CommandError("invalid", http_status=response.status)
+                    if rejected:
+                        raise decode_error(b"", status)
+                    raise CommandError("invalid", http_status=status)
+                limit = MAX_HTTP_ERROR_BYTES if rejected else MAX_HTTP_BYTES
                 body = bytearray()
-                async for chunk in response.content.iter_chunked(8192):
+                async for chunk in response.content.iter_chunked(min(8192, limit + 1)):
                     body.extend(chunk)
-                    if len(body) > MAX_HTTP_BYTES:
-                        raise CommandError("invalid")
-                return decode_response(bytes(body))
+                    if len(body) > limit:
+                        if rejected:
+                            raise decode_error(b"", status)
+                        raise CommandError("invalid", http_status=status)
+                if rejected:
+                    raise decode_error(bytes(body), status)
+
+                try:
+                    return decode_response(bytes(body))
+                except CommandError:
+                    # Сохраняем наблюдавшийся статус даже при неверном успешном ответе.
+                    raise CommandError("invalid", http_status=status) from None
         except CommandError:
             raise
         except Exception:
-            raise CommandError("unavailable") from None
+            # Ошибка чтения/timeout после headers не стирает уже полученный статус.
+            if status is not None and status != 200:
+                raise decode_error(b"", status) from None
+            raise CommandError("unavailable", http_status=status) from None
         finally:
             self._active -= 1
             delivery_context.reset(context_token)

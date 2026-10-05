@@ -1,10 +1,10 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками relay.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-200546
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
@@ -29,7 +29,7 @@ import ssl
 from typing import Any
 
 from remote_watch._validation import require_int
-from remote_watch.commands.http_wire import MAX_HTTP_BYTES, OPERATIONS, encode_response
+from remote_watch.commands.http_wire import ERROR_HTTP_STATUS, MAX_HTTP_BYTES, OPERATIONS, encode_response
 from remote_watch.commands.hub import CommandHub
 from remote_watch.commands.protocol import (
     CommandClaim,
@@ -248,9 +248,7 @@ class CommandHubServer:
                 return web.Response(status=204)
             return web.Response(body=encode_response(result), content_type="application/json")
         except CommandError as error:
-            status = {"denied": 403, "invalid": 400, "busy": 429,
-                      "conflict": 409, "stale_session": 409, "already_started": 409,
-                      "outcome_conflict": 409, "expired": 409}.get(error.code, 503)
+            status = ERROR_HTTP_STATUS.get(error.code, 503)
             response = web.json_response({"code": error.code}, status=status)
         except Exception:
             response = web.json_response({"code": "invalid"}, status=400)

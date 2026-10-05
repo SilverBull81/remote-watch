@@ -1,10 +1,10 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-153416
+# Дата и время последнего изменения: 261005-200546
 #
 # Классы:
 # -> CommandRuntime: Владение циклом команд при выбранном режиме запуска.
@@ -17,6 +17,9 @@
 #    -> astop(): Асинхронная остановка командного исполнителя.
 #    Служебные методы:
 #    -> _serve(): Работа отдельного командного цикла синхронного приложения.
+#
+# Функции:
+# -> _startup_cause(): Безопасная классификация причины отказа командного потока.
 
 
 #******************************************************************************************************************
@@ -25,10 +28,13 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+import ssl
 import threading
 
 from remote_watch._validation import require_number
 from remote_watch.commands.dispatcher import CommandDispatcher, command_context, is_async
+from remote_watch.commands.storage import StoreError
 from remote_watch.commands.transport import CommandError
 
 
@@ -200,12 +206,59 @@ class CommandRuntime:
         try:
             asyncio.run(serve())
         except BaseException as error:
-            self._error = error
+            # Через границу потоков переносим только безопасную классификацию.
+            # Исходный traceback удерживает объекты приложения, а его текст может
+            # содержать секреты даже при безопасном сообщении верхнего CommandError.
+            self._error = _startup_cause(error)
         finally:
             self._ready.set()
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Безопасная классификация причины отказа командного потока
+#------------------------------------------------------------------------------------------------------------------
+def _startup_cause(error: BaseException) -> BaseException:
+
+    """Copy only a known failure category without retaining the original exception.
+
+    :param error: Worker failure whose text, attributes and traceback must remain private.
+    :type error: BaseException
+
+    :return: Fresh exception with a fixed message and no original exception chain.
+    :rtype: BaseException
+    """
+
+    # error — исходная ошибка; не копируем args, notes, пути, URL или имя зависимости.
+
+    if type(error) is CommandError:
+        # Даже публичные атрибуты могли быть изменены пользовательским transport.
+        code = error.code if type(error.code) is str else "unavailable"
+        return CommandError(code, http_status=error.http_status)
+
+    # Порядок важен: частные подклассы проверяются раньше общих OSError/ImportError.
+    # Созданные исключения ещё не выбрасывались и не содержат traceback или context.
+    categories = (
+        (ModuleNotFoundError, "command dependency unavailable"),
+        (ImportError, "command dependency import failed"),
+        (ssl.SSLCertVerificationError, "command TLS certificate verification failed"),
+        (ssl.SSLError, "command TLS failed"),
+        (TimeoutError, "command startup timed out"),
+        (ConnectionError, "command connection failed"),
+        (sqlite3.Error, "command storage failed"),
+        (StoreError, "command storage failed"),
+        (OSError, "command operating system operation failed"),
+        (ValueError, "command configuration invalid"),
+    )
+    for category, message in categories:
+        if isinstance(error, category):
+            return category(message)
+
+    return RuntimeError("command startup failed")
+#------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
