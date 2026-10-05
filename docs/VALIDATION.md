@@ -1,10 +1,23 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.3.6
+Version 1.3.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-144705
+Дата и время последнего изменения: 261005-145708
+
+## Проверка 0.4.1.dev3 — literal token для relay
+
+RelayConfig поддерживает взаимоисключающие token/token_env через общий gateway
+credential validator. Окружение читается при open; repr скрывает оба источника.
+Проверены отказ отсутствующему/двойному/неверному credential, прежний env API,
+HTTP Authorization и ответы gateway для обоих способов задания секрета.
+
+Windows, CPython 3.12.2: **1099 passed, 2 deselected**, 64,74 с; целевые relay
+контракты — **33 passed**. Полная проверка выполнена на копии текущего dev2
+с изменением relay внутри рабочего каталога SpamBot. Использованы локальные
+HTTP/TLS серверы и синтетические credentials; live-провайдеры и CI не запускались.
+Это расширение нужно SpamBot для value/env/file без изменения os.environ.
 
 ## Проверка 0.4.1.dev2 — понятные ошибки командного gateway
 

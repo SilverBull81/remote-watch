@@ -1,10 +1,10 @@
 ﻿# Контракт relay-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.2
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-145708
 #
 # Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
@@ -194,6 +194,16 @@ def test_relay_configuration() -> None:
 
     config = RelayConfig(endpoint="https://gateway.invalid", alias="phone", token_env="RW_RELAY_TEST")
     destination = config.destination("local-phone")
+    literal = replace(config, token_env=None, token="x" * 32)
+    assert "x" * 32 not in repr(literal)
+    assert "RW_RELAY_TEST" not in repr(config)
+    for credentials in ({"token": "x" * 32}, {"token_env": None},
+                        {"token_env": None, "token": "short"},
+                        {"token_env": None, "token": "x" * 32 + "\n"}):
+        with pytest.raises(ValueError) as caught:
+            replace(config, **credentials)
+        assert "x" * 32 not in str(caught.value)
+
     assert destination.mode is DeliveryMode.RELAY
     assert isinstance(destination.channel_factory(), RelayChannel)
     with pytest.raises(ValueError, match="exceed"):
@@ -210,14 +220,19 @@ def test_relay_configuration() -> None:
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий HTTP-клиент и подставной gateway на loopback
 #------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("literal", [False, True])
 @pytest.mark.parametrize("mode", ["accepted", "mismatch", "duplicate", "oversize", "auth", "rate", "disconnect"])
 def test_relay_http(
+    literal: bool,
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
 ) -> None:
 
     """Exercise the real HTTP client against a temporary loopback gateway stub.
+
+    :param literal: Select direct credential instead of the environment reference.
+    :type literal: bool
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -290,8 +305,11 @@ def test_relay_http(
             port = sock.getsockname()[1]
             site = web.SockSite(runner, sock)
             await site.start()
-            channel = RelayChannel(RelayConfig(endpoint=f"http://127.0.0.1:{port}", alias="phone",
-                                                token_env="RW_RELAY_TEST", allow_http=True))
+            credential = "synthetic_service_token_01234567890123456789"
+            channel = RelayChannel(RelayConfig(
+                endpoint=f"http://127.0.0.1:{port}", alias="phone", allow_http=True,
+                token=credential if literal else None, token_env=None if literal else "RW_RELAY_TEST",
+            ))
             try:
                 await channel.open()
                 result = await channel.send(replace(fresh_delivery(notification), remaining_timeout=3))

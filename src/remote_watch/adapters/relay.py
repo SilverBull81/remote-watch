@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-145708
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -30,17 +30,16 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import partial
 
+from remote_watch._credentials import resolve_token, validate_credentials
 from remote_watch._validation import require_number
 from remote_watch.adapters._common import (
     http_failure,
-    read_token,
     retry_after,
     validate_endpoint,
-    validate_env,
 )
 from remote_watch.adapters._http import HttpSender
 from remote_watch.config import DeliveryMode, Destination, RetryPolicy
@@ -69,7 +68,8 @@ class RelayConfig:
 
     endpoint: str                       # Базовый HTTPS-адрес gateway, без токена и query.
     alias: str                          # Имя получателя в конфигурации gateway.
-    token_env: str                      # Переменная окружения с отдельным сервисным токеном.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной; альтернатива token.
+    token: str | None = field(default=None, repr=False)      # Сервисный токен из приватных настроек.
     server_timeout: float = 8.0         # Верхний срок обработки запроса gateway, секунды.
     network_margin: float = 1.0         # Резерв на обмен с gateway, секунды.
     allow_http: bool = False            # Явное разрешение HTTP только для локальной проверки.
@@ -121,9 +121,7 @@ class RelayConfig:
 
         validate_endpoint(self.endpoint, self.allow_http)
         validate_alias(self.alias)
-        validate_env(self.token_env)
-        if self.token_env is None:
-            raise ValueError("relay requires token_env")
+        validate_credentials(self.token, self.token_env, "gateway")
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
         if type(self.schema_version) is not int or self.schema_version not in (1, 2):
@@ -203,9 +201,8 @@ class RelayChannel:
         if self._token is not None:
             await self._http.open()
             return
-        token = read_token(self._config.token_env)
-        if token is None or len(token) < 32:
-            raise ValueError("relay token must contain at least 32 URL-safe characters")
+        token = resolve_token(self._config.token, self._config.token_env, "gateway")
+
         await self._http.open()
         self._token = token
     #--------------------------------------------------------------------------------------------------------------
