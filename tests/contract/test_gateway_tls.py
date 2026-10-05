@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-180651
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -32,7 +32,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -176,7 +175,7 @@ def certificates(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящее TLS-соединение с сертификатами из CLI
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("mode", ["trusted", "untrusted", "expired", "wrong_name", "plaintext"])
+@pytest.mark.parametrize("mode", ["trusted", "untrusted", "expired", "wrong_name", "plaintext", "default_trust"])
 def test_gateway_tls_cli(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -213,31 +212,7 @@ def test_gateway_tls_cli(
     if mode != "untrusted":
         client_context.load_verify_locations(cafile=str(ca_path))
     assert client_context.check_hostname and client_context.verify_mode == ssl.CERT_REQUIRED
-    original_connector = aiohttp.TCPConnector
-
-    #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Доверие тестовому центру без отключения проверок TLS
-    #--------------------------------------------------------------------------------------------------------------
-    def connector(**kwargs: Any) -> aiohttp.TCPConnector:
-
-        """Trust only this test's additional CA while preserving all verification checks.
-
-        :param kwargs: Captured request or client keyword arguments.
-        :type kwargs: Any
-
-        :return: HTTP connector using the temporary test certificate trust context.
-        :rtype: aiohttp.TCPConnector
-        """
-
-        # kwargs - именованные параметры запроса или клиента.
-
-        return original_connector(ssl=client_context, **kwargs)
-    #--------------------------------------------------------------------------------------------------------------
-    #--------------------------------------------------------------------------------------------------------------
-
-    # Подменяется лишь источник доверия тестового клиента. Реальный TLS-handshake,
-    # проверка срока и имени, HTTP-клиент, ACL и обработка gateway выполняются полностью.
-    monkeypatch.setattr(aiohttp, "TCPConnector", connector)
+    # Реальный TLS использует публичный контекст RelayConfig без подмены connector.
     outcomes: list[DeliveryResult] = []
 
     #--------------------------------------------------------------------------------------------------------------
@@ -276,7 +251,8 @@ def test_gateway_tls_cli(
         await gateway.start(host=host, port=port, ssl_context=context)
         scheme = "http" if mode == "plaintext" else "https"
         relay = RelayChannel(RelayConfig(endpoint=f"{scheme}://127.0.0.1:{gateway.port}", alias="phone",
-            token_env="RW_TLS_TEST", allow_http=mode == "plaintext"))
+            token_env="RW_TLS_TEST", allow_http=mode == "plaintext",
+            ssl_context=None if mode == "default_trust" else client_context))
         try:
             await relay.open()
             delivery = Delivery(notification=event, destination_id="phone", delivery_id="tls")

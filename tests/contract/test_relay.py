@@ -1,10 +1,10 @@
 ﻿# Контракт relay-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-145708
+# Дата и время последнего изменения: 261005-180651
 #
 # Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import socket
+import ssl
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -203,6 +204,15 @@ def test_relay_configuration() -> None:
         with pytest.raises(ValueError) as caught:
             replace(config, **credentials)
         assert "x" * 32 not in str(caught.value)
+
+    context = ssl.create_default_context()
+    assert replace(config, ssl_context=context).ssl_context is context
+    assert "SSLContext" not in repr(replace(config, ssl_context=context))
+    context.check_hostname = False
+    for invalid in (False, "PRIVATE path", context):
+        with pytest.raises(ValueError, match="verify certificates") as caught:
+            replace(config, ssl_context=invalid)
+        assert "PRIVATE" not in str(caught.value)
 
     assert destination.mode is DeliveryMode.RELAY
     assert isinstance(destination.channel_factory(), RelayChannel)

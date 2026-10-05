@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.6
+Version 1.3.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-153416
+Дата и время последнего изменения: 261005-180651
 
 ## Project Intent
 
@@ -253,3 +253,10 @@ were modified. See docs/VALIDATION.md for exact evidence and limits.
 - Follow Russian documentation/comments, English identifiers/docstrings, file
   versions and Moscow timestamps, UTF-8 BOM/CRLF for Markdown/Python as specified
   in CODE_STYLE.md. Do not copy neighboring projects' runtime dependencies.
+
+Dev5 adds RelayConfig.ssl_context for an explicit verifying client TLS context.
+No environment mutation, wire change or gateway upgrade is needed for this API.
+CERT_REQUIRED and hostname checks remain mandatory; contexts must not be mutated
+after handoff. Full local extras suite: 1102 passed, 2 opt-in live skips. Targeted
+relay/HTTP/TLS: 76 passed, including trusted/untrusted/expired/name/default-trust.
+Application field acceptance of explicit contexts is still pending.

@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-180651
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -58,6 +59,7 @@ class HttpSender:
         response_limit: int = 65536,
         json_decoder: Callable[[bytes], object] = json.loads,
         json_encoder: Callable[[object], str] = json.dumps,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
 
         """Store request budgets without importing or creating a network client.
@@ -73,12 +75,16 @@ class HttpSender:
 
         :param json_encoder: Serializer shared with the adapter's request size checks.
         :type json_encoder: Callable[[object], str]
+
+        :param ssl_context: Explicit verifying TLS context, or None for default trust.
+        :type ssl_context: ssl.SSLContext | None
         """
 
         # policy - политика времени ожидания и повторов.
         # response_limit - предел размера ответа до разбора JSON.
         # json_decoder - выбранный разборщик тела ответа без вывода его содержимого.
         # json_encoder - способ упаковки запроса, согласованный с ограничениями адаптера.
+        # ssl_context - контекст принадлежит вызывающему коду и не изменяется адаптером.
 
         if not isinstance(policy, RetryPolicy):
             raise TypeError("retry must be RetryPolicy")
@@ -92,6 +98,7 @@ class HttpSender:
         self._response_limit = response_limit
         self._json_decoder = json_decoder
         self._json_encoder = json_encoder
+        self._ssl_context = ssl_context
         self._client: aiohttp.ClientSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._closed = False
@@ -121,7 +128,12 @@ class HttpSender:
         # Один канал обрабатывается последовательно. Cookies, proxy из окружения и распаковка не нужны.
         # Запрет распаковки позволяет ограничить размер ответа до выделения памяти под большой JSON.
         self._loop = asyncio.get_running_loop()
-        connector = aiohttp.TCPConnector(limit=1, limit_per_host=1)
+        context = self._ssl_context
+        if context is not None and (not isinstance(context, ssl.SSLContext)
+                or context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname):
+            raise ValueError("HTTP TLS context must verify certificates and hostnames")
+
+        connector = aiohttp.TCPConnector(limit=1, limit_per_host=1, ssl=True if context is None else context)
         try:
             self._client = aiohttp.ClientSession(
                 connector=connector,

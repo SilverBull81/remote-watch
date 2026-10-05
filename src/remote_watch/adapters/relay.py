@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-145708
+# Дата и время последнего изменения: 261005-180651
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -30,6 +30,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import ssl
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import partial
@@ -74,6 +75,7 @@ class RelayConfig:
     network_margin: float = 1.0         # Резерв на обмен с gateway, секунды.
     allow_http: bool = False            # Явное разрешение HTTP только для локальной проверки.
     schema_version: int = 1             # Версия wire: 2 добавляет числовую диагностику провайдера.
+    ssl_context: ssl.SSLContext | None = field(default=None, repr=False, compare=False)  # Явное доверие CA.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ленивое назначение с заданным способом доставки
@@ -122,6 +124,9 @@ class RelayConfig:
         validate_endpoint(self.endpoint, self.allow_http)
         validate_alias(self.alias)
         validate_credentials(self.token, self.token_env, "gateway")
+        if self.ssl_context is not None and (not isinstance(self.ssl_context, ssl.SSLContext)
+                or self.ssl_context.verify_mode != ssl.CERT_REQUIRED or not self.ssl_context.check_hostname):
+            raise ValueError("relay TLS context must verify certificates and hostnames")
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
         if type(self.schema_version) is not int or self.schema_version not in (1, 2):
@@ -187,7 +192,8 @@ class RelayChannel:
         self._config = config
         self._http = HttpSender(self._policy, response_limit=MAX_RESPONSE_BYTES,
                                 json_encoder=encode_json,
-                                json_decoder=partial(_decode, limit=MAX_RESPONSE_BYTES))
+                                json_decoder=partial(_decode, limit=MAX_RESPONSE_BYTES),
+                                ssl_context=config.ssl_context)
         self._token: str | None = None
     #--------------------------------------------------------------------------------------------------------------
 
