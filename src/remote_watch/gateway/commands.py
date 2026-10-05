@@ -1,10 +1,10 @@
 ﻿# Запуск отдельного командного gateway из JSON без пользовательского Python-кода.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261005-144006
 #
 # Классы:
 # -> CommandParser: Разбор CLI без раскрытия ошибочных значений.
@@ -14,6 +14,8 @@
 # Функции:
 # -> serve(): Работа gateway до остановки или отказа источника.
 # -> main(): Разбор параметров и явный запуск выбранного режима.
+# -> _version(): Версия установленного пакета без приватных путей.
+# -> _failure_details(): Причина отказа и подсказка без исходного текста исключения.
 
 
 #******************************************************************************************************************
@@ -23,13 +25,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import errno
 import json
 import signal
 import ssl
 import sys
 from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from remote_watch.commands.transport import CommandError
 from remote_watch.gateway.command_config import CommandConfigError, check_command_gateway, load_command_gateway
 from remote_watch.gateway.command_service import CommandGateway
 
@@ -163,6 +168,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv — параметры CLI; None читает аргументы процесса.
 
     parser = CommandParser(description="Команды приложений через Telegram и закрытые топики ntfy.")
+    parser.add_argument("--version", action="version", version="remote-watch " + _version())
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--check-config", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
@@ -182,7 +188,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = load_command_gateway(args.config)
         stage = "tls"
         if bool(args.cert) != bool(args.key):
-            raise ValueError("both TLS certificate and key required")
+            print("Ошибка command gateway: code=tls_pair field=tls. "
+                  "Укажите вместе --cert и --key либо уберите оба для HTTP за Caddy.", flush=True)
+            return 1
         context = None
         if args.cert is not None:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -196,12 +204,106 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as error:
-        field = error.field if isinstance(error, CommandConfigError) else stage
-        code = (error.code if isinstance(error, CommandConfigError)
-                else "dependency_missing" if isinstance(error, ImportError) else "operation_failed")
-        hint = error.hint if isinstance(error, CommandConfigError) else "Значения и детали скрыты."
-        print(f"Ошибка command gateway: code={code} field={field}. {hint}", flush=True)
+        code, field, hint = _failure_details(error, stage)
+        print(f"Ошибка command gateway: code={code} field={field}. {hint} "
+              f"Версия remote-watch: {_version()}. Значения настроек скрыты.", flush=True)
         return 1
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Версия установленного пакета без приватных путей
+#------------------------------------------------------------------------------------------------------------------
+def _version() -> str:
+
+    """Read installed distribution metadata without exposing installation paths.
+
+    :return: Installed version or a fixed label for an unpackaged source checkout.
+    :rtype: str
+    """
+
+    try:
+        return version("remote-watch")
+    except PackageNotFoundError:
+        return "unknown (source checkout)"
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Причина отказа и подсказка без исходного текста исключения
+#------------------------------------------------------------------------------------------------------------------
+def _failure_details(
+    error: Exception,
+    stage: str,
+) -> tuple[str, str, str]:
+
+    """Classify failures by trusted types and numeric codes, never by exception messages.
+
+    :param error: Failure caught at the CLI boundary.
+    :type error: Exception
+
+    :param stage: Fixed local phase in which the failure was observed.
+    :type stage: str
+
+    :return: Safe code, field and actionable Russian explanation.
+    :rtype: tuple[str, str, str]
+    """
+
+    # error — исключение может содержать токен, URL, SQL или полный путь; str(error) запрещён.
+    # stage — только известный этап CLI, не значение из JSON или сообщения провайдера.
+
+    if isinstance(error, CommandConfigError):
+        return error.code, error.field, error.hint
+    field = stage if stage in ("config", "tls", "startup") else "startup"
+
+    if isinstance(error, ImportError):
+        return ("dependency_missing", field,
+                "Установите remote-watch[commands] в тот же venv, которым запускаете сервер.")
+    if isinstance(error, ssl.SSLError):
+        return ("tls_invalid", field,
+                "Проверьте формат PEM, соответствие сертификата ключу и параметры TLS. "
+                "За Caddy используйте HTTP на loopback без --cert/--key.")
+    if isinstance(error, PermissionError):
+        return ("permission_denied", field,
+                "Проверьте права учётной записи на конфиг, сертификаты и запись в state_dir; "
+                "при открытии listener проверьте также ограничения ОС на порт.")
+    if isinstance(error, FileNotFoundError):
+        return ("file_missing", field,
+                "Не найден требуемый файл. Для TLS проверьте --cert/--key; "
+                "относительные пути этих аргументов считаются от текущей папки PowerShell.")
+    if isinstance(error, OSError):
+        if error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048:
+            return ("address_in_use", field,
+                    "Адрес и порт уже заняты. Проверьте прежний command gateway и --port; "
+                    "порт notification gateway должен отличаться.")
+        if error.errno == errno.EADDRNOTAVAIL or getattr(error, "winerror", None) == 10049:
+            return ("address_unavailable", field,
+                    "Адрес --host недоступен на этой машине. За локальным Caddy укажите 127.0.0.1.")
+
+    # StoreWorker уже переводит ошибки журналов в фиксированные command-коды.
+    # Conflict не доказывает наличие второго процесса: возможна несовместимость
+    # owner/generation. Сохраняем это различие и не советуем удалять журнал.
+    if isinstance(error, CommandError):
+        hints = {
+            "conflict": "Проверьте другой reader/владельца и соответствие state_dir прежней установке. "
+                        "Не удаляйте locks или SQLite для обхода защиты.",
+            "capacity": "Исчерпан предел журнала команд. Нужен разбор накопленного состояния без сброса UNKNOWN.",
+            "unavailable": "Командный ресурс недоступен или операция превысила срок. "
+                           "Проверьте доступность и права state_dir; сохраните предыдущий status/summary.",
+            "busy": "Предыдущая операция с журналом ещё не завершилась. Проверьте нагрузку и состояние диска.",
+            "denied": "Командный ресурс отклонил авторизацию. Проверьте отдельные командные токены и ACL.",
+        }
+        code = error.code if error.code in hints else "unavailable"
+        return "command_" + code, field, hints[code]
+
+    # Даже для непредусмотренного сбоя оставляем полезную категорию. Имена
+    # пользовательских классов тоже не выводим: только закрытый набор типов.
+    kinds = {KeyError: "KeyError", TypeError: "TypeError", ValueError: "ValueError",
+             AttributeError: "AttributeError", RuntimeError: "RuntimeError", OSError: "OSError"}
+    kind = kinds.get(type(error), "unexpected_exception")
+    hint = (f"Необработанный сбой ({kind}). Выполните --check-config и сообщите эту строку с версией пакета. "
+            "Если проверка прошла, проверьте параметры listener/TLS и доступность state_dir.")
+    return "operation_failed", field, hint
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

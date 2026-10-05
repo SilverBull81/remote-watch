@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261005-144006
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек.
@@ -75,6 +75,10 @@ class CommandConfigError(ValueError):
         self,
         field: str,
         code: str = "config_value",
+        *,
+        line: int | None = None,
+        column: int | None = None,
+        json_reason: str = "syntax",
     ) -> None:
 
         """Restrict the public diagnostic to known configuration sections.
@@ -84,22 +88,39 @@ class CommandConfigError(ValueError):
 
         :param code: Fixed failure category without configuration values.
         :type code: str
+
+        :param line: Optional one-based JSON error line.
+        :type line: int | None
+
+        :param column: Optional one-based JSON error column.
+        :type column: int | None
+
+        :param json_reason: Allowlisted JSON failure category, never the parser message itself.
+        :type json_reason: str
         """
 
         # field — известный раздел настроек для безопасной диагностики.
         # code — фиксированная причина, не содержащая секретов или пользовательских имён.
+        # line — номер строки JSON; только целое в пределах размера файла.
+        # column — номер столбца; сам фрагмент строки не выводится.
+        # json_reason — известная причина ошибки JSON, без текста и значений файла.
 
-        pattern = (r"(?:config|schema|targets|hub|state_dir|"
-                   r"client(?:\.(?:token|token_env|identity|commands|endpoint|ca_file|state_file|owner_id))?|"
+        pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|sources))?|schema|"
+                   r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
+                   r"hub|state_dir|"
+                   r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
+                   r"state_file|owner_id|allow_loopback_http))?|"
                    r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes))?|"
-                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.settings(?:\.(?:token|token_env))?|"
-                   r"\.access(?:\[[0-9]{1,3}\])?(?:\.targets)?)?)")
+                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|"
+                   r"\.settings(?:\.(?:token|token_env|topic|reply_topic|actor_id|private_topic_confirmed))?|"
+                   r"\.access(?:\[[0-9]{1,3}\])?(?:\.(?:targets|scopes|actor_id|conversation_id))?)?)")
         self.field = field if type(field) is str and re.fullmatch(pattern, field) else "config"
         known = {"config_value", "config_read", "config_json", "config_size", "config_schema",
                  "duplicate_principal_token", "duplicate_principal_name", "duplicate_identity",
                  "unknown_target", "unassigned_target", "duplicate_source", "duplicate_provider",
                  "credential_source", "credential_environment", "credential_value", "source_acl",
-                 "ca_read", "ca_invalid", "endpoint_invalid"}
+                 "ca_read", "ca_invalid", "endpoint_invalid", "config_missing", "config_unknown",
+                 "config_object", "config_list"}
         self.code = code if type(code) is str and code in known else "config_value"
         self.hint = {
             "duplicate_principal_token": "У каждого приложения должен быть свой командный токен.",
@@ -120,7 +141,30 @@ class CommandConfigError(ValueError):
             "config_json": "Проверьте UTF-8, синтаксис JSON и отсутствие повторяющихся ключей.",
             "config_size": "Размер JSON не должен превышать 1 MiB.",
             "config_schema": "В schema_version требуется целое число 1.",
+            "config_missing": "Отсутствует обязательное поле. Добавьте его в указанный раздел JSON.",
+            "config_unknown": "В разделе есть неизвестные поля. Сверьте названия с шаблоном JSON.",
+            "config_object": "В этом поле нужен JSON-объект {...}, а не список, строка или null.",
+            "config_list": "В этом поле нужен непустой JSON-список [...] в пределах допустимого размера.",
         }.get(self.code, "Проверьте указанное поле настроек.")
+        if self.code == "config_json":
+            explanations = {
+                "escape": "Недопустимая escape-последовательность. В JSON-пути используйте / либо \\\\.",
+                "trailing_comma": "Лишняя запятая перед ] или }. Уберите запятую после последнего элемента.",
+                "delimiter": "Ожидается запятая или разделитель между элементами JSON.",
+                "property": "Ключ объекта должен быть в двойных кавычках; уберите запятую перед }.",
+                "value": "Ожидается значение JSON; проверьте кавычки, запятые и отсутствие комментариев.",
+                "extra": "После завершённого JSON есть лишние данные; в файле нужен один объект.",
+                "control": "В JSON-строке есть неэкранированный управляющий символ.",
+                "encoding": "Файл должен быть сохранён в UTF-8; кодировка UTF-16 не поддерживается.",
+                "duplicate": "В JSON повторяется ключ. У каждого объекта должны быть уникальные ключи.",
+                "constant": "NaN и Infinity не допускаются в JSON-настройках.",
+                "object": "На верхнем уровне файла нужен один JSON-объект {...}.",
+            }
+            if type(json_reason) is str and json_reason in explanations:
+                self.hint = explanations[json_reason]
+            if (type(line) is int and type(column) is int
+                    and 1 <= line <= 1048577 and 1 <= column <= 1048577):
+                self.hint += f" Строка {line}, столбец {column}."
         super().__init__(f"invalid command configuration: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -264,7 +308,7 @@ def load_command_client(
         location = Path(path).resolve()
         value = read_command_json(location)
         _keys(value, {"schema_version", "identity", "endpoint", "state_file", "owner_id"},
-              {"token", "token_env", "ca_file", "allow_loopback_http"})
+              {"token", "token_env", "ca_file", "allow_loopback_http"}, field_name)
         _schema(value)
         token = _credential(value, True)
         field_name = "client.identity"
@@ -325,10 +369,25 @@ def read_command_json(path: Path) -> dict[str, Any]:
             raise CommandConfigError("config", "config_size")
         value = json.loads(body.decode("utf-8-sig"), object_pairs_hook=_pairs, parse_constant=_constant)
         if type(value) is not dict:
-            raise ValueError("configuration object")
+            raise CommandConfigError("config", "config_json", json_reason="object")
         return value
     except CommandConfigError:
         raise
+    except UnicodeDecodeError:
+        raise CommandConfigError("config", "config_json", json_reason="encoding") from None
+    except json.JSONDecodeError as error:
+        # msg используется только как ключ закрытой таблицы; исходный текст
+        # парсера и его doc содержат JSON с токенами и никогда не печатаются.
+        reasons = {"Invalid \\escape": "escape", "Invalid \\uXXXX escape": "escape",
+                   "Expecting ',' delimiter": "delimiter", "Expecting ':' delimiter": "delimiter",
+                   "Expecting property name enclosed in double quotes": "property",
+                   "Expecting value": "value", "Extra data": "extra",
+                   "Invalid control character at": "control"}
+        reason = reasons.get(error.msg, "syntax")
+        if error.doc[error.pos:error.pos + 1] in ("}", "]") and error.doc[:error.pos].rstrip().endswith(","):
+            reason = "trailing_comma"
+        raise CommandConfigError("config", "config_json", line=error.lineno, column=error.colno,
+                                 json_reason=reason) from None
     except Exception:
         raise CommandConfigError("config", "config_json") from None
 #------------------------------------------------------------------------------------------------------------------
@@ -368,8 +427,17 @@ def _gateway(
         field_name = "targets"
         # Адрес из сообщения не заменяет Identity. Проверяем полную таблицу целей
         # прежде, чем выдавать кому-либо права на одно из этих приложений.
-        targets = SourceTargets(aliases={
-            name: Identity(**identity) for name, identity in value["targets"].items()})
+        if type(value["targets"]) is not dict:
+            raise CommandConfigError(field_name, "config_object")
+        if not 1 <= len(value["targets"]) <= 64:
+            raise CommandConfigError(field_name)
+        aliases = {}
+        for target_index, (name, identity) in enumerate(value["targets"].items()):
+            field_name = f"targets[{target_index}]"
+            _keys(identity, {"service", "environment", "region", "host", "instance_id"}, set(), field_name)
+            aliases[name] = Identity(**identity)
+        field_name = "targets"
+        targets = SourceTargets(aliases=aliases)
         principals = []
         seen_tokens: set[str] = set()
         seen_environment: set[str] = set()
@@ -378,9 +446,9 @@ def _gateway(
         field_name = "principals"
         # У каждой клиентской Identity один владелец и отдельный секрет команд.
         # Ссылки на окружение разрешаются только при настоящем запуске, не в check.
-        for index, raw in enumerate(_items(value["principals"], 64)):
+        for index, raw in enumerate(_items(value["principals"], 64, field_name)):
             field_name = f"principals[{index}]"
-            _keys(raw, {"name", "targets", "scopes"}, {"token", "token_env"})
+            _keys(raw, {"name", "targets", "scopes"}, {"token", "token_env"}, field_name)
             token = _credential(raw, resolve_environment)
             environment = raw.get("token_env")
             if token in seen_tokens or (environment is not None and environment in seen_environment):
@@ -391,7 +459,7 @@ def _gateway(
                 seen_environment.add(environment)
 
             field_name = f"principals[{index}].targets"
-            names = _items(raw["targets"], 64)
+            names = _items(raw["targets"], 64, field_name)
             if any(type(name) is not str or name not in targets.aliases for name in names):
                 raise CommandConfigError(field_name, "unknown_target")
             identities = tuple(targets.aliases[name] for name in names)
@@ -400,7 +468,7 @@ def _gateway(
             seen_identities.update(identities)
             field_name = f"principals[{index}]"
             principal = CommandPrincipal(name=raw["name"], token=token, identities=identities,
-                                         scopes=frozenset(_items(raw["scopes"], 128)))
+                                         scopes=frozenset(_items(raw["scopes"], 128, field_name + ".scopes")))
             if principal.name in seen_names:
                 raise CommandConfigError(field_name + ".name", "duplicate_principal_name")
             seen_names.add(principal.name)
@@ -415,22 +483,22 @@ def _gateway(
         field_name = "sources"
         # Provider задаёт способ удостоверения автора. Ни текст сообщения, ни
         # параметры клиентского HTTP-запроса не могут подменить эту политику.
-        for index, raw in enumerate(_items(value["sources"], 8)):
+        for index, raw in enumerate(_items(value["sources"], 8, field_name)):
             field_name = f"sources[{index}]"
-            _keys(raw, {"source_id", "provider", "settings", "access"}, set())
+            _keys(raw, {"source_id", "provider", "settings", "access"}, set(), field_name)
             if raw["source_id"] in seen_sources:
                 raise CommandConfigError(field_name + ".source_id", "duplicate_source")
             seen_sources.add(raw["source_id"])
             field_name += ".settings"
             settings = raw["settings"]
             if raw["provider"] == "telegram":
-                _keys(settings, set(), {"token", "token_env", "endpoint", "allow_loopback_http"})
+                _keys(settings, set(), {"token", "token_env", "endpoint", "allow_loopback_http"}, field_name)
                 config = TelegramCommandConfig(**settings)
                 # Даже разные source_id не должны порождать второго getUpdates для одного bot.
                 marker = ("telegram", config.endpoint, config.token or config.token_env)
             elif raw["provider"] == "ntfy":
                 _keys(settings, {"topic", "reply_topic", "actor_id", "private_topic_confirmed"},
-                      {"token", "token_env", "endpoint", "allow_loopback_http"})
+                      {"token", "token_env", "endpoint", "allow_loopback_http"}, field_name)
                 config = NtfyCommandConfig(**settings)
                 marker = ("ntfy", config.endpoint, config.topic)
             else:
@@ -442,16 +510,17 @@ def _gateway(
             # Короткий список адресов в JSON разворачивается в точные ACL-записи.
             # Ограничиваем размер по мере разворачивания, до создания всего списка.
             field_name = f"sources[{index}].access"
-            for rule_index, rule in enumerate(_items(raw["access"], 256)):
+            for rule_index, rule in enumerate(_items(raw["access"], 256, field_name)):
                 field_name = f"sources[{index}].access[{rule_index}]"
-                _keys(rule, {"actor_id", "conversation_id", "targets", "scopes"}, set())
-                for name in _items(rule["targets"], 64):
+                _keys(rule, {"actor_id", "conversation_id", "targets", "scopes"}, set(), field_name)
+                for name in _items(rule["targets"], 64, field_name + ".targets"):
                     if type(name) is not str or name not in targets.aliases:
                         raise CommandConfigError(field_name + ".targets", "unknown_target")
                     if len(access) >= 256:
                         raise ValueError("source access capacity")
                     access.append(CommandAccess(actor_id=rule["actor_id"], conversation_id=rule["conversation_id"],
-                        identity=targets.aliases[name], scopes=frozenset(_items(rule["scopes"], 128))))
+                        identity=targets.aliases[name],
+                        scopes=frozenset(_items(rule["scopes"], 128, field_name + ".scopes"))))
                 if isinstance(config, NtfyCommandConfig):
                     if rule["actor_id"] != config.actor_id or rule["conversation_id"] != config.topic:
                         raise CommandConfigError(field_name, "source_acl")
@@ -467,7 +536,7 @@ def _gateway(
         # оставить более широкое значение по умолчанию вместо ожидаемого запрета.
         limits = value.get("hub", {})
         _keys(limits, set(), {"session_ttl", "poll_timeout", "storage_timeout", "shutdown_timeout",
-                             "refresh_interval", "max_sessions", "max_pending"})
+                             "refresh_interval", "max_sessions", "max_pending"}, field_name)
         hub = CommandHubConfig(principals=tuple(principals), sources=tuple(sources), **limits)
         field_name = "state_dir"
         return CommandGatewayConfig(state_dir=_path(path, value["state_dir"]), hub=hub,
@@ -569,6 +638,7 @@ def _keys(
     value: Any,
     required: set[str],
     optional: set[str],
+    field_name: str = "config",
 ) -> None:
 
     """Reject missing and unknown keys before constructing typed objects.
@@ -581,14 +651,26 @@ def _keys(
 
     :param optional: Allowed optional object keys.
     :type optional: set[str]
+
+    :param field_name: Safe schema path containing this object.
+    :type field_name: str
     """
 
     # value — проверяемое значение настроек либо ответа провайдера.
     # required — обязательные поля JSON-объекта.
     # optional — допустимые необязательные поля объекта.
+    # field_name — фиксированный путь схемы, без имён целей и других значений пользователя.
 
-    if type(value) is not dict or not required <= value.keys() or value.keys() - required - optional:
-        raise ValueError("invalid configuration keys")
+    if type(value) is not dict:
+        raise CommandConfigError(field_name, "config_object")
+
+    # Название отсутствующего обязательного поля берётся из схемы. Неизвестный
+    # ключ, напротив, может случайно содержать токен: его никогда не печатаем.
+    missing = sorted(required - value.keys())
+    if missing:
+        raise CommandConfigError(field_name + "." + missing[0], "config_missing")
+    if value.keys() - required - optional:
+        raise CommandConfigError(field_name, "config_unknown")
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -598,6 +680,7 @@ def _keys(
 def _items(
     value: Any,
     maximum: int,
+    field_name: str = "config",
 ) -> list[Any]:
 
     """Require a nonempty bounded JSON list instead of accepting arbitrary iterables.
@@ -608,15 +691,19 @@ def _items(
     :param maximum: Maximum permitted number of JSON list items.
     :type maximum: int
 
+    :param field_name: Safe schema path containing this list.
+    :type field_name: str
+
     :return: Validated bounded JSON list.
     :rtype: list[Any]
     """
 
     # value — проверяемое значение настроек либо ответа провайдера.
     # maximum — наибольшее допустимое число элементов списка JSON.
+    # field_name — известное имя поля для понятного сообщения об ошибке.
 
     if type(value) is not list or not 1 <= len(value) <= maximum:
-        raise ValueError("invalid configuration list")
+        raise CommandConfigError(field_name, "config_list")
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -641,7 +728,7 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
     for key, value in pairs:
         if key in result:
-            raise ValueError("duplicate configuration key")
+            raise CommandConfigError("config", "config_json", json_reason="duplicate")
         result[key] = value
     return result
 #------------------------------------------------------------------------------------------------------------------
@@ -660,7 +747,7 @@ def _constant(value: str) -> None:
 
     # value — проверяемое значение настроек либо ответа провайдера.
 
-    raise ValueError("invalid JSON constant")
+    raise CommandConfigError("config", "config_json", json_reason="constant")
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

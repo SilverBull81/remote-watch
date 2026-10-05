@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.3
+Version 1.3.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261002-185330
+Дата и время последнего изменения: 261005-144705
 
 ## Project Intent
 
@@ -13,7 +13,7 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev2; no stable 0.2.0 tag is implied.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
@@ -168,6 +168,20 @@ Dev 0.4.1.dev1 passed 1058 local tests (2 live deselections) on Windows Python
 passed style checks and all eight installed CLIs passed help/encoding checks.
 No new CI/Linux/Python 3.10 or live provider checks were run. Actual process
 supervision and recovery remain unimplemented; see docs/VALIDATION.md.
+
+Dev 0.4.1.dev2 improves command configuration and CLI diagnostics: safe JSON
+line/column and fixed syntax explanations, missing-field/schema paths, distinct
+TLS/listener/storage hints and --version. It does not print JSON excerpts,
+unknown keys, exception payloads, arbitrary class names or credentials. Existing
+config schemas and command execution guarantees are unchanged. See
+docs/COMMAND_SOURCES.md for operator steps; source_id is a stable local source
+name, not a provider actor/chat ID. Do not rename an existing journal owner to
+bypass recovery or create a second reader for the same bot.
+Dev2 passed 1092 tests (2 live deselections), clean core/extras wheels with
+754/1092 passed and style checks of all 115 Python files on Windows Python
+3.12.2. No CI/Linux/Python 3.10 or live provider runs were added. The owner's
+configuration was checked read-only; neither deployment files nor its venv
+were modified. See docs/VALIDATION.md for exact evidence and limits.
 
 ## Read the Relevant Design Context
 
