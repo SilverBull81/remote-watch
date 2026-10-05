@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -12,6 +12,7 @@
 # -> read_token(): Чтение токена при открытии канала.
 # -> truncate(): Сокращение текста с сохранением целых символов.
 # -> render(): Подготовка текста со сведениями об отправителе.
+# -> validate_display(): Проверка режима и выбранных групп полей отображения.
 # -> retry_after(): Чтение минимальной задержки из ответа сервиса.
 # -> http_failure(): Классификация HTTP-ошибки без текста ответа.
 
@@ -21,6 +22,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -170,32 +172,94 @@ def truncate(
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка текста со сведениями об отправителе
 #------------------------------------------------------------------------------------------------------------------
-def render(delivery: Delivery) -> str:
+def render(
+    delivery: Delivery,
+    mode: str = "full",
+    fields: tuple[str, ...] | None = None,
+) -> str:
 
     """Render explicit source identity and event identifiers as plain text.
 
     :param delivery: Immutable delivery attempt.
     :type delivery: Delivery
 
+    :param mode: Validated destination display mode: full, compact or text.
+    :type mode: str
+
+    :param fields: Optional ordered selection of technical field groups.
+    :type fields: tuple[str, ...] | None
+
     :return: Plain text with source context.
     :rtype: str
     """
 
     # delivery - подготовленные данные одной попытки.
+    # mode/fields — только внешний вид; исходные модели и идентификаторы не изменяются.
 
     event = delivery.notification
     identity = event.identity
-    # Поля принадлежности остаются отдельными и не выводятся из текста сообщения или имени чата.
-    source = (
-        f"service={identity.service} environment={identity.environment} region={identity.region}\n"
-        f"host={identity.host} instance_id={identity.instance_id}\n"
-        f"[{event.level_name}] {event.logger_name} {event.created_at.isoformat()}\n"
-        f"event_id={event.event_id} session_id={event.session_id}\n"
-        f"delivery_id={delivery.delivery_id}\n\n{event.message}"
-    )
+    selected = fields if fields is not None else (
+        ("identity", "level", "logger", "time", "ids") if mode == "full" else ("identity", "level"))
+    # Полная Identity различает источники даже при одинаковом instance_id в разных регионах.
+    # JSON-массив в compact не допускает неоднозначности разделителей внутри самих полей.
+    identity_text = (json.dumps([identity.service, identity.environment, identity.region,
+                               identity.host, identity.instance_id], ensure_ascii=False, separators=(",", ":"))
+                     if mode == "compact" else
+                     f"service={identity.service} environment={identity.environment} region={identity.region}\n"
+                     f"host={identity.host} instance_id={identity.instance_id}")
+    metadata = {"identity": identity_text, "level": f"[{event.level_name}]", "logger": event.logger_name,
+                "time": event.created_at.isoformat(),
+                "ids": (f"event_id={event.event_id} session_id={event.session_id}\n"
+                        f"delivery_id={delivery.delivery_id}")}
+    if mode == "text":
+        header = ""
+    elif mode == "full" and fields is None:
+        # Прежний формат по умолчанию сохраняется побайтово, включая переносы строк.
+        header = (identity_text + "\n" + metadata["level"] + " " + metadata["logger"] + " " + metadata["time"]
+                  + "\n" + metadata["ids"])
+    else:
+        header = (" " if mode == "compact" else "\n").join(metadata[field] for field in selected)
+    source = (header + "\n\n" if header else "") + event.message
     if event.exception:
         source += "\n\n" + event.exception
     return source
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Проверка режима и выбранных групп полей отображения
+#------------------------------------------------------------------------------------------------------------------
+def validate_display(
+    mode: str,
+    fields: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+
+    """Validate a presentation policy without permitting removal of compact source identity.
+
+    :param mode: Requested display mode.
+    :type mode: str
+
+    :param fields: Optional field groups, normalized to an immutable tuple.
+    :type fields: tuple[str, ...] | None
+
+    :return: Validated field selection, or None for mode defaults.
+    :rtype: tuple[str, ...] | None
+    """
+
+    # mode/fields — фиксированные имена, без пользовательского форматирующего кода.
+    if mode not in ("full", "compact", "text"):
+        raise ValueError("invalid display mode")
+    if fields is None:
+        return None
+    if not isinstance(fields, (tuple, list)) or len(fields) > 5:
+        raise ValueError("invalid display fields")
+    fields = tuple(fields)
+    if (any(type(field) is not str or field not in {"identity", "level", "logger", "time", "ids"}
+            for field in fields) or len(set(fields)) != len(fields)):
+        raise ValueError("invalid display fields")
+    if mode == "text" or mode == "compact" and "identity" not in fields:
+        raise ValueError("display fields conflict with mode")
+    return fields
 #------------------------------------------------------------------------------------------------------------------
 
 

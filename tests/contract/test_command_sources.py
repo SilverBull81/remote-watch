@@ -1,10 +1,10 @@
 ﻿# Проверки разбора команд, постоянной позиции и восстановления источника.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями.
@@ -24,6 +24,7 @@
 # -> test_source_journal_recovery(): Восстановление решения и необратимая граница очистки.
 # -> test_source_journal_capacity_and_lock(): Предел защиты от повторов и исключительное владение.
 # -> test_source_admission(): Права, свежесть и потери подтверждений источника.
+# -> test_short_commands(): Короткая справка, однозначность и прежние границы доступа.
 
 
 #******************************************************************************************************************
@@ -34,10 +35,14 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock
 
 import pytest
-from test_command_hub import SOURCE_TOKEN, Rig
+from test_command_hub import APP_TOKEN, SOURCE_TOKEN, Rig
 
+from remote_watch.adapters.telegram_commands import TelegramCommandConfig, TelegramCommandProvider
+from remote_watch.commands.client import CommandClient
+from remote_watch.commands.protocol import CommandCapability
 from remote_watch.commands.source import CommandSourceRunner
 from remote_watch.commands.source_protocol import SourceEvent, SourcePending, SourceTargets, parse_source_command
 from remote_watch.commands.source_store import ProcessLock, SourceJournal
@@ -427,6 +432,149 @@ def test_source_admission(
 
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Короткая справка, однозначность и прежние границы доступа
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ["Help", "hElP", "/help", "/status", "/resume_load", "restricted",
+                                  "foreign_actor", "foreign_chat", "multi_offline", "explicit",
+                                  "offline", "foreign_bot", "legacy", "ntfy", "lost_ack", "long_help",
+                                  "restricted_command", "second_live", "new_session", "telegram_wire"])
+def test_short_commands(
+    tmp_path: Path,
+    case: str,
+) -> None:
+
+    """Resolve implicit targets from static ACL and preserve exact session binding.
+
+    :param tmp_path: Isolated source and command journals.
+    :type tmp_path: Path
+
+    :param case: Selected syntax, permission or ambiguity scenario.
+    :type case: str
+    """
+
+    # tmp_path — отдельные журналы; case — сценарий без настоящего Telegram/ntfy.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Обработка события через постоянное решение источника
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """Run one source event without interpreting availability as implicit addressing."""
+
+        rig = Rig(tmp_path)
+        config = rig.hub.config
+        access = config.sources[0].access[0]
+        second = replace(rig.identity, instance_id="two")
+        scopes = frozenset({"read", "control"})
+        access = replace(access, scopes=frozenset({"read"}) if case.startswith("restricted") else scopes)
+        if case == "telegram_wire":
+            access = replace(access, actor_id="42", conversation_id="-123")
+        rules = ((access, replace(access, identity=second))
+                 if case in {"multi_offline", "explicit", "second_live"} else (access,))
+        rig.hub.config = replace(config,
+            principals=(replace(config.principals[0], scopes=scopes, identities=(rig.identity, second)),),
+            sources=(replace(config.sources[0], access=rules),))
+        rig.registration = replace(rig.registration, capabilities=(
+            CommandCapability(name="status", required_scope="read"),
+            CommandCapability(name="resume_load", required_scope="control")))
+        if case == "long_help":
+            rig.registration = replace(rig.registration, capabilities=tuple(
+                CommandCapability(name=f"a{number:02d}" + "x" * 61, required_scope="read")
+                for number in range(64)))
+        rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now)
+        await rig.start()
+        if case == "second_live":
+            await rig.hub.register(APP_TOKEN, replace(rig.registration, identity=second, session_id="f" * 32))
+        provider = FakeProvider()
+        text = case if case in {"Help", "hElP", "/help", "/status", "/resume_load"} else "/status"
+        if case in {"restricted", "long_help"}:
+            text = "/help"
+        elif case == "restricted_command":
+            text = "/resume_load"
+        elif case == "explicit":
+            text = "/rw loader status"
+        elif case == "legacy":
+            text = "/rw"
+        elif case == "foreign_bot":
+            text = "/status@another_bot"
+        incoming = event(text=text)
+        if case == "telegram_wire":
+            telegram = TelegramCommandProvider(TelegramCommandConfig(token_env="SYNTHETIC_TEST"))
+            telegram._username = "test_bot"
+            incoming = telegram._event({"update_id": 1, "message": {"date": 1000,
+                "from": {"id": 42, "is_bot": False}, "chat": {"id": -123, "type": "group"},
+                "text": "/status@TEST_BOT"}})
+        if case == "foreign_actor":
+            incoming = replace(incoming, actor_id="stranger")
+        if case == "foreign_chat":
+            incoming = replace(incoming, conversation_id="another-chat")
+        if case == "offline":
+            rig.now += config.session_ttl + 1
+        provider.events.append(incoming)
+        aliases = {"loader": rig.identity}
+        if len(rules) == 2:
+            aliases["second"] = second
+        journal = SourceJournal(tmp_path / "short.sqlite")
+        runner = CommandSourceRunner(rig.hub, rig.hub.config.sources[0], SourceTargets(aliases=aliases),
+                                     provider, journal, short_commands=case != "ntfy")
+        try:
+            await runner.start(activate=False)
+            if case == "new_session":
+                submit = rig.hub.submit
+                rig.hub.submit = AsyncMock(side_effect=CommandError("unavailable"))
+                with pytest.raises(CommandError):
+                    await runner.step()
+                pending = journal.state()[2]
+                assert pending.request.ref.session_id == rig.registration.session_id
+                rig.hub.submit = submit
+                rig.now += config.session_ttl + 1
+                await rig.hub.register(APP_TOKEN, replace(rig.registration, session_id="f" * 32))
+                runner._prepare = Mock(side_effect=AssertionError("must not select another session"))
+            if case == "lost_ack":
+                provider.lose_ack = True
+                with pytest.raises(CommandError):
+                    await runner.step()
+                # Повтор события не создаёт новую команду даже при повторной доставке.
+                provider.lose_ack = False
+            await runner.step()
+            rows = rig.store.pending()
+            accepted = case in {"/status", "/resume_load", "explicit", "lost_ack", "telegram_wire"}
+            assert bool(rows) is accepted
+            if accepted:
+                assert len(rows) == 1
+                assert rows[0].record.request.ref.session_id == rig.registration.session_id
+                assert rows[0].record.request.name == ("resume_load" if case == "/resume_load" else "status")
+            elif case in {"Help", "hElP", "/help", "restricted"}:
+                expected = "Allowed Bot Commands:\n/status"
+                if case != "restricted":
+                    expected += "\n/resume_load"
+                assert provider.replies[0][1] == expected
+            elif case.startswith("foreign_") and case != "foreign_bot":
+                assert not provider.replies
+            elif case in {"multi_offline", "second_live"}:
+                assert "loader" in provider.replies[0][1] and "second" in provider.replies[0][1]
+            elif case == "long_help":
+                assert len(provider.replies) == 2
+                lines = []
+                for _, page in provider.replies:
+                    assert len(page.encode("utf-8")) <= 3800
+                    assert page.splitlines()[0] == "Allowed Bot Commands:"
+                    lines.extend(page.splitlines()[1:])
+                assert lines == ["/" + cap.name for cap in rig.registration.capabilities]
+            elif case == "legacy":
+                assert "Адреса приложений" in provider.replies[0][1]
+            elif case == "offline":
+                assert "недоступно" in provider.replies[0][1]
+        finally:
+            await runner.close()
+            await rig.close()
+    #--------------------------------------------------------------------------------------------------------------
+
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
 
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла

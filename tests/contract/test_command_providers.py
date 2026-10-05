@@ -1,10 +1,10 @@
 ﻿# Проверки Telegram и закрытых топиков ntfy через локальный HTTP.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261005-210047
 #
 # Тесты:
 # -> update(): Подставное исходное сообщение Telegram.
@@ -185,7 +185,8 @@ def test_provider_http(kind: str) -> None:
 # ТЕСТ : Исходные сообщения людей без подмены отправителя
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["normal", "other_bot", "own_bot", "sender_chat", "forward_origin", "bot",
-                                 "edited", "channel", "message_thread_id", "long"])
+                                 "edited", "channel", "message_thread_id", "long", "help_mixed", "short_status",
+                                 "short_own", "short_other", "short_forward", "short_edited"])
 def test_telegram_authenticated_fields(kind: str) -> None:
 
     """Reject copied, edited, anonymous and foreign-bot messages without trusting displayed names.
@@ -214,8 +215,23 @@ def test_telegram_authenticated_fields(kind: str) -> None:
         value["message"]["chat"]["type"] = "channel"
     elif kind == "long":
         value["message"]["text"] += " x=" + "я" * 4000
+    elif kind.startswith("short"):
+        value["message"]["text"] = "/status"
+        if kind == "short_own":
+            value["message"]["text"] += "@TEST_BOT"
+        elif kind == "short_other":
+            value["message"]["text"] += "@OTHER_BOT"
+        elif kind == "short_forward":
+            value["message"]["forward_origin"] = {}
+        elif kind == "short_edited":
+            value["edited_message"] = value.pop("message")
+    elif kind == "help_mixed":
+        value["message"]["text"] = "hElP"
     event = provider._event(value)
-    assert (event.actor_id is not None) == (kind in ("normal", "own_bot", "long"))
+    assert (event.actor_id is not None) == (kind in (
+        "normal", "own_bot", "long", "help_mixed", "short_status", "short_own"))
+    if kind in {"short_status", "short_own", "help_mixed"}:
+        assert event.text == ("Help" if kind == "help_mixed" else "/status")
 #------------------------------------------------------------------------------------------------------------------
 
 

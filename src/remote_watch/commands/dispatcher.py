@@ -1,10 +1,10 @@
 ﻿# Выполнение пользовательских команд с явным владением потоками и неизвестными исходами.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> DispatcherStats: Счётчики и состояние исполнителя без приватных данных.
@@ -46,6 +46,7 @@ from typing import Any
 
 from remote_watch._validation import require_number
 from remote_watch.commands.client import CommandClient, CommandTicket
+from remote_watch.commands.health import CommandHealth
 from remote_watch.commands.protocol import (
     CommandOutcome,
     CommandReason,
@@ -98,6 +99,9 @@ class DispatcherStats:
     running: bool               # Пользовательская работа ещё фактически не закончилась.
     closed: bool                # Новые команды больше не принимаются.
     last_error: str | None       # Фиксированный код последнего отказа; None при отсутствии.
+    ready: bool = False          # Наблюдаемая исправность всех этапов при действующей сессии.
+    last_error_stage: str | None = None      # Этап последнего отказа; история не стирается успехом.
+    health: CommandHealth | None = None     # Отдельные текущие ошибки, отказы и восстановления этапов.
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -184,9 +188,11 @@ class CommandDispatcher:
         :rtype: DispatcherStats
         """
 
+        health = self.client.health
         return DispatcherStats(completed=self._completed, unknown=self._unknown, rejected=self._rejected,
             running=self._job is not None and not self._job.done(), closed=self._stopping.is_set(),
-            last_error=self._error)
+            last_error=health.last_error, last_error_stage=health.last_error_stage, health=health,
+            ready=health.ready and self._runner is not None and not self._stopping.is_set())
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -263,13 +269,17 @@ class CommandDispatcher:
                     await asyncio.sleep(self._poll_interval)
                 except CommandError as error:
                     self._error = error.code
+                    if getattr(error, "_health_observation", (None,))[0] is not self.client._health:
+                        self.client._health.failure("poll", error, object())
                     if error.code not in ("busy", "unavailable", "capacity"):
                         break
                     await asyncio.sleep(self._retry_interval)
         except asyncio.CancelledError:
             pass
-        except Exception:
+        except Exception as error:
             self._error = "unavailable"
+            if getattr(error, "_health_observation", (None,))[0] is not self.client._health:
+                self.client._health.failure("poll", CommandError("unavailable"), object())
         finally:
             self._stopping.set()
             await self._shutdown()
@@ -516,6 +526,7 @@ class CommandDispatcher:
         # result — точный итог выполнения с идентификаторами исходной команды.
         # finished — фактическое окончание callback либо доказанный отказ от его вызова.
 
+        self.client._health.pending(True)
         while not self._stopping.is_set():
             try:
                 stored = await self.client.lookup(result.ref)
@@ -531,6 +542,8 @@ class CommandDispatcher:
                 return
             except CommandError as error:
                 self._error = error.code
+                if getattr(error, "_health_observation", (None,))[0] is not self.client._health:
+                    self.client._health.failure("result", error, object())
                 if error.code not in ("busy", "unavailable", "capacity"):
                     raise
                 await asyncio.sleep(self._retry_interval)

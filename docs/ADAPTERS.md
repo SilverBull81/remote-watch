@@ -1,10 +1,10 @@
 ﻿# Адаптеры Telegram и ntfy
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-112704
+Дата и время последнего изменения: 261005-213218
 
 ## Реализовано в 0.1.0
 
@@ -141,7 +141,57 @@ Basic Auth в этой версии не поддерживается; испо�
 
 ## Текст, ошибки и ресурсы
 
-Перед сообщением выводятся service, environment, region, host, instance_id,
+С 0.4.1.dev7 у TelegramConfig и NtfyConfig есть настройки отображения назначения:
+
+| Настройка | Поведение |
+| --- | --- |
+| `display_mode="full"` | Прежняя техническая шапка; режим по умолчанию |
+| `display_mode="compact"` | Короткая строка источника и уровня, затем сообщение |
+| `display_mode="text"` | Только сообщение и описание исключения, если оно есть |
+| `display_fields=None` | Стандартный набор полей выбранного режима |
+
+Необязательный `display_fields` — tuple/list уникальных групп в нужном порядке:
+`identity`, `level`, `logger`, `time`, `ids`. Например, для compact можно добавить
+время: `display_fields=("identity", "level", "time")`. Группа ids содержит
+event/session/delivery ID. В compact обязательна identity, в text поля не задаются.
+JSON использует те же имена и массив вместо tuple.
+
+Compact показывает источник JSON-массивом из пяти строк в порядке
+`service, environment, region, host, instance_id`, например:
+
+```text
+["quotes","prod","ru","vm-1","one"] [ERROR]
+
+Источник недоступен
+```
+
+Все пять полей сохраняются даже при одном недавно видимом instance. Это различает
+одинаковые instance_id у разных приложений и не зависит от доступности других машин.
+В text отсутствие источника — явный выбор назначения; title ntfy задаётся отдельно.
+
+Для direct настройка находится в приложении. Для relay она задаётся в
+`destinations[].settings` **notification gateway**, поскольку текст формирует его
+Telegram/ntfy adapter. Пример настроек назначения в JSON:
+
+```json
+{
+  "alias": "app1-telegram",
+  "provider": "telegram",
+  "settings": {
+    "token_env": "APP1_TELEGRAM_TOKEN",
+    "chat_id": -123456789,
+    "display_mode": "compact",
+    "display_fields": ["identity", "level"]
+  }
+}
+```
+
+Это только отображение: Notification/Delivery, Identity, wire, журналы, IDs,
+авторизация и локальные logging handlers не меняются. Настройка не применяется к
+служебным ответам на команды. Лимиты Telegram UTF-16 и ntfy UTF-8/JSON действуют
+после форматирования во всех режимах, включая длинный текст с Unicode.
+
+В full по умолчанию перед сообщением выводятся service, environment, region, host, instance_id,
 уровень, logger, время UTC и event/session/delivery IDs. Затем идут сообщение
 и описание исключения. При усечении добавляется `[сокращено]`; исходное Notification
 не меняется. Длинное сообщение может вытеснить конец traceback. Текст уже должен

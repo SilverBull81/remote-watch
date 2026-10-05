@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.8
+Version 1.3.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-202646
+Дата и время последнего изменения: 261005-213218
 
 ## Project Intent
 
@@ -13,7 +13,20 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev6; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev7; no stable 0.2.0 tag is implied.
+Dev7 implements the first-pilot wishes: Telegram Help and implicit-target slash commands
+use the statically configured actor/chat ACL, never the sole currently live instance.
+Ambiguity requires explicit /rw alias; original session binding and replay protection remain.
+Telegram/ntfy notification destinations support full/compact/text and fixed display field
+groups. Relay display belongs to the gateway provider adapter; wire/IDs/auth remain intact.
+CommandClient.health and DispatcherStats.ready separate current poll/heartbeat/storage/result
+failures from last_error history. Successful callbacks cannot hide heartbeat or result failure.
+No implicit command session re-registration or callback retry is introduced.
+See docs/COMMAND_SOURCES.md, docs/ADAPTERS.md and docs/COMMAND_EXECUTION.md.
+Dev7 passed 1213 local tests (2 live deselections), plus clean Windows Python 3.12.2
+core/extras wheel checks: 823/1213 passed. Ruff/style: 119 Python files, no issues.
+No CI/Linux/live providers were rerun. Owner pilot acceptance of these new features
+remains pending; exact evidence is in docs/VALIDATION.md.
 RelayConfig now accepts either a private literal token or token_env, exclusively.
 Both use the gateway credential validator; neither value nor reference is exposed in repr.
 Local validation: 1099 passed, 2 live deselected; 33 relay contract cases, no live providers.
@@ -25,7 +38,7 @@ Unknown bodies keep the status fallback, and body failures retain an observed ht
 See docs/COMMAND_EXECUTION.md. SpamBot's field root cause remains unconfirmed.
 Dev6 passed 1148 local tests (2 live deselections), plus clean Windows Python 3.12.2
 core/extras wheel checks: 768/1148 passed. Ruff/style: 116 Python files, no issues.
-No new CI/Linux/live-provider run. Pilot wishes remain planned; only R1/R2 are fixed.
+Those dev6 checks did not rerun CI/Linux/live providers; dev7 validation is recorded separately.
 Core provides standard logging integration, bounded queues/retries/TTL, independent
 destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
 ntfy, relay and gateway have isolated optional dependencies. JSON and Python server

@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -324,6 +324,7 @@ def _destination(value: Any) -> Destination:
 
         options = _object(settings["settings"], {
             "token", "token_env", "chat_id", "endpoint", "message_thread_id", "disable_notification", "allow_http",
+            "display_mode", "display_fields",
         }, {"chat_id"})
         _credential_source(options)
         provider = TelegramConfig(**options)
@@ -332,6 +333,7 @@ def _destination(value: Any) -> Destination:
 
         options = _object(settings["settings"], {
             "topic", "token", "token_env", "endpoint", "title", "priority", "tags", "allow_http",
+            "display_mode", "display_fields",
         }, {"topic"})
         _credential_source(options)
         provider = NtfyConfig(**options)

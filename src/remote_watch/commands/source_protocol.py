@@ -1,10 +1,10 @@
 ﻿# События источников, явные адреса приложений и текстовые ответы на команды.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> SourceEvent: Проверенные данные одного события провайдера.
@@ -265,18 +265,26 @@ class CommandProvider(Protocol):
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор адреса, имени команды и строковых аргументов
 #------------------------------------------------------------------------------------------------------------------
-def parse_source_command(text: str) -> tuple[str | None, str | None, dict[str, str]]:
+def parse_source_command(
+    text: str,
+    *,
+    short_commands: bool = False,
+) -> tuple[str | None, str | None, dict[str, str]]:
 
     """Parse /rw [alias [command [key=value ...]]] without evaluation or positional callback arguments.
 
     :param text: Bounded plain text of a command or a provider reply.
     :type text: str
 
+    :param short_commands: Explicit provider capability permitting implicit-target slash commands and Help.
+    :type short_commands: bool
+
     :return: Optional target and command names followed by textual named arguments.
     :rtype: tuple[str | None, str | None, dict[str, str]]
     """
 
     # text — ограниченный обычный текст команды либо ответа.
+    # short_commands — явное разрешение синтаксиса Telegram; выбор адреса выполняет source runner.
 
     require_text(text, "command text", 8192)
 
@@ -285,6 +293,14 @@ def parse_source_command(text: str) -> tuple[str | None, str | None, dict[str, s
     except ValueError:
         raise ValueError("invalid command syntax") from None
 
+    if short_commands and len(words) == 1 and words[0].casefold() in {"help", "/help"}:
+        return None, None, {}
+    if short_commands and words and words[0].casefold() in {"help", "/help"}:
+        raise ValueError("help does not accept arguments")
+    short = bool(short_commands and words and words[0].startswith("/") and words[0] != "/rw")
+    if short:
+        # Не удаляем @bot: чужой адресат должен быть отклонён обычной проверкой имени.
+        words = ["/rw", "implicit", words[0][1:], *words[1:]]
     if not words or words[0] != "/rw" or len(words) > 35:
         raise ValueError("invalid command syntax")
     alias = words[1] if len(words) > 1 else None
@@ -302,7 +318,7 @@ def parse_source_command(text: str) -> tuple[str | None, str | None, dict[str, s
         if not sep or key in arguments or not key:
             raise ValueError("invalid named argument")
         arguments[key] = value
-    return alias, name, arguments
+    return None if short else alias, name, arguments
 #------------------------------------------------------------------------------------------------------------------
 
 

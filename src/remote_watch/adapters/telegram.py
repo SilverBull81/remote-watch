@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -39,6 +39,7 @@ from remote_watch.adapters._common import (
     render,
     retry_after,
     truncate,
+    validate_display,
     validate_endpoint,
 )
 from remote_watch.adapters._http import HttpSender
@@ -64,6 +65,8 @@ class TelegramConfig:
     message_thread_id: int | None = None        # ID темы в группе-форуме; None — обычная отправка.
     disable_notification: bool = False          # Отправка без звука.
     allow_http: bool = False                    # Явное разрешение HTTP для своего сервера.
+    display_mode: str = "full"                  # Полная шапка, компактный источник либо только текст.
+    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Создание получателя с общей политикой таймаутов
@@ -111,6 +114,7 @@ class TelegramConfig:
         """Validate static settings without reading credentials or importing aiohttp."""
 
         validate_credentials(self.token, self.token_env, "telegram")
+        object.__setattr__(self, "display_fields", validate_display(self.display_mode, self.display_fields))
 
         validate_endpoint(self.endpoint, self.allow_http)
 
@@ -211,7 +215,8 @@ class TelegramChannel:
         # предел для emoji: не более 4096 кодовых единиц, без разрезания символа.
         payload: dict[str, object] = {
             "chat_id": self._config.chat_id,
-            "text": truncate(render(delivery), 8192, "utf-16-le"),
+            "text": truncate(render(delivery, self._config.display_mode, self._config.display_fields),
+                             8192, "utf-16-le"),
             "disable_notification": self._config.disable_notification,
             "link_preview_options": {"is_disabled": True},
         }

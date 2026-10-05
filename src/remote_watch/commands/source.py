@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных.
@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 import asyncio
+import shlex
 from dataclasses import dataclass
 from hashlib import sha256
 from secrets import token_hex
@@ -88,6 +89,7 @@ class CommandSourceRunner:
         journal: SourceJournal,
         *,
         retry_interval: float = 2.0,
+        short_commands: bool = False,
     ) -> None:
 
         """Bind explicit source ownership without opening journals or contacting the provider.
@@ -109,6 +111,9 @@ class CommandSourceRunner:
 
         :param retry_interval: Finite delay before the next failed-operation attempt, seconds.
         :type retry_interval: float
+
+        :param short_commands: Enable implicit-target commands for a provider supporting Telegram syntax.
+        :type short_commands: bool
         """
 
         # hub — отдельно настроенный командный hub.
@@ -117,6 +122,7 @@ class CommandSourceRunner:
         # provider — реализация протокола одного отдельно принадлежащего потока событий.
         # journal — постоянный ограниченный журнал только этого источника.
         # retry_interval — конечная пауза перед повтором операции после отказа, секунды.
+        # short_commands — короткий синтаксис при неизменных ACL и привязке к сессии.
 
         if policy not in hub.config.sources:
             raise ValueError("source policy differs from hub")
@@ -127,6 +133,9 @@ class CommandSourceRunner:
 
         if retry_interval > 60:
             raise ValueError("source retry interval")
+        if type(short_commands) is not bool:
+            raise ValueError("invalid short command mode")
+        self._short_commands = short_commands
         self.hub = hub
         self.policy = policy
         self.targets = targets
@@ -308,13 +317,19 @@ class CommandSourceRunner:
                       and rule.conversation_id == event.conversation_id)
         request = None
         notice = None
+        short_help = False
 
         if rules and event.text is not None:
             try:
-                alias, name, arguments = parse_source_command(event.text)
+                alias, name, arguments = parse_source_command(event.text, short_commands=self._short_commands)
+                short = self._short_commands and shlex.split(event.text, comments=False, posix=True)[0] != "/rw"
+                allowed = [key for key, identity in self.targets.aliases.items()
+                           if any(rule.identity == identity for rule in rules)]
+                # Список определяется конфигурацией ACL, а не текущей доступностью
+                # приложений. Отключение второго instance не меняет адрес команды.
+                if short and len(allowed) == 1:
+                    alias = allowed[0]
                 if alias is None:
-                    allowed = [key for key, identity in self.targets.aliases.items()
-                               if any(rule.identity == identity for rule in rules)]
                     notice = "Адреса приложений: " + ", ".join(allowed) + ". Справка: /rw адрес"
                 else:
                     identity = self.targets.aliases.get(alias)
@@ -323,7 +338,11 @@ class CommandSourceRunner:
                     names = self.hub.commands_for(
                         self.policy.token, identity, event.actor_id, event.conversation_id)
                     if name is None:
-                        notice = alias + ": " + ", ".join(names) + ". Вызов: /rw адрес команда [имя=значение]"
+                        if short:
+                            notice = "Allowed Bot Commands:\n" + "\n".join("/" + item for item in names)
+                            short_help = True
+                        else:
+                            notice = alias + ": " + ", ".join(names) + ". Вызов: /rw адрес команда [имя=значение]"
                     elif name not in names:
                         raise CommandError("denied")
                     else:
@@ -338,7 +357,7 @@ class CommandSourceRunner:
             except CommandError as error:
                 notice = "Приложение недоступно." if error.code == "stale_session" else "Команда не разрешена."
         return SourcePending(position=position, event=event, request=request,
-                             notice=None if notice is None else bound_source_text(notice))
+                             notice=notice if notice is None or short_help else bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -386,7 +405,19 @@ class CommandSourceRunner:
         if notice is not None and pending.event.conversation_id is not None:
             # Справка/отказ не запускают приложение. Их ответ — одна попытка после
             # постоянного решения; потеря такого ответа не повторяет входящую команду.
-            await self.provider.reply(pending.event.conversation_id, bound_source_text(notice))
+            # Все разрешённые команды должны попасть в справку. Максимум 64 имени
+            # по 64 ASCII-символа помещаются в две ограниченные страницы, без усечения строки.
+            prefix = "Allowed Bot Commands:\n"
+            if self._short_commands and notice.startswith(prefix):
+                page = prefix.rstrip()
+                for line in notice[len(prefix):].splitlines():
+                    if len((page + "\n" + line).encode("utf-8")) > 3800:
+                        await self.provider.reply(pending.event.conversation_id, page)
+                        page = prefix.rstrip()
+                    page += "\n" + line
+                await self.provider.reply(pending.event.conversation_id, page)
+            else:
+                await self.provider.reply(pending.event.conversation_id, bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
 
 

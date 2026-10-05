@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов.
@@ -338,10 +338,12 @@ def accepted_body(provider: str) -> dict[str, object]:
 # ТЕСТ : Отправка, размер текста и освобождение клиента
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("provider", ["telegram", "ntfy"])
+@pytest.mark.parametrize("display", ["full", "compact", "text"])
 def test_success_and_lifecycle(
     provider: str,
     notification: Notification,
     sessions: list[FakeSession],
+    display: str,
 ) -> None:
 
     """Verify rendering, limits, authentication, request budgets and owned cleanup.
@@ -354,11 +356,15 @@ def test_success_and_lifecycle(
 
     :param sessions: Captured fake sessions.
     :type sessions: list[FakeSession]
+
+    :param display: Per-destination presentation mode.
+    :type display: str
     """
 
     # provider - сервис, выбранный для проверки.
     # notification - уведомление с заданными тестовыми данными.
     # sessions - сессии, созданные адаптером в проверке.
+    # display — проверяется вместе с прежними пределами длинного Unicode-текста.
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение асинхронного сценария проверки
@@ -368,6 +374,7 @@ def test_success_and_lifecycle(
         """Exercise one full channel lifetime in its owning loop."""
 
         channel = make_channel(provider)
+        channel._config = replace(channel._config, display_mode=display)
         assert not sessions
         with pytest.raises(RuntimeError, match="not open"):
             await channel.send(Delivery(notification=notification, destination_id="phone", delivery_id="d1"))
@@ -376,7 +383,8 @@ def test_success_and_lifecycle(
         assert len(sessions) == 1
         session = sessions[0]
         session.response.body = accepted_body(provider)
-        event = replace(notification, message="😀аб" * 1000 + "<b>& markdown_*", exception="trace text")
+        event = replace(notification, message="😀аб" * 1000 + "x" * 160 + "<b>& markdown_*",
+                        exception="trace text")
         delivery = Delivery(notification=event, destination_id="phone", delivery_id="d1")
         result = await channel.send(delivery)
         assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
@@ -385,7 +393,14 @@ def test_success_and_lifecycle(
         url, request = session.calls[0]
         payload = request["json"]
         text = payload["text" if provider == "telegram" else "message"]
-        assert "instance_id=one" in text and "event_id=event-1" in text and "delivery_id=d1" in text
+        if display == "full":
+            assert "instance_id=one" in text and "event_id=event-1" in text and "delivery_id=d1" in text
+        elif display == "compact":
+            assert text.startswith('["quotes","test","test-region","test-host","one"]')
+            assert "event_id=" not in text
+        else:
+            assert text.startswith("😀аб") and "event_id=" not in text
+        assert delivery.notification.identity == notification.identity and delivery.delivery_id == "d1"
         assert text.endswith("[сокращено]")
         assert "parse_mode" not in payload and "attach" not in payload
         assert request["allow_redirects"] is False

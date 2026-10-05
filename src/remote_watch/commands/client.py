@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
@@ -14,6 +14,7 @@
 #    -> __init__(): Создание объекта.
 #    Интерфейс:
 #    -> session(): Чтение выданной регистрации приложения.
+#    -> health(): Чтение текущей готовности и истории отказов.
 #    -> start(): Запуск объекта и подготовка состояния.
 #    -> acquire(): Подготовка команды и запись разрешения до callback.
 #    -> begin(): Однократная проверка права перед непосредственным вызовом callback.
@@ -26,6 +27,10 @@
 #    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
 #    Служебные методы:
+#    -> _open_storage(): Наблюдение открытия локального журнала.
+#    -> _storage(): Наблюдение одной завершённой операции хранения.
+#    -> _refresh_results(): Проверка неподтверждённых результатов по журналу.
+#    -> _heartbeat_once(): Один проверенный обмен продления регистрации.
 #    -> _check(): Проверка жизненного цикла и владельца event loop.
 #    -> _now(): Проверка монотонного времени с запретом работы после отката.
 #    -> _live(): Проверка оставшегося срока регистрации клиента.
@@ -48,9 +53,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from secrets import token_hex
 from time import monotonic
+from typing import TypeVar
 
 from remote_watch._validation import require_number, require_text
 from remote_watch.commands._worker import StoreWorker
+from remote_watch.commands.health import CommandHealth, HealthState, observe
 from remote_watch.commands.protocol import (
     CommandClaim,
     CommandGrant,
@@ -67,6 +74,8 @@ from remote_watch.commands.protocol import (
 from remote_watch.commands.state import CommandAction, CommandDeadline
 from remote_watch.commands.storage import CommandStore, StoredCommand
 from remote_watch.commands.transport import CommandError, CommandOffer, CommandTransport
+
+T = TypeVar("T")
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -159,6 +168,7 @@ class CommandClient:
         self._begun = False
         self._last = 0.0
         self._failed_clock = False
+        self._health = HealthState()
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -183,8 +193,25 @@ class CommandClient:
 
 
     #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение текущей готовности и истории отказов
+    #--------------------------------------------------------------------------------------------------------------
+    @property
+    def health(self) -> CommandHealth:
+
+        """Read stage health from any thread without network or journal access.
+
+        :return: Immutable observations and current lease validity.
+        :rtype: CommandHealth
+        """
+
+        return self._health.snapshot(self._clock(), self._last)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
+    @observe("heartbeat")
     async def start(self) -> None:
 
         """Register the exact application identity and start one heartbeat task."""
@@ -194,11 +221,12 @@ class CommandClient:
         self._loop = asyncio.get_running_loop()
 
         try:
-            await self._worker.open()
+            await self._open_storage()
             await self._transport.open()
             sent = self._now()
             response = await self._transport.exchange("register", self.registration)
             self._install_session(response, sent)
+            await self._refresh_results()
             self._heartbeat = asyncio.create_task(self._keep_alive())
         except BaseException:
             await self.close()
@@ -209,6 +237,7 @@ class CommandClient:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка команды и запись разрешения до callback
     #--------------------------------------------------------------------------------------------------------------
+    @observe("poll")
     async def acquire(
         self,
         validate: Callable[[CommandRequest, float], Awaitable[CommandReason | None]] | None = None,
@@ -278,7 +307,7 @@ class CommandClient:
             #------------------------------------------------------------------------------------------------------
 
 
-            claim = await self._worker.call(prepare)
+            claim = await self._storage(prepare)
             if claim is None:
                 return None
             if validate is not None:
@@ -330,7 +359,7 @@ class CommandClient:
             #------------------------------------------------------------------------------------------------------
 
 
-            ticket = await self._worker.call(start)
+            ticket = await self._storage(start)
             self._active = ticket
             self._begun = False
             return ticket
@@ -370,6 +399,7 @@ class CommandClient:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сохранение результата callback и попытка его доставки
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def complete(
         self,
         ticket: CommandTicket,
@@ -423,11 +453,12 @@ class CommandClient:
         #----------------------------------------------------------------------------------------------------------
 
 
-        await self._worker.call(finish)
+        self._health.pending(True)
+        await self._storage(finish)
         # С этого момента повторять можно только доставку результата. Локальная
         # фиксация выполнена даже при потере следующего HTTP-ответа.
         if execution_finished:
-            await self._worker.call(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
+            await self._storage(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
             self._active = None
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
@@ -436,23 +467,25 @@ class CommandClient:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Повтор доставки сохранённых результатов без повторного исполнения
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def flush_results(self) -> None:
 
         """Retry persisted results without replaying callbacks or old process sessions."""
 
         self._check()
         await self.reconcile()
-        rows = await self._worker.call(lambda: self._worker.store.pending(limit=1000))
+        rows = await self._storage(lambda: self._worker.store.pending(limit=1000))
 
         for stored in rows:
             result = stored.record.result
             if result is not None and not stored.acknowledged and result.ref.matches(self.session):
                 # Истёкшие до START команды сообщает сам hub; клиент не подменяет его итог.
                 if stored.record.phase.value not in ("completed", "unknown", "rejected"):
-                    await self._worker.call(lambda: self._worker.store.acknowledge(result))
+                    await self._storage(lambda: self._worker.store.acknowledge(result))
                     continue
                 await self._send_result(result)
-        await self._worker.call(self._worker.store.prune)
+        await self._storage(self._worker.store.prune)
+        await self._refresh_results()
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -477,6 +510,8 @@ class CommandClient:
 
         if self._closed or self._session is None or self._lease is None or self._failed_clock:
             return 0.0
+        if not self.health.session_valid:
+            return 0.0
         now = self._clock()
         require_number(now, "execution clock", allow_zero=True)
         if now < self._last:
@@ -498,7 +533,7 @@ class CommandClient:
         """
 
         self._check()
-        return await self._worker.call(lambda: self._worker.store.pending(limit=1000))
+        return await self._storage(lambda: self._worker.store.pending(limit=1000))
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -522,7 +557,7 @@ class CommandClient:
         # ref — точные Identity, сессия процесса, запуск hub и ID команды.
 
         self._check()
-        return await self._worker.call(lambda: self._worker.store.get(ref))
+        return await self._storage(lambda: self._worker.store.get(ref))
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -564,13 +599,14 @@ class CommandClient:
         #----------------------------------------------------------------------------------------------------------
 
 
-        await self._worker.call(retire)
+        await self._storage(retire)
     #--------------------------------------------------------------------------------------------------------------
 
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение фактического окончания ранее неизвестного исполнения
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def release(
         self,
         ticket: CommandTicket,
@@ -587,11 +623,11 @@ class CommandClient:
         self._check()
         if ticket is not self._active:
             raise CommandError("conflict")
-        stored = await self._worker.call(lambda: self._worker.store.get(ticket.grant.request.ref))
+        stored = await self._storage(lambda: self._worker.store.get(ticket.grant.request.ref))
         if stored is None or stored.record.result is None:
             raise CommandError("conflict")
         result = stored.record.result
-        await self._worker.call(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
+        await self._storage(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
         self._active = None
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
@@ -607,6 +643,7 @@ class CommandClient:
         if self._closed:
             return
         self._closed = True
+        self._health.close()
 
         if self._heartbeat is not None:
             self._heartbeat.cancel()
@@ -618,6 +655,71 @@ class CommandClient:
 
         if self._heartbeat is not None:
             await asyncio.wait({self._heartbeat}, timeout=0)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Наблюдение открытия локального журнала
+    #--------------------------------------------------------------------------------------------------------------
+    @observe("storage")
+    async def _open_storage(self) -> None:
+
+        """Observe journal startup without changing worker ownership."""
+
+        await self._worker.open()
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Наблюдение одной завершённой операции хранения
+    #--------------------------------------------------------------------------------------------------------------
+    @observe("storage")
+    async def _storage(
+        self,
+        operation: Callable[[], T],
+    ) -> T:
+
+        """Observe actual worker completion; timeout never reports recovery.
+
+        :param operation: One bounded journal operation.
+        :type operation: Callable[[], T]
+
+        :return: Unchanged operation result.
+        :rtype: T
+        """
+
+        # operation — операция журнала; очередь и владение после timeout остаются в StoreWorker.
+        return await self._worker.call(operation)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка неподтверждённых результатов по журналу
+    #--------------------------------------------------------------------------------------------------------------
+    async def _refresh_results(self) -> None:
+
+        """Clear pending delivery only after a bounded durable journal inspection."""
+
+        rows = await self._storage(lambda: self._worker.store.pending(limit=1000))
+        # Полная порция может скрывать продолжение. В этом случае готовность консервативна.
+        pending = len(rows) >= 1000 or any(row.record.result is not None and not row.acknowledged
+            and row.record.result.ref.matches(self._session) for row in rows)
+        self._health.pending(pending)
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Один проверенный обмен продления регистрации
+    #--------------------------------------------------------------------------------------------------------------
+    @observe("heartbeat")
+    async def _heartbeat_once(self) -> None:
+
+        """Recover heartbeat only after validating the renewed session and its remaining lease."""
+
+        self._live()
+        sent = self._now()
+        response = await self._transport.exchange("heartbeat", self.session)
+        self._install_session(response, sent)
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -669,7 +771,7 @@ class CommandClient:
 
         self._check()
 
-        if self._lease is None or self._lease.remaining(self._now(), self.session.hub_epoch) <= 0:
+        if not self.health.session_valid:
             raise CommandError("stale_session")
         return self._lease
     #--------------------------------------------------------------------------------------------------------------
@@ -708,12 +810,14 @@ class CommandClient:
             raise CommandError("stale_session")
         self._session = response
         self._lease = lease
+        self._health.lease(lease.expires_at)
     #--------------------------------------------------------------------------------------------------------------
 
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Подтверждение локального результата только после квитанции hub
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def _send_result(
         self,
         result: CommandResult,
@@ -727,22 +831,25 @@ class CommandClient:
 
         # result — точный итог выполнения с идентификаторами исходной команды.
 
+        self._health.pending(True)
         response = await self._transport.exchange("result", result)
 
         if type(response) is not CommandReceipt or not response.matches(result):
             raise CommandError("invalid")
-        stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
+        stored = await self._storage(lambda: self._worker.store.get(result.ref))
         if result.outcome is CommandOutcome.UNKNOWN and not stored.execution_active:
             await self._release_remote(result)
-        await self._worker.call(lambda: self._worker.store.acknowledge(result))
+        await self._storage(lambda: self._worker.store.acknowledge(result))
         await self._reconcile_ticket()
-        await self._worker.call(self._worker.store.prune)
+        await self._storage(self._worker.store.prune)
+        await self._refresh_results()
     #--------------------------------------------------------------------------------------------------------------
 
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Фиксация отказа до получения разрешения на исполнение
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def _reject(
         self,
         claim: CommandClaim,
@@ -788,19 +895,21 @@ class CommandClient:
         #----------------------------------------------------------------------------------------------------------
 
 
-        saved = await self._worker.call(reject)
+        self._health.pending(True)
+        saved = await self._storage(reject)
         if saved.outcome is CommandOutcome.REJECTED:
             await self._send_result(saved)
         else:
             # До grant callback не мог начаться. Истечение на hub завершится независимо;
             # локальный ACK здесь означает лишь освобождение заведомо неисполненной записи.
-            await self._worker.call(lambda: self._worker.store.acknowledge(saved))
+            await self._storage(lambda: self._worker.store.acknowledge(saved))
     #--------------------------------------------------------------------------------------------------------------
 
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Доставка отдельного подтверждения фактической остановки
     #--------------------------------------------------------------------------------------------------------------
+    @observe("result")
     async def _release_remote(
         self,
         result: CommandResult,
@@ -814,7 +923,7 @@ class CommandClient:
 
         # result — точный итог выполнения с идентификаторами исходной команды.
 
-        stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
+        stored = await self._storage(lambda: self._worker.store.get(result.ref))
         if stored is None:
             raise CommandError("invalid")
         claim = CommandClaim(ref=result.ref, claim_id=result.claim_id,
@@ -835,7 +944,7 @@ class CommandClient:
         if self._active is None:
             return
         ticket = self._active
-        stored = await self._worker.call(lambda: self._worker.store.get(ticket.grant.request.ref))
+        stored = await self._storage(lambda: self._worker.store.get(ticket.grant.request.ref))
 
         # Запись результата/ACK могла завершиться, а ожидание её ответа — оборваться.
         # Сверяем память до prune: UNKNOWN живого callback не удовлетворяет проверке.
@@ -855,15 +964,16 @@ class CommandClient:
         while not self._closed:
             await asyncio.sleep(max(0.01, self._session.remaining_ttl / 3))
             try:
-                self._live()
-                sent = self._now()
-                response = await self._transport.exchange("heartbeat", self.session)
-                self._install_session(response, sent)
-            except CommandError:
+                await self._heartbeat_once()
+            except CommandError as error:
                 # Сбой сети не продлевает локальную регистрацию. После её истечения
                 # клиент остаётся закрыт для новых действий до нового запуска.
-                if self._lease.remaining(self._clock(), self._session.hub_epoch) <= 0:
+                if error.code == "stale_session" or not self.health.session_valid:
                     return
+            except Exception:
+                # Неожиданная ошибка уже отражена наблюдателем heartbeat. Не отдаём
+                # приватный traceback в стандартный обработчик исключений event loop.
+                return
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

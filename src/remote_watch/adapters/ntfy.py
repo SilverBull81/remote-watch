@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -44,6 +44,7 @@ from remote_watch.adapters._common import (
     render,
     retry_after,
     truncate,
+    validate_display,
     validate_endpoint,
 )
 from remote_watch.adapters._http import HttpSender
@@ -70,6 +71,8 @@ class NtfyConfig:
     priority: int = 3                           # Приоритет ntfy от 1 до 5.
     tags: tuple[str, ...] = ()                  # Метки отображения ntfy, отдельно от routing tags.
     allow_http: bool = False                    # Явное разрешение HTTP для своего сервера.
+    display_mode: str = "full"                  # Полная шапка, компактный источник либо только текст.
+    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Создание получателя с общей политикой таймаутов
@@ -118,6 +121,7 @@ class NtfyConfig:
 
         validate_endpoint(self.endpoint, self.allow_http)
         validate_credentials(self.token, self.token_env, "ntfy")
+        object.__setattr__(self, "display_fields", validate_display(self.display_mode, self.display_fields))
 
         # Тема фиксирована для получателя. Значение из LogRecord не может перенаправить публикацию.
         if not isinstance(self.topic, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.topic) is None:
@@ -218,7 +222,8 @@ class NtfyChannel:
             raise TypeError("delivery must be Delivery")
 
         # Проверяем не только текст, но и байты JSON, которые действительно отправит HTTP-клиент.
-        payload = _publish_payload(self._config, render(delivery))
+        text = render(delivery, self._config.display_mode, self._config.display_fields)
+        payload = _publish_payload(self._config, text)
         sizes = {"message_bytes": len(str(payload["message"]).encode("utf-8")),
                  "request_bytes": len(_encode_json(payload).encode("utf-8"))}
         response = await self._http.post(self._config.endpoint.rstrip('/') + '/', payload, self._token)

@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд.
@@ -28,7 +28,7 @@ from secrets import token_hex
 from typing import Any
 
 from remote_watch.adapters.ntfy_commands import NtfyCommandConfig, NtfyCommandProvider
-from remote_watch.adapters.telegram_commands import TelegramCommandProvider
+from remote_watch.adapters.telegram_commands import TelegramCommandConfig, TelegramCommandProvider
 from remote_watch.adapters.timeapi import TimeApiTimeSource
 from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.hub import CommandHub
@@ -86,7 +86,8 @@ class CommandGateway:
                         else TelegramCommandProvider(binding.settings))
             policy = next(source for source in config.hub.sources if source.source_id == binding.source_id)
             journal = SourceJournal(config.state_dir / (binding.source_id + ".source.sqlite"))
-            self.sources.append(CommandSourceRunner(self.hub, policy, config.targets, provider, journal))
+            self.sources.append(CommandSourceRunner(self.hub, policy, config.targets, provider, journal,
+                short_commands=isinstance(binding.settings, TelegramCommandConfig)))
     #--------------------------------------------------------------------------------------------------------------
 
 

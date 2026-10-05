@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-210047
 #
 # Тесты:
 # -> document(): Синтетический файл настроек без секретов.
@@ -61,10 +61,12 @@ def document() -> dict[str, Any]:
 # ТЕСТ : Создание настроек обоих провайдеров без токенов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("provider", ["telegram", "ntfy"])
+@pytest.mark.parametrize("display", ["full", "compact", "text"])
 def test_json_valid(
     tmp_path: Path,
     provider: str,
     monkeypatch: pytest.MonkeyPatch,
+    display: str,
 ) -> None:
 
     """Create typed destinations without reading provider or service credentials.
@@ -77,11 +79,15 @@ def test_json_valid(
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
+
+    :param display: Destination display mode parsed from JSON.
+    :type display: str
     """
 
     # tmp_path - временный каталог теста.
     # provider - сервис, выбранный для проверки.
     # monkeypatch - фикстура подмены зависимостей и окружения.
+    # display — режим именно серверного provider adapter, а не настройки relay-клиента.
 
     monkeypatch.delenv("RW_JSON_FAKE_TG", raising=False)
     monkeypatch.delenv("RW_JSON_FAKE_APP", raising=False)
@@ -91,6 +97,9 @@ def test_json_valid(
     destination["timeouts"] = {"connect_timeout": 2, "attempt_timeout": 4, "ttl": 60}
     if provider == "ntfy":
         destination["settings"] = {"topic": "synthetic-topic", "token_env": None, "tags": ["warning"]}
+    destination["settings"]["display_mode"] = display
+    if display == "compact":
+        destination["settings"]["display_fields"] = ["identity", "level"]
     value["gateway"] = {"capacity": 10, "clock_skew_tolerance": 600}
     path = tmp_path / "config.json"
     # BOM принимается для файлов, сохранённых стандартными средствами Windows.
@@ -103,6 +112,9 @@ def test_json_valid(
     assert config.destinations[0].mode is DeliveryMode.DIRECT
     assert config.destinations[0].retry.max_attempts == 1
     assert config.destinations[0].retry.ttl == 60
+    provider_config = config.destinations[0].channel_factory.args[0]
+    assert provider_config.display_mode == display
+    assert provider_config.display_fields == (("identity", "level") if display == "compact" else None)
 #------------------------------------------------------------------------------------------------------------------
 
 

@@ -1,10 +1,10 @@
 ﻿# Приём исходных сообщений Telegram с проверкой отправителя и чата.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261005-210047
 #
 # Классы:
 # -> TelegramCommandConfig: Настройки единственного получателя сообщений bot.
@@ -311,10 +311,14 @@ class TelegramCommandProvider:
                     and type(message.get("text")) is str):
                 candidate = message["text"]
                 # Идентичность отправителя берётся только из from.id, никогда из текста.
-                prefix = re.match(r"^/rw(?:@([A-Za-z0-9_]+))?(?=\s|$)", candidate)
-                if prefix and (prefix[1] is None or prefix[1].lower() == self._username.lower()):
+                prefix = re.match(r"^/([A-Za-z][A-Za-z0-9_]{0,63})(?:@([A-Za-z0-9_]+))?(?=\s|$)", candidate)
+                if prefix and (prefix[2] is None or prefix[2].lower() == self._username.lower()):
                     actor, chat = str(sender["id"]), str(conversation["id"])
-                    text = "/rw" + candidate[prefix.end():]
+                    # Суффикс убирается только после сравнения с getMe.username.
+                    # ACL и однозначный выбор приложения остаются в общем source runner.
+                    text = "/" + prefix[1] + candidate[prefix.end():]
+                elif candidate.strip().casefold() == "help":
+                    actor, chat, text = str(sender["id"]), str(conversation["id"]), "Help"
         return SourceEvent(event_id=event_id, message_date=date, actor_id=actor, conversation_id=chat, text=text)
     #--------------------------------------------------------------------------------------------------------------
 
