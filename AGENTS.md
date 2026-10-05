@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.3.9
+Version 1.4.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-213218
+Дата и время последнего изменения: 261005-222720
 
 ## Project Intent
 
@@ -13,12 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev7; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev8; no stable 0.2.0 tag is implied.
+Dev8 adds client RelayConfig display_mode/display_fields, carried only by relay schema 3.
+Absent mode inherits gateway presentation; explicit mode replaces it only for that delivery.
+The owner chose client config changes with application restart, not live config reload.
+Upgrade notification gateway once; later client display changes do not restart it.
+Schemas 1/2 retain their exact envelope; no downgrade/repeated POST fallback is allowed.
+Identity, routing, credentials, ACL and execution contracts are unchanged. See docs/RELAY.md.
+Dev8 passed 1235 local tests (2 live deselections) on Windows Python 3.12.2;
+clean core/extras wheel checks passed 842/1235 tests. Ruff/style: 121 Python files,
+no issues. No CI/Linux/live-provider rerun; schema 3 field acceptance is pending.
+Exact evidence is recorded in docs/VALIDATION.md.
 Dev7 implements the first-pilot wishes: Telegram Help and implicit-target slash commands
 use the statically configured actor/chat ACL, never the sole currently live instance.
 Ambiguity requires explicit /rw alias; original session binding and replay protection remain.
 Telegram/ntfy notification destinations support full/compact/text and fixed display field
-groups. Relay display belongs to the gateway provider adapter; wire/IDs/auth remain intact.
+groups. The gateway provider renders relay output, with optional dev8 client presentation overrides.
 CommandClient.health and DispatcherStats.ready separate current poll/heartbeat/storage/result
 failures from last_error history. Successful callbacks cannot hide heartbeat or result failure.
 No implicit command session re-registration or callback retry is introduced.

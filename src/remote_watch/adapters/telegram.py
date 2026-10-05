@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261005-221259
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram.
@@ -39,12 +39,12 @@ from remote_watch.adapters._common import (
     render,
     retry_after,
     truncate,
-    validate_display,
     validate_endpoint,
 )
 from remote_watch.adapters._http import HttpSender
 from remote_watch.config import Destination, RetryPolicy
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
+from remote_watch.notifications.display import validate_display
 
 #******************************************************************************************************************
 # КЛАССЫ

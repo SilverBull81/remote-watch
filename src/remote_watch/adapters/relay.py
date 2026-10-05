@@ -1,10 +1,10 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-180651
+# Дата и время последнего изменения: 261005-221259
 #
 # Классы:
 # -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
@@ -50,6 +50,7 @@ from remote_watch.notifications.delivery import (
     DeliveryStatus,
     ResultSource,
 )
+from remote_watch.notifications.display import validate_display
 from remote_watch.relay_protocol import (
     MAX_RESPONSE_BYTES,
     RelayRequest,
@@ -74,8 +75,10 @@ class RelayConfig:
     server_timeout: float = 8.0         # Верхний срок обработки запроса gateway, секунды.
     network_margin: float = 1.0         # Резерв на обмен с gateway, секунды.
     allow_http: bool = False            # Явное разрешение HTTP только для локальной проверки.
-    schema_version: int = 1             # Версия wire: 2 добавляет числовую диагностику провайдера.
+    schema_version: int | None = None   # None — выбор 1 либо 3 при заданном display_mode.
     ssl_context: ssl.SSLContext | None = field(default=None, repr=False, compare=False)  # Явное доверие CA.
+    display_mode: str | None = None     # full/compact/text; None — оставить серверный режим.
+    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ленивое назначение с заданным способом доставки
@@ -129,8 +132,20 @@ class RelayConfig:
             raise ValueError("relay TLS context must verify certificates and hostnames")
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
-        if type(self.schema_version) is not int or self.schema_version not in (1, 2):
+        if self.display_mode is None:
+            if self.display_fields is not None:
+                raise ValueError("display fields require a display mode")
+        else:
+            object.__setattr__(self, "display_fields", validate_display(self.display_mode, self.display_fields))
+
+        # Существующий клиент без override по-прежнему посылает схему 1.
+        # Режим требует схемы 3; явно указанную старую схему не подменяем молча.
+        if self.schema_version is None:
+            object.__setattr__(self, "schema_version", 3 if self.display_mode is not None else 1)
+        if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
             raise ValueError("unsupported relay schema version")
+        if self.display_mode is not None and self.schema_version != 3:
+            raise ValueError("client display requires relay schema 3")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -247,6 +262,11 @@ class RelayChannel:
             return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.PERMANENT_FAILURE,
                                   reason_code="relay_budget_exhausted")
         try:
+            # Копия относится только к этому получателю: другие каналы того же
+            # события и общая immutable Notification не получают чужой режим.
+            if self._config.display_mode is not None:
+                delivery = replace(delivery, display_mode=self._config.display_mode,
+                                   display_fields=self._config.display_fields)
             request = RelayRequest(delivery=delivery, alias=self._config.alias,
                                    remaining_ttl=remaining, timeout=timeout,
                                    schema_version=self._config.schema_version)

@@ -1,10 +1,10 @@
 ﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-221259
 #
 # Классы:
 # -> RelayRequest: Версионированный запрос одной попытки через gateway.
@@ -168,7 +168,7 @@ def _keys(
 
     if set(payload) != expected:
         raise ValueError("relay envelope has missing or unknown fields")
-    if type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2):
+    if type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2, 3):
         raise ValueError("unsupported relay schema version")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -184,7 +184,7 @@ class RelayRequest:
     alias: str                          # Разрешённое на gateway имя получателя.
     remaining_ttl: float                # Верхний предел оставшегося срока, секунды.
     timeout: float                      # Максимальное ожидание gateway, секунды.
-    schema_version: int = 1             # 1 — прежний ответ; 2 — ответ с числовой диагностикой.
+    schema_version: int = 1             # 1 — исходная схема; 2 — диагностика; 3 — отображение клиента.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Данные запроса без секретов и локальных настроек
@@ -197,9 +197,16 @@ class RelayRequest:
         :rtype: dict[str, object]
         """
 
-        return {"schema_version": self.schema_version, "notification": self.delivery.notification.to_dict(),
-                "alias": self.alias, "delivery_id": self.delivery.delivery_id,
-                "attempt": self.delivery.attempt, "remaining_ttl": self.remaining_ttl, "timeout": self.timeout}
+        payload = {"schema_version": self.schema_version, "notification": self.delivery.notification.to_dict(),
+                   "alias": self.alias, "delivery_id": self.delivery.delivery_id,
+                   "attempt": self.delivery.attempt, "remaining_ttl": self.remaining_ttl, "timeout": self.timeout}
+        if self.schema_version == 3:
+            # Политика только отображения, без адресов, токенов или шаблонов кода.
+            # null сохраняет настройку сервера; fields=null выбирает состав режима.
+            payload["display"] = (None if self.delivery.display_mode is None else {
+                "mode": self.delivery.display_mode,
+                "fields": None if self.delivery.display_fields is None else list(self.delivery.display_fields)})
+        return payload
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -223,14 +230,26 @@ class RelayRequest:
         # data - байты JSON с ограниченным размером.
 
         payload = _decode(data, MAX_REQUEST_BYTES)
-        _keys(payload, {"schema_version", "notification", "alias", "delivery_id", "attempt",
-                        "remaining_ttl", "timeout"})
+        expected = {"schema_version", "notification", "alias", "delivery_id", "attempt",
+                    "remaining_ttl", "timeout"}
+        if payload.get("schema_version") == 3:
+            expected.add("display")
+        _keys(payload, expected)
         try:
+            display = payload.get("display")
+            if display is not None:
+                if (type(display) is not dict or set(display) != {"mode", "fields"}
+                        or type(display["mode"]) is not str):
+                    raise ValueError("invalid relay display")
+                if display["fields"] is not None and type(display["fields"]) is not list:
+                    raise ValueError("invalid relay display fields")
             return cls(alias=payload["alias"], remaining_ttl=payload["remaining_ttl"], timeout=payload["timeout"],
                        schema_version=payload["schema_version"],
                        delivery=Delivery(notification=Notification.from_dict(payload["notification"]),
                                          destination_id=payload["alias"], delivery_id=payload["delivery_id"],
-                                         attempt=payload["attempt"]))
+                                         attempt=payload["attempt"],
+                                         display_mode=None if display is None else display["mode"],
+                                         display_fields=None if display is None else display["fields"]))
         except (TypeError, ValueError, OverflowError):
             raise ValueError("invalid relay request") from None
     #--------------------------------------------------------------------------------------------------------------
@@ -244,10 +263,12 @@ class RelayRequest:
 
         if not isinstance(self.delivery, Delivery):
             raise TypeError("delivery must be Delivery")
-        if type(self.schema_version) is not int or self.schema_version not in (1, 2):
+        if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
             raise ValueError("unsupported relay schema version")
+        if self.schema_version != 3 and self.delivery.display_mode is not None:
+            raise ValueError("client display requires relay schema 3")
 
-        # Обе версии wire используют стандартные пределы Notification. Увеличенные
+        # Все версии wire используют стандартные пределы Notification. Увеличенные
         # локальные SnapshotLimits не расширяют доверие принимающей стороны.
         # Повторная проверка на клиенте исключает заведомо бесполезный сетевой запрос.
         Notification.from_dict(self.delivery.notification.to_dict())
@@ -294,12 +315,12 @@ def encode_response(
 
     if not isinstance(delivery, Delivery) or not isinstance(result, DeliveryResult):
         raise TypeError("delivery and result must use validated models")
-    if type(schema_version) is not int or schema_version not in (1, 2):
+    if type(schema_version) is not int or schema_version not in (1, 2, 3):
         raise ValueError("unsupported relay schema version")
     payload = {"schema_version": schema_version, "delivery_id": delivery.delivery_id, "attempt": delivery.attempt,
                "result": {"status": result.status.value, "reason_code": result.reason_code,
                           "provider_message_id": result.provider_message_id, "retry_after": result.retry_after}}
-    if schema_version == 2:
+    if schema_version in (2, 3):
         payload["result"].update({name: getattr(result, name) for name in DIAGNOSTIC_FIELDS})
     data = encode_json(payload).encode("utf-8")
     if len(data) > MAX_RESPONSE_BYTES:
@@ -348,7 +369,7 @@ def decode_response(
         raise ValueError("relay response attempt mismatch")
     result = payload["result"]
     expected = {"status", "reason_code", "provider_message_id", "retry_after"}
-    if schema_version == 2:
+    if schema_version in (2, 3):
         expected.update(DIAGNOSTIC_FIELDS)
     if not isinstance(result, dict) or set(result) != expected:
         raise ValueError("invalid relay result fields")
@@ -357,7 +378,7 @@ def decode_response(
                               reason_code=result["reason_code"], provider_message_id=result["provider_message_id"],
                               retry_after=result["retry_after"],
                               **({name: result[name] for name in DIAGNOSTIC_FIELDS}
-                                 if schema_version == 2 else {}))
+                                 if schema_version in (2, 3) else {}))
     except (ValueError, TypeError, OverflowError):
         raise ValueError("invalid relay result") from None
 #------------------------------------------------------------------------------------------------------------------

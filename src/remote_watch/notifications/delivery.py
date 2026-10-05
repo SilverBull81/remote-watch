@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261005-221259
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -31,6 +31,7 @@ from enum import Enum
 
 from remote_watch._validation import require_int, require_number, require_text
 from remote_watch.events import Notification
+from remote_watch.notifications.display import validate_display
 
 #******************************************************************************************************************
 # КЛАССЫ
@@ -81,6 +82,8 @@ class Delivery:
     delivery_id: str            # Общий идентификатор всех повторов отправки.
     attempt: int = 1            # Номер попытки, начиная с единицы.
     remaining_timeout: float | None = None  # Остаток срока попытки; None — вызов вне runtime.
+    display_mode: str | None = None         # Режим этой доставки; None — настройка provider-канала.
+    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка задания
@@ -99,6 +102,14 @@ class Delivery:
 
         if self.remaining_timeout is not None:
             require_number(self.remaining_timeout, "remaining_timeout")
+
+        # Отображение не меняет Notification, маршрутизацию или идентификаторы.
+        # Без явного режима нельзя случайно передать частичную настройку шапки.
+        if self.display_mode is None:
+            if self.display_fields is not None:
+                raise ValueError("display fields require a display mode")
+        else:
+            object.__setattr__(self, "display_fields", validate_display(self.display_mode, self.display_fields))
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 

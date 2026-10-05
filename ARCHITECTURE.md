@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.3.0
+Version 1.3.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-213218
+Дата и время последнего изменения: 261005-222720
 
 ## Статус и границы
 
@@ -588,8 +588,8 @@ Identity для actor/chat; live sessions и capabilities не сокращаю�
 по строкам максимум на два сообщения. ntfy сохраняет прежний явный синтаксис.
 
 Политика full/compact/text принадлежит TelegramConfig/NtfyConfig назначения.
-В relay она остаётся на gateway; клиентский wire не задаёт произвольный renderer.
-Выбор групп identity/level/logger/time/ids не изменяет Notification/Delivery и журнал.
+В dev7 relay использует её на gateway; в dev8 добавлен клиентский override ниже.
+Выбор групп identity/level/logger/time/ids не изменяет Notification, ID и журнал.
 Compact всегда содержит полную Identity, text явно отказывается от видимого источника.
 
 Наблюдения CommandClient разделены на poll, heartbeat, storage и result. Фиксированный
@@ -603,3 +603,30 @@ Compact всегда содержит полную Identity, text явно от�
 Stale_session не восстанавливается поздним heartbeat; нового автоматического
 register нет. Подробнее: [контур команд](docs/COMMAND_EXECUTION.md),
 [источники](docs/COMMAND_SOURCES.md), [отображение](docs/ADAPTERS.md).
+
+## Клиентский режим отображения relay (0.4.1.dev8)
+
+RelayConfig принимает display_mode/display_fields с теми же правилами, что и
+TelegramConfig/NtfyConfig. Это закрытый набор параметров представления, без
+произвольного renderer, адресов и credentials. При отсутствии режима сохраняется
+настройка gateway. Явный режим заменяет серверный режим и набор полей целиком
+только для этой доставки; provider config и другие клиенты не меняются.
+
+Delivery получает два необязательных поля представления. RelayChannel создаёт
+копию задания для своего назначения; Notification, Identity и delivery ID сохраняются.
+Gateway после прежних auth/ACL/TTL проверок передаёт проверенные поля адаптеру;
+render Telegram/ntfy использует их перед стандартным усечением текста. Общая проверка
+полей находится в notifications.display и не зависит от provider/network-модулей.
+
+Wire schema 3 добавляет обязательное display=null либо {mode, fields} и сохраняет
+числовую диагностику схемы 2. Схемы 1/2 остаются без изменений и не могут неявно
+потерять переданный override. RelayConfig без явной schema_version выбирает 1
+для прежнего клиента либо 3 при заданном display_mode. Явные версии 1/2 с режимом
+отклоняются до сети. Повтора с другой схемой и автоматического fallback нет.
+Маршрут /v1/notifications, пределы JSON, один POST на попытку и серверные права
+сохраняются. Детали и порядок обновления: [RELAY.md](docs/RELAY.md).
+
+Владелец выбрал изменение клиентского конфига с перезапуском приложения.
+Notification gateway нужно один раз обновить до dev8; при дальнейшей смене режима
+его перезапуск не требуется. Автоматического перечитывания JSON и изменения
+работающего RemoteWatcher в этой итерации нет.

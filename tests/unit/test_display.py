@@ -1,14 +1,17 @@
 ﻿# Отображение уведомлений без изменения исходных данных и протокола доставки.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261005-221259
 #
 # Тесты:
 # -> test_display_modes(): Прежний full, различимый compact и только текст с исключением.
 # -> test_display_validation(): Проверка настроек назначения до открытия сети.
+# -> test_relay_display_wire(): Строгое расширение wire и сохранение старых схем.
+# -> test_relay_display_invalid(): Отказ повреждённым настройкам отображения.
+# -> test_relay_display_configuration(): Выбор версии и приоритет клиентского режима.
 
 
 #******************************************************************************************************************
@@ -16,6 +19,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -24,9 +28,10 @@ import pytest
 from remote_watch import Notification
 from remote_watch.adapters._common import render
 from remote_watch.adapters.ntfy import NtfyConfig
+from remote_watch.adapters.relay import RelayConfig
 from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.notifications.delivery import Delivery
-from remote_watch.relay_protocol import RelayRequest
+from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
+from remote_watch.relay_protocol import RelayRequest, decode_response, encode_response
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -110,6 +115,135 @@ def test_display_validation(
         if isinstance(fields, list):
             fields.append("PRIVATE")
             assert "PRIVATE" not in config.display_fields
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Строгое расширение wire и сохранение старых схем
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize(("schema", "mode"), [(1, None), (2, None), (3, None),
+    (3, "full"), (3, "compact"), (3, "text")])
+def test_relay_display_wire(
+    notification: Notification,
+    schema: int,
+    mode: str | None,
+) -> None:
+
+    """Round-trip presentation independently of identity and delivery correlation.
+
+    :param notification: Synthetic immutable event.
+    :type notification: Notification
+
+    :param schema: Explicit protocol version.
+    :type schema: int
+
+    :param mode: Optional client presentation override.
+    :type mode: str | None
+    """
+
+    # schema/mode — новая настройка не добавляет поля в схемы старых клиентов.
+    delivery = Delivery(notification=notification, destination_id="local", delivery_id="one",
+                        display_mode=mode, display_fields=("identity", "time") if mode == "compact" else None)
+    request = RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=5, schema_version=schema)
+    payload = request.to_dict()
+    assert ("display" in payload) is (schema == 3)
+    restored = RelayRequest.from_bytes(json.dumps(payload).encode()).delivery
+    assert restored.notification.to_dict() == notification.to_dict()
+    assert restored.delivery_id == delivery.delivery_id and restored.attempt == delivery.attempt
+    assert restored.display_mode == mode and restored.display_fields == delivery.display_fields
+
+    outcome = DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, http_status=200,
+                             provider_message_id="receipt")
+    response = json.loads(encode_response(delivery, outcome, schema_version=schema))
+    decoded = decode_response(response, delivery, schema_version=schema)
+    assert decoded.http_status == (None if schema == 1 else 200)
+    with pytest.raises(ValueError):
+        decode_response(response, delivery, schema_version=2 if schema == 3 else 3)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Отказ повреждённым настройкам отображения
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("display", [True, "text", {}, {"mode": "text"},
+    {"mode": None, "fields": None}, {"mode": "custom", "fields": None},
+    {"mode": "text", "fields": []}, {"mode": "compact", "fields": ["level"]},
+    {"mode": "full", "fields": "identity"}, {"mode": "full", "fields": ["unknown"]},
+    {"mode": "full", "fields": ["level", "level"]},
+    {"mode": "full", "fields": None, "chat_id": 999}])
+def test_relay_display_invalid(
+    notification: Notification,
+    display: Any,
+) -> None:
+
+    """Reject malformed, partial or routing-like display payloads before provider dispatch.
+
+    :param notification: Synthetic immutable event.
+    :type notification: Notification
+
+    :param display: Deliberately invalid JSON display value.
+    :type display: Any
+    """
+
+    # display — произвольное поле запроса не превращается в provider-настройку.
+    delivery = Delivery(notification=notification, destination_id="phone", delivery_id="one")
+    payload = RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=5,
+                           schema_version=3).to_dict()
+    payload["display"] = display
+    with pytest.raises(ValueError):
+        RelayRequest.from_bytes(json.dumps(payload).encode())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Выбор версии и приоритет клиентского режима
+#------------------------------------------------------------------------------------------------------------------
+def test_relay_display_configuration(notification: Notification) -> None:
+
+    """Require compatible wire and preserve per-delivery isolation without mutating server defaults.
+
+    :param notification: Synthetic immutable event.
+    :type notification: Notification
+    """
+
+    # Настройки принадлежат назначению, не общей Notification и не logging extra.
+    base = {"endpoint": "https://gateway.invalid", "alias": "phone", "token": "x" * 32}
+    assert RelayConfig(**base).schema_version == 1
+    assert RelayConfig(**base, display_mode="text").schema_version == 3
+    assert RelayConfig(**base, schema_version=3).display_mode is None
+    for changes in ({"display_mode": "text", "schema_version": 1},
+                    {"display_mode": "full", "schema_version": 2},
+                    {"display_fields": []}, {"display_mode": "other"}, {"schema_version": 4}):
+        with pytest.raises(ValueError):
+            RelayConfig(**base, **changes)
+
+    delivery = Delivery(notification=notification, destination_id="phone", delivery_id="one")
+    fields = ["identity", "level"]
+    compact = replace(delivery, display_mode="compact", display_fields=fields)
+    fields.append("ids")
+    assert compact.display_fields == ("identity", "level")
+    assert render(compact, "text").startswith('["quotes",')
+    assert render(replace(delivery, display_mode="text"), "full", ("ids",)) == notification.message
+    assert render(delivery).startswith("service=") and delivery.display_mode is None
+    for changes in ({"display_fields": []}, {"display_mode": "compact", "display_fields": ["ids"]}):
+        with pytest.raises(ValueError):
+            replace(delivery, **changes)
+    for schema in (1, 2):
+        with pytest.raises(ValueError):
+            RelayRequest(delivery=compact, alias="phone", remaining_ttl=10, timeout=5, schema_version=schema)
+        payload = RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=5,
+                               schema_version=schema).to_dict()
+        payload["display"] = None
+        with pytest.raises(ValueError):
+            RelayRequest.from_bytes(json.dumps(payload).encode())
+
+    payload["schema_version"] = 3
+    raw = json.dumps(payload).encode()
+    with pytest.raises(ValueError):
+        RelayRequest.from_bytes(b'{"display":null,' + raw[1:])
+    del payload["display"]
+    with pytest.raises(ValueError):
+        RelayRequest.from_bytes(json.dumps(payload).encode())
 #------------------------------------------------------------------------------------------------------------------
 
 

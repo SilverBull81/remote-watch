@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261005-221259
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -12,7 +12,6 @@
 # -> read_token(): Чтение токена при открытии канала.
 # -> truncate(): Сокращение текста с сохранением целых символов.
 # -> render(): Подготовка текста со сведениями об отправителе.
-# -> validate_display(): Проверка режима и выбранных групп полей отображения.
 # -> retry_after(): Чтение минимальной задержки из ответа сервиса.
 # -> http_failure(): Классификация HTTP-ошибки без текста ответа.
 
@@ -198,6 +197,10 @@ def render(
 
     event = delivery.notification
     identity = event.identity
+    # Настройка конкретной доставки имеет приоритет над режимом канала.
+    # При отсутствии override старые direct/relay назначения работают как прежде.
+    if delivery.display_mode is not None:
+        mode, fields = delivery.display_mode, delivery.display_fields
     selected = fields if fields is not None else (
         ("identity", "level", "logger", "time", "ids") if mode == "full" else ("identity", "level"))
     # Полная Identity различает источники даже при одинаковом instance_id в разных регионах.
@@ -223,43 +226,6 @@ def render(
     if event.exception:
         source += "\n\n" + event.exception
     return source
-#------------------------------------------------------------------------------------------------------------------
-
-
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка режима и выбранных групп полей отображения
-#------------------------------------------------------------------------------------------------------------------
-def validate_display(
-    mode: str,
-    fields: tuple[str, ...] | None,
-) -> tuple[str, ...] | None:
-
-    """Validate a presentation policy without permitting removal of compact source identity.
-
-    :param mode: Requested display mode.
-    :type mode: str
-
-    :param fields: Optional field groups, normalized to an immutable tuple.
-    :type fields: tuple[str, ...] | None
-
-    :return: Validated field selection, or None for mode defaults.
-    :rtype: tuple[str, ...] | None
-    """
-
-    # mode/fields — фиксированные имена, без пользовательского форматирующего кода.
-    if mode not in ("full", "compact", "text"):
-        raise ValueError("invalid display mode")
-    if fields is None:
-        return None
-    if not isinstance(fields, (tuple, list)) or len(fields) > 5:
-        raise ValueError("invalid display fields")
-    fields = tuple(fields)
-    if (any(type(field) is not str or field not in {"identity", "level", "logger", "time", "ids"}
-            for field in fields) or len(set(fields)) != len(fields)):
-        raise ValueError("invalid display fields")
-    if mode == "text" or mode == "compact" and "identity" not in fields:
-        raise ValueError("display fields conflict with mode")
-    return fields
 #------------------------------------------------------------------------------------------------------------------
 
 
