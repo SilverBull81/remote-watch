@@ -1,10 +1,10 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261005-153416
 #
 # Классы:
 # -> CommandRuntime: Владение циклом команд при выбранном режиме запуска.
@@ -72,7 +72,7 @@ class CommandRuntime:
         self._stop: asyncio.Event | None = None
         self._ready = threading.Event()
         self._stopping = threading.Event()
-        self._error = False
+        self._error: BaseException | None = None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -89,8 +89,8 @@ class CommandRuntime:
             raise ValueError("async command callbacks require watcher.astart on the application loop")
 
         if self._mode == "sync" and not self._stopping.is_set():
-            if not self._ready.wait(self._startup_timeout) or self._error:
-                raise CommandError("unavailable")
+            if not self._ready.wait(self._startup_timeout) or self._error is not None:
+                raise CommandError("unavailable") from self._error
             return
 
         if self._mode is not None or self._stopping.is_set():
@@ -99,9 +99,9 @@ class CommandRuntime:
         self._thread = threading.Thread(target=self._serve, name="remote-watch-commands", daemon=True)
         self._thread.start()
 
-        if not self._ready.wait(self._startup_timeout) or self._error:
+        if not self._ready.wait(self._startup_timeout) or self._error is not None:
             self.stop()
-            raise CommandError("unavailable")
+            raise CommandError("unavailable") from self._error
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -199,8 +199,8 @@ class CommandRuntime:
 
         try:
             asyncio.run(serve())
-        except BaseException:
-            self._error = True
+        except BaseException as error:
+            self._error = error
         finally:
             self._ready.set()
     #--------------------------------------------------------------------------------------------------------------

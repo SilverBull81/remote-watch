@@ -1,10 +1,10 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261005-153416
 #
 # Классы:
 # -> CommandError: Ошибка с безопасным фиксированным кодом.
@@ -47,19 +47,26 @@ class CommandError(RuntimeError):
     def __init__(
         self,
         code: str,
+        *,
+        http_status: int | None = None,
     ) -> None:
 
         """Retain only the supported public failure classification.
 
         :param code: Fixed public failure classification.
         :type code: str
+
+        :param http_status: Optional HTTP response status, without server text or headers.
+        :type http_status: int | None
         """
 
         # code — фиксированный код ошибки без приватных подробностей.
+        # http_status — только проверенное число, без тела ответа gateway.
 
         known = {"denied", "unavailable", "busy", "stale_session", "conflict", "invalid",
                  "capacity", "expired", "already_started", "outcome_conflict", "closed"}
         self.code = code if code in known else "unavailable"
+        self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
         super().__init__(self.code)
     #--------------------------------------------------------------------------------------------------------------
 

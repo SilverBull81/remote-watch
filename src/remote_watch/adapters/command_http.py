@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261005-153416
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
@@ -186,9 +186,9 @@ class HttpsCommandTransport:
                 if response.status != 200:
                     code = {401: "denied", 403: "denied", 409: "conflict", 429: "busy"}.get(
                         response.status, "unavailable")
-                    raise CommandError(code)
+                    raise CommandError(code, http_status=response.status)
                 if response.content_type != "application/json" or response.headers.get("Content-Encoding"):
-                    raise CommandError("invalid")
+                    raise CommandError("invalid", http_status=response.status)
                 body = bytearray()
                 async for chunk in response.content.iter_chunked(8192):
                     body.extend(chunk)

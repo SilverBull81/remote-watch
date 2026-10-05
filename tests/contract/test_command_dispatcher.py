@@ -1,12 +1,13 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-201702
+# Дата и время последнего изменения: 261005-153416
 #
 # Тесты:
+# -> test_sync_startup_cause(): Сохранение первичной ошибки синхронного старта.
 # -> configured(): Подготовка согласованных прав, реестра и двух журналов.
 # -> until(): Конечное ожидание наблюдаемого результата теста.
 # -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
@@ -38,6 +39,7 @@ from functools import partial
 from pathlib import Path
 from time import monotonic
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from test_command_hub import APP_TOKEN, DirectTransport, Rig
@@ -1191,6 +1193,43 @@ def test_dispatcher_result_persisted_before_release_failure(
     #--------------------------------------------------------------------------------------------------------------
 
     asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Сохранение первичной ошибки синхронного старта
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["dependency", "denied"])
+def test_sync_startup_cause(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+
+    """Preserve worker startup failure as a cause while retaining the existing public code.
+
+    :param tmp_path: Isolated command journal directory.
+    :type tmp_path: Path
+
+    :param mode: Missing dependency or denied registration in the command worker.
+    :type mode: str
+    """
+
+    # tmp_path — только временный журнал, без рабочего gateway.
+    # mode — выбранный отказ до начала обработки команд.
+
+    registry = CommandRegistry.from_callbacks({"status": lambda: "ready"})
+    rig, _ = configured(tmp_path, registry)
+    failure = (ModuleNotFoundError("PRIVATE", name="aiohttp") if mode == "dependency"
+               else CommandError("denied", http_status=403))
+    rig.client.start = AsyncMock(side_effect=failure)
+    watcher = RemoteWatcher(WatcherConfig(identity=rig.identity, commands=registry), command_client=rig.client)
+
+    with pytest.raises(CommandError, match="unavailable") as caught:
+        watcher.start()
+    assert caught.value.__cause__ is failure
+    assert "PRIVATE" not in str(caught.value)
+    assert watcher.logger.handlers == []
+    watcher.stop()
 #------------------------------------------------------------------------------------------------------------------
 
 

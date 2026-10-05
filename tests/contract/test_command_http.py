@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261005-153416
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -145,8 +145,9 @@ def test_command_https_exchange(
             await client.complete(ticket, unknown, execution_finished=False)
             assert rig.store.get(request.ref).execution_active
             wrong = CommandClaim(ref=request.ref, claim_id="f" * 32, request_digest=message_digest(request))
-            with pytest.raises(CommandError, match="conflict"):
+            with pytest.raises(CommandError, match="conflict") as caught:
                 await transport.exchange("release", wrong)
+            assert caught.value.http_status == 409
             assert rig.store.get(request.ref).execution_active
             await client.release(ticket)
             assert not rig.store.get(request.ref).execution_active
