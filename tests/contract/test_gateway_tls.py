@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-180651
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -272,6 +272,13 @@ def test_gateway_tls_cli(
         assert outcomes[0].status is not DeliveryStatus.PROVIDER_ACCEPTED and provider.calls == 0
         if mode != "plaintext":
             assert outcomes[0].reason_code == "tls_certificate"
+            assert outcomes[0].error_kind == "tls_certificate"
+            assert type(outcomes[0].verify_code) is int
+            if mode == "expired":
+                assert outcomes[0].verify_code == 10
+                assert outcomes[0].tls_reason == "certificate_expired"
+            if mode == "wrong_name":
+                assert outcomes[0].tls_reason == "hostname_mismatch"
 #------------------------------------------------------------------------------------------------------------------
 
 

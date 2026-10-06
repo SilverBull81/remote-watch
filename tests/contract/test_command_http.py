@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261006-163320
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -108,8 +108,17 @@ def test_command_https_exchange(
 
         try:
             if mode != "trusted":
-                with pytest.raises(CommandError, match="unavailable"):
+                with pytest.raises(CommandError, match="unavailable") as caught:
                     await client.start()
+                error = caught.value
+                assert error.error_kind == "tls_certificate"
+                assert type(error.verify_code) is int
+                expected = {"expired": "certificate_expired", "wrong_name": "hostname_mismatch"}
+                if mode in expected:
+                    assert error.tls_reason == expected[mode]
+                if mode == "expired":
+                    assert error.verify_code == 10
+                assert APP_TOKEN not in str(error) and "127.0.0.1" not in str(error)
                 assert rig.store.pending() == ()
                 return
             await client.start()

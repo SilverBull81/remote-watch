@@ -1,10 +1,10 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> CommandRuntime: Владение циклом команд при выбранном режиме запуска.
@@ -16,6 +16,7 @@
 #    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов.
 #    -> astop(): Асинхронная остановка командного исполнителя.
 #    Служебные методы:
+#    -> _startup_tls(): Безопасная TLS-причина в верхней ошибке запуска.
 #    -> _serve(): Работа отдельного командного цикла синхронного приложения.
 #
 # Функции:
@@ -96,7 +97,7 @@ class CommandRuntime:
 
         if self._mode == "sync" and not self._stopping.is_set():
             if not self._ready.wait(self._startup_timeout) or self._error is not None:
-                raise CommandError("unavailable") from self._error
+                raise CommandError("unavailable", **self._startup_tls()) from self._error
             return
 
         if self._mode is not None or self._stopping.is_set():
@@ -107,7 +108,7 @@ class CommandRuntime:
 
         if not self._ready.wait(self._startup_timeout) or self._error is not None:
             self.stop()
-            raise CommandError("unavailable") from self._error
+            raise CommandError("unavailable", **self._startup_tls()) from self._error
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -176,6 +177,23 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Безопасная TLS-причина в верхней ошибке запуска
+    #--------------------------------------------------------------------------------------------------------------
+    def _startup_tls(self) -> dict[str, str | int | None]:
+
+        """Expose sanitized TLS details on the outer synchronous startup error.
+
+        :return: Bounded metadata copied from the already sanitized worker failure.
+        :rtype: dict[str, str | int | None]
+        """
+
+        # Причина уже очищена в рабочем потоке; конструктор снова проверит поля.
+        if type(self._error) is CommandError:
+            return {"error_kind": self._error.error_kind, "verify_code": self._error.verify_code}
+        return {}
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Работа отдельного командного цикла синхронного приложения
     #--------------------------------------------------------------------------------------------------------------
     def _serve(self) -> None:
@@ -236,7 +254,8 @@ def _startup_cause(error: BaseException) -> BaseException:
     if type(error) is CommandError:
         # Даже публичные атрибуты могли быть изменены пользовательским transport.
         code = error.code if type(error.code) is str else "unavailable"
-        return CommandError(code, http_status=error.http_status)
+        return CommandError(code, http_status=error.http_status,
+                            error_kind=error.error_kind, verify_code=error.verify_code)
 
     # Порядок важен: частные подклассы проверяются раньше общих OSError/ImportError.
     # Созданные исключения ещё не выбрасывались и не содержат traceback или context.

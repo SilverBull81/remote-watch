@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-180651
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -30,6 +30,7 @@ import ssl
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from remote_watch._tls import tls_diagnostics
 from remote_watch._validation import require_int
 from remote_watch.config import RetryPolicy
 from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus
@@ -212,8 +213,12 @@ class HttpSender:
         except asyncio.CancelledError:
             # Отменой владеет runtime; нельзя превратить её в новую попытку внутри адаптера.
             raise
-        except (aiohttp.ClientConnectorCertificateError, aiohttp.ClientConnectorSSLError):
-            return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="tls_certificate")
+        except (aiohttp.ClientConnectorCertificateError, aiohttp.ClientConnectorSSLError) as error:
+            # Сохраняем прежний reason_code для совместимости, уточнение — в новых полях.
+            failure = (error.certificate_error if isinstance(error, aiohttp.ClientConnectorCertificateError)
+                       else error.os_error)
+            return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="tls_certificate",
+                                  **tls_diagnostics(failure))
         except aiohttp.ClientConnectorError:
             return DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, reason_code="connect_failed")
         except aiohttp.ConnectionTimeoutError:

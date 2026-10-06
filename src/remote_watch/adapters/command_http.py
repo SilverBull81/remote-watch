@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
@@ -24,8 +24,10 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import ssl
+import sys
 from urllib.parse import urlsplit
 
+from remote_watch._tls import tls_diagnostics
 from remote_watch._validation import require_number
 from remote_watch.commands.http_wire import (
     MAX_HTTP_BYTES,
@@ -217,11 +219,21 @@ class HttpsCommandTransport:
                     raise CommandError("invalid", http_status=status) from None
         except CommandError:
             raise
-        except Exception:
+        except Exception as error:
             # Ошибка чтения/timeout после headers не стирает уже полученный статус.
             if status is not None and status != 200:
                 raise decode_error(b"", status) from None
-            raise CommandError("unavailable", http_status=status) from None
+            # aiohttp хранит исходную ssl-ошибку в отдельном атрибуте. Извлекаем
+            # только её классификацию; URL, verify_message и исходная цепочка скрыты.
+            # Реальный open уже загрузил aiohttp. Подставной транспорт в core-тесте
+            # может не иметь этой зависимости; отказ не должен импортировать её заново.
+            aiohttp = sys.modules.get("aiohttp")
+            failure = error
+            if aiohttp is not None and isinstance(error, aiohttp.ClientConnectorCertificateError):
+                failure = error.certificate_error
+            elif aiohttp is not None and isinstance(error, aiohttp.ClientConnectorSSLError):
+                failure = error.os_error
+            raise CommandError("unavailable", http_status=status, **tls_diagnostics(failure)) from None
         finally:
             self._active -= 1
             delivery_context.reset(context_token)

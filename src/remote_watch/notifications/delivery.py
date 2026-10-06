@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -26,9 +26,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
+from remote_watch._tls import tls_reason
 from remote_watch._validation import require_int, require_number, require_text
 from remote_watch.events import Notification
 from remote_watch.notifications.display import validate_display
@@ -137,6 +138,9 @@ class DeliveryResult:
     provider_code: int | None = None                # Числовой код ошибки API; None — нет допустимого кода.
     message_bytes: int | None = None                # Размер переданного текста в UTF-8; None — неизвестен.
     request_bytes: int | None = None                # Размер отправляемого JSON в UTF-8; None — неизвестен.
+    error_kind: str | None = None                   # Локальная категория TLS, без текста сетевой ошибки.
+    verify_code: int | None = None                  # Код OpenSSL; None, если проверка цепочки не дала кода.
+    tls_reason: str | None = field(init=False, default=None)  # Фиксированное пояснение к TLS-отказу.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности результата
@@ -151,6 +155,21 @@ class DeliveryResult:
 
         if not isinstance(self.source, ResultSource):
             raise TypeError("source must be ResultSource")
+
+        # Поля относятся к локальному HTTPS-соединению. Relay wire сохраняет свой
+        # прежний формат: удалённые provider-ошибки не выдают себя за TLS клиента.
+        if self.error_kind is not None:
+            if type(self.error_kind) is not str or self.error_kind not in {"tls_certificate", "tls_handshake"}:
+                raise ValueError("invalid TLS category")
+            if self.status is not DeliveryStatus.PERMANENT_FAILURE:
+                raise ValueError("TLS category requires permanent_failure")
+        if self.verify_code is not None:
+            require_int(self.verify_code, "verify_code", 0)
+            if self.verify_code > 999999 or self.error_kind != "tls_certificate":
+                raise ValueError("invalid TLS verification code")
+        reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
+                  else "handshake_failed" if self.error_kind else None)
+        object.__setattr__(self, "tls_reason", reason)
 
         # Диагностика допускает только ограниченные целые числа. Текст ответов,
         # адреса и токены не должны проникать в модель через дополнительные поля.

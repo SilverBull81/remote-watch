@@ -1,10 +1,10 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> StageHealth: Ошибка одного этапа и счётчики восстановления.
@@ -55,6 +55,9 @@ class StageHealth:
 
     current_error: str | None = None     # Текущая ошибка; None после успешного восстановления.
     http_status: int | None = None       # HTTP-статус текущего отказа, если он был получен.
+    error_kind: str | None = None        # Безопасная категория TLS; None для прочих отказов.
+    verify_code: int | None = None       # Числовой код проверки сертификата OpenSSL.
+    tls_reason: str | None = None        # Фиксированная причина TLS без адресов и текста сервера.
     failures: int = 0                    # Все наблюдавшиеся отказы этого этапа.
     transient_failures: int = 0          # Временные busy/unavailable/capacity, включая повторы.
     recoveries: int = 0                  # Переходы от временного отказа к успешной операции.
@@ -214,6 +217,7 @@ class HealthState:
         with self._lock:
             previous = self._stages[stage]
             self._stages[stage] = replace(previous, current_error=error.code, http_status=error.http_status,
+                error_kind=error.error_kind, verify_code=error.verify_code, tls_reason=error.tls_reason,
                 failures=previous.failures + 1,
                 transient_failures=previous.transient_failures + int(error.code in _TRANSIENT))
             self._last_error = error.code
@@ -243,6 +247,7 @@ class HealthState:
                 return
             if previous.current_error in _TRANSIENT:
                 self._stages[stage] = replace(previous, current_error=None, http_status=None,
+                                            error_kind=None, verify_code=None, tls_reason=None,
                                             recoveries=previous.recoveries + 1)
     #--------------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261006-163320
 #
 # Тесты:
 # -> test_sync_startup_cause(): Сохранение первичной ошибки синхронного старта.
@@ -1204,7 +1204,8 @@ def test_dispatcher_result_persisted_before_release_failure(
 # ТЕСТ : Безопасная причина старта без исходной цепочки исключений
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("mode", ["dependency", "import", "denied", "certificate", "tls", "timeout",
-                                  "connection", "sqlite", "store", "os", "value", "unknown", "mutated", "custom"])
+                                  "connection", "sqlite", "store", "os", "value", "unknown", "mutated", "custom",
+                                  "http_tls"])
 def test_sync_startup_cause(
     tmp_path: Path,
     mode: str,
@@ -1235,6 +1236,8 @@ def test_sync_startup_cause(
                else CommandError("denied", http_status=403))
     if mode == "custom":
         failure = type("PRIVATE_CLASS", (RuntimeError,), {})("PRIVATE")
+    if mode == "http_tls":
+        failure = CommandError("unavailable", error_kind="tls_certificate", verify_code=10)
     failure.__cause__ = RuntimeError("PRIVATE_CHAIN")
     if hasattr(failure, "add_note"):
         failure.add_note("PRIVATE_NOTE")
@@ -1252,6 +1255,11 @@ def test_sync_startup_cause(
     assert cause.__cause__ is None and cause.__context__ is None and cause.__traceback__ is None
     formatted = "".join(traceback.format_exception(type(caught.value), caught.value, caught.value.__traceback__))
     assert "PRIVATE" not in formatted
+    if mode == "http_tls":
+        assert caught.value.error_kind == cause.error_kind == "tls_certificate"
+        assert caught.value.verify_code == cause.verify_code == 10
+        assert caught.value.tls_reason == cause.tls_reason == "certificate_expired"
+        assert "certificate_expired" in str(caught.value)
     if mode in {"denied", "mutated"}:
         assert cause.code == ("denied" if mode == "denied" else "unavailable")
         assert cause.http_status == (403 if mode == "denied" else None)

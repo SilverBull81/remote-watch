@@ -8,6 +8,7 @@ include docs/examples/command_gateway.telegram.example.json
 include docs/examples/command_gateway.ntfy.example.json
 include docs/examples/command_client.example.json
 include docs/examples/gateway_server.example.json
+include docs/examples/collect_caddy_state.ps1
 recursive-include tests *.py
 recursive-include tools *.py
 include .github/workflows/validation.yml

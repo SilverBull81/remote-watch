@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.1
+Version 1.4.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-103703
+Дата и время последнего изменения: 261006-170841
 
 ## Project Intent
 
@@ -13,7 +13,16 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev9; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev10; no stable 0.2.0 tag is implied.
+Dev10 retains safe local TLS error_kind/verify_code/tls_reason in CommandError,
+sync startup errors, current StageHealth and DeliveryResult. Existing command codes
+and relay wire schemas are unchanged. Never infer a failing chain depth from code 10.
+Read docs/CADDY_RECOVERY.md for the recurring Windows Caddy incident and evidence;
+console selection was confirmed; Esc restored API and renewed leaf/intermediate
+without changing PID/root. RemoteWatchCaddy now runs on LV as LocalService with
+automatic startup, recovery and runtime file logging; verified TLS still uses the
+original root. A bounded 25-hour local TLS observation is running. Future scheduled
+renewals are not yet accepted; the owner will reboot the VM later and report back.
 On 2026-10-06 the owner accepted the first real-application pilot: notifications and
 commands work as intended. This is conversation evidence, not a newly inspected report;
 do not infer acceptance of the subsequent dev9 presentation changes or ntfy commands.

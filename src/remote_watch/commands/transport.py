@@ -1,10 +1,10 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-153416
+# Дата и время последнего изменения: 261006-163320
 #
 # Классы:
 # -> CommandError: Ошибка с безопасным фиксированным кодом.
@@ -30,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from remote_watch._tls import tls_reason
 from remote_watch._validation import require_int, require_number
 from remote_watch.commands.protocol import CommandMessage, CommandRequest
 
@@ -49,6 +50,8 @@ class CommandError(RuntimeError):
         code: str,
         *,
         http_status: int | None = None,
+        error_kind: str | None = None,
+        verify_code: int | None = None,
     ) -> None:
 
         """Retain only the supported public failure classification.
@@ -58,6 +61,12 @@ class CommandError(RuntimeError):
 
         :param http_status: Optional HTTP response status, without server text or headers.
         :type http_status: int | None
+
+        :param error_kind: Allowlisted local TLS category; not server-provided text.
+        :type error_kind: str | None
+
+        :param verify_code: Bounded OpenSSL certificate verification number.
+        :type verify_code: int | None
         """
 
         # code — фиксированный код ошибки без приватных подробностей.
@@ -67,7 +76,19 @@ class CommandError(RuntimeError):
                  "capacity", "expired", "already_started", "outcome_conflict", "closed"}
         self.code = code if code in known else "unavailable"
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
-        super().__init__(self.code)
+        # Для TLS оставляем прежний code, но сохраняем причину отдельно и в str(error).
+        # Неизвестные строки, bool и произвольные объекты не проходят эту границу.
+        self.error_kind = (error_kind if type(error_kind) is str
+                           and error_kind in {"tls_certificate", "tls_handshake"} else None)
+        self.verify_code = (verify_code if self.error_kind == "tls_certificate"
+                            and type(verify_code) is int and 0 <= verify_code <= 999999 else None)
+        self.tls_reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
+                           else "handshake_failed" if self.error_kind else None)
+        message = self.code
+        if self.error_kind:
+            message += (f"; error_kind={self.error_kind}; verify_code={self.verify_code}"
+                        f"; tls_reason={self.tls_reason}")
+        super().__init__(message)
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
