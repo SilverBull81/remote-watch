@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.2
+Version 1.4.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-170841
+Дата и время последнего изменения: 261006-202721
 
 ## Project Intent
 
@@ -21,8 +21,13 @@ Read docs/CADDY_RECOVERY.md for the recurring Windows Caddy incident and evidenc
 console selection was confirmed; Esc restored API and renewed leaf/intermediate
 without changing PID/root. RemoteWatchCaddy now runs on LV as LocalService with
 automatic startup, recovery and runtime file logging; verified TLS still uses the
-original root. A bounded 25-hour local TLS observation is running. Future scheduled
-renewals are not yet accepted; the owner will reboot the VM later and report back.
+original root. On 2026-10-06 the owner rebooted LV: boot 16:58:02.500 UTC,
+Caddy serving 16:58:24.378 UTC, Auto/LocalService, unchanged root and verified TLS.
+The owner manually started both Python gateways; local listeners and credential-free
+HTTPS GET probes to both routes returned 405/Allow: POST. This is not command-session
+or RU/provider acceptance. The old observation contains 123 successful samples over
+two hours, with no renewal; a new bounded 25-hour observation started at 17:26 UTC.
+Scheduled renewal remains pending. See docs/CADDY_RECOVERY.md for observation limits.
 On 2026-10-06 the owner accepted the first real-application pilot: notifications and
 commands work as intended. This is conversation evidence, not a newly inspected report;
 do not infer acceptance of the subsequent dev9 presentation changes or ntfy commands.
