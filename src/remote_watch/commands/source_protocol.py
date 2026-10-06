@@ -1,10 +1,10 @@
 ﻿# События источников, явные адреса приложений и текстовые ответы на команды.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> SourceEvent: Проверенные данные одного события провайдера.
@@ -38,6 +38,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -293,9 +294,9 @@ def parse_source_command(
     except ValueError:
         raise ValueError("invalid command syntax") from None
 
-    if short_commands and len(words) == 1 and words[0].casefold() in {"help", "/help"}:
+    if len(words) == 1 and words[0].casefold() in {"help", "/help"}:
         return None, None, {}
-    if short_commands and words and words[0].casefold() in {"help", "/help"}:
+    if words and words[0].casefold() in {"help", "/help"}:
         raise ValueError("help does not accept arguments")
     short = bool(short_commands and words and words[0].startswith("/") and words[0] != "/rw")
     if short:
@@ -328,6 +329,8 @@ def parse_source_command(
 def source_result_text(
     request: CommandRequest,
     result: CommandResult,
+    *,
+    mode: str = "full",
 ) -> str:
 
     """Render bounded correlation and the retained outcome without claiming business completion.
@@ -338,23 +341,40 @@ def source_result_text(
     :param result: Correlated terminal result whose exact contents must be retained.
     :type result: CommandResult
 
+    :param mode: Source default, overridden by the original request's client-selected mode.
+    :type mode: str
+
     :return: Bounded correlated command result suitable for either provider.
     :rtype: str
     """
 
     # request — входящий запрос, проверяемый перед обработкой.
     # result — точный итог выполнения с идентификаторами исходной команды.
+    # mode — только отображение, без изменения result/digest и его квитанции.
 
     identity = request.ref.identity
+    mode = request.command_display_mode or mode
+    if mode not in ("full", "compact", "text"):
+        raise ValueError("invalid command display mode")
     reason = "" if result.reason is None else "/" + result.reason.value
     header = (f"{identity.service}/{identity.environment}/{identity.region}/"
               f"{identity.host}/{identity.instance_id}\n"
               f"command={request.name} id={request.ref.command_id}\n"
               f"session={request.ref.session_id}\nresult={result.outcome.value}{reason}")
-    fallback = "Обработчик завершился." if result.outcome.value == "completed" else ""
-    body = result.text if result.text is not None else fallback
+    fallback = "Handler completed." if result.outcome.value == "completed" else ""
+    body = result.text if result.text else fallback
+    if mode == "compact":
+        source = json.dumps([identity.service, identity.environment, identity.region, identity.host,
+                             identity.instance_id], ensure_ascii=False, separators=(",", ":"))
+        header = f"{source}\n/{request.name}: {result.outcome.value}{reason}"
+    elif mode == "text":
+        # Ошибка/UNKNOWN не превращается в пустое либо внешне успешное сообщение.
+        # При успехе текст приложения остаётся как есть, без машинных ID и шапки.
+        failure = {"unknown": "Command outcome is unknown", "rejected": "Command rejected",
+                   "expired": "Command expired"}.get(result.outcome.value)
+        header = "" if failure is None else f"{failure} ({result.reason.value})."
     # Один ответ вместо нескольких частей: усечение видно, корреляция остаётся в начале.
-    value = header + ("\n" + body if body else "")
+    value = header + ("\n" if header and body else "") + body
     return bound_source_text(value)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -376,7 +396,7 @@ def bound_source_text(text: str) -> str:
     # text — ограниченный обычный текст команды либо ответа.
 
     raw = text.encode("utf-8")
-    return text if len(raw) <= 3800 else raw[:3760].decode("utf-8", errors="ignore") + "\n[ответ сокращён]"
+    return text if len(raw) <= 3800 else raw[:3760].decode("utf-8", errors="ignore") + "\n[response truncated]"
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

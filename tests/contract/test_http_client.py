@@ -1,10 +1,10 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261006-102445
 #
 # Тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
@@ -298,8 +298,8 @@ def test_ntfy_wire_limits(
             assert result.message_bytes == len(sent.encode("utf-8"))
             assert result.request_bytes == len(requests[0])
             if len(original.encode("utf-8")) > 4095 or sent != original:
-                assert payload["message"].endswith("\n[сокращено]")
-                assert original.startswith(sent.removesuffix("\n[сокращено]"))
+                assert payload["message"].endswith("\n[truncated]")
+                assert original.startswith(sent.removesuffix("\n[truncated]"))
             else:
                 assert sent == original
             if not large_metadata and rendered_size == 4095:

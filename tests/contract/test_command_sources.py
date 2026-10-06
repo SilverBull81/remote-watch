@@ -1,10 +1,10 @@
 ﻿# Проверки разбора команд, постоянной позиции и восстановления источника.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями.
@@ -439,7 +439,8 @@ def test_source_admission(
 @pytest.mark.parametrize("case", ["Help", "hElP", "/help", "/status", "/resume_load", "restricted",
                                   "foreign_actor", "foreign_chat", "multi_offline", "explicit",
                                   "offline", "foreign_bot", "legacy", "ntfy", "lost_ack", "long_help",
-                                  "restricted_command", "second_live", "new_session", "telegram_wire"])
+                                  "restricted_command", "second_live", "new_session", "telegram_wire",
+                                  "explicit_help", "long_explicit_help", "ntfy_help", "help_collision"])
 def test_short_commands(
     tmp_path: Path,
     case: str,
@@ -479,18 +480,23 @@ def test_short_commands(
         rig.registration = replace(rig.registration, capabilities=(
             CommandCapability(name="status", required_scope="read"),
             CommandCapability(name="resume_load", required_scope="control")))
-        if case == "long_help":
+        if case in {"long_help", "long_explicit_help"}:
             rig.registration = replace(rig.registration, capabilities=tuple(
                 CommandCapability(name=f"a{number:02d}" + "x" * 61, required_scope="read")
                 for number in range(64)))
+        if case == "help_collision":
+            rig.registration = replace(rig.registration, capabilities=(
+                *rig.registration.capabilities, CommandCapability(name="help", required_scope="read")))
         rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now)
         await rig.start()
         if case == "second_live":
             await rig.hub.register(APP_TOKEN, replace(rig.registration, identity=second, session_id="f" * 32))
         provider = FakeProvider()
         text = case if case in {"Help", "hElP", "/help", "/status", "/resume_load"} else "/status"
-        if case in {"restricted", "long_help"}:
+        if case in {"restricted", "long_help", "help_collision", "ntfy_help"}:
             text = "/help"
+        elif case in {"explicit_help", "long_explicit_help"}:
+            text = "/rw loader"
         elif case == "restricted_command":
             text = "/resume_load"
         elif case == "explicit":
@@ -518,7 +524,7 @@ def test_short_commands(
             aliases["second"] = second
         journal = SourceJournal(tmp_path / "short.sqlite")
         runner = CommandSourceRunner(rig.hub, rig.hub.config.sources[0], SourceTargets(aliases=aliases),
-                                     provider, journal, short_commands=case != "ntfy")
+                                     provider, journal, short_commands=case not in {"ntfy", "ntfy_help"})
         try:
             await runner.start(activate=False)
             if case == "new_session":
@@ -546,27 +552,32 @@ def test_short_commands(
                 assert len(rows) == 1
                 assert rows[0].record.request.ref.session_id == rig.registration.session_id
                 assert rows[0].record.request.name == ("resume_load" if case == "/resume_load" else "status")
-            elif case in {"Help", "hElP", "/help", "restricted"}:
-                expected = "Allowed Bot Commands:\n/status"
+            elif case in {"Help", "hElP", "/help", "restricted", "explicit_help", "ntfy_help", "help_collision"}:
+                expected = "Allowed Bot Commands:\n-> /help\n-> /status"
                 if case != "restricted":
-                    expected += "\n/resume_load"
+                    expected += "\n-> /resume_load"
+                if case == "explicit_help":
+                    expected += "\nUsage: /rw loader command [arg_name=value]"
                 assert provider.replies[0][1] == expected
             elif case.startswith("foreign_") and case != "foreign_bot":
                 assert not provider.replies
             elif case in {"multi_offline", "second_live"}:
                 assert "loader" in provider.replies[0][1] and "second" in provider.replies[0][1]
-            elif case == "long_help":
+            elif case in {"long_help", "long_explicit_help"}:
                 assert len(provider.replies) == 2
                 lines = []
                 for _, page in provider.replies:
                     assert len(page.encode("utf-8")) <= 3800
                     assert page.splitlines()[0] == "Allowed Bot Commands:"
                     lines.extend(page.splitlines()[1:])
-                assert lines == ["/" + cap.name for cap in rig.registration.capabilities]
+                expected = ["-> /help"] + ["-> /" + cap.name for cap in rig.registration.capabilities]
+                if case == "long_explicit_help":
+                    expected += ["Usage: /rw loader command [arg_name=value]"]
+                assert lines == expected
             elif case == "legacy":
-                assert "Адреса приложений" in provider.replies[0][1]
+                assert provider.replies[0][1] == "Configured applications:\n-> loader\nHelp: /rw app_name or /help"
             elif case == "offline":
-                assert "недоступно" in provider.replies[0][1]
+                assert provider.replies[0][1] == "Application unavailable."
         finally:
             await runner.close()
             await rig.close()

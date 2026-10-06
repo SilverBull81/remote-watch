@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -24,6 +24,7 @@
 #    -> skip_source(): Фиксация пропуска события до подтверждения провайдеру.
 #    -> source_cutoff(): Консервативная граница очистки по доверенному времени.
 #    -> commands_for(): Разрешённые команды живого приложения для автора и чата.
+#    -> response_mode_for(): Режим ответа именно исходной зарегистрированной сессии.
 #    -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
 #    -> poll(): Ожидание одной команды с одним waiter на сессию.
 #    -> claim(): Запись CLAIMED и STARTED до выдачи разрешения приложению.
@@ -562,6 +563,37 @@ class CommandHub:
 
 
     #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Режим ответа именно исходной зарегистрированной сессии
+    #--------------------------------------------------------------------------------------------------------------
+    def response_mode_for(
+        self,
+        token: str,
+        ref: CommandRef,
+    ) -> str | None:
+
+        """Read presentation for the exact live session before persisting a source decision.
+
+        :param token: Credential of the trusted command source.
+        :type token: str
+
+        :param ref: Original target identity, session and hub epoch.
+        :type ref: CommandRef
+
+        :return: Client-selected mode or None to use source presentation defaults.
+        :rtype: str | None
+        """
+
+        # Режим читается до SourcePending и хранится в request. Новый процесс
+        # не меняет оформление ответа уже принятой команды предыдущей сессии.
+        self._source_policy(token)
+        entry = self._targets.get(ref.identity)
+        if entry is None or not ref.matches(self._session(entry)):
+            raise CommandError("stale_session")
+        return entry.registration.command_display_mode
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка прав и свежести перед атомарной записью с cursor
     #--------------------------------------------------------------------------------------------------------------
     async def submit(
@@ -621,6 +653,8 @@ class CommandHub:
         )
 
         if capability is not None and request.arguments and not capability.accepts_arguments:
+            permitted = False
+        if capability is not None and request.command_display_mode != entry.registration.command_display_mode:
             permitted = False
 
         # actor/chat берутся у доверенного источника. Секрет приложения не даёт

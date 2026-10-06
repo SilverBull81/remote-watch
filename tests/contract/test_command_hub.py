@@ -1,10 +1,10 @@
 ﻿# Проверки маршрутизации, прав, сроков и отказов двух постоянных журналов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-203048
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> DirectTransport: Подставной транспорт с потерей уже записанного ответа.
@@ -258,7 +258,8 @@ class Rig:
         return CommandRequest(ref=CommandRef(identity=self.identity, session_id=session.session_id,
             hub_epoch=session.hub_epoch, command_id=f"{number:032x}"),
             source_id="fake", source_event_id=str(number),
-            actor_id="owner", conversation_id="chat", name="resume_load")
+            actor_id="owner", conversation_id="chat", name="resume_load",
+            command_display_mode=self.registration.command_display_mode)
     #--------------------------------------------------------------------------------------------------------------
 
 

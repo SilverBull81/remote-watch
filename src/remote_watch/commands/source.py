@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных.
@@ -90,6 +90,7 @@ class CommandSourceRunner:
         *,
         retry_interval: float = 2.0,
         short_commands: bool = False,
+        command_display_mode: str = "full",
     ) -> None:
 
         """Bind explicit source ownership without opening journals or contacting the provider.
@@ -114,6 +115,9 @@ class CommandSourceRunner:
 
         :param short_commands: Enable implicit-target commands for a provider supporting Telegram syntax.
         :type short_commands: bool
+
+        :param command_display_mode: Default result presentation when the client does not select one.
+        :type command_display_mode: str
         """
 
         # hub — отдельно настроенный командный hub.
@@ -123,6 +127,7 @@ class CommandSourceRunner:
         # journal — постоянный ограниченный журнал только этого источника.
         # retry_interval — конечная пауза перед повтором операции после отказа, секунды.
         # short_commands — короткий синтаксис при неизменных ACL и привязке к сессии.
+        # command_display_mode — оформление ответов, отдельное от notification-каналов.
 
         if policy not in hub.config.sources:
             raise ValueError("source policy differs from hub")
@@ -136,6 +141,9 @@ class CommandSourceRunner:
         if type(short_commands) is not bool:
             raise ValueError("invalid short command mode")
         self._short_commands = short_commands
+        if command_display_mode not in ("full", "compact", "text"):
+            raise ValueError("invalid command display mode")
+        self._display_mode = command_display_mode
         self.hub = hub
         self.policy = policy
         self.targets = targets
@@ -322,7 +330,8 @@ class CommandSourceRunner:
         if rules and event.text is not None:
             try:
                 alias, name, arguments = parse_source_command(event.text, short_commands=self._short_commands)
-                short = self._short_commands and shlex.split(event.text, comments=False, posix=True)[0] != "/rw"
+                first = shlex.split(event.text, comments=False, posix=True)[0]
+                short = (self._short_commands and first != "/rw") or first.casefold() in {"help", "/help"}
                 allowed = [key for key, identity in self.targets.aliases.items()
                            if any(rule.identity == identity for rule in rules)]
                 # Список определяется конфигурацией ACL, а не текущей доступностью
@@ -330,7 +339,10 @@ class CommandSourceRunner:
                 if short and len(allowed) == 1:
                     alias = allowed[0]
                 if alias is None:
-                    notice = "Адреса приложений: " + ", ".join(allowed) + ". Справка: /rw адрес"
+                    notice = "Configured applications:\n" + "\n".join("-> " + item for item in allowed)
+                    notice += "\nHelp: /rw app_name or /help"
+                    if short and len(allowed) > 1:
+                        notice += "\nSelect an application explicitly: /rw app_name"
                 else:
                     identity = self.targets.aliases.get(alias)
                     if identity is None or not any(rule.identity == identity for rule in rules):
@@ -338,11 +350,11 @@ class CommandSourceRunner:
                     names = self.hub.commands_for(
                         self.policy.token, identity, event.actor_id, event.conversation_id)
                     if name is None:
-                        if short:
-                            notice = "Allowed Bot Commands:\n" + "\n".join("/" + item for item in names)
-                            short_help = True
-                        else:
-                            notice = alias + ": " + ", ".join(names) + ". Вызов: /rw адрес команда [имя=значение]"
+                        notice = "Allowed Bot Commands:\n-> /help"
+                        notice += "".join("\n-> /" + item for item in names if item != "help")
+                        if not short:
+                            notice += f"\nUsage: /rw {alias} command [arg_name=value]"
+                        short_help = True
                     elif name not in names:
                         raise CommandError("denied")
                     else:
@@ -351,11 +363,12 @@ class CommandSourceRunner:
                                          hub_epoch=session.hub_epoch, command_id=token_hex(16))
                         request = CommandRequest(ref=ref, source_id=self.policy.source_id,
                             source_event_id=event.event_id, actor_id=event.actor_id,
-                            conversation_id=event.conversation_id, name=name, arguments=arguments)
+                            conversation_id=event.conversation_id, name=name, arguments=arguments,
+                            command_display_mode=self.hub.response_mode_for(self.policy.token, ref))
             except (ValueError, TypeError):
-                notice = "Неверная команда. Формат: /rw адрес команда [имя=значение]. Справка: /rw"
+                notice = "Invalid command. Usage: /rw app_name command [arg_name=value]. Help: /rw or /help"
             except CommandError as error:
-                notice = "Приложение недоступно." if error.code == "stale_session" else "Команда не разрешена."
+                notice = "Application unavailable." if error.code == "stale_session" else "Command not allowed."
         return SourcePending(position=position, event=event, request=request,
                              notice=notice if notice is None or short_help else bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
@@ -400,7 +413,7 @@ class CommandSourceRunner:
         notice = pending.notice
 
         if pending.request is not None and admitted.command is None:
-            notice = "Команда отклонена: права, срок или достоверное время недоступны."
+            notice = "Command rejected: authorization, freshness or trusted time check failed."
 
         if notice is not None and pending.event.conversation_id is not None:
             # Справка/отказ не запускают приложение. Их ответ — одна попытка после
@@ -408,7 +421,7 @@ class CommandSourceRunner:
             # Все разрешённые команды должны попасть в справку. Максимум 64 имени
             # по 64 ASCII-символа помещаются в две ограниченные страницы, без усечения строки.
             prefix = "Allowed Bot Commands:\n"
-            if self._short_commands and notice.startswith(prefix):
+            if notice.startswith(prefix):
                 page = prefix.rstrip()
                 for line in notice[len(prefix):].splitlines():
                     if len((page + "\n" + line).encode("utf-8")) > 3800:
@@ -466,7 +479,8 @@ class CommandSourceRunner:
                         continue
                     try:
                         await self.provider.reply(
-                            request.conversation_id, source_result_text(request, row.record.result))
+                            request.conversation_id, source_result_text(
+                                request, row.record.result, mode=self._display_mode))
                         await self.hub.acknowledge(self.policy.token, row.record.result)
                         self._replies += 1
                     except CommandError as error:

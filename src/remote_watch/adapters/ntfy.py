@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy.
@@ -139,7 +139,7 @@ class NtfyConfig:
 
         # Даже метаданные с экранированием должны оставлять место для отметки об усечении.
         # Проверяем это при настройке, чтобы неверный набор меток не ломал каждую отправку.
-        _publish_payload(self, "\n[сокращено]")
+        _publish_payload(self, "\n[truncated]")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -320,7 +320,7 @@ def _publish_payload(
     if len(_encode_json(payload).encode("utf-8")) <= 8192:
         return payload
 
-    marker = "\n[сокращено]"
+    marker = "\n[truncated]"
     payload["message"] = marker
     if len(_encode_json(payload).encode("utf-8")) > 8192:
         raise ValueError("ntfy display settings exceed the JSON request limit")

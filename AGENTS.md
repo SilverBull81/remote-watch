@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.0
+Version 1.4.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-222720
+Дата и время последнего изменения: 261006-103703
 
 ## Project Intent
 
@@ -13,7 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev8; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev9; no stable 0.2.0 tag is implied.
+On 2026-10-06 the owner accepted the first real-application pilot: notifications and
+commands work as intended. This is conversation evidence, not a newly inspected report;
+do not infer acceptance of the subsequent dev9 presentation changes or ntfy commands.
+Dev9 adds English messenger notices, -> /command help lines and built-in /help.
+command_display_mode is independent of outbound display_mode. Explicit client mode
+is registered and persisted in the original request; results never look up a newer session's mode.
+Command wire schema 2 extends only registration/request/grant with explicit mode;
+absent mode retains byte-identical schema 1 and old hashes. Results/receipts are unchanged.
+Source JSON defaults to full; client override needs dev9 gateway/client, with no downgrade retry.
+Config JSON schema remains 1. Retain existing journals/cursors on upgrade; old code cannot
+read new schema 2 records. See docs/COMMAND_SOURCES.md and docs/COMMAND_STORAGE.md.
+Dev9 passed 1299 local tests (2 live deselections) on Windows Python 3.12.2;
+clean core/extras wheels passed 902/1299 tests. Ruff/style: 123 Python files, no issues.
+Real local TLS, source-journal recovery and independent two-client presentation are covered.
+No new CI/Linux/live-provider run; exact evidence is in docs/VALIDATION.md.
 Dev8 adds client RelayConfig display_mode/display_fields, carried only by relay schema 3.
 Absent mode inherits gateway presentation; explicit mode replaces it only for that delivery.
 The owner chose client config changes with application restart, not live config reload.

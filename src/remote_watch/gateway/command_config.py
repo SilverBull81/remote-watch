@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-144006
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек.
@@ -109,9 +109,9 @@ class CommandConfigError(ValueError):
                    r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
                    r"hub|state_dir|"
                    r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
-                   r"state_file|owner_id|allow_loopback_http))?|"
+                   r"state_file|owner_id|allow_loopback_http|command_display_mode))?|"
                    r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes))?|"
-                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|"
+                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|\.command_display_mode|"
                    r"\.settings(?:\.(?:token|token_env|topic|reply_topic|actor_id|private_topic_confirmed))?|"
                    r"\.access(?:\[[0-9]{1,3}\])?(?:\.(?:targets|scopes|actor_id|conversation_id))?)?)")
         self.field = field if type(field) is str and re.fullmatch(pattern, field) else "config"
@@ -180,6 +180,7 @@ class ProviderBinding:
 
     source_id: str                              # Постоянный ID источника в журнале hub.
     settings: TelegramCommandConfig | NtfyCommandConfig = field(repr=False)     # Проверенные настройки провайдера.
+    command_display_mode: str = "full"          # Оформление результатов при отсутствии режима клиента.
 
 
     #--------------------------------------------------------------------------------------------------------------
@@ -194,6 +195,8 @@ class ProviderBinding:
 
         if type(self.settings) not in (TelegramCommandConfig, NtfyCommandConfig):
             raise TypeError("invalid provider settings")
+        if self.command_display_mode not in ("full", "compact", "text"):
+            raise ValueError("invalid command display mode")
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -308,15 +311,18 @@ def load_command_client(
         location = Path(path).resolve()
         value = read_command_json(location)
         _keys(value, {"schema_version", "identity", "endpoint", "state_file", "owner_id"},
-              {"token", "token_env", "ca_file", "allow_loopback_http"}, field_name)
+              {"token", "token_env", "ca_file", "allow_loopback_http", "command_display_mode"}, field_name)
         _schema(value)
         token = _credential(value, True)
         field_name = "client.identity"
         identity = Identity(**value["identity"])
         session = token_hex(16)
         field_name = "client.commands"
+        capabilities = describe_commands(commands)
+        field_name = "client.command_display_mode"
         registration = CommandRegistration(
-            identity=identity, session_id=session, capabilities=describe_commands(commands))
+            identity=identity, session_id=session, capabilities=capabilities,
+            command_display_mode=value.get("command_display_mode"))
         context = ssl.create_default_context()
         if value.get("ca_file") is not None:
             field_name = "client.ca_file"
@@ -485,7 +491,7 @@ def _gateway(
         # параметры клиентского HTTP-запроса не могут подменить эту политику.
         for index, raw in enumerate(_items(value["sources"], 8, field_name)):
             field_name = f"sources[{index}]"
-            _keys(raw, {"source_id", "provider", "settings", "access"}, set(), field_name)
+            _keys(raw, {"source_id", "provider", "settings", "access"}, {"command_display_mode"}, field_name)
             if raw["source_id"] in seen_sources:
                 raise CommandConfigError(field_name + ".source_id", "duplicate_source")
             seen_sources.add(raw["source_id"])
@@ -530,7 +536,9 @@ def _gateway(
                     raise CommandConfigError(field_name, "source_acl")
             field_name = f"sources[{index}].source_id"
             sources.append(CommandSource(source_id=raw["source_id"], token=token_hex(32), access=tuple(access)))
-            providers.append(ProviderBinding(source_id=raw["source_id"], settings=config))
+            field_name = f"sources[{index}].command_display_mode"
+            providers.append(ProviderBinding(source_id=raw["source_id"], settings=config,
+                                            command_display_mode=raw.get("command_display_mode", "full")))
         field_name = "hub"
         # Только известные конечные пределы: неизвестное поле не должно молча
         # оставить более широкое значение по умолчанию вместо ожидаемого запрета.

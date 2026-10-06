@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261006-102445
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -49,10 +49,12 @@ from test_gateway_tls import certificates  # noqa: E402
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Реальный TLS до изменения подставного состояния
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("mode", ["trusted", "untrusted", "expired", "wrong_name"])
+@pytest.mark.parametrize(("mode", "display"), [("trusted", None), ("trusted", "full"),
+    ("trusted", "compact"), ("trusted", "text"), ("untrusted", None), ("expired", None), ("wrong_name", None)])
 def test_command_https_exchange(
     tmp_path: Path,
     mode: str,
+    display: str | None,
 ) -> None:
 
     """Verify real TLS before fake callback execution through both durable journals.
@@ -62,6 +64,9 @@ def test_command_https_exchange(
 
     :param mode: Selected TLS certificate verification scenario.
     :type mode: str
+
+    :param display: Optional client presentation requiring command schema 2.
+    :type display: str | None
     """
 
     # tmp_path — отдельный временный каталог теста.
@@ -81,6 +86,7 @@ def test_command_https_exchange(
         """Run an isolated HTTPS hub with synthetic application state."""
 
         rig = Rig(tmp_path)
+        rig.registration = replace(rig.registration, command_display_mode=display)
         # В ручном HTTPS-сценарии таймер ожидает остановки, не конкурируя за SQLite.
         # Не отменяем живое обслуживание: теперь такая отмена правильно считается отказом hub.
 

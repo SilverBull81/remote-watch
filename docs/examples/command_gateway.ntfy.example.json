@@ -49,6 +49,7 @@
     {
       "source_id": "ntfy",
       "provider": "ntfy",
+      "command_display_mode": "full",
       "settings": {
         "endpoint": "https://ntfy.sh",
         "topic": "REPLACE-private-commands",

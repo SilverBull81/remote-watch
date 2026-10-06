@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-201702
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети.
@@ -202,12 +202,19 @@ class FakeTime:
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Команды двум экземплярам в одном чате через настоящий HTTP
 #------------------------------------------------------------------------------------------------------------------
-def test_gateway_two_applications(tmp_path: Path) -> None:
+@pytest.mark.parametrize("client_modes", [False, True])
+def test_gateway_two_applications(
+    tmp_path: Path,
+    client_modes: bool,
+) -> None:
 
     """Route shared-chat commands through HTTP to two real dispatchers and separate smoke states.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
+
+    :param client_modes: Whether two clients independently override the source's full display.
+    :type client_modes: bool
     """
 
     # tmp_path — отдельный временный каталог теста.
@@ -240,6 +247,8 @@ def test_gateway_two_applications(tmp_path: Path) -> None:
                 client_config = {"schema_version": 1, "identity": raw["targets"][alias],
                     "endpoint": f"http://127.0.0.1:{gateway.server.port}", "allow_loopback_http": True,
                     "state_file": alias + ".sqlite", "owner_id": alias, "token": raw["principals"][index]["token"]}
+                if client_modes:
+                    client_config["command_display_mode"] = "text" if index == 0 else "compact"
                 client = load_command_client(
                     write_config(tmp_path / (alias + ".local.json"), client_config), registry)
                 watcher = RemoteWatcher(WatcherConfig(identity=client.registration.identity, commands=registry),
@@ -263,7 +272,12 @@ def test_gateway_two_applications(tmp_path: Path) -> None:
                 conversation_id="-123", text="/rw two suspend_load"))
             await until(lambda: gateway.sources[0].stats.replies >= 5, timeout=20)
             assert applications[1].paused.is_set() and not applications[0].paused.is_set()
-            assert all("id=" in text and "session=" in text for _, text in provider.replies)
+            if client_modes:
+                assert all("id=" not in text and "session=" not in text for _, text in provider.replies)
+                assert provider.replies[-1][1].startswith('["smoke","test","ru","vm","two"]')
+                assert not provider.replies[0][1].startswith('["smoke"')
+            else:
+                assert all("id=" in text and "session=" in text for _, text in provider.replies)
             # Второй gateway обязан отказаться до открытия hub с новым поколением.
             rival = CommandGateway(config, time_source=FakeTime())
             with pytest.raises(Exception):

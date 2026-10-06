@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261006-102445
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -163,7 +163,7 @@ def truncate(
     data = text.encode(encoding)
     if len(data) <= limit:
         return text
-    marker = "\n[сокращено]"
+    marker = "\n[truncated]"
     return data[:limit - len(marker.encode(encoding))].decode(encoding, errors="ignore") + marker
 #------------------------------------------------------------------------------------------------------------------
 

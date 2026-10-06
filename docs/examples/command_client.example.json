@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "command_display_mode": null,
   "identity": {
     "service": "command-smoke",
     "environment": "test",

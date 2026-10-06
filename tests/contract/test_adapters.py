@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261006-102445
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов.
@@ -401,7 +401,7 @@ def test_success_and_lifecycle(
         else:
             assert text.startswith("😀аб") and "event_id=" not in text
         assert delivery.notification.identity == notification.identity and delivery.delivery_id == "d1"
-        assert text.endswith("[сокращено]")
+        assert text.endswith("[truncated]")
         assert "parse_mode" not in payload and "attach" not in payload
         assert request["allow_redirects"] is False
         assert session.settings["trust_env"] is False and session.settings["auto_decompress"] is False

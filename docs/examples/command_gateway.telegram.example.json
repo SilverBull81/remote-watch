@@ -49,6 +49,7 @@
     {
       "source_id": "telegram",
       "provider": "telegram",
+      "command_display_mode": "full",
       "settings": {
         "token": "12345:REPLACE_WITH_YOUR_TELEGRAM_BOT_TOKEN"
       },

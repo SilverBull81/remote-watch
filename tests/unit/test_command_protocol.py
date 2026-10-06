@@ -1,10 +1,10 @@
 ﻿# Проверки моделей, сериализации и результатов команд без сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261006-102445
 #
 # Тесты:
 # -> request(): Детерминированный запрос с вымышленными аргументами.
@@ -78,9 +78,11 @@ def request(identity: Identity) -> CommandRequest:
 # ТЕСТ : Передача всех моделей через строгий JSON
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["registration", "session", "request", "claim", "grant", "result", "receipt"])
+@pytest.mark.parametrize("display", [None, "full", "compact", "text"])
 def test_command_wire_roundtrip(
     identity: Identity,
     kind: str,
+    display: str | None,
 ) -> None:
 
     """Round-trip each closed wire shape without optional network dependencies.
@@ -90,17 +92,21 @@ def test_command_wire_roundtrip(
 
     :param kind: Selected protocol message kind.
     :type kind: str
+
+    :param display: Optional presentation mode belonging to the original session.
+    :type display: str | None
     """
 
     # identity — явно заданные сведения о тестовом приложении.
     # kind — проверяемый вид сообщения.
 
-    event = request(identity)
+    event = replace(request(identity), command_display_mode=display)
     claim = CommandClaim(ref=event.ref, claim_id="4" * 32, request_digest=message_digest(event))
     result = callback_result(event.ref, claim.claim_id, "Запрос передан приложению")
     messages = {
         "registration": CommandRegistration(identity=identity, session_id=event.ref.session_id,
-            capabilities=(CommandCapability(name=event.name, required_scope="load:write"),)),
+            capabilities=(CommandCapability(name=event.name, required_scope="load:write"),),
+            command_display_mode=display),
         "session": CommandSession(identity=identity, session_id=event.ref.session_id,
             hub_epoch=event.ref.hub_epoch, remaining_ttl=30),
         "request": event, "claim": claim,
@@ -113,6 +119,9 @@ def test_command_wire_roundtrip(
     assert decode_command(encoded) == message
     assert encode_command(decode_command(encoded)) == encoded
     assert json.loads(encoded)["kind"] == kind
+    extended = display is not None and kind in {"registration", "request", "grant"}
+    assert json.loads(encoded)["schema_version"] == (2 if extended else 1)
+    assert (b'"command_display_mode"' in encoded) is extended
     assert len(encoded) <= MAX_COMMAND_BYTES
 #------------------------------------------------------------------------------------------------------------------
 

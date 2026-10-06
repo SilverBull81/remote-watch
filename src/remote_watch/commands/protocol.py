@@ -1,10 +1,10 @@
 ﻿# Модели и строгий wire-контракт команд без сети и исполнения callbacks.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261006-102445
 #
 # Константы и типы:
 # -> MAX_COMMAND_BYTES, MAX_COMMAND_TEXT_BYTES: Пределы wire и текста ответа, байт UTF-8.
@@ -69,6 +69,7 @@
 # -> callback_result(): Проверка результата без пользовательского преобразования в строку.
 # -> _plain(): Преобразование только разрешённых моделей в данные JSON.
 # -> encode_command(): Кодирование ограниченного сообщения заданной версии.
+# -> _schema_version(): Выбор схемы без изменения прежних сообщений и их хешей.
 # -> _pairs(): Запрет повторяющихся ключей JSON.
 # -> _constant(): Запрет нестандартных чисел JSON.
 # -> _model(): Разбор точного состава полей по закрытому перечню моделей.
@@ -243,6 +244,7 @@ class CommandRegistration:
     identity: Identity      # Полная принадлежность приложения.
     session_id: str         # Новый случайный ID при каждом запуске клиента.
     capabilities: tuple[CommandCapability, ...]     # Только метаданные, без функций и состояния приложения.
+    command_display_mode: str | None = None        # full/compact/text; None — оформление источника gateway.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
@@ -254,6 +256,8 @@ class CommandRegistration:
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
         _nonce(self.session_id)
+        if self.command_display_mode is not None and self.command_display_mode not in ("full", "compact", "text"):
+            raise ValueError("invalid command display mode")
         if not isinstance(self.capabilities, (tuple, list)) or not 1 <= len(self.capabilities) <= MAX_CAPABILITIES:
             raise ValueError("invalid capability count")
         if any(type(item) is not CommandCapability for item in self.capabilities):
@@ -358,6 +362,7 @@ class CommandRequest:
     conversation_id: str = field(repr=False)    # Проверенный ID беседы или чата.
     name: str                               # Пользовательское имя зарегистрированного callback.
     arguments: Mapping[str, str] = field(default_factory=dict, repr=False)      # Проверяемые именованные строки.
+    command_display_mode: str | None = None        # Режим исходной регистрации; сохраняется вместе с командой.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка контекста без исполнения и выдачи прав
@@ -384,6 +389,8 @@ class CommandRequest:
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
+        if self.command_display_mode is not None and self.command_display_mode not in ("full", "compact", "text"):
+            raise ValueError("invalid command display mode")
         _identifier(self.source_id)
         require_text(self.source_event_id, "source_event_id", 128)
         if not isinstance(self.name, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.name) is None:
@@ -663,7 +670,10 @@ def _plain(value: object) -> object:
     # value — объект, преобразуемый в обычные JSON-совместимые значения.
 
     if type(value) in (*_KINDS.values(), CommandRef, CommandCapability, Identity):
-        return {item.name: _plain(getattr(value, item.name)) for item in fields(value)}
+        # Отсутствующий режим не добавляет null в старый wire: это сохраняет
+        # канонические байты и digest уже записанных запросов и квитанций.
+        return {item.name: _plain(getattr(value, item.name)) for item in fields(value)
+                if item.name != "command_display_mode" or getattr(value, item.name) is not None}
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, Mapping):
@@ -671,6 +681,27 @@ def _plain(value: object) -> object:
     if isinstance(value, tuple):
         return [_plain(item) for item in value]
     return value
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Выбор схемы без изменения прежних сообщений и их хешей
+#------------------------------------------------------------------------------------------------------------------
+def _schema_version(message: CommandMessage) -> int:
+
+    """Select the smallest exact schema needed by the immutable message.
+
+    :param message: Validated command protocol model.
+    :type message: CommandMessage
+
+    :return: Schema 2 only for an explicit registration/request presentation mode.
+    :rtype: int
+    """
+
+    # В grant вложен тот же request; result/receipt остаются в прежней схеме.
+    target = message.request if type(message) is CommandGrant else message
+    return 2 if (type(target) in (CommandRegistration, CommandRequest)
+                 and target.command_display_mode is not None) else 1
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -692,7 +723,7 @@ def encode_command(message: CommandMessage) -> bytes:
 
     try:
         kind = next(name for name, model in _KINDS.items() if type(message) is model)
-        body = json.dumps({"schema_version": 1, "kind": kind, "payload": _plain(message)},
+        body = json.dumps({"schema_version": _schema_version(message), "kind": kind, "payload": _plain(message)},
                           ensure_ascii=False, sort_keys=True,
                           separators=(",", ":"), allow_nan=False).encode("utf-8")
         if len(body) > MAX_COMMAND_BYTES:
@@ -751,6 +782,7 @@ def _constant(value: str) -> None:
 def _model(
     model: type,
     value: object,
+    schema_version: int = 1,
 ) -> object:
 
     """Decode exact field sets using a closed model registry.
@@ -761,6 +793,9 @@ def _model(
     :param value: Value to validate or normalize.
     :type value: object
 
+    :param schema_version: Exact envelope version, also applied to nested models.
+    :type schema_version: int
+
     :return: An instance of the requested validated message model.
     :rtype: object
     """
@@ -768,11 +803,19 @@ def _model(
     # model — ожидаемый класс сообщения протокола.
     # value — словарь полей входящего сообщения.
 
-    if type(value) is not dict or set(value) != {item.name for item in fields(model)}:
+    # Схема 1 не принимает новое поле даже с null. В схеме 2 режим обязателен
+    # в registration/request; у вложенного grant он принадлежит только request.
+    expected = {item.name for item in fields(model)}
+    if schema_version == 1:
+        expected.discard("command_display_mode")
+    if type(value) is not dict or set(value) != expected:
         raise ValueError("invalid command payload fields")
+    if schema_version == 2 and model in (CommandRegistration, CommandRequest):
+        if type(value["command_display_mode"]) is not str:
+            raise ValueError("invalid command display mode")
     payload = dict(value)
     for name, nested in _NESTED.get(model, {}).items():
-        payload[name] = _model(nested, payload[name])
+        payload[name] = _model(nested, payload[name], schema_version)
     if model is CommandRegistration:
         items = payload["capabilities"]
         if type(items) is not list or not 1 <= len(items) <= MAX_CAPABILITIES:
@@ -808,11 +851,14 @@ def decode_command(data: bytes) -> CommandMessage:
         value = json.loads(data.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=_constant)
         if type(value) is not dict or set(value) != {"schema_version", "kind", "payload"}:
             raise ValueError("invalid command envelope")
-        if type(value["schema_version"]) is not int or value["schema_version"] != 1:
+        if type(value["schema_version"]) is not int or value["schema_version"] not in (1, 2):
             raise ValueError("unsupported command schema")
         if type(value["kind"]) is not str or value["kind"] not in _KINDS:
             raise ValueError("unknown command kind")
-        return _model(_KINDS[value["kind"]], value["payload"])
+        message = _model(_KINDS[value["kind"]], value["payload"], value["schema_version"])
+        if _schema_version(message) != value["schema_version"]:
+            raise ValueError("noncanonical command schema")
+        return message
     except (ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError):
         raise ValueError("invalid command message") from None
 #------------------------------------------------------------------------------------------------------------------
