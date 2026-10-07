@@ -1,10 +1,10 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261007-235742
 #
 # Тесты:
 # -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
@@ -363,8 +363,9 @@ def test_command_http_capacity(tmp_path: Path) -> None:
             session = await transport.exchange("register", rig.registration)
             pending = asyncio.create_task(transport.exchange("poll", session))
             await asyncio.sleep(0.05)
-            with pytest.raises(CommandError, match="busy"):
+            with pytest.raises(CommandError, match="busy") as caught:
                 await transport.exchange("poll", session)
+            assert caught.value.busy_reason == "http_polls_full"
             renewed = await transport.exchange("heartbeat", session)
             assert renewed.session_id == session.session_id
             assert await pending is None

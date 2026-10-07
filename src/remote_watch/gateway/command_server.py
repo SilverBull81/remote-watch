@@ -1,10 +1,10 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками relay.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
@@ -226,8 +226,10 @@ class CommandHubServer:
                 raise CommandError("denied")
             token = auth[0][7:]
             self.hub.authenticate(token)
-            if self._active >= self._max_requests or (polling and self._polls >= self._max_polls):
-                raise CommandError("busy")
+            if self._active >= self._max_requests:
+                raise CommandError("busy", busy_reason="http_requests_full")
+            if polling and self._polls >= self._max_polls:
+                raise CommandError("busy", busy_reason="http_polls_full")
             self._active += 1
             self._polls += int(polling)
             counted = True
@@ -249,7 +251,10 @@ class CommandHubServer:
             return web.Response(body=encode_response(result), content_type="application/json")
         except CommandError as error:
             status = ERROR_HTTP_STATUS.get(error.code, 503)
-            response = web.json_response({"code": error.code}, status=status)
+            payload = {"code": error.code}
+            if error.busy_reason is not None:
+                payload["busy_reason"] = error.busy_reason
+            response = web.json_response(payload, status=status)
         except Exception:
             response = web.json_response({"code": "invalid"}, status=400)
         finally:

@@ -1,10 +1,10 @@
 ﻿# Строгая упаковка ответа long poll поверх командного протокола.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261007-235742
 #
 # Функции:
 # -> encode_response(): Кодирование сообщения либо предложения команды.
@@ -116,6 +116,7 @@ def decode_error(
     # Пустое/чужое тело сохраняет прежнюю классификацию, включая ответы reverse proxy.
     code = {401: "denied", 403: "denied", 409: "conflict", 429: "busy"}.get(status, "unavailable")
 
+    busy_reason = None
     try:
         if type(data) is not bytes or len(data) > MAX_HTTP_ERROR_BYTES:
             raise ValueError("invalid error response size")
@@ -123,11 +124,17 @@ def decode_error(
         if (type(value) is dict and set(value) == {"code"} and type(value["code"]) is str
                 and ERROR_HTTP_STATUS.get(value["code"]) == status):
             code = value["code"]
+        elif (type(value) is dict and set(value) == {"code", "busy_reason"}
+              and value["code"] == "busy" and status == 429):
+            # Дополнение оболочки ошибки не меняет успешные wire-сообщения/хеши.
+            # Конструктор пропускает лишь фиксированные причины, старый клиент
+            # сохранит прежний fallback busy по HTTP 429.
+            busy_reason = value["busy_reason"]
     except (ValueError, TypeError, RecursionError):
         # Ни текст JSON, ни исключение декодера не становятся причиной публичной ошибки.
         pass
 
-    return CommandError(code, http_status=status)
+    return CommandError(code, http_status=status, busy_reason=busy_reason)
 #------------------------------------------------------------------------------------------------------------------
 
 

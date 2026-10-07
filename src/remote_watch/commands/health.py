@@ -1,10 +1,10 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> StageHealth: Ошибка одного этапа и счётчики восстановления.
@@ -58,6 +58,7 @@ class StageHealth:
     error_kind: str | None = None        # Безопасная категория TLS; None для прочих отказов.
     verify_code: int | None = None       # Числовой код проверки сертификата OpenSSL.
     tls_reason: str | None = None        # Фиксированная причина TLS без адресов и текста сервера.
+    busy_reason: str | None = None       # Точная фиксированная причина текущей занятости.
     failures: int = 0                    # Все наблюдавшиеся отказы этого этапа.
     transient_failures: int = 0          # Временные busy/unavailable/capacity, включая повторы.
     recoveries: int = 0                  # Переходы от временного отказа к успешной операции.
@@ -218,6 +219,7 @@ class HealthState:
             previous = self._stages[stage]
             self._stages[stage] = replace(previous, current_error=error.code, http_status=error.http_status,
                 error_kind=error.error_kind, verify_code=error.verify_code, tls_reason=error.tls_reason,
+                busy_reason=error.busy_reason,
                 failures=previous.failures + 1,
                 transient_failures=previous.transient_failures + int(error.code in _TRANSIENT))
             self._last_error = error.code
@@ -247,7 +249,7 @@ class HealthState:
                 return
             if previous.current_error in _TRANSIENT:
                 self._stages[stage] = replace(previous, current_error=None, http_status=None,
-                                            error_kind=None, verify_code=None, tls_reason=None,
+                                            error_kind=None, verify_code=None, tls_reason=None, busy_reason=None,
                                             recoveries=previous.recoveries + 1)
     #--------------------------------------------------------------------------------------------------------------
 

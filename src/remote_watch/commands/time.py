@@ -1,10 +1,10 @@
 ﻿# Проверка возраста команд по достоверному времени без зависимости от часов VM.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> TimeUnavailable: Отказ при отсутствии достоверного времени.
@@ -43,6 +43,7 @@
 #******************************************************************************************************************
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -214,6 +215,7 @@ class TrustedClock:
         self._clock = clock
         self._sample: TimeSample | None = None
         self._last: float | None = None
+        self.unavailable_reason: str | None = "missing_sample"
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -232,6 +234,8 @@ class TrustedClock:
 
         # sample — доверенное показание и момент его получения.
 
+        self._sample = None
+        self.unavailable_reason = "invalid_sample"
         if type(sample) is not TimeSample:
             raise TypeError("invalid time sample type")
         now = self._clock()
@@ -244,8 +248,11 @@ class TrustedClock:
         elapsed = now - sample.observed_at
         width = sample.upper_utc - sample.lower_utc + 2 * max(0, elapsed) * self.policy.drift_ppm / 1e6
         if elapsed < 0 or elapsed >= self.policy.sample_ttl or width > self.policy.max_uncertainty:
+            self.unavailable_reason = ("clock_rollback" if elapsed < 0 else "sample_expired"
+                                       if elapsed >= self.policy.sample_ttl else "uncertainty")
             raise TimeUnavailable("trusted time unavailable")
         self._sample = sample
+        self.unavailable_reason = None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -264,11 +271,23 @@ class TrustedClock:
 
         # source — явно выбранный источник времени.
 
-        self._sample = None
+        # Пока запрос идёт, bounds продолжает проверять TTL/дрейф прежнего
+        # показания. Сам старт штатного refresh не означает утрату доверия.
         try:
-            self.install(await source.sample())
+            sample = await source.sample()
+        except asyncio.CancelledError:
+            self._sample = None
+            self.unavailable_reason = "refresh_cancelled"
+            raise
         except Exception:
             self._sample = None
+            self.unavailable_reason = "source_failed"
+            raise TimeUnavailable("trusted time unavailable") from None
+
+        # Подмена происходит без await; ошибочный ответ снимает старое доверие.
+        try:
+            self.install(sample)
+        except (TypeError, ValueError):
             raise TimeUnavailable("trusted time unavailable") from None
     #--------------------------------------------------------------------------------------------------------------
 
@@ -288,6 +307,7 @@ class TrustedClock:
         sample = self._sample
         if self._last is not None and now < self._last:
             self._sample = None
+            self.unavailable_reason = "clock_rollback"
         self._last = now
         if self._sample is None or sample is None:
             raise TimeUnavailable("trusted time unavailable")
@@ -297,6 +317,8 @@ class TrustedClock:
         lower, upper = sample.lower_utc + elapsed - drift, sample.upper_utc + elapsed + drift
         if elapsed < 0 or elapsed >= self.policy.sample_ttl or upper - lower > self.policy.max_uncertainty:
             self._sample = None
+            self.unavailable_reason = ("clock_rollback" if elapsed < 0 else "sample_expired"
+                                       if elapsed >= self.policy.sample_ttl else "uncertainty")
             raise TimeUnavailable("trusted time unavailable")
         return TimeSample(lower_utc=lower, upper_utc=upper, observed_at=now)
     #--------------------------------------------------------------------------------------------------------------

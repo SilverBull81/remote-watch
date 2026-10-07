@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
@@ -257,7 +257,7 @@ class CommandClient:
         self._live()
 
         if self._acquiring or self._active is not None:
-            raise CommandError("busy")
+            raise CommandError("busy", busy_reason="client_operation_active")
         self._acquiring = True
 
         try:

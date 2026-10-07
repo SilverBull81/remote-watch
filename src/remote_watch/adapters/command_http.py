@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
@@ -173,7 +173,7 @@ class HttpsCommandTransport:
             raise CommandError("invalid")
 
         if self._active >= 2:
-            raise CommandError("busy")
+            raise CommandError("busy", busy_reason="transport_requests_full")
 
         if not self._ssl.check_hostname or self._ssl.verify_mode != ssl.CERT_REQUIRED:
             raise CommandError("unavailable")

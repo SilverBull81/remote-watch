@@ -1,10 +1,10 @@
 ﻿# Последовательные операции постоянного журнала с ограниченным ожиданием.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> StoreLifecycle: Контракт ресурсов рабочего потока хранения.
@@ -17,8 +17,10 @@
 #    -> __init__(): Создание объекта.
 #    Интерфейс:
 #    -> open(): Открытие принадлежащих объекту ресурсов.
-#    -> call(): Отказ при занятости с сохранением владения после отмены caller.
+#    -> call(): Ограниченное ожидание с сохранением владения после отмены caller.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    Служебные методы:
+#    -> _completed(): Освобождение исполнителя после фактического завершения операции.
 #
 # Функции:
 # -> _consume(): Извлечение поздней ошибки без записи её деталей в лог.
@@ -34,6 +36,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Generic, Protocol, TypeVar
 
+from remote_watch._validation import require_int
 from remote_watch.commands.storage import StoreConflict, StoreError, StoreFull
 from remote_watch.commands.transport import CommandError
 
@@ -85,6 +88,8 @@ class StoreWorker(Generic[S]):
         self,
         store: S,
         timeout: float,
+        *,
+        max_waiters: int = 0,
     ) -> None:
 
         """Configure a single storage lane without creating threads.
@@ -94,11 +99,21 @@ class StoreWorker(Generic[S]):
 
         :param timeout: Finite wait limit in seconds.
         :type timeout: float
+
+        :param max_waiters: Bounded async waiters; zero preserves immediate rejection.
+        :type max_waiters: int
         """
 
         # store — принадлежащий объекту журнал с согласованным поколением.
         # timeout — конечный предел ожидания, секунды.
 
+        # max_waiters — очередь только в event loop, не в ThreadPoolExecutor.
+        require_int(max_waiters, "storage waiters", 0)
+        if max_waiters > 256:
+            raise ValueError("invalid storage waiter limit")
+        self._max_waiters = max_waiters
+        self._waiters = 0
+        self._gate = asyncio.Lock()
         self.store = store
         self.timeout = timeout
         self._pool: ThreadPoolExecutor | None = None
@@ -127,7 +142,7 @@ class StoreWorker(Generic[S]):
 
 
     #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Отказ при занятости с сохранением владения после отмены caller
+    # ИНТЕРФЕЙС : Ограниченное ожидание с сохранением владения после отмены caller
     #--------------------------------------------------------------------------------------------------------------
     async def call(
         self,
@@ -148,14 +163,38 @@ class StoreWorker(Generic[S]):
         if self._closing or self._pool is None:
             raise CommandError("closed")
 
-        if self._pending is not None and not self._pending.done():
-            raise CommandError("busy")
-        future = asyncio.get_running_loop().run_in_executor(self._pool, operation)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.timeout
+        if self._gate.locked() or self._waiters:
+            if self._waiters >= self._max_waiters:
+                reason = "storage_busy" if self._max_waiters == 0 else "storage_queue_full"
+                raise CommandError("busy", busy_reason=reason)
+            self._waiters += 1
+            try:
+                await asyncio.wait_for(self._gate.acquire(), max(0, deadline - loop.time()))
+            except asyncio.TimeoutError:
+                raise CommandError("busy", busy_reason="storage_wait_timeout") from None
+            finally:
+                self._waiters -= 1
+        else:
+            await self._gate.acquire()
+
+        # Ожидание съедает исходный бюджет. После отмены/закрытия отложенный
+        # caller не должен незаметно отправить новую операцию в executor.
+        try:
+            if self._closing or self._pool is None:
+                raise CommandError("closed")
+            if loop.time() >= deadline:
+                raise CommandError("busy", busy_reason="storage_wait_timeout")
+            future = loop.run_in_executor(self._pool, operation)
+        except BaseException:
+            self._gate.release()
+            raise
         self._pending = future
-        future.add_done_callback(_consume)
+        future.add_done_callback(self._completed)
 
         try:
-            return await asyncio.wait_for(asyncio.shield(future), self.timeout)
+            return await asyncio.wait_for(asyncio.shield(future), max(0, deadline - loop.time()))
         except StoreFull:
             raise CommandError("capacity") from None
         except (StoreConflict, ValueError, TypeError):
@@ -204,6 +243,25 @@ class StoreWorker(Generic[S]):
             pass
         finally:
             self._pool = None
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Освобождение исполнителя после фактического завершения операции
+    #--------------------------------------------------------------------------------------------------------------
+    def _completed(
+        self,
+        future: asyncio.Future,
+    ) -> None:
+
+        """Release the storage lane only after the actual executor future completes.
+
+        :param future: Actual storage completion, independent of caller cancellation.
+        :type future: asyncio.Future
+        """
+
+        # future — запись могла закончиться уже после timeout или отмены caller.
+        _consume(future)
+        self._gate.release()
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

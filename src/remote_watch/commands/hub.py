@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -162,7 +162,7 @@ class CommandHub:
         self._clock = clock
         self._trusted = trusted_clock
         self._source = time_source
-        self._worker = StoreWorker(store, config.storage_timeout)
+        self._worker = StoreWorker(store, config.storage_timeout, max_waiters=config.max_storage_waiters)
         self._issued: dict[str, _Session] = {}
         self._targets: dict[Identity, _Session] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -256,7 +256,8 @@ class CommandHub:
         else:
             reason = self._maintenance_error
         return {"ready": reason is None, "reason": reason, "fatal": self._maintenance_failed,
-                "maintenance_running": running, "time_ready": time_ready}
+                "maintenance_running": running, "time_ready": time_ready,
+                "time_reason": None if time_ready else self._trusted.unavailable_reason}
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -722,7 +723,7 @@ class CommandHub:
         entry = self._entry(token, session)
 
         if entry.polling:
-            raise CommandError("busy")
+            raise CommandError("busy", busy_reason="session_poll_active")
         entry.polling = True
 
         try:
@@ -1302,7 +1303,10 @@ class CommandHub:
         #----------------------------------------------------------------------------------------------------------
 
 
-        return await self._worker.call(select)
+        offer = await self._worker.call(select)
+        # В очереди мог истечь lease. Ответ не должен оживлять прежнюю сессию.
+        self._session(entry)
+        return offer
     #--------------------------------------------------------------------------------------------------------------
 
 

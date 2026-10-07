@@ -1,10 +1,10 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandRuntime: Владение циклом команд при выбранном режиме запуска.
@@ -122,7 +122,7 @@ class CommandRuntime:
             if asyncio.get_running_loop() is not self._loop:
                 raise RuntimeError("command runtime belongs to another event loop")
             if not self._ready.is_set():
-                raise CommandError("busy")
+                raise CommandError("busy", busy_reason="client_operation_active")
             return
 
         if self._mode is not None or self._stopping.is_set():
@@ -255,7 +255,8 @@ def _startup_cause(error: BaseException) -> BaseException:
         # Даже публичные атрибуты могли быть изменены пользовательским transport.
         code = error.code if type(error.code) is str else "unavailable"
         return CommandError(code, http_status=error.http_status,
-                            error_kind=error.error_kind, verify_code=error.verify_code)
+                            error_kind=error.error_kind, verify_code=error.verify_code,
+                            busy_reason=error.busy_reason)
 
     # Порядок важен: частные подклассы проверяются раньше общих OSError/ImportError.
     # Созданные исключения ещё не выбрасывались и не содержат traceback или context.

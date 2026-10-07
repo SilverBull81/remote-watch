@@ -1,10 +1,10 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandError: Ошибка с безопасным фиксированным кодом.
@@ -52,6 +52,7 @@ class CommandError(RuntimeError):
         http_status: int | None = None,
         error_kind: str | None = None,
         verify_code: int | None = None,
+        busy_reason: str | None = None,
     ) -> None:
 
         """Retain only the supported public failure classification.
@@ -67,6 +68,9 @@ class CommandError(RuntimeError):
 
         :param verify_code: Bounded OpenSSL certificate verification number.
         :type verify_code: int | None
+
+        :param busy_reason: Fixed contention category, accepted only for busy errors.
+        :type busy_reason: str | None
         """
 
         # code — фиксированный код ошибки без приватных подробностей.
@@ -84,7 +88,14 @@ class CommandError(RuntimeError):
                             and type(verify_code) is int and 0 <= verify_code <= 999999 else None)
         self.tls_reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
                            else "handshake_failed" if self.error_kind else None)
+        # busy_reason — только известная категория конкуренции, без имён/текста запроса.
+        reasons = {"storage_busy", "storage_queue_full", "storage_wait_timeout", "session_poll_active",
+                   "http_requests_full", "http_polls_full", "transport_requests_full", "client_operation_active"}
+        self.busy_reason = (busy_reason if self.code == "busy" and type(busy_reason) is str
+                            and busy_reason in reasons else None)
         message = self.code
+        if self.busy_reason:
+            message += f"; busy_reason={self.busy_reason}"
         if self.error_kind:
             message += (f"; error_kind={self.error_kind}; verify_code={self.verify_code}"
                         f"; tls_reason={self.tls_reason}")

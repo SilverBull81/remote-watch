@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.4
+Version 1.4.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261007-120324
+Дата и время последнего изменения: 261008-001220
 
 ## Project Intent
 
@@ -13,7 +13,19 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev11; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev12; no stable 0.2.0 tag is implied.
+Dev12 serializes normal hub storage contention through a bounded FIFO async wait:
+max_storage_waiters=64 (1..256), one executor operation, one shared storage_timeout
+for admission plus execution. Cancelled/expired queued calls never reach the store;
+active operations stay pinned until actual completion. Client/source workers retain
+immediate rejection. busy_reason adds allowlisted local/HTTP 429 diagnostics and
+StageHealth details; legacy clients still see busy via status. Successful command
+wire schemas and stored request hashes are unchanged.
+TrustedClock keeps a still-valid anchor while refresh is in flight, checking original
+TTL/uncertainty/drift; actual failure or cancellation still invalidates it. Local hub
+health and command CLI expose time_reason, never source exception text or fallback UTC.
+See docs/COMMAND_HUB.md and docs/COMMAND_TIME.md. No live pilot incident log was inspected;
+the two failure mechanisms were reproduced locally, not proven as the only field causes.
 Dev11 adds DailyFileConfig/DailyFileHandler for YYYY/MM. EnglishMonth/prefix_log_YYMMDD.txt.
 RemoteWatcher(file=...) supports it alongside the unchanged RotatingFileConfig.
 Record.created selects the day in the configured tzinfo or OS local timezone;

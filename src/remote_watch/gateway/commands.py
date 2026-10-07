@@ -1,10 +1,10 @@
 ﻿# Запуск отдельного командного gateway из JSON без пользовательского Python-кода.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-144006
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandParser: Разбор CLI без раскрытия ошибочных значений.
@@ -129,6 +129,8 @@ async def serve(
                 break
             stats = gateway.stats()
             status = {key: stats[key] for key in ("ready", "reason", "fatal")}
+            if status["reason"] == "time_unavailable":
+                status["time_reason"] = stats["hub"]["time_reason"]
             # Печатаем только смену состояния, а не очередную строку каждую секунду.
             # Временная потеря UTC оставляет loop обновления активным для восстановления.
             if status != previous:

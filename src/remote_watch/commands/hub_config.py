@@ -1,10 +1,10 @@
 ﻿# Учётные данные и правила доступа к командам приложений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandPrincipal: Права приложения с отдельным секретом команд.
@@ -184,6 +184,7 @@ class CommandHubConfig:
     shutdown_timeout: float = 5.0               # Общий срок остановки, секунды.
     refresh_interval: float = 60.0              # Период обновления внешнего времени, секунды.
     max_sessions: int = 256                     # Включая истёкшие сессии текущего запуска hub.
+    max_storage_waiters: int = 64              # Ожидающие операции hub; executor выполняет только одну.
     max_pending: int = 1000                     # Неподтверждённые или ещё исполняемые команды.
 
 
@@ -225,7 +226,7 @@ class CommandHubConfig:
         if self.poll_timeout >= self.session_ttl / 2:
             raise ValueError("poll exceeds session budget")
 
-        for name, high in (("max_sessions", 4096), ("max_pending", 1000)):
+        for name, high in (("max_sessions", 4096), ("max_pending", 1000), ("max_storage_waiters", 256)):
             require_int(getattr(self, name), name)
             if getattr(self, name) > high:
                 raise ValueError("invalid command capacity")

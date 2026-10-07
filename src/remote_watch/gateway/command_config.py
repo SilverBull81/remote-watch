@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261007-235742
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек.
@@ -544,7 +544,7 @@ def _gateway(
         # оставить более широкое значение по умолчанию вместо ожидаемого запрета.
         limits = value.get("hub", {})
         _keys(limits, set(), {"session_ttl", "poll_timeout", "storage_timeout", "shutdown_timeout",
-                             "refresh_interval", "max_sessions", "max_pending"}, field_name)
+                             "refresh_interval", "max_sessions", "max_pending", "max_storage_waiters"}, field_name)
         hub = CommandHubConfig(principals=tuple(principals), sources=tuple(sources), **limits)
         field_name = "state_dir"
         return CommandGatewayConfig(state_dir=_path(path, value["state_dir"]), hub=hub,
