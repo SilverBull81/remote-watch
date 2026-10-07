@@ -1,12 +1,21 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.3.3
+Version 1.3.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-170841
+Дата и время последнего изменения: 261007-120324
 
 ## Статус и границы
+
+В 0.4.1.dev11 добавлен независимый от транспорта `local_logging`:
+DailyFileConfig и стандартный DailyFileHandler. RemoteWatcher принимает
+календарную настройку через существующий параметр file; путь выбирается по
+LogRecord.created в заданном либо местном часовом поясе. Handler держит один
+stream, меняет его под lock, закрывает старый и не открывается после close.
+Чужие handlers не меняются, архивы не удаляются, глобальная локаль не затрагивается.
+Это синхронное локальное logging, без новых потоков/сетевых зависимостей/изменений wire.
+Контракт и примеры: [LOCAL_LOGGING.md](docs/LOCAL_LOGGING.md).
 
 В 0.4.1.dev10 локальные HTTPS-отказы сохраняют безопасные error_kind, verify_code
 и tls_reason: в CommandError, текущем StageHealth и DeliveryResult. Синхронный

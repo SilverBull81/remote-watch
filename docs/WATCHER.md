@@ -1,12 +1,17 @@
 ﻿# Подключение RemoteWatcher к приложению
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-170744
+Дата и время последнего изменения: 261007-120324
 
 ## Назначение
+
+С 0.4.1.dev11 `file` также принимает `DailyFileConfig(directory="log", prefix="spambot")`:
+файл автоматически выбирается по дню в папке `YYYY/MM. EnglishMonth`.
+Часовой пояс, самостоятельный DailyFileHandler и примеры:
+[ежедневные журналы](LOCAL_LOGGING.md). Прежний RotatingFileConfig сохранён.
 
 `RemoteWatcher(config, logger=..., console=..., file=..., redactor=...)` управляет
 runtime и только теми обработчиками, которые создал сам. Записи идут через

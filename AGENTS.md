@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.3
+Version 1.4.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-202721
+Дата и время последнего изменения: 261007-120324
 
 ## Project Intent
 
@@ -13,7 +13,14 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev10; no stable 0.2.0 tag is implied.
+The package version is 0.4.1.dev11; no stable 0.2.0 tag is implied.
+Dev11 adds DailyFileConfig/DailyFileHandler for YYYY/MM. EnglishMonth/prefix_log_YYMMDD.txt.
+RemoteWatcher(file=...) supports it alongside the unchanged RotatingFileConfig.
+Record.created selects the day in the configured tzinfo or OS local timezone;
+the default formatter uses that timezone too. Relative roots freeze at configuration.
+One stream per handler, thread-safe switching, append, no archive deletion and no reopen
+after close. Files are per-process; no multi-process coordination is promised.
+See docs/LOCAL_LOGGING.md before changing local calendar logging.
 Dev10 retains safe local TLS error_kind/verify_code/tls_reason in CommandError,
 sync startup errors, current StageHealth and DeliveryResult. Existing command codes
 and relay wire schemas are unchanged. Never infer a failing chain depth from code 10.

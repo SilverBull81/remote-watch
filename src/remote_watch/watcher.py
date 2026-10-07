@@ -1,10 +1,10 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261007-112702
 #
 # Классы:
 # -> ConsoleConfig: Настройки необязательного вывода в консоль.
@@ -62,6 +62,7 @@ from remote_watch.commands.client import CommandClient
 from remote_watch.commands.dispatcher import CommandDispatcher, DispatcherStats, command_context
 from remote_watch.commands.runtime import CommandRuntime
 from remote_watch.config import WatcherConfig
+from remote_watch.local_logging import DailyFileConfig, DailyFileHandler
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.runtime import NotificationRuntime
 
@@ -184,7 +185,7 @@ class RemoteWatcher:
         *,
         logger: logging.Logger | logging.LoggerAdapter | None = None,
         console: ConsoleConfig | None = None,
-        file: RotatingFileConfig | None = None,
+        file: RotatingFileConfig | DailyFileConfig | None = None,
         redactor: Callable[[str], str] | None = None,
         command_client: CommandClient | None = None,
     ) -> None:
@@ -200,8 +201,8 @@ class RemoteWatcher:
         :param console: Optional console settings.
         :type console: ConsoleConfig | None
 
-        :param file: Optional rotating file settings.
-        :type file: RotatingFileConfig | None
+        :param file: Optional size-rotating or calendar-based local file settings.
+        :type file: RotatingFileConfig | DailyFileConfig | None
 
         :param redactor: Optional remote text redactor.
         :type redactor: Callable[[str], str] | None
@@ -221,8 +222,8 @@ class RemoteWatcher:
             raise TypeError("logger must be Logger or LoggerAdapter")
         if console is not None and not isinstance(console, ConsoleConfig):
             raise TypeError("console must be ConsoleConfig")
-        if file is not None and not isinstance(file, RotatingFileConfig):
-            raise TypeError("file must be RotatingFileConfig")
+        if file is not None and not isinstance(file, (RotatingFileConfig, DailyFileConfig)):
+            raise TypeError("file must be RotatingFileConfig or DailyFileConfig")
 
         self.runtime = NotificationRuntime(config, redactor=redactor)
         self._commands = None
@@ -437,7 +438,12 @@ class RemoteWatcher:
                     handler.setLevel(self._console.level)
                     handler.setFormatter(logging.Formatter(self._console.format))
 
-                if self._file is not None:
+                if isinstance(self._file, DailyFileConfig):
+                    # Подключаем один календарный handler на весь срок работы:
+                    # смена дня выполняется внутри него под собственным lock.
+                    handler = DailyFileHandler(self._file)
+                    self._handlers.append(handler)
+                elif self._file is not None:
                     handler = _OwnedRotatingFileHandler(self._file.path, maxBytes=self._file.max_bytes,
                                                         backupCount=self._file.backup_count,
                                                         encoding="utf-8", errors="backslashreplace")
