@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261008-203635
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных.
@@ -67,6 +67,9 @@ class SourceStats:
     replies: int            # Ответы, принятые провайдером; не подтверждение показа на телефоне.
     closed: bool            # Получатель больше не принимает события.
     last_error: str | None  # Последний фиксированный код отказа без его приватных деталей.
+    ready: bool = True     # Текущая работа обоих циклов; история ошибок не мешает восстановлению.
+    receive_error: str | None = None  # Текущий отказ приёма, отдельно от доставки ответов.
+    reply_error: str | None = None    # Текущий отказ цикла доставки сохранённых результатов.
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -155,6 +158,8 @@ class CommandSourceRunner:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._accepted = self._ignored = self._replies = 0
         self._error: str | None = None
+        self._receive_error: str | None = None
+        self._reply_error: str | None = None
         self._reply_position = 0
     #--------------------------------------------------------------------------------------------------------------
 
@@ -175,7 +180,10 @@ class CommandSourceRunner:
             if task.done():
                 self._finished(task)
         return SourceStats(accepted=self._accepted, ignored=self._ignored, replies=self._replies,
-                           closed=self._stopping, last_error=self._error)
+                           closed=self._stopping, last_error=self._error,
+                           ready=bool(self._tasks) and not self._stopping
+                           and self._receive_error is None and self._reply_error is None,
+                           receive_error=self._receive_error, reply_error=self._reply_error)
     #--------------------------------------------------------------------------------------------------------------
 
 
@@ -444,9 +452,11 @@ class CommandSourceRunner:
         while not self._stopping:
             try:
                 await self.step()
+                self._receive_error = None
                 await asyncio.sleep(0.1)
             except CommandError as error:
                 self._error = error.code
+                self._receive_error = error.code
                 if error.code not in ("busy", "capacity", "unavailable"):
                     self._stopping = True
                     return
@@ -464,6 +474,7 @@ class CommandSourceRunner:
         while not self._stopping:
             try:
                 rows = await self.hub.results(self.policy.token)
+                reply_error = None
                 # За проход отправляем не более 32 результатов. Начало сдвигается,
                 # чтобы недоступный чат не задерживал остальные приложения.
                 count = len(rows)
@@ -485,11 +496,14 @@ class CommandSourceRunner:
                         self._replies += 1
                     except CommandError as error:
                         self._error = error.code
+                        reply_error = error.code
                         if error.code in ("busy", "unavailable"):
                             break
+                self._reply_error = reply_error
                 await asyncio.sleep(self._retry)
             except CommandError as error:
                 self._error = error.code
+                self._reply_error = error.code
                 await asyncio.sleep(self._retry)
     #--------------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-184007
+# Дата и время последнего изменения: 261008-203635
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -69,11 +69,15 @@ def main() -> int:
     from remote_watch.gateway.command_service import CommandGateway
     from remote_watch.gateway.json_config import load_gateway_config
     from remote_watch.gateway.server import Gateway
+    from remote_watch.gateway_server import ApplicationConfig
+    from remote_watch.gateway_server.manager import GatewayManager
+    from remote_watch.gateway_server.tray import GatewayTray
 
     assert Path(sys.prefix).resolve() in Path(remote_watch.__file__).resolve().parents
     assert Path(remote_watch.__file__).with_name("py.typed").is_file()
     assert importlib.metadata.version("remote-watch") == args.version
     assert "aiohttp" not in sys.modules
+    assert "pystray" not in sys.modules and "PIL" not in sys.modules
     assert tuple(threading.enumerate()) == threads
     assert tuple(logging.getLogger().handlers) == handlers
     assert importlib.util.find_spec("cryptography") is None
@@ -87,6 +91,9 @@ def main() -> int:
     assert PublicGateway is Gateway
     assert all(item is not None for item in (CommandClient, CommandHub, CommandHubServer, HttpsCommandTransport))
     assert all(item is not None for item in (CommandDispatcher, DispatcherStats))
+    assert all(item is not None for item in (ApplicationConfig, GatewayManager, GatewayTray))
+    if sys.platform == "win32":
+        assert (importlib.util.find_spec("pystray") is not None) == (args.mode == "extras")
     assert all(item is not None for item in (
         CommandSourceRunner, TelegramCommandProvider, NtfyCommandProvider, CommandGateway))
     for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):

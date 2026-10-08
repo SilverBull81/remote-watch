@@ -16,6 +16,15 @@
   "caddy": {
     "mode": "external"
   },
+  "application": {
+    "ui": "headless",
+    "log_max_bytes": 1048576,
+    "log_backups": 5,
+    "alerts": {
+      "cooldown": 60,
+      "destinations": []
+    }
+  },
   "lifecycle": {
     "startup_timeout": 60,
     "shutdown_timeout": 30,

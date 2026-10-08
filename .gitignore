@@ -36,6 +36,9 @@ credentials.local.*
 /gateway_settings.py
 /gateway_config.json
 secrets/
+control/
+*.gateway.lock
+runtime.json
 
 # Local editor and agent state
 .vscode/

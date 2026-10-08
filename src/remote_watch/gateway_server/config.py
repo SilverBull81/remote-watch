@@ -1,10 +1,10 @@
 ﻿# Общие настройки deployment и их проверка без запуска серверов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-184007
+# Дата и время последнего изменения: 261008-203635
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига.
@@ -28,6 +28,7 @@
 #    -> __post_init__(): Проверка согласованности deployment.
 #
 # Функции:
+# -> load_control_directory(): Поиск локального управления без чтения связанных конфигов.
 # -> load_deployment_config(): Чтение общего конфига и проверка связанных файлов.
 # -> _read_json(): Ограниченное чтение строгого JSON.
 # -> _unique_object(): Отказ при повторном ключе объекта.
@@ -53,6 +54,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .._validation import require_int, require_text
+from .application import ApplicationConfig, application_config
 from .policy import RestartPolicy, _bounded_seconds
 
 
@@ -87,7 +89,7 @@ class DeploymentConfigError(ValueError):
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
                  "component_config", "path_unavailable", "operation_failed")
         fields = ("config", "schema_version", "endpoint", "control_dir", "log_dir", "notifications",
-                  "commands", "caddy", "lifecycle", "restart")
+                  "commands", "caddy", "lifecycle", "restart", "application")
         self.code = code if code in codes else "config_value"
         self.field = field_name if field_name in fields else "config"
         super().__init__(f"Invalid deployment: code={self.code} field={self.field}")
@@ -207,6 +209,7 @@ class DeploymentConfig:
     caddy: CaddyConfig = field(default_factory=CaddyConfig)           # Режим владения Caddy.
     lifecycle: LifecycleConfig = field(default_factory=LifecycleConfig)  # Сроки управления процессами.
     restart: RestartPolicy = field(default_factory=RestartPolicy)    # Лимит повторных запусков компонента.
+    application: ApplicationConfig = field(default_factory=ApplicationConfig)  # Трей и сообщения владельцу.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности deployment
@@ -222,6 +225,8 @@ class DeploymentConfig:
             raise TypeError("deployment models required")
         if not isinstance(self.restart, RestartPolicy):
             raise TypeError("restart model required")
+        if not isinstance(self.application, ApplicationConfig):
+            raise TypeError("application model required")
 
         components = [item for item in (self.notifications, self.commands) if item is not None]
         if not components or any(not isinstance(item, ComponentConfig) for item in components):
@@ -248,6 +253,34 @@ class DeploymentConfig:
 
 
 #------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Поиск локального управления без чтения связанных конфигов
+#------------------------------------------------------------------------------------------------------------------
+def load_control_directory(path: str | Path) -> Path:
+
+    """Locate control state even when a linked component config was removed or broken.
+
+    :param path: Deployment JSON selected explicitly by the local operator.
+    :type path: str | Path
+
+    :return: Absolute private control directory without opening component configuration.
+    :rtype: Path
+    """
+
+    # path — status/stop не зависят от исправности отредактированных конфигов компонентов.
+    try:
+        location = Path(path).resolve()
+        root = _read_json(location)
+        if type(root) is not dict or type(root.get("schema_version")) is not int or root["schema_version"] != 1:
+            raise DeploymentConfigError("config_schema", "schema_version")
+        return _path(location, root["control_dir"])
+    except DeploymentConfigError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError):
+        raise DeploymentConfigError("config_value", "control_dir") from None
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение общего конфига и проверка связанных файлов
 #------------------------------------------------------------------------------------------------------------------
 def load_deployment_config(path: str | Path) -> DeploymentConfig:
@@ -268,7 +301,7 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         location = Path(path).resolve()
         root = _read_json(location)
         _object(root, {"schema_version", "endpoint", "control_dir", "log_dir"},
-                {"notifications", "commands", "caddy", "lifecycle", "restart"})
+                {"notifications", "commands", "caddy", "lifecycle", "restart", "application"})
         if type(root["schema_version"]) is not int or root["schema_version"] != 1:
             raise DeploymentConfigError("config_schema", "schema_version")
 
@@ -307,9 +340,12 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         value = _object(root.get(section, {}), set(), {"max_restarts", "window", "initial_delay", "max_delay"})
         restart = RestartPolicy(**value)
 
+        section = "application"
+        application = application_config(root.get(section, {}))
+
         section = "config"
         deployment = DeploymentConfig(endpoint=root["endpoint"], caddy=caddy, lifecycle=lifecycle,
-                                      restart=restart, **directories, **components)
+                                      restart=restart, application=application, **directories, **components)
         _check_components(deployment)
         return deployment
     except DeploymentConfigError:

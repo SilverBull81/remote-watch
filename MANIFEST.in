@@ -17,3 +17,4 @@ global-exclude credentials.local.json *.local.json
 global-exclude gateway_settings.py
 global-exclude gateway_config.json
 global-exclude *.sqlite* *.db *.db-journal *.db-wal *.db-shm
+global-exclude runtime.json *.gateway.lock

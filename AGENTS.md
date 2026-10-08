@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.5
+Version 1.4.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261008-001220
+Дата и время последнего изменения: 261008-205235
 
 ## Project Intent
 
@@ -13,7 +13,25 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.1.dev12; no stable 0.2.0 tag is implied.
+The package version is 0.4.2.dev1; no stable 0.2.0 tag is implied.
+Stage 0.4.2 now implements gateway_server --start/--status/--stop with independent
+notification/command processes, loop-owned heartbeats, finite recovery and startup rollback.
+Windows x64 uses per-component kill-on-close Jobs; Linux uses gated parent-death protection.
+Private numeric loopback control has per-generation and per-child tokens, protected on disk.
+Never kill by a stale PID or touch external Caddy. Managed Caddy verifies explicit filesystem
+storage, runs a private effective-config snapshot and probes its local admin API; ingress
+remains unverified. Config application holds optional Windows tray and explicit direct
+Telegram/ntfy owner destinations. The owner selected messenger notices, not application events.
+SourceStats.ready/receive_error/reply_error track current source failures independently
+of last_error history. No command re-registration, callback retry, wire or journal change.
+Read docs/GATEWAY_DEPLOYMENT.md for limits and docs/VALIDATION.md for exact acceptance.
+The production deployment and SpamBot were not changed; deploy/doctor/OS service remain later work.
+Dev 0.4.2.dev1 clean Windows CPython 3.12.2 wheels passed core 994 tests (71 skips)
+and extras 1403 tests, both with 2 live deselections. Ruff/style passed 138 files.
+Real process tests cover both gateways with synthetic provider/time edges; actual
+Caddy 2.11.4 passed isolated managed startup, verifying TLS, restart and root retention
+from the installed wheel. Tray wiring uses a fake GUI backend. No new Linux/CI,
+live-provider, visual tray, reboot or long manager observation was performed.
 Dev12 serializes normal hub storage contention through a bounded FIFO async wait:
 max_storage_waiters=64 (1..256), one executor operation, one shared storage_timeout
 for admission plus execution. Cancelled/expired queued calls never reach the store;
@@ -237,7 +255,7 @@ build/validation-0361-core / build/validation-0361-extras for exact results.
 
 Stage 0.4.1 provides typed deployment configuration, read-only linked-file validation
 through remote_watch.gateway_server --check-config and a finite per-component
-RestartBudget. Real process supervision/start/stop/status is the next step 0.4.2;
+RestartBudget. Real process supervision/start/stop/status was added in 0.4.2 as described above;
 deploy, doctor and OS service installation are not implemented. Read
 docs/GATEWAY_DEPLOYMENT.md and ADR 0012 before changing ownership/recovery.
 Keep existing component config paths, journals and Caddy CA storage. External

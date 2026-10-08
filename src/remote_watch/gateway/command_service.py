@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261008-203635
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд.
@@ -163,6 +163,8 @@ class CommandGateway:
             reason = "source_stopped"
         elif not self._started:
             reason = "not_started"
+        elif reason is None and any(not source["ready"] for source in sources):
+            reason = "source_unavailable"
         # Открытый listener сам по себе не означает пригодность времени и источников.
         # Статистика не запускает сетевых проб и не открывает журнал вторым владельцем.
         return {"closed": self._closed, "ready": reason is None, "reason": reason,

@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.3.5
+Version 1.3.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261008-001220
+Дата и время последнего изменения: 261008-205235
 
 ## Статус и границы
 
@@ -577,7 +577,19 @@ CommandGateway.stats различают запуск, пригодность UTC
 
 [ADR 0012](docs/adr/0012-gateway-deployment-and-supervision.md) фиксирует ownership,
 readiness, перезапуски, shutdown и сохранение журналов/CA. Схема:
-[GATEWAY_DEPLOYMENT.md](docs/GATEWAY_DEPLOYMENT.md). Управление процессами — 0.4.2,
+[GATEWAY_DEPLOYMENT.md](docs/GATEWAY_DEPLOYMENT.md). В 0.4.2.dev1 реализованы
+независимые процессы notifications/commands и необязательный managed Caddy.
+Каждый процесс получает закрытый стартовый канал после присвоения OS ownership:
+Windows Job Object либо Linux parent-death signal. Heartbeat принадлежит рабочему loop;
+manager использует своё монотонное время и перезапускает только подтверждённо умершего потомка.
+Локальный IPv4 loopback control защищён случайными токенами и каталогом user/System ACL
+либо POSIX 0700. Смена запуска меняет токены; stale runtime.json не разрешает kill по PID.
+Служебные логи ограничены ротацией, произвольные исключения/вывод потомков не пересылаются.
+Настройки приложения добавлены в `application` общего JSON: headless/tray и прямые
+служебные назначения Telegram/ntfy. Они не используют notification gateway для доставки
+собственных ошибок, не читают команды и не меняют grants приложений.
+SourceStats отделяет текущие receive/reply ошибки от истории last_error.
+Серверный ingress остаётся `unverified`: локальная готовность не доказывает HTTPS с клиентской VM,
 а deploy/doctor/служба ОС остаются последующими шагами
 [плана](docs/GATEWAY_OPERATIONS_PLAN.md). Supervisor не заменяет службу ОС.
 Перезапуск hub не регистрирует клиентские сессии автоматически; восстановление

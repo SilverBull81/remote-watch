@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "0.4.1.dev12"
+version = "0.4.2.dev1"
 description = "Standard logging integration and bounded asynchronous remote notifications"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ ntfy = ["aiohttp>=3.14.3,<4"]
 relay = ["aiohttp>=3.14.3,<4"]
 gateway = ["aiohttp>=3.14.3,<4"]
 commands = ["aiohttp>=3.14.3,<4"]
+tray = ["pystray>=0.19.5,<1; sys_platform == 'win32'", "Pillow>=10,<13; sys_platform == 'win32'"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
