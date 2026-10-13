@@ -1,10 +1,10 @@
 ﻿# Общие настройки deployment и их проверка без запуска серверов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261013-184704
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига.
@@ -72,6 +72,8 @@ class DeploymentConfigError(ValueError):
         self,
         code: str,
         field_name: str,
+        *,
+        component_error: Exception | None = None,
     ) -> None:
 
         """Retain only allowlisted error labels.
@@ -81,10 +83,14 @@ class DeploymentConfigError(ValueError):
 
         :param field_name: Fixed deployment section name.
         :type field_name: str
+
+        :param component_error: Sanitized error from a built-in component configuration loader.
+        :type component_error: Exception | None
         """
 
         # code — категория ошибки, без исходного сообщения исключения.
         # field_name — раздел общей схемы; неизвестные ключи не выводятся.
+        # component_error — копируем только безопасную диагностику штатного загрузчика.
 
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
                  "component_config", "path_unavailable", "operation_failed")
@@ -92,6 +98,30 @@ class DeploymentConfigError(ValueError):
                   "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path")
         self.code = code if code in codes else "config_value"
         self.field = field_name if field_name in fields else "config"
+        self.component_code: str | None = None
+        self.component_field: str | None = None
+        self.hint: str | None = None
+
+        # Загрузчики уже ограничивают коды, пути полей и подсказки своей схемой.
+        # Исходное исключение не сохраняем; произвольные ошибки и подклассы не принимаем.
+        if self.code == "component_config" and component_error is not None:
+            from .._credentials import CREDENTIAL_HINTS
+            from ..gateway.command_config import CommandConfigError
+            from ..gateway.notification_json_config import NotificationGatewayConfigError
+
+            if type(component_error) in (CommandConfigError, NotificationGatewayConfigError):
+                self.component_code = component_error.code
+                self.component_field = component_error.field
+                if type(component_error) is CommandConfigError:
+                    self.hint = component_error.hint
+                else:
+                    self.hint = CREDENTIAL_HINTS.get(component_error.reason) or {
+                        "config_read": "Проверьте путь к JSON и права чтения файла.",
+                        "config_size": "Размер JSON не должен превышать 1 MiB.",
+                        "config_json": "Проверьте UTF-8, синтаксис JSON и отсутствие повторяющихся ключей.",
+                        "config_fields": "Сверьте обязательные и допустимые поля с шаблоном JSON.",
+                        "config_schema": "В schema_version требуется целое число 1.",
+                    }.get(component_error.code, "Проверьте указанный раздел настроек уведомлений.")
         super().__init__(f"Invalid deployment: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -578,8 +608,8 @@ def _check_components(config: DeploymentConfig) -> None:
                 load_notification_gateway_config(component.config)
             else:
                 check_command_gateway(component.config)
-        except (NotificationGatewayConfigError, CommandConfigError):
-            raise DeploymentConfigError("component_config", name) from None
+        except (NotificationGatewayConfigError, CommandConfigError) as error:
+            raise DeploymentConfigError("component_config", name, component_error=error) from None
 #------------------------------------------------------------------------------------------------------------------
 
 

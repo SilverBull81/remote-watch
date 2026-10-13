@@ -1,10 +1,10 @@
 ﻿# Gateway server: настройка и первый запуск
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-174601
+Дата и время последнего изменения: 261013-184704
 
 Этот комплект подготовлен remote-watch **@@VERSION@@**. Deploy только записывает
 отсутствующие файлы. Серверы, службы, Caddy и сетевые проверки он не запускает.
@@ -95,9 +95,30 @@ Start работает до Ctrl+C или команды stop из другог�
 .\stop.ps1
 ```
 
-При запрете локальных .ps1 используйте тот же Python напрямую:
-`python -m remote_watch.gateway_server --config gateway_server.local.json --check-config`
-и затем --start/--status/--stop. Не отключайте корпоративную политику автоматически.
+При запрете локальных .ps1 используйте Python из выбранного venv напрямую.
+Например, для установки в C:\Work\RemoteWatch:
+
+```powershell
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server --config C:\Work\RemoteWatch\gateway_server.local.json --check-config
+```
+
+Для управления замените --check-config на --start/--status/--stop.
+Изменение политики PowerShell для этого не требуется.
+
+Ошибка component_config означает отказ связанного JSON. Поля component_code и
+component_field указывают причину и место внутри файла компонента. Например,
+field=commands и component_field=sources[1] относятся ко второму источнику команд.
+При config_unknown сверьте названия полей; старый command_display_mode в sources
+нужно заменить на display_mode, оставив значение. Проверка не исправляет файл сама.
+В старой версии без подробностей запустите проверку компонента отдельно:
+
+```powershell
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --check-config
+```
+
+Используйте фактический путь из commands.config. Аналогичная проверка уведомлений:
+модуль remote_watch.gateway с путём из notifications.config и --check-config.
+Содержимое JSON и токены для диагностики пересылать не нужно.
 В Linux соответствуют `sh check-config.sh`, `sh start.sh`, `sh status.sh`, `sh stop.sh`.
 Скрипты используют выбранный при deploy Python и работают из любой текущей папки.
 

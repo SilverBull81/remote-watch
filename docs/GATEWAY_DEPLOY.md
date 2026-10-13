@@ -1,12 +1,12 @@
 ﻿# Подготовка установки gateway server
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-180233
+Дата и время последнего изменения: 261013-185134
 
-Этап **0.4.3**, версия **0.4.3.dev1**. Команда
+Этап **0.4.3**, версия **0.4.3.dev2**. Команда
 `python -m remote_watch.gateway_server.deploy` создаёт файлы установки из ресурсов
 wheel, без checkout, сети, запуска компонентов и обращения к журналам команд.
 Она работает и с новой папкой, и рядом с существующей установкой.
@@ -111,6 +111,28 @@ storage, совпадающий с --caddy-data. Переход со служб�
 для текущей LV-схемы он не требуется. Настройки шаблона основаны на
 [Caddy storage](https://caddyserver.com/docs/caddyfile/options#storage) и
 [маршрутизации handle](https://caddyserver.com/docs/caddyfile/directives/handle).
+
+## Если сценарий или проверка не запускается
+
+Если PowerShell блокирует `.ps1`, используйте Python выбранного venv напрямую:
+
+```powershell
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server --config C:\Work\RemoteWatch\gateway_server.local.json --check-config
+```
+
+Менять execution policy не требуется; для управления используйте вместо
+--check-config флаги --start, --status или --stop.
+
+Успешный deploy подтверждает подготовку файлов, а не корректность введённых
+настроек. При `component_config` общий checker начиная с 0.4.3.dev2 сохраняет
+`component_code`, `component_field` и безопасную подсказку загрузчика компонента.
+Значения, неизвестные ключи и содержимое JSON не печатаются.
+Например, `field=commands component_code=config_unknown component_field=sources[1]`
+указывает на неизвестное поле второго источника. При обновлении проверьте замену
+старого `command_display_mode` на `display_mode` в JSON (не в SQLite).
+В старой версии можно вызвать `remote_watch.gateway.commands --config ... --check-config`
+отдельно с фактическим путём из `commands.config`; для уведомлений —
+`remote_watch.gateway --config ... --check-config` с путём из `notifications.config`.
 
 ## Повторная подготовка и безопасные отличия
 

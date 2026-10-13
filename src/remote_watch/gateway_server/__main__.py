@@ -1,10 +1,10 @@
 ﻿# Запуск gateway server, проверка настроек, локальное состояние и остановка.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-184704
 #
 # Классы:
 # -> DeploymentParser: Разбор CLI без раскрытия неизвестных значений.
@@ -118,7 +118,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             code, field_name = "dependency_missing", "runtime"
         elif args.status or args.stop:
             code, field_name = "control_unavailable", "control"
-        print(f"Ошибка gateway server: code={code} field={field_name}. Значения и детали скрыты.", flush=True)
+        # Связанный JSON имеет собственную схему: показываем её проверенный путь и подсказку,
+        # а не исходное исключение, фрагмент файла или значения настроек.
+        detail = ""
+        if isinstance(error, DeploymentConfigError) and error.component_code is not None:
+            detail = (f" component_code={error.component_code} component_field={error.component_field}. "
+                      f"{error.hint}")
+        print(f"Ошибка gateway server: code={code} field={field_name}.{detail} "
+              f"Версия remote-watch: {version('remote-watch')}. Значения настроек скрыты.", flush=True)
         return 1
 
     print("Структура deployment и конфиги компонентов корректны. Процессы не запускались; "

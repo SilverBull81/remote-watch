@@ -1,10 +1,10 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261013-184704
 #
 # Тесты:
 # -> deployment(): Создание только подставных конфигов в отдельной папке.
@@ -13,6 +13,7 @@
 # -> test_json_failures(): Строгий ограниченный JSON и приватные сообщения.
 # -> test_managed_caddy(): Явные пути собственного Caddy без исполнения binary.
 # -> test_component_failure(): Проверка вложенного конфига и безопасная подсказка.
+# -> test_component_diagnostics(): Причина отказа связанного JSON без раскрытия его содержимого.
 # -> test_cli(): Успех, отказ и обязательность явного режима проверки.
 # -> test_typed_models(): Ограничения Python API и приватность repr.
 # -> test_icon_path(): Путь иконки относится к конфигу и проверяется без GUI.
@@ -346,6 +347,91 @@ def test_component_failure(
         load_deployment_config(path)
     assert (caught.value.code, caught.value.field) == ("component_config", component)
     assert "secret-value" not in str(caught.value)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Причина отказа связанного JSON без раскрытия его содержимого
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize(("component", "failure", "code", "field_name", "hint"), [
+    ("commands", "missing", "config_read", "config", "права чтения"),
+    ("notifications", "missing", "config_read", "config", "права чтения"),
+    ("commands", "json", "config_json", "config", "Строка 3"),
+    ("notifications", "json", "config_json", "config", "синтаксис JSON"),
+    ("commands", "legacy", "config_unknown", "sources[0]", "неизвестные поля"),
+    ("commands", "unknown", "config_unknown", "sources[0]", "неизвестные поля"),
+    ("notifications", "unknown", "config_fields", "config", "допустимые поля"),
+])
+def test_component_diagnostics(
+    deployment: tuple[Path, dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    component: str,
+    failure: str,
+    code: str,
+    field_name: str,
+    hint: str,
+) -> None:
+
+    """Preserve actionable component diagnostics without exposing paths, keys or values.
+
+    :param deployment: Synthetic linked configuration files.
+    :type deployment: tuple[Path, dict[str, Any]]
+
+    :param capsys: Captured CLI output.
+    :type capsys: pytest.CaptureFixture[str]
+
+    :param component: Component whose configuration fails.
+    :type component: str
+
+    :param failure: Missing file, syntax error or unsupported field.
+    :type failure: str
+
+    :param code: Expected nested diagnostic category.
+    :type code: str
+
+    :param field_name: Expected schema path within the linked file.
+    :type field_name: str
+
+    :param hint: Expected fragment of the fixed operator hint.
+    :type hint: str
+    """
+
+    # deployment/capsys — подставные файлы и вывод общего CLI; сеть и рабочие конфиги не нужны.
+    # component/failure — воспроизводим неверное старое имя, приватный ключ и другие причины.
+    # code/field_name/hint — вложенная диагностика должна сохранить причину, а не только компонент.
+
+    path, value = deployment
+    path.write_text(json.dumps(value), encoding="utf-8")
+    linked = path.parent / value[component]["config"]
+    content = json.loads(linked.read_text(encoding="utf-8-sig"))
+    if failure == "missing":
+        linked.unlink()
+    elif failure == "json":
+        linked.write_text('{\n"secret-key": "secret-value",\n}', encoding="utf-8")
+    else:
+        target = content["sources"][0] if component == "commands" else content
+        target["command_display_mode" if failure == "legacy" else "secret-key"] = "secret-value"
+        linked.write_text(json.dumps(content), encoding="utf-8")
+
+    with pytest.raises(DeploymentConfigError) as caught:
+        load_deployment_config(path)
+    error = caught.value
+    assert (error.code, error.field) == ("component_config", component)
+    assert (error.component_code, error.component_field) == (code, field_name)
+    assert hint in error.hint
+
+    assert main(["--config", str(path), "--check-config"]) == 1
+    output = capsys.readouterr().out
+    assert f"component_code={code} component_field={field_name}" in output
+    assert hint in output
+    for private in ("secret-key", "secret-value", str(linked), str(path)):
+        assert private not in output + str(error) + repr(error)
+
+    # Неизвестное исключение с похожими атрибутами не становится источником подсказок.
+    unknown = ValueError("secret-value")
+    unknown.hint = "secret-key"
+    sanitized = DeploymentConfigError("component_config", component, component_error=unknown)
+    assert sanitized.component_code is None and sanitized.hint is None
 #------------------------------------------------------------------------------------------------------------------
 
 

@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.1
+Version 1.5.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-180233
+Дата и время последнего изменения: 261013-185257
 
 ## Project Intent
 
@@ -13,7 +13,14 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.3.dev1.
+The package version is 0.4.3.dev2.
+Dev2 preserves safe component_code/component_field and loader hints in deployment
+configuration errors. Linked JSON contents, unknown keys and supplied values stay
+private. PowerShell script policy does not prevent direct venv Python CLI usage;
+deployment instructions document this route without policy changes.
+Dev2 passed clean Windows CPython 3.12.2 wheels: core 1050 tests (72 skips),
+extras 1460 tests, each with 2 live deselections and no pytest warnings.
+Ruff/style passed for 142 files. No new CI/Linux/live-provider run; see VALIDATION.
 Stage 0.4.3 adds python -m remote_watch.gateway_server.deploy and packaged resources.
 Read docs/GATEWAY_DEPLOY.md and ADR 0015 before changing deployment behavior.
 Deploy never launches components, opens journals or reads environment credentials.
