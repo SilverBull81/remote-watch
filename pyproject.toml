@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "0.4.2.dev5"
+version = "0.4.3.dev1"
 description = "Standard logging integration and bounded asynchronous remote notifications"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,7 +28,7 @@ tray = ["pystray>=0.19.5,<1; sys_platform == 'win32'", "Pillow>=10,<13; sys_plat
 where = ["src"]
 
 [tool.setuptools.package-data]
-remote_watch = ["py.typed"]
+remote_watch = ["py.typed", "gateway_server/templates/*"]
 
 [tool.setuptools.data-files]
 "share/remote-watch/logo" = ["logo/remote_watch.ico"]

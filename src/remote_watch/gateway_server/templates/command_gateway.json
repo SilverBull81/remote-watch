@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "state_dir": "data/commands",
+  "targets": {
+    "one": {
+      "service": "app1",
+      "environment": "production",
+      "region": "ru",
+      "host": "ru-server-1",
+      "instance_id": "one"
+    }
+  },
+  "principals": [
+    {
+      "name": "one",
+      "targets": [
+        "one"
+      ],
+      "scopes": [
+        "command:status",
+        "command:check_load",
+        "command:suspend_load",
+        "command:resume_load"
+      ],
+      "token_env": "RW_COMMAND_APP1_TOKEN"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "telegram",
+      "provider": "telegram",
+      "display_mode": "full",
+      "settings": {
+        "token_env": "RW_TELEGRAM_BOT_TOKEN"
+      },
+      "access": [
+        {
+          "actor_id": "123456789",
+          "conversation_id": "123456789",
+          "targets": [
+            "one"
+          ],
+          "scopes": [
+            "command:status",
+            "command:check_load",
+            "command:suspend_load",
+            "command:resume_load"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "identity": {
+    "service": "app1",
+    "environment": "production",
+    "region": "ru",
+    "host": "ru-server-1",
+    "instance_id": "one"
+  },
+  "endpoint": "https://lv.example.test:8443",
+  "alias": "app1-telegram",
+  "token_env": "RW_NOTIFICATION_APP1_TOKEN",
+  "ca_file": "secrets/root-ca.crt",
+  "display_mode": null
+}

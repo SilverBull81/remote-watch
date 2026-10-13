@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.0
+Version 1.5.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-170523
+Дата и время последнего изменения: 261013-180233
 
 ## Project Intent
 
@@ -13,7 +13,21 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.2.dev5.
+The package version is 0.4.3.dev1.
+Stage 0.4.3 adds python -m remote_watch.gateway_server.deploy and packaged resources.
+Read docs/GATEWAY_DEPLOY.md and ADR 0015 before changing deployment behavior.
+Deploy never launches components, opens journals or reads environment credentials.
+Existing configs stay at their original paths; external Caddy is the default.
+Existing files are never overwritten. Dry-run writes nothing; update-templates
+creates separate versioned proposals with a safe file-level difference report.
+Doctor, OS services and field acceptance remain subsequent work.
+Dev1 passed clean Windows CPython 3.12.2 wheel checks: core 1043 tests (72 skips),
+extras 1453 tests, each with 2 live deselections. Both runs had two old pytest
+temporary-directory cleanup warnings; no test failures. Ruff/style: 142 files.
+Installed checks exercise nine CLIs and offline deploy outside the checkout.
+A synthetic Caddyfile passed real local Caddy adaptation and storage validation;
+no service restart, CA generation or live TLS/provider test was performed.
+Read docs/VALIDATION.md for exact evidence; no new CI/Linux/Python 3.10 run.
 Dev5 unifies notification module and API names without legacy aliases. Shared
 notification wire types live in notifications.gateway_protocol; gateway server
 modules use notification_ prefixes and provider modules use _notifications.

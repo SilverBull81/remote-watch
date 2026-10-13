@@ -1,10 +1,10 @@
 ﻿# Remote Watch
 
-Version 1.3.4
+Version 1.3.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-170523
+Дата и время последнего изменения: 261013-180233
 
 Python-библиотека для стандартного логирования, уведомлений на телефон
 и адресных команд приложениям на удалённых серверах.
@@ -117,6 +117,7 @@ command_client в RemoteWatcher. Входящие Telegram/ntfy-команды �
 | [FIELD_SMOKE.md](docs/FIELD_SMOKE.md) | Суточный сценарий на трёх серверах и отчёт |
 | [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md) | Gateway-клиент, wire-контракт и границы текущей итерации |
 | [NAMING_MIGRATION.md](docs/NAMING_MIGRATION.md) | Новые имена API и конфигов в 0.4.2.dev5, обновление приложений |
+| [GATEWAY_DEPLOY.md](docs/GATEWAY_DEPLOY.md) | Подготовка новой установки и подключение прежних конфигов LV без переноса SQLite/CA |
 | [SMOKE.md](docs/SMOKE.md) | Одна пробная отправка выбранному сервису |
 | [NTFY_SETUP.md](docs/NTFY_SETUP.md) | Закрытый topic, права отправителя/телефона и токен |
 | [COMMAND_HUB.md](docs/COMMAND_HUB.md) | Hub, HTTPS-клиент, права, сроки и границы этапа 0.3.3 |

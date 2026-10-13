@@ -15,6 +15,7 @@ recursive-include tests *.py
 recursive-include tools *.py
 include .github/workflows/validation.yml
 recursive-include src/remote_watch py.typed
+recursive-include src/remote_watch/gateway_server/templates *.json *.md *.ps1 *.sh *.template
 global-exclude credentials.local.json *.local.json
 global-exclude gateway_settings.py
 global-exclude gateway_config.json

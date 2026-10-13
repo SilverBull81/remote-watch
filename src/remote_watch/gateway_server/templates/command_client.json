@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "display_mode": null,
+  "identity": {
+    "service": "app1",
+    "environment": "production",
+    "region": "ru",
+    "host": "ru-server-1",
+    "instance_id": "one"
+  },
+  "endpoint": "https://REPLACE-LV-ADDRESS:8766",
+  "state_file": "data/command-client-one.sqlite",
+  "owner_id": "command-client-one",
+  "ca_file": "secrets/root-ca.crt",
+  "token_env": "RW_COMMAND_APP1_TOKEN"
+}

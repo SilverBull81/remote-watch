@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.3
+# Version 1.1.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261013-180233
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -22,6 +22,7 @@ import importlib.util
 import logging
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -120,6 +121,7 @@ def main() -> int:
         "gateway",
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
         "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands", "gateway_server",
+        "gateway_server.deploy",
     ):
         result = subprocess.run(
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],
@@ -143,6 +145,19 @@ def main() -> int:
     assert all(item is not None for item in (
         NotificationGatewayChannel, NotificationGatewayClientConfig, TelegramChannel,
         TelegramConfig, NotificationGateway, load_notification_gateway_config))
+
+    # Deploy должен работать из wheel без docs/checkout, сети и optional providers.
+    with tempfile.TemporaryDirectory(prefix="remote-watch-deploy-") as temporary:
+        target = Path(temporary) / "installation"
+        arguments = [sys.executable, "-I", "-m", "remote_watch.gateway_server.deploy",
+                     "--directory", str(target), "--endpoint", "https://example.test:8443"]
+        preview = subprocess.run(arguments + ["--dry-run"], cwd=temporary, capture_output=True, timeout=15)
+        assert preview.returncode == 0 and not target.exists(), preview.stderr
+        prepared = subprocess.run(arguments, cwd=temporary, capture_output=True, timeout=15)
+        assert prepared.returncode == 0, prepared.stderr
+        assert (target / "START_HERE.md").is_file() and (target / "check-config.ps1").is_file()
+        from remote_watch.gateway_server.config import load_deployment_config
+        assert load_deployment_config(target / "gateway_server.local.json").commands.port == 8766
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

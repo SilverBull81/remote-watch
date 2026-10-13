@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "endpoint": "https://lv.example.test:8443",
+  "control_dir": "control",
+  "log_dir": "logs",
+  "notifications": {
+    "config": "notification_gateway.example.json",
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "commands": {
+    "config": "command_gateway.telegram.example.json",
+    "host": "127.0.0.1",
+    "port": 8766
+  },
+  "caddy": {
+    "mode": "external"
+  },
+  "application": {
+    "ui": "headless",
+    "icon_path": null,
+    "log_max_bytes": 1048576,
+    "log_backups": 5,
+    "alerts": {
+      "cooldown": 60,
+      "destinations": []
+    }
+  },
+  "lifecycle": {
+    "startup_timeout": 60,
+    "shutdown_timeout": 30,
+    "kill_timeout": 5,
+    "heartbeat_interval": 1,
+    "heartbeat_timeout": 15
+  },
+  "restart": {
+    "max_restarts": 3,
+    "window": 300,
+    "initial_delay": 2,
+    "max_delay": 30
+  }
+}
