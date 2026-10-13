@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261013-235443
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -890,8 +890,14 @@ class CommandHub:
             if result.ref.identity not in principal.identities:
                 raise CommandError("denied")
             stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
-            if stored is None or result.claim_id is None or stored.record.result != result:
+            if stored is None or result.claim_id is None:
                 raise CommandError("outcome_conflict")
+            if stored.record.result != result:
+                # Исключение возможно только после явной локальной сверки владельца.
+                # Сам сетевой запрос не создаёт решение и не меняет исходный UNKNOWN.
+                accepted = await self._worker.call(lambda: self._worker.store.resolved_result(result.ref))
+                if accepted != result:
+                    raise CommandError("outcome_conflict")
             return CommandReceipt(ref=result.ref, claim_id=result.claim_id, result_digest=message_digest(result))
 
         entry = self._ref_entry(token, result.ref, live=False)

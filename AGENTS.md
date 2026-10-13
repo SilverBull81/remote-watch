@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.5
+Version 1.5.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-232656
+Дата и время последнего изменения: 261014-001413
 
 ## Project Intent
 
@@ -13,7 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.4.dev2.
+The package version is 0.4.4.dev3.
+Dev3 adds explicit offline diagnostics.command_resolution (list/export/preview/apply).
+Read docs/COMMAND_RESOLUTION.md and ADR 0017 before changing reconciliation.
+Only operator-confirmed stopped execution with client COMPLETED and exact hub UNKNOWN
+may be reconciled. The original UNKNOWN remains; SQLite schema 2 stores separate acceptance,
+fences prior hub handles and preserves owner/cursors. Existing schema 1 migrates on open;
+old runtimes reject schema 2. No HTTP admin endpoint or wire change is introduced.
+Clients still require exact authenticated receipts; no manual local ACK or callback replay.
+Health exposes operator_action_required/recovery_hint even after close. Actual field
+resolution and post-resolution reconnect remain unverified; production journals/processes
+and SpamBot source are not changed by this implementation. Validation is in docs/VALIDATION.md.
+Final dev3 Windows CPython 3.12.2 wheels passed core 1093 (73 skips, 2 live deselections)
+and extras 1524 (2 live deselections), without pytest warnings. Ruff/style: 150 files;
+all 11 installed CLIs passed. Reports: build/validation-0443-core-final and
+build/validation-0443-extras-final. Read-only preview matched the field request/claim;
+no administrative apply, CI/Linux/Python 3.10 or live-provider run was performed.
 Dev2 includes prior-process unacknowledged results in client health and retries only
 completed, nonrunning results of the same Identity with their original refs/claims.
 Matching durable receipts remain mandatory; old UNKNOWN/running work is not resolved.
@@ -23,7 +38,7 @@ UNKNOWN/timeout with execution_active. Both journals were inspected read-only.
 The field reconnect blocks after one attempt; dev2 fixes hidden pending state and
 skipped old results, but does not resolve this real outcome conflict. No journal
 deletion, manual ACK/reset or implicit UNKNOWN adjudication is authorized. A separate
-explicit administrative resolution workflow remains needed; do not claim field recovery.
+explicit administrative resolution workflow is provided by dev3; do not claim field recovery.
 Dev2 clean Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1074 tests
 (73 skips, 2 live deselections), extras 1505 (2 live deselections), no warnings.
 Ruff/style: 147 files, no issues. Targeted reconnect/health: 25 passed. Reports:

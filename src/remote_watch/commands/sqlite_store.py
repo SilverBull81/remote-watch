@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261014-000823
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -17,6 +17,7 @@
 #    -> cursor(): Чтение сохранённой позиции источника.
 #    -> admit(): Атомарная запись решения и позиции источника.
 #    -> get(): Поиск команды с проверкой всех полей цели.
+#    -> resolved_result(): Итог, отдельно принятый владельцем при ручной сверке.
 #    -> transition(): Фиксация перехода с проверкой версии.
 #    -> acknowledge(): Подтверждение точного сохранённого результата.
 #    -> pending(): Ограниченная страница неподтверждённых или исполняемых команд.
@@ -189,12 +190,19 @@ class SQLiteCommandStore:
 
             connection.execute("BEGIN IMMEDIATE")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise StoreError("unsupported store schema")
             if version == 0:
                 if connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchone() is not None:
                     raise StoreError("unrecognized store schema")
                 self._create(connection)
+            # Версия 2 сохраняет административное решение отдельно от UNKNOWN.
+            # Старый код откажется открыть новый журнал вместо потери этой оговорки.
+            if version in (0, 1):
+                connection.execute("CREATE TABLE resolutions (command_id TEXT PRIMARY KEY "
+                                   "REFERENCES commands(command_id) ON DELETE CASCADE, "
+                                   "accepted BLOB NOT NULL, fingerprint TEXT NOT NULL, decided_at TEXT NOT NULL)")
+            connection.execute("PRAGMA user_version=2")
             meta = connection.execute("SELECT * FROM metadata WHERE id=1").fetchone()
             settings = json.dumps(asdict(self._limits), sort_keys=True)
             now = self._now()
@@ -453,6 +461,38 @@ class SQLiteCommandStore:
         with self._transaction() as (db, _):
             row = self._row(db, ref, required=False)
             return None if row is None else self._stored(row)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение отдельно принятого владельцем итога
+    #--------------------------------------------------------------------------------------------------------------
+    def resolved_result(
+        self,
+        ref: CommandRef,
+    ) -> CommandResult | None:
+
+        """Read a separately approved result without changing the original outcome.
+
+        :param ref: Exact original command reference.
+        :type ref: CommandRef
+        :return: Administratively accepted result, if present.
+        :rtype: CommandResult | None
+        """
+
+        # ref — сверка всех полей обязательна и для административной квитанции.
+        with self._transaction() as (db, _):
+            row = self._row(db, ref, required=False)
+            if row is None:
+                return None
+            resolution = db.execute("SELECT accepted FROM resolutions WHERE command_id=?",
+                                    (ref.command_id,)).fetchone()
+            if resolution is None:
+                return None
+            result = decode_command(resolution[0])
+            if (type(result) is not CommandResult or result.ref != ref
+                    or result.claim_id != row["claim_id"] or row["running"]):
+                raise StoreConflict("invalid resolution")
+            return result
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

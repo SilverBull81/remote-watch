@@ -1,10 +1,10 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261013-235443
 #
 # Классы:
 # -> StageHealth: Ошибка одного этапа и счётчики восстановления.
@@ -87,6 +87,8 @@ class CommandHealth:
     reconnect_reason: str | None = None # Фиксированная причина ожидания или блокировки.
     reconnect_attempts: int = 0         # Число попыток восстановления, включая неудачные.
     reconnects: int = 0                 # Число успешно заменённых сессий этого процесса.
+    operator_action_required: bool = False  # Нужна сверка журналов; обычный reconnect не поможет.
+    recovery_hint: str | None = None        # Фиксированная подсказка, сохраняемая после close.
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -144,11 +146,18 @@ class HealthState:
                      and not self._closed and not self._fenced)
             ready = (valid and self._connection == "connected" and not self._pending
                      and all(s.current_error is None for s in self._stages.values()))
+            # Конфликт виден сразу при передаче результата, а не только после
+            # следующего heartbeat; close сохраняет его для мониторинга приложения.
+            review = (self._reconnect_reason in ("unknown_execution", "unresolved_results", "outcome_conflict")
+                      or self._stages["result"].current_error == "outcome_conflict")
             return CommandHealth(ready=ready, closed=self._closed, session_valid=valid,
                 has_pending_results=self._pending, last_error=self._last_error,
                 last_error_stage=self._last_stage, connection_state=self._connection,
                 reconnect_reason=self._reconnect_reason, reconnect_attempts=self._reconnect_attempts,
-                reconnects=self._reconnects, **self._stages)
+                reconnects=self._reconnects,
+                operator_action_required=review,
+                recovery_hint="review_command_journal" if review else None,
+                **self._stages)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
