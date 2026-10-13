@@ -1,10 +1,10 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками notification gateway.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-220456
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
@@ -14,6 +14,8 @@
 #    -> start(): Запуск объекта и подготовка состояния.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
 #    Служебные методы:
+#    -> _probe_auth(): Проверка credentials для диагностики без изменения lifecycle.
+#    -> _probe_status(): Наблюдение готовности и уже существующей сессии клиента.
 #    -> _expect(): Отказ от Expect до чтения тела запроса.
 #    -> _handle(): Авторизация до чтения тела и вызов подходящей операции.
 
@@ -25,12 +27,13 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import re
 import ssl
 from typing import Any
 
 from remote_watch._validation import require_int
 from remote_watch.commands.http_wire import ERROR_HTTP_STATUS, MAX_HTTP_BYTES, OPERATIONS, encode_response
-from remote_watch.commands.hub import CommandHub
+from remote_watch.commands.hub import CommandHub, _matches
 from remote_watch.commands.protocol import (
     CommandClaim,
     CommandRegistration,
@@ -39,6 +42,8 @@ from remote_watch.commands.protocol import (
     decode_command,
 )
 from remote_watch.commands.transport import CommandError
+from remote_watch.events import Identity
+from remote_watch.gateway.doctor_protocol import ProbeEndpoint
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -138,6 +143,9 @@ class CommandHubServer:
 
         for operation in sorted(OPERATIONS):
             app.router.add_post("/v1/commands/" + operation, self._handle, expect_handler=self._expect)
+        # Отдельный протокол doctor не попадает в dispatch операций регистрации/исполнения.
+        probe = ProbeEndpoint("commands", self._probe_auth, self._probe_status)
+        app.router.add_post("/v1/commands/probe", probe.handle, expect_handler=self._expect)
         self._runner = web.AppRunner(app, access_log=None, shutdown_timeout=1, handler_cancellation=True,
                                      max_line_size=2048, max_field_size=2048)
 
@@ -167,6 +175,56 @@ class CommandHubServer:
 
         if self._runner is not None:
             await self._runner.cleanup()
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка credentials без изменения lifecycle
+    #--------------------------------------------------------------------------------------------------------------
+    def _probe_auth(
+        self,
+        request: Any,
+    ) -> Any:
+
+        """Authenticate diagnostics even when maintenance is degraded, without checking storage.
+
+        :param request: Incoming request containing exactly one bearer header.
+        :type request: Any
+
+        :return: Matching command principal, or None.
+        :rtype: Any
+        """
+
+        # request — не используем register/authenticate hub: диагностика не двигает его часы и lifecycle.
+        headers = request.headers.getall("Authorization", [])
+        if len(headers) != 1 or re.fullmatch(r"Bearer [A-Za-z0-9_-]{32,512}", headers[0]) is None:
+            return None
+        found = None
+        for principal in self.hub.config.principals:
+            if _matches(headers[0][7:], principal.token):
+                found = principal
+        return found
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Наблюдение готовности и существующей сессии
+    #--------------------------------------------------------------------------------------------------------------
+    def _probe_status(
+        self,
+        identity: Identity,
+    ) -> dict[str, Any]:
+
+        """Read cached hub readiness and the presence of the already authorized client.
+
+        :param identity: Exact identity authorized by the probe endpoint.
+        :type identity: Identity
+
+        :return: Local flags filtered by the shared response encoder.
+        :rtype: dict[str, Any]
+        """
+
+        # identity — чужие Identity endpoint отвергает до этого вызова.
+        return dict(self.hub.health(), session_present=self.hub.client_present(identity))
     #--------------------------------------------------------------------------------------------------------------
 
 

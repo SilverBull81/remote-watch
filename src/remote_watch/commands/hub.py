@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261013-220456
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -16,6 +16,7 @@
 #    -> start(): Запуск объекта и подготовка состояния.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
 #    -> health(): Готовность обслуживания и доверенного времени без обращения к сети.
+#    -> client_present(): Наличие живой сессии одной явно указанной Identity без продления.
 #    -> authenticate(): Проверка отдельных учётных данных приложения.
 #    -> register(): Регистрация точной цели без замены живой сессии.
 #    -> heartbeat(): Продление живой регистрации без продления команд.
@@ -258,6 +259,31 @@ class CommandHub:
         return {"ready": reason is None, "reason": reason, "fatal": self._maintenance_failed,
                 "maintenance_running": running, "time_ready": time_ready,
                 "time_reason": None if time_ready else self._trusted.unavailable_reason}
+    #--------------------------------------------------------------------------------------------------------------
+
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Наличие живой сессии без продления и обращения к журналу
+    #--------------------------------------------------------------------------------------------------------------
+    def client_present(
+        self,
+        identity: Identity,
+    ) -> bool:
+
+        """Observe an existing client lease without registering or renewing it.
+
+        :param identity: Locally supplied identity; HTTP callers must authorize it first.
+        :type identity: Identity
+
+        :return: Whether this hub currently retains an unexpired session for the identity.
+        :rtype: bool
+        """
+
+        # identity — HTTP doctor вызывает метод только после проверки principal и точных прав.
+        entry = self._targets.get(identity)
+        now = self._clock()
+        return (not self._closed and entry is not None and now >= self._last
+                and entry.deadline.remaining(now, self.epoch) > 0)
     #--------------------------------------------------------------------------------------------------------------
 
 

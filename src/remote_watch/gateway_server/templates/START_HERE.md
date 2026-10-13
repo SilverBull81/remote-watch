@@ -1,10 +1,10 @@
 ﻿# Gateway server: настройка и первый запуск
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-200317
+Дата и время последнего изменения: 261013-220456
 
 Этот комплект подготовлен remote-watch **@@VERSION@@**. Deploy только записывает
 отсутствующие файлы. Серверы, службы, Caddy и сетевые проверки он не запускает.
@@ -156,8 +156,40 @@ templates/версия; current_preserved показывает отличия п
 Чужие SQLite/CA нельзя заменять шаблонами или откатывать для повторения теста.
 
 Автозапуск после reboot/выхода из RDP ещё не устанавливается: это следующий этап
-службы ОС. Gateway doctor также пока не реализован; используйте check-config,
-status и существующие явные smoke. Готовность manager не доказывает доставку на телефон.
+службы ОС. Готовность manager не доказывает доставку на телефон.
+
+## Gateway doctor
+
+`doctor.ps1` / `doctor.sh` проверяет конфигурацию и зависимости offline.
+Для наблюдения работающего manager и локальных listeners: `./doctor.ps1 --online`.
+Если PowerShell запрещает скрипты, используйте прямую команду:
+
+```powershell
+python -m remote_watch.diagnostics.gateway_doctor --mode server --config gateway_server.local.json --online
+```
+
+Замените `python` на путь к выбранному python.exe; для пути с пробелами используйте
+`& 'полный путь к python.exe'`. Отчёт можно сохранить через `--report doctor-server-01.json`:
+файл должен быть новым, папка — существующей.
+
+На машине приложения заполните закрытую копию
+`clients/gateway_doctor.client.example.json`: endpoint, корневой ca_file, точную
+Identity, разные сервисные token/token_env и разрешённые aliases/scopes. Команда:
+
+```powershell
+python -m remote_watch.diagnostics.gateway_doctor --mode client --config gateway_doctor.client.local.json --online
+```
+
+Doctor проверяет DNS/TCP/TLS, маршрут, права, готовность и наличие командной сессии.
+Без `--online` сети нет. Он не регистрирует сессию, не отправляет уведомления,
+не выполняет callbacks, не открывает journals и не исправляет UNKNOWN/reconnect.
+Успех не доказывает работу провайдера или получение сообщения телефоном.
+
+При обновлении прежнего deployment сохраните рабочие конфиги/CA/journals. В Caddy
+добавьте из нового образца отдельный `handle /v1/notifications/probe` с тем же
+upstream, что у `/v1/notifications`; прежний маршрут доставки не удаляйте.
+`/v1/commands/*` уже покрывает командный probe. Нужны gateway 0.4.4.dev1 или новее.
+Старый маршрут возвращает route_missing; doctor не заменяет проверку отправкой команды.
 
 Настройки Caddy сверены с официальными описаниями
 [storage](https://caddyserver.com/docs/caddyfile/options#storage) и

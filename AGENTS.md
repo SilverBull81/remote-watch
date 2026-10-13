@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.3
+Version 1.5.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-201452
+Дата и время последнего изменения: 261013-230511
 
 ## Project Intent
 
@@ -13,7 +13,25 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.3.dev3.
+The package version is 0.4.4.dev1.
+Stage 0.4.4 provides diagnostics.gateway_doctor with explicit server/client modes,
+offline default and opt-in --online. Client checks use separate authenticated probe
+endpoints, never registration/heartbeat/poll/send as a ping. Probe Identity and all
+requested aliases/scopes must match the configured principal; no actor selection,
+callback execution, lease renewal or journal access occurs. Existing wire schemas
+are unchanged. Read docs/GATEWAY_DOCTOR.md and ADR 0016 before extending this boundary.
+Deploy ships doctor launchers/client template and the notification probe Caddy route.
+Existing Caddy/configs remain preserved. UNKNOWN and full journal capacity are not
+observed; trusted time comes from existing health, not a fresh provider request.
+The owner is independently repeating the SpamBot reconnect pilot; do not claim this
+doctor implementation fixes or confirms the still-unresolved field reconnect incident.
+Dev 0.4.4.dev1 passed clean Windows CPython 3.12.2 wheel-from-sdist checks:
+core 1070 tests (73 skips, 2 live deselections), extras 1501 (2 live deselections),
+without pytest warnings. Ruff/style passed for 147 Python files; ten installed CLIs
+passed help/encoding checks. Final core evidence is validation-0441-core-final;
+extras evidence is validation-0441-extras. Caddy adapt accepted a synthetic generated
+config; no production reload, new CI/Linux/Python 3.10 or live-provider run occurred.
+Read docs/VALIDATION.md for precise coverage and remaining field checks.
 Dev3 copies the canonical ICO into deployment logo/remote_watch.ico and sets a
 relative application.icon_path in new server configs. Existing configs/icons
 remain untouched on repeat deploy. Tray has About and Stop gateway server.

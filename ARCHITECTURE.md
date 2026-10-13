@@ -1,12 +1,20 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.4.1
+Version 1.4.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-180233
+Дата и время последнего изменения: 261013-230511
 
 ## Статус и границы
+
+В 0.4.4.dev1 реализован `diagnostics.gateway_doctor`: offline-проверка по умолчанию,
+явный `--online` для наблюдения manager/listeners либо DNS/TCP/TLS и read-only probe.
+`gateway.doctor_protocol` отделён от delivery/command wire и не создаёт registrations,
+не продлевает lease, не выполняет callback и не открывает journal. Новые POST-маршруты
+`/v1/notifications/probe` и `/v1/commands/probe` проверяют сервисный principal, точную
+Identity и запрошенные aliases/scopes. Границы и квоты: [ADR 0016](docs/adr/0016-read-only-gateway-doctor.md).
+Наблюдение UNKNOWN и полной ёмкости journal остаётся отдельной будущей задачей.
 
 Текущий словарь: notifications — события приложения; commands — запросы и ответы;
 gateway — промежуточный сервер для этих возможностей, не отдельный третий контур.
@@ -618,7 +626,7 @@ manager использует своё монотонное время и пер�
 собственных ошибок, не читают команды и не меняют grants приложений.
 SourceStats отделяет текущие receive/reply ошибки от истории last_error.
 Серверный ingress остаётся `unverified`: локальная готовность не доказывает HTTPS с клиентской VM,
-а doctor/служба ОС остаются последующими шагами
+doctor добавлен в 0.4.4.dev1, а установка службы ОС остаётся следующим шагом
 [плана](docs/GATEWAY_OPERATIONS_PLAN.md). Supervisor не заменяет службу ОС.
 В 0.4.3.dev1 gateway_server.deploy создаёт комплект из ресурсов установленного wheel.
 Существующие конфиги подключаются по абсолютным ссылкам без копирования состояния;

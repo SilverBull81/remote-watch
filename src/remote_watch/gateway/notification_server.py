@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261013-220456
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -29,6 +29,7 @@
 #    -> _expect(): Отказ от неподдерживаемого Expect до чтения тела.
 #    -> _reject(): Безопасный отказ с закрытием соединения.
 #    -> _authenticate(): Проверка отдельного сервисного токена.
+#    -> _probe_status(): Готовность исходящего канала без попытки доставки.
 #    -> _handle(): Проверка доступа и приём ограниченного запроса.
 #    -> _read_body(): Чтение тела с ограничением размера.
 #    -> _dispatch(): Одна попытка с проверкой alias и сроков.
@@ -67,6 +68,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from remote_watch._credentials import CREDENTIAL_HINTS, resolve_token
+from remote_watch.events import Identity
+from remote_watch.gateway.doctor_protocol import ProbeEndpoint
 from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.channels import NotificationChannel
@@ -299,8 +302,10 @@ class NotificationGateway:
             await asyncio.wait_for(self._open_channels(), self._config.startup_timeout)
             stage = "listener"
             app = web.Application(client_max_size=MAX_REQUEST_BYTES)
-            # Единственный маршрут не создаёт ни command endpoints, ни общего HTTP proxy.
+            # Доставка и диагностика имеют отдельные маршруты; командного контура здесь нет.
             app.router.add_post("/v1/notifications", self._handle, expect_handler=self._expect)
+            probe = ProbeEndpoint("notifications", self._authenticate, self._probe_status)
+            app.router.add_post("/v1/notifications/probe", probe.handle, expect_handler=self._expect)
             quiet = logging.Logger("remote_watch.gateway.http", level=logging.CRITICAL + 1)
             quiet.addHandler(logging.NullHandler())
             quiet.propagate = False
@@ -455,6 +460,27 @@ class NotificationGateway:
             if hmac.compare_digest(digest, expected):
                 match = principal
         return match
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Готовность исходящего канала без попытки доставки
+    #--------------------------------------------------------------------------------------------------------------
+    def _probe_status(
+        self,
+        identity: Identity,
+    ) -> dict[str, object]:
+
+        """Observe lifecycle only, without consuming delivery capacity or provider rate limits.
+
+        :param identity: Already authorized identity, never returned in the response.
+        :type identity: Identity
+
+        :return: Cached lifecycle readiness.
+        :rtype: dict[str, object]
+        """
+
+        # identity — проверена общим endpoint; наблюдение не меняет счётчики доставки.
+        return {"ready": self._state == "running", "reason": None if self._state == "running" else "closed"}
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

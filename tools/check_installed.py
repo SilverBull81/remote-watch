@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.5
+# Version 1.1.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-200317
+# Дата и время последнего изменения: 261013-220456
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import importlib.metadata
 import importlib.util
+import json
 import logging
 import subprocess
 import sys
@@ -121,7 +122,7 @@ def main() -> int:
         "gateway",
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
         "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands", "gateway_server",
-        "gateway_server.deploy",
+        "gateway_server.deploy", "diagnostics.gateway_doctor",
     ):
         result = subprocess.run(
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],
@@ -161,6 +162,15 @@ def main() -> int:
         assert deployment.commands.port == 8766
         assert deployment.application.icon_path == target / "logo" / "remote_watch.ico"
         assert deployment.application.icon_path.read_bytes() == default_icon().read_bytes()
+
+        # Doctor работает offline даже в core wheel и не разрешает token_env.
+        from remote_watch.diagnostics.gateway_doctor import client_checks
+        doctor_path = target / "clients" / "gateway_doctor.client.example.json"
+        doctor_value = json.loads(doctor_path.read_text(encoding="utf-8"))
+        doctor_value["ca_file"] = None
+        doctor_path.write_text(json.dumps(doctor_value), encoding="utf-8")
+        assert all(row["status"] != "failed" for row in client_checks(doctor_path, False, 1))
+        assert (target / "doctor.ps1").is_file() and (target / "doctor.sh").is_file()
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

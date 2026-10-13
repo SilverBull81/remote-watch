@@ -1,10 +1,46 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.5.6
+Version 1.5.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-201452
+Дата и время последнего изменения: 261013-230511
+
+## Gateway doctor — 0.4.4.dev1
+
+Чистые Windows CPython 3.12.2 окружения с wheel, собранным из sdist:
+
+- core: **1070 passed, 73 skipped, 2 live deselected за 46,15 с**;
+  итоговый отчёт `build/validation-0441-core-final/report.json`;
+- extras: **1501 passed, 2 live deselected за 120,16 с**;
+  отчёт `build/validation-0441-extras/report.json`.
+
+Предупреждений pytest нет. Ruff/style: **147 Python-файлов, 0 замечаний**.
+Installed-check проверяет десять CLI, включая doctor, обычный и cp1252 вывод,
+offline client-проверку без extras, deploy launchers и шаблон из установленного wheel.
+Первая core-сборка в `build/validation-0441-core` тоже прошла, но предшествует
+последнему усилению общего сетевого deadline; итоговой является `core-final` выше.
+
+В новых 41 сценарии проверены offline без DNS/разрешения environment credentials,
+безопасные ошибки JSON/CA/аргументов, запрет перезаписи отчёта, истечение общего
+DNS/TCP/TLS/HTTP срока, медленный ответ по одному байту, недоверенный/просроченный
+сертификат и неверное имя, ошибочный Caddy route/upstream, redirect без второго POST,
+раздельные credentials/Identity/scopes, квота/размер probe и отсутствие доставки,
+регистрации, продления lease и обращения probe к StoreWorker. Настоящие локальные
+TLS и SQLite используются с синтетическими ключами и токенами. Отдельно проверены
+отсутствующая/действующая сессия, просроченный trusted time и фильтрация manager status.
+
+До финальной сборки целевой набор doctor/deploy прошёл **61 тест**; после усиления
+deadline новый набор doctor прошёл **41 тест**, затем выполнены полные проверки выше.
+Подготовленный в `build/doctor-caddy-review` Caddyfile успешно прошёл локальный
+`caddy adapt`; осталось обычное предупреждение форматирования шаблона. Это проверка
+синтаксиса, не reload/проверка работающего Caddy или доступности ingress.
+
+Рабочие gateway/Caddy/SpamBot, их конфиги, venv, CA и journals не изменялись.
+CI/Linux/Python 3.10 и live-provider тесты не запускались. Реальный doctor с RU/LV
+после обновления gateway/маршрута ещё не принят владельцем. Полевая причина неудачи
+reconnect остаётся отдельной задачей: новый doctor не считается её исправлением.
+UNKNOWN и полная ёмкость command journal намеренно не объявлены проверенными.
 
 ## Комплект с иконкой и меню About — 0.4.3.dev3
 

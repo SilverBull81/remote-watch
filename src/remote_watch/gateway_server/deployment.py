@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-200317
+# Дата и время последнего изменения: 261013-220456
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки новой или существующей установки.
@@ -241,6 +241,8 @@ def prepare_files(options: DeployOptions) -> dict[str, bytes]:
             result[filename] = _json(json.loads(_resource(template)))
         route = "/v1/commands/*" if component == "commands" else "/v1/notifications"
         routes.append(f"    handle {route} {{\n        reverse_proxy 127.0.0.1:{port}\n    }}")
+        if component == "notifications":
+            routes.append(f"    handle /v1/notifications/probe {{\n        reverse_proxy 127.0.0.1:{port}\n    }}")
         client_name = "command_client.json" if component == "commands" else "notification_client.json"
         client = json.loads(_resource(client_name))
         client["endpoint"] = options.endpoint.rstrip("/")
@@ -272,6 +274,17 @@ def prepare_files(options: DeployOptions) -> dict[str, bytes]:
             if suffix == "ps1":
                 text = text.replace("\n", "\r\n")
             result[action + "." + suffix] = text.encode(encoding)
+    # Doctor по умолчанию offline; аргументы --online/--report оператор задаёт явно.
+    for suffix, quote in (("ps1", "'" + python.replace("'", "''") + "'"), ("sh", shlex.quote(python))):
+        text = _resource("doctor." + suffix).replace("@@PYTHON@@", quote).replace("\r\n", "\n")
+        result["doctor." + suffix] = (text.replace("\n", "\r\n").encode("utf-8-sig")
+                                       if suffix == "ps1" else text.encode("utf-8"))
+    doctor = json.loads(_resource("gateway_doctor.client.json"))
+    doctor["endpoint"] = options.endpoint.rstrip("/")
+    for name in ("notifications", "commands"):
+        if options.components not in ("both", name):
+            doctor.pop(name)
+    result["clients/gateway_doctor.client.example.json"] = _json(doctor)
     guide = _resource("START_HERE.md").replace("@@VERSION@@", package_version)
     result["START_HERE.md"] = guide.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
     manifest = {"schema_version": 1, "package_version": package_version,
