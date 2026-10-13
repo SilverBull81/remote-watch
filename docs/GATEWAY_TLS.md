@@ -1,10 +1,10 @@
 ﻿# HTTPS для gateway на Windows
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Повторное истечение сертификата, 06.10.2026
 
@@ -60,7 +60,7 @@ flowchart LR
 В отдельных терминалах на LV, с действующими настройками каждого сервера:
 
 ```powershell
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\Work\RemoteWatch\gateway_config.json --host 127.0.0.1 --port 8765
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\Work\RemoteWatch\notification_gateway.local.json --host 127.0.0.1 --port 8765
 ```
 
 ```powershell
@@ -331,7 +331,7 @@ DNS-01 позволяют иную схему. HTTPS может работать
 3. Установите Caddy из [официального источника](https://caddyserver.com/docs/install).
    Ниже предполагается, что caddy.exe доступен в текущем каталоге.
 4. Установите библиотеку с extras gateway и нужных провайдеров; подготовьте
-   [gateway_config.json](GATEWAY_SERVER.md) и окружение с токенами.
+   [notification_gateway.local.json](GATEWAY_SERVER.md) и окружение с токенами.
 
 Доступность входящих портов зависит от конфигурации конкретной машины. Не нужно
 отключать Windows Firewall целиком. Для закрытого использования желательно
@@ -344,7 +344,7 @@ DNS-01 позволяют иную схему. HTTPS может работать
 Запустите gateway с настройками по умолчанию, в отдельном терминале:
 
 ```powershell
-python -m remote_watch.gateway --config gateway_config.json
+python -m remote_watch.gateway --config notification_gateway.local.json
 ```
 
 Он слушает только 127.0.0.1:8765. Этот порт не открывайте в интернет. Создайте
@@ -379,7 +379,7 @@ Caddy самостоятельно получает сертификат для 
 
 ## Настройка клиентов и проверка
 
-В NotificationGatewayConfig клиентов задайте endpoint `https://watch.example.com` без суффикса
+В NotificationGatewayClientConfig клиентов задайте endpoint `https://watch.example.com` без суффикса
 /v1/notifications: адаптер добавляет путь сам. У каждого приложения свои token_env
 и alias, а endpoint общий. Сервисный токен должен совпадать с токеном его principal
 на gateway; Identity — со всеми пятью разрешёнными полями.

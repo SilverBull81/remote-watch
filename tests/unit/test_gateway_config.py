@@ -1,10 +1,10 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> configuration(): Конфигурация без запуска фабрики канала.
@@ -29,13 +29,13 @@ from remote_watch import (
     Identity,
     RetryPolicy,
 )
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конфигурация без запуска фабрики канала
 #------------------------------------------------------------------------------------------------------------------
-def configuration(identity: Identity) -> GatewayConfig:
+def configuration(identity: Identity) -> NotificationGatewayServerConfig:
 
     """Create settings whose factory must never run during validation.
 
@@ -43,13 +43,15 @@ def configuration(identity: Identity) -> GatewayConfig:
     :type identity: Identity
 
     :return: Configuration using only explicit synthetic test identities and destinations.
-    :rtype: GatewayConfig
+    :rtype: NotificationGatewayServerConfig
     """
 
     # identity - явная принадлежность вымышленного приложения.
 
-    return GatewayConfig(destinations=(Destination(destination_id="phone", channel_factory=object,
-        retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name="app", token_env="GW_TOKEN",
+    return NotificationGatewayServerConfig(destinations=(Destination(destination_id="phone",
+        channel_factory=object,
+        retry=RetryPolicy(max_attempts=1)),), principals=(NotificationGatewayPrincipal(name="app",
+            token_env="GW_TOKEN",
         identity=identity, aliases=("phone",)),))
 #------------------------------------------------------------------------------------------------------------------
 
@@ -148,7 +150,7 @@ def test_config_copy(identity: Identity) -> None:
     original = configuration(identity)
     destinations = list(original.destinations)
     principals = list(original.principals)
-    config = GatewayConfig(destinations=destinations, principals=principals)
+    config = NotificationGatewayServerConfig(destinations=destinations, principals=principals)
     destinations.clear()
     principals.clear()
     assert len(config.destinations) == len(config.principals) == 1

@@ -1,10 +1,10 @@
 ﻿# ADR 0008: явный допуск расхождения часов outbound relay
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171854
+Дата и время последнего изменения: 261013-170523
 
 ## Причина и статус
 
@@ -21,7 +21,7 @@ provider_accepted в RU → LV smoke и немедленный показ в Tel
 
 ## Решение
 
-В GatewayConfig и JSON gateway добавлен clock_skew_tolerance: конечное число
+В NotificationGatewayServerConfig и JSON gateway добавлен clock_skew_tolerance: конечное число
 секунд от 0 до 3600 включительно, по умолчанию 0. Оно не передаётся клиентом.
 Wire schema 1/2 не меняются; обновление клиента для допуска не требуется.
 Настройка действует на все principals данного gateway и только на outbound relay.

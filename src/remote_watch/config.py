@@ -1,10 +1,10 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> DeliveryMode: Отправка напрямую или через шлюз уведомлений.
@@ -185,7 +185,7 @@ class Destination:
             raise TypeError("mode must be DeliveryMode")
 
         # Способ доставки описывает выбранную фабрику; сам enum не подменяет прямой канал шлюзом.
-        # NotificationGatewayConfig.destination согласует mode/factory;
+        # NotificationGatewayClientConfig.destination согласует mode/factory;
         # самому core при этом не нужна зависимость от конкретного адаптера.
 
         require_int(self.outstanding_capacity, "outstanding_capacity")

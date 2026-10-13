@@ -1,10 +1,10 @@
 ﻿# Общая конфигурация gateway server
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-151745
+Дата и время последнего изменения: 261013-170523
 
 ## Что уже работает
 
@@ -28,8 +28,8 @@ C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server --co
   "endpoint": "https://YOUR_LV_VM_IP:8443",
   "control_dir": "control",
   "log_dir": "logs",
-  "notifications": {"config": "gateway_config.json", "port": 8765},
-  "commands": {"config": "command_gateway.json", "port": 8766},
+  "notifications": {"config": "notification_gateway.local.json", "port": 8765},
+  "commands": {"config": "command_gateway.local.json", "port": 8766},
   "caddy": {"mode": "external"}
 }
 ```

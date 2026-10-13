@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов.
@@ -63,8 +63,8 @@ from remote_watch import (
     WatcherConfig,
 )
 from remote_watch.adapters._common import retry_after
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
 aiohttp = pytest.importorskip("aiohttp")
 

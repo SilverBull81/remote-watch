@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway: настройка и запуск
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Реализовано в 0.2.0.dev3
 
@@ -24,12 +24,12 @@ gateway: provider token и chat/topic ему не нужны. Ни импорт,
 
 С версии 0.2.0.dev4 можно выбрать JSON-файл или Python-фабрику. Для Telegram/ntfy
 обычно достаточно JSON; Python нужен для собственных адаптеров. Обе формы создают
-одинаковые GatewayConfig/GatewayPrincipal и проходят одни проверки.
+одинаковые NotificationGatewayServerConfig/NotificationGatewayPrincipal и проходят одни проверки.
 
 ### Токены прямо в файле, начиная с 0.2.0.dev8
 
-Для ручного размещения используйте [пример с token](examples/gateway_config.inline.example.json).
-Скопируйте его в локальный gateway_config.json и замените заглушки. Если нужен только
+Для ручного размещения используйте [пример с token](examples/notification_gateway.inline.example.json).
+Скопируйте его в локальный notification_gateway.local.json и замените заглушки. Если нужен только
 Telegram, удалите ntfy из destinations и соответствующий alias из principals.
 
 В каждой записи выберите ровно один ключ:
@@ -48,12 +48,12 @@ Telegram, удалите ntfy из destinations и соответствующи�
 Создать случайное значение можно локально: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 Сохраните его в конфиге gateway и настройках соответствующего gateway-клиента.
 У разных principals должны быть разные сервисные токены независимо от источника.
-NotificationGatewayConfig клиента по-прежнему использует token_env; smoke читает token из локальных credentials.
+NotificationGatewayClientConfig клиента по-прежнему использует token_env; smoke читает token из локальных credentials.
 
 Для каталога владельца проверка выглядит так:
 
 ```powershell
-& "C:\Work\RemoteWatch\.venv\Scripts\python.exe" -m remote_watch.gateway --config "C:\Work\RemoteWatch\gateway_config.json" --check-config
+& "C:\Work\RemoteWatch\.venv\Scripts\python.exe" -m remote_watch.gateway --config "C:\Work\RemoteWatch\notification_gateway.local.json" --check-config
 ```
 
 Для --check-config переменные с токенами не нужны. Значения token проверяются
@@ -69,7 +69,7 @@ repr настроек скрывает token; обычные ошибки и ж�
 задать `display_mode` (`full`, `compact`, `text`) и `display_fields` в settings.
 Gateway-клиент передаёт полные данные; сокращает только видимый текст серверный
 provider adapter. Формат JSON, поля и примеры: [ADAPTERS.md](ADAPTERS.md#текст-ошибки-и-ресурсы).
-С 0.4.1.dev8 клиент также может задать режим в своём NotificationGatewayConfig: он имеет
+С 0.4.1.dev8 клиент также может задать режим в своём NotificationGatewayClientConfig: он имеет
 приоритет для этой доставки, не меняя config/канал gateway и настройки других
 клиентов. Gateway достаточно обновить один раз; последующие смены режима
 не требуют его перезапуска. [Настройка на клиенте](NOTIFICATION_GATEWAY.md#выбор-отображения-на-стороне-приложения).
@@ -92,7 +92,7 @@ provider adapter. Формат JSON, поля и примеры: [ADAPTERS.md](A
 токены приложений всё равно отдельные: это ключи доступа к gateway, не токены бота.
 Нескольким приложениям можно явно разрешить один общий alias. Одному приложению
 можно разрешить несколько aliases, в том числе Telegram и ntfy одновременно.
-На клиенте каждое назначение настраивается отдельно через NotificationGatewayConfig.
+На клиенте каждое назначение настраивается отдельно через NotificationGatewayClientConfig.
 
 Чаты обслуживаются независимо: ожидание одного канала не останавливает соседние.
 Общая ёмкость и остановка процесса остаются общими; при отказе машины gateway
@@ -101,17 +101,17 @@ ntfy на клиентах от этого не зависят.
 
 ### JSON без собственного Python-кода
 
-Вариант с переменными окружения: скопируйте [готовый пример четырёх программ](examples/gateway_config.example.json)
-в локальный `gateway_config.json`. Замените вымышленные chat_id, все пять полей
+Вариант с переменными окружения: скопируйте [готовый пример четырёх программ](examples/notification_gateway.example.json)
+в локальный `notification_gateway.local.json`. Замените вымышленные chat_id, все пять полей
 Identity каждого приложения и имена переменных окружения, если используете другие.
 Идентичности должны точно совпадать с WatcherConfig соответствующих приложений.
-Корневой gateway_config.json и файлы *.local.json исключены из Git; файл
-gateway_config.json исключён также из сборки. За пределами этого репозитория
+Корневой notification_gateway.local.json и файлы *.local.json исключены из Git; файл
+notification_gateway.local.json исключён также из сборки. За пределами этого репозитория
 исключение из системы контроля версий настраивается отдельно.
 
 ```powershell
-python -m remote_watch.gateway --config gateway_config.json --check-config
-python -m remote_watch.gateway --config gateway_config.json
+python -m remote_watch.gateway --config notification_gateway.local.json --check-config
+python -m remote_watch.gateway --config notification_gateway.local.json
 ```
 
 Первая команда проверяет структуру, значения и ссылки без чтения переменных окружения,
@@ -163,14 +163,14 @@ null имя переменной с токеном ntfy. Публичная те
 
 ```python
 from remote_watch import Identity, RetryPolicy
-from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.adapters.telegram_notifications import TelegramConfig
+from remote_watch.gateway.notification_config import NotificationGatewayServerConfig, NotificationGatewayPrincipal
 
 
-def build_config() -> GatewayConfig:
+def build_config() -> NotificationGatewayServerConfig:
     """Build a gateway for the explicit synthetic gateway smoke identity."""
 
-    return GatewayConfig(
+    return NotificationGatewayServerConfig(
         destinations=(
             TelegramConfig(
                 token_env="REMOTE_WATCH_TELEGRAM_TOKEN",
@@ -178,7 +178,7 @@ def build_config() -> GatewayConfig:
             ).destination("operations-phone", retry=RetryPolicy(max_attempts=1)),
         ),
         principals=(
-            GatewayPrincipal(
+            NotificationGatewayPrincipal(
                 name="manual-check",
                 token_env="REMOTE_WATCH_GATEWAY_TOKEN",
                 identity=Identity(
@@ -192,7 +192,7 @@ def build_config() -> GatewayConfig:
 ```
 
 Пример специально разрешает Identity одноразового `remote_watch.diagnostics.smoke gateway`.
-Для рабочего приложения добавьте отдельный GatewayPrincipal с его **точными пятью
+Для рабочего приложения добавьте отдельный NotificationGatewayPrincipal с его **точными пятью
 полями Identity** и отдельным токеном. Имена хоста или приложения из текста сообщения
 не дают прав. Session ID может меняться при перезапуске, identity остаётся привязанной
 к credential. `name` — локальный идентификатор настроек, не дополнительное поле Identity.
@@ -205,7 +205,7 @@ def build_config() -> GatewayConfig:
 Для отзыва/ротации перезапустите процесс с новой конфигурацией. Два разных токена
 с одинаковой Identity допустимы, например на время контролируемой ротации.
 
-При создании GatewayConfig проверяются ссылки aliases, дубликаты имён, конечные
+При создании NotificationGatewayServerConfig проверяются ссылки aliases, дубликаты имён, конечные
 числа, размеры списков и способ доставки. Принимаются только DIRECT-назначения
 с `max_attempts=1`. Пользовательская фабрика должна создавать отдельный прямой канал
 и соблюдать async/cancellation-контракт; нельзя скрывать за ней следующий gateway.
@@ -227,7 +227,7 @@ python -m remote_watch.gateway gateway_settings:build_config --host 0.0.0.0 --po
 Пути замените реальными локальными путями сертификата и ключа. Без TLS разрешены
 только числовые loopback-адреса; даже строка `localhost` не является обходом проверки.
 Клиент проверяет сертификат и имя сервера. Для работы за reverse proxy оставьте
-gateway на loopback, а в NotificationGatewayConfig укажите публичный HTTPS-адрес proxy.
+gateway на loopback, а в NotificationGatewayClientConfig укажите публичный HTTPS-адрес proxy.
 Forwarded-заголовки не меняют права и настройки сервера.
 
 Для публичного размещения перед gateway нужен HTTP reverse proxy с ограничениями
@@ -257,10 +257,10 @@ Windows Task Scheduler: [GATEWAY_OPERATIONS.md](GATEWAY_OPERATIONS.md).
 
 | Настройка | По умолчанию | Смысл |
 | --- | --- | --- |
-| GatewayConfig.capacity | 32 | Одновременное чтение тел и выполнение принятых запросов, максимум 256 |
-| GatewayPrincipal.capacity | 4 | То же ограничение для одного приложения, максимум 256 |
-| GatewayPrincipal.min_interval | 0.2 с | Минимальная пауза между принятыми запросами приложения |
-| GatewayConfig.destination_interval | 1 с | Минимальная пауза между началами отправок одного alias |
+| NotificationGatewayServerConfig.capacity | 32 | Одновременное чтение тел и выполнение принятых запросов, максимум 256 |
+| NotificationGatewayPrincipal.capacity | 4 | То же ограничение для одного приложения, максимум 256 |
+| NotificationGatewayPrincipal.min_interval | 0.2 с | Минимальная пауза между принятыми запросами приложения |
+| NotificationGatewayServerConfig.destination_interval | 1 с | Минимальная пауза между началами отправок одного alias |
 | Активная попытка на alias | 1 | Пока канал занят, новый запрос получает 429 без очереди |
 | body_timeout | 2 с | Общий срок чтения тела после приёма |
 | attempt_timeout | 8 с | Серверный предел одной отправки, дополнительно ограниченный клиентом и expiry |
@@ -300,7 +300,7 @@ server/destination attempt_timeout и Destination.retry.ttl. Истёкший з
 }
 ```
 
-Это фрагмент gateway_config.json, а не весь файл. Если gateway уже есть, добавьте
+Это фрагмент notification_gateway.local.json, а не весь файл. Если gateway уже есть, добавьте
 поле в существующий объект. 600 секунд — пример для разницы до десяти минут;
 выберите допуск по фактической разнице с небольшим запасом, максимум 3600.
 Обновите сервер до dev9 или новее, проверьте --check-config и перезапустите gateway.
@@ -327,7 +327,7 @@ retry на gateway нет. Дубликат возможен при потере
 
 ## Владение ресурсами и диагностика
 
-`Gateway(config)` предоставляет async start/close, свойство port и stats(). Все методы
+`NotificationGateway(config)` предоставляет async start/close, свойство port и stats(). Все методы
 вызываются в одном loop; фонового потока у gateway нет. После close повторный start
 запрещён. Для прерывания незавершённого start отмените и дождитесь именно его задачи;
 конкурирующий close во время start явно отклоняется. Ошибка/отмена start закрывает
@@ -356,7 +356,7 @@ Remote Watch. Сторонний адаптер сам отвечает за о�
 На клиенте заполните секцию gateway в `credentials.local.json` по [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md)
 и запустите `python -m remote_watch.diagnostics.smoke gateway`. В примере выше smoke должен пройти
 точную проверку Identity. Для смешанного режима передайте в WatcherConfig одно
-NotificationGatewayConfig.destination и одно NtfyConfig.destination: вызовы logger остаются прежними.
+NotificationGatewayClientConfig.destination и одно NtfyConfig.destination: вызовы logger остаются прежними.
 
 До реального размещения проверены offline: auth/ACL, ограничения тела и частоты,
 overload, expiry, cancellation, startup rollback, shutdown, возможный дубликат после

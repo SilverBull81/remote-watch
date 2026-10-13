@@ -1,10 +1,10 @@
 ﻿# Контракт gateway-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
@@ -48,8 +48,8 @@ from remote_watch import (
     Route,
     WatcherConfig,
 )
-from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
-from remote_watch.notification_gateway_protocol import (
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayClientConfig
+from remote_watch.notifications.gateway_protocol import (
     MAX_REQUEST_BYTES,
     NotificationGatewayRequest,
     decode_response,
@@ -195,7 +195,7 @@ def test_notification_gateway_configuration() -> None:
 
     """Keep a lazy gateway factory and require room for the network within attempt timeout."""
 
-    config = NotificationGatewayConfig(
+    config = NotificationGatewayClientConfig(
         endpoint="https://gateway.invalid", alias="phone", token_env="RW_GATEWAY_TEST")
     destination = config.destination("local-phone")
     literal = replace(config, token_env=None, token="x" * 32)
@@ -319,7 +319,7 @@ def test_notification_gateway_http(
             site = web.SockSite(runner, sock)
             await site.start()
             credential = "synthetic_service_token_01234567890123456789"
-            channel = NotificationGatewayChannel(NotificationGatewayConfig(
+            channel = NotificationGatewayChannel(NotificationGatewayClientConfig(
                 endpoint=f"http://127.0.0.1:{port}", alias="phone", allow_http=True,
                 token=credential if literal else None, token_env=None if literal else "RW_GATEWAY_TEST",
             ))
@@ -375,7 +375,7 @@ def test_no_request_after_budget_expiry(
 
         """Open a client without connecting and exercise a locally exhausted budget."""
 
-        channel = NotificationGatewayChannel(NotificationGatewayConfig(
+        channel = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint="https://gateway.invalid", alias="phone",
                                             token_env="RW_GATEWAY_TEST"))
         await channel.open()
@@ -490,8 +490,8 @@ def test_gateway_names() -> None:
 
     # Проверяем именно установленную поверхность API: старый режим требует явной миграции.
     adapter = importlib.import_module("remote_watch.adapters.notification_gateway")
-    protocol = importlib.import_module("remote_watch.notification_gateway_protocol")
-    assert adapter.NotificationGatewayConfig is NotificationGatewayConfig
+    protocol = importlib.import_module("remote_watch.notifications.gateway_protocol")
+    assert adapter.NotificationGatewayClientConfig is NotificationGatewayClientConfig
     assert protocol.NotificationGatewayRequest is NotificationGatewayRequest
     assert not hasattr(adapter, "RelayConfig") and not hasattr(adapter, "RelayChannel")
     assert not hasattr(protocol, "RelayRequest")

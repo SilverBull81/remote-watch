@@ -1,10 +1,10 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
@@ -30,8 +30,8 @@ from remote_watch import (
     RetryPolicy,
 )
 from remote_watch.adapters._common import render
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
 pytest.importorskip("aiohttp")
 

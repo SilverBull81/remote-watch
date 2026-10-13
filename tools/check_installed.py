@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.2
+# Version 1.1.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261013-164040
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -46,11 +46,14 @@ def main() -> int:
     # -I и отдельный venv исключают src и пользовательские site-packages.
     import remote_watch
     from remote_watch.adapters.command_http import HttpsCommandTransport
-    from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
-    from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
+    from remote_watch.adapters.notification_gateway import (
+        NotificationGatewayChannel,
+        NotificationGatewayClientConfig,
+    )
     from remote_watch.adapters.ntfy_commands import NtfyCommandProvider
-    from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+    from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
     from remote_watch.adapters.telegram_commands import TelegramCommandProvider
+    from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
     from remote_watch.adapters.time_source import HttpsDateTimeSource
     from remote_watch.adapters.timeapi import TimeApiTimeSource
     from remote_watch.commands import CommandRegistry
@@ -64,11 +67,11 @@ def main() -> int:
     from remote_watch.commands.state import CommandRecord
     from remote_watch.commands.storage import CommandStore
     from remote_watch.commands.time import TrustedClock
-    from remote_watch.gateway import Gateway as PublicGateway
+    from remote_watch.gateway import NotificationGateway as PublicGateway
     from remote_watch.gateway.command_server import CommandHubServer
     from remote_watch.gateway.command_service import CommandGateway
-    from remote_watch.gateway.json_config import load_gateway_config
-    from remote_watch.gateway.server import Gateway
+    from remote_watch.gateway.notification_json_config import load_notification_gateway_config
+    from remote_watch.gateway.notification_server import NotificationGateway
     from remote_watch.gateway_server import ApplicationConfig
     from remote_watch.gateway_server.manager import GatewayManager
     from remote_watch.gateway_server.tray import GatewayTray
@@ -86,7 +89,12 @@ def main() -> int:
     assert importlib.util.find_spec("cryptography") is None
     assert (importlib.util.find_spec("aiohttp") is not None) == (args.mode == "extras")
     # Установка новой версии не должна возвращать удалённые имена через файлы из старой сборки.
-    for removed in ("remote_watch.adapters.relay", "remote_watch.relay_protocol"):
+    for removed in (
+        "remote_watch.adapters.relay", "remote_watch.relay_protocol",
+        "remote_watch.notification_gateway_protocol", "remote_watch.gateway.server",
+        "remote_watch.gateway.config", "remote_watch.gateway.json_config",
+        "remote_watch.adapters.telegram", "remote_watch.adapters.ntfy",
+    ):
         assert importlib.util.find_spec(removed) is None
     assert "relay" not in importlib.metadata.metadata("remote-watch").get_all("Provides-Extra", [])
     assert all("extra ==" in item for item in importlib.metadata.requires("remote-watch") or [])
@@ -95,7 +103,7 @@ def main() -> int:
     assert all(item is not None for item in (CommandStore, SQLiteCommandStore, TrustedClock, HttpsDateTimeSource))
     assert TimeApiTimeSource()._accuracy == 1.0
     assert CommandRegistry is remote_watch.CommandRegistry
-    assert PublicGateway is Gateway
+    assert PublicGateway is NotificationGateway
     assert all(item is not None for item in (CommandClient, CommandHub, CommandHubServer, HttpsCommandTransport))
     assert all(item is not None for item in (CommandDispatcher, DispatcherStats))
     assert all(item is not None for item in (ApplicationConfig, GatewayManager, GatewayTray))
@@ -133,8 +141,8 @@ def main() -> int:
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
     assert all(item is not None for item in (
-        NotificationGatewayChannel, NotificationGatewayConfig, TelegramChannel,
-        TelegramConfig, Gateway, load_gateway_config))
+        NotificationGatewayChannel, NotificationGatewayClientConfig, TelegramChannel,
+        TelegramConfig, NotificationGateway, load_notification_gateway_config))
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

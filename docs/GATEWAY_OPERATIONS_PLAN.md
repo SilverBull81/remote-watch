@@ -1,10 +1,10 @@
 ﻿# План серверного приложения и эксплуатации gateway
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-151745
+Дата и время последнего изменения: 261013-170523
 
 Статус: план согласован владельцем 02.10.2026; **0.4.1 реализован в 0.4.1.dev1**.
 Доступны [общий конфиг и его локальная проверка](GATEWAY_DEPLOYMENT.md), typed-модели
@@ -48,7 +48,7 @@ supervisor должен направлять вывод дочерних про�
 
 Предлагаемый entry point: `python -m remote_watch.gateway_server --config ...`.
 Он входит в ту же distribution, использует optional extras и композицию существующих
-Gateway/CommandGateway. Core библиотеки не получает серверных зависимостей.
+NotificationGateway/CommandGateway. Core библиотеки не получает серверных зависимостей.
 
 Для первого варианта рекомендуется управляющий процесс и отдельные дочерние
 процессы notifications/commands. Это сохраняет границы отказа: перезапуск доставки
@@ -89,8 +89,8 @@ deploy и не менять доверенный root.crt на RU без отд�
 
 - `gateway_server.local.json`: состав deployment, ссылки на конфиги компонентов,
   локальные listener-адреса/порты, Caddy, каталоги журналов и политика восстановления.
-- `notifications.local.json`: существующая схема gateway с destinations/principals.
-- `commands.local.json`: существующая схема command gateway с targets/principals/sources.
+- `notification_gateway.local.json`: существующая схема gateway с destinations/principals.
+- `command_gateway.local.json`: существующая схема command gateway с targets/principals/sources.
 
 Старые имена gateway_config.json и command_gateway.json допустимы как ссылки:
 переименование не требуется. Секреты остаются в конфиге своего компонента;
@@ -181,8 +181,8 @@ Task Scheduler с требуемой
 ```text
 RemoteWatch/
     gateway_server.local.json
-    notifications.local.json
-    commands.local.json
+    notification_gateway.local.json
+    command_gateway.local.json
     Caddyfile
     START_HERE.md
     start.ps1 / stop.ps1 / status.ps1 / doctor.ps1

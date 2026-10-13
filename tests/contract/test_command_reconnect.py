@@ -1,10 +1,10 @@
 ﻿# Восстановление командной сессии без повторного исполнения и потери результатов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261013-164040
 #
 # Функции:
 # -> restart(): Новый hub над тем же журналом.
@@ -173,7 +173,7 @@ def test_idle_reconnect(
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
 
-    :param mode: Gateway restart or prolonged loss of heartbeat.
+    :param mode: NotificationGateway restart or prolonged loss of heartbeat.
     :type mode: str
     """
 

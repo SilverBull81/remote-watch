@@ -1,17 +1,17 @@
 ﻿# Gateway-клиент и первая итерация 0.2
 
-Version 1.1.0
+Version 1.1.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Готовность
 
-Клиент и протокол реализованы в 0.2; с 0.4.2.dev3 используются имена
-NotificationGatewayConfig/NotificationGatewayChannel/NotificationGatewayRequest
+Клиент и протокол реализованы в 0.2; актуальные имена в 0.4.2.dev5:
+NotificationGatewayClientConfig/NotificationGatewayChannel/NotificationGatewayRequest
 без старых алиасов. Для обновления приложения нужна
-[таблица миграции](GATEWAY_FOLLOW_UP.md). Настройка сервера:
+[таблица миграции](NAMING_MIGRATION.md). Настройка сервера:
 [GATEWAY_SERVER.md](GATEWAY_SERVER.md).
 
 Сервер проверяет credentials и точные Identity/alias ACL, ограничивает нагрузку
@@ -28,9 +28,9 @@ Gateway использует отдельный optional extra `gateway` в эт
 
 ```python
 from remote_watch import DeliveryMode, RetryPolicy
-from remote_watch.adapters.notification_gateway import NotificationGatewayConfig
+from remote_watch.adapters.notification_gateway import NotificationGatewayClientConfig
 
-destination = NotificationGatewayConfig(
+destination = NotificationGatewayClientConfig(
     endpoint="https://gateway.example.com",
     alias="operations-phone",
     token_env="REMOTE_WATCH_GATEWAY_TOKEN",
@@ -54,9 +54,9 @@ HTTPS и проверка сертификата включены по умол�
 `allow_http=True` существует для явной локальной проверки; передача рабочего токена
 по незашифрованной сети не является целевым режимом. Alias — короткое логическое имя,
 а не URL или chat/topic. Сам `DeliveryMode.GATEWAY` не меняет произвольную фабрику канала;
-согласованную пару mode/factory создаёт `NotificationGatewayConfig.destination()`.
+согласованную пару mode/factory создаёт `NotificationGatewayClientConfig.destination()`.
 
-В NotificationGatewayConfig можно передать `token="..."` вместо `token_env="..."`.
+В NotificationGatewayClientConfig можно передать `token="..."` вместо `token_env="..."`.
 Допускается ровно один источник; значение и имя переменной исключены из repr.
 Литерал проверяется при создании настроек, окружение читается при open.
 Оба способа используют сервисный токен длиной 32–512 символов ASCII: буквы,
@@ -64,14 +64,14 @@ HTTPS и проверка сертификата включены по умол�
 
 ## Выбор отображения на стороне приложения
 
-С **0.4.1.dev8** режим можно задать в NotificationGatewayConfig клиента. Один раз обновите
+С **0.4.1.dev8** режим можно задать в NotificationGatewayClientConfig клиента. Один раз обновите
 библиотеку на gateway до dev8 или новее и перезапустите notification gateway.
 После этого смена режима требует только изменения конфига и перезапуска приложения;
 gateway продолжает работать со своим прежним конфигом. Caddy и командный gateway
 для этой настройки менять не требуется.
 
 ```python
-destination = NotificationGatewayConfig(
+destination = NotificationGatewayClientConfig(
     endpoint="https://gateway.example.com",
     alias="operations-phone",
     token_env="REMOTE_WATCH_GATEWAY_TOKEN",
@@ -79,7 +79,7 @@ destination = NotificationGatewayConfig(
 ).destination("alerts")
 ```
 
-Если приложение читает собственный JSON и передаёт его параметры в NotificationGatewayConfig,
+Если приложение читает собственный JSON и передаёт его параметры в NotificationGatewayClientConfig,
 в тот же раздел клиента добавьте `"display_mode": "text"`. Поля совпадают с
 TelegramConfig/NtfyConfig: необязательный `display_fields` выбирает группы
 `identity`, `level`, `logger`, `time`, `ids`. Например, compact с источником и временем:
@@ -103,7 +103,7 @@ gateway, удалите оба поля из клиента и перезапу�
 доступа. Client override реализован в Telegram/ntfy; собственному адаптеру нужно
 учитывать Delivery.display_mode/display_fields при подготовке текста.
 
-Для режима автоматически выбирается wire schema 3 при создании NotificationGatewayConfig.
+Для режима автоматически выбирается wire schema 3 при создании NotificationGatewayClientConfig.
 Если в прежнем клиентском конфиге явно стоит schema_version=1 или 2, **удалите
 это поле либо замените значение на 3**. Старый gateway отклонит схему 3;
 автоматического повтора без режима нет. Изменение JSON на диске само по себе
@@ -112,7 +112,7 @@ gateway, удалите оба поля из клиента и перезапу�
 ## Wire-контракт: схемы 1, 2 и 3
 
 С 0.2.0.dev5 поддерживаются схемы **1 и 2**, с 0.4.1.dev8 — также **3**,
-на том же /v1/notifications. NotificationGatewayConfig.schema_version=None при создании
+на том же /v1/notifications. NotificationGatewayClientConfig.schema_version=None при создании
 выбирает 1 без display_mode либо 3 при заданном режиме. После проверки в объекте
 хранится выбранное целое число. Gateway отвечает в версии, указанной в запросе.
 При обновлении имён в dev3 используйте одинаковую версию библиотеки с обеих сторон;
@@ -237,10 +237,10 @@ CommandHubServer и не включаются настройкой gateway: [COM
 
 ## Явный контекст доверия TLS
 
-С 0.4.1.dev5 NotificationGatewayConfig принимает ssl_context: ssl.SSLContext | None.
+С 0.4.1.dev5 NotificationGatewayClientConfig принимает ssl_context: ssl.SSLContext | None.
 None сохраняет стандартное доверие Python/aiohttp. Приложение может создать
 ssl.create_default_context(), добавить свой CA через load_verify_locations
-и передать контекст в NotificationGatewayConfig. Переменные окружения не меняются; TLS
+и передать контекст в NotificationGatewayClientConfig. Переменные окружения не меняются; TLS
 проверяет цепочку, срок и имя сервера. CERT_REQUIRED и check_hostname=True
 обязательны; адаптер повторно проверяет их перед созданием HTTP-клиента.
 Контекст исключён из repr и не передаётся в wire JSON. После передачи контекст

@@ -1,10 +1,10 @@
 ﻿# Короткая диагностика длинных уведомлений ntfy
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Назначение
 
@@ -77,7 +77,7 @@ completed означает выполнение всей серии; незав�
 Старые JSONL остаются читаемыми, но восстановить отсутствующие HTTP-коды из них нельзя.
 
 Новый gateway переносит диагностику провайдера в gateway **схемы 2**. Для этого клиенту
-задают NotificationGatewayConfig(schema_version=2); см. [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Схема 1 остаётся
+задают NotificationGatewayClientConfig(schema_version=2); см. [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Схема 1 остаётся
 по умолчанию для совместимости и этих полей в ответе не содержит. Диагностическая
 команда выше не требует gateway и всегда проверяет прямой ntfy.
 

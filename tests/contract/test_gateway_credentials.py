@@ -1,10 +1,10 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> document(): Конфигурация с вымышленными токенами.
@@ -34,12 +34,15 @@ from typing import Any
 import pytest
 
 from remote_watch import Delivery, Notification
-from remote_watch.adapters.ntfy import NtfyConfig
-from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.gateway.config import GatewayPrincipal
-from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
-from remote_watch.gateway.server import Gateway, GatewayStartupError, main
-from remote_watch.notification_gateway_protocol import NotificationGatewayRequest
+from remote_watch.adapters.ntfy_notifications import NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramConfig
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal
+from remote_watch.gateway.notification_json_config import (
+    NotificationGatewayConfigError,
+    load_notification_gateway_config,
+)
+from remote_watch.gateway.notification_server import NotificationGateway, NotificationGatewayStartupError, main
+from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -133,7 +136,7 @@ def test_inline_check(
 
     with monkeypatch.context() as patch:
         patch.setattr("remote_watch._credentials.os", SimpleNamespace(environ=SimpleNamespace(get=forbidden)))
-        config = load_gateway_config(path)
+        config = load_notification_gateway_config(path)
         assert main(["--config", str(path), "--check-config"]) == 0
     assert dict(os.environ) == before
 
@@ -206,10 +209,10 @@ def test_credential_errors(
 
     # Только явный token_env=null у ntfy сохраняет прежнюю анонимную отправку.
     if target == "ntfy" and case == "null_env":
-        assert load_gateway_config(path).destinations[1].channel_factory()._config.token is None
+        assert load_notification_gateway_config(path).destinations[1].channel_factory()._config.token is None
         return
-    with pytest.raises(GatewayConfigError) as captured:
-        load_gateway_config(path)
+    with pytest.raises(NotificationGatewayConfigError) as captured:
+        load_notification_gateway_config(path)
     assert captured.value.field == f"{prefix}.{field}"
     assert main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out + repr(captured.value)
@@ -235,7 +238,7 @@ def test_safe_error_labels(field: str) -> None:
 
     # field - недопустимый путь, который нельзя копировать в вывод CLI.
 
-    error = GatewayConfigError("PRIVATE_CODE", field, "PRIVATE_REASON")
+    error = NotificationGatewayConfigError("PRIVATE_CODE", field, "PRIVATE_REASON")
     assert error.code == "config_value" and error.field == "config" and error.reason is None
     assert "PRIVATE" not in repr(error)
 #------------------------------------------------------------------------------------------------------------------
@@ -342,8 +345,8 @@ def test_inline_delivery(
                 raw["principals"][0]["token_env"] = "RW_SYNTHETIC_SERVICE"
             path = tmp_path / "gateway.local.json"
             path.write_text(json.dumps(raw), encoding="utf-8")
-            config = load_gateway_config(path)
-            gateway = Gateway(config, utc_now=lambda: notification.created_at)
+            config = load_notification_gateway_config(path)
+            gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
             await gateway.start(port=0)
             async with ClientSession() as session:
                 for alias in ("tg", "ntfy"):
@@ -400,11 +403,11 @@ def test_duplicate_credentials(
     pytest.importorskip("aiohttp")
     path = tmp_path / "gateway.local.json"
     path.write_text(json.dumps(document(notification)), encoding="utf-8")
-    config = load_gateway_config(path)
+    config = load_notification_gateway_config(path)
     principal = config.principals[0]
     monkeypatch.setenv("RW_DUPLICATE", principal.token)
     duplicate = replace(principal, name="other", token=None, token_env="RW_DUPLICATE")
-    gateway = Gateway(replace(config, principals=(principal, duplicate)))
+    gateway = NotificationGateway(replace(config, principals=(principal, duplicate)))
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка отката запуска без открытия провайдеров
@@ -414,7 +417,7 @@ def test_duplicate_credentials(
         """Keep duplicate-credential failures safe and close partially started state."""
 
         try:
-            with pytest.raises(GatewayStartupError) as captured:
+            with pytest.raises(NotificationGatewayStartupError) as captured:
                 await gateway.start(port=0)
             assert captured.value.stage == "credentials"
             assert principal.token not in repr(captured.value)
@@ -452,7 +455,8 @@ def test_typed_sources(
     elif kind == "ntfy":
         config = NtfyConfig(topic="synthetic", token="synthetic_typed")
     else:
-        config = GatewayPrincipal(name="app", identity=notification.identity, aliases=("phone",), token="x" * 32)
+        config = NotificationGatewayPrincipal(name="app", identity=notification.identity,
+            aliases=("phone",), token="x" * 32)
     with pytest.raises(ValueError):
         replace(config, token_env="RW_SYNTHETIC")
     assert config.token not in repr(config)
@@ -471,8 +475,8 @@ def test_inline_example() -> None:
 
     """Load the shipped inline example without accessing environment credentials."""
 
-    path = Path(__file__).resolve().parents[2] / "docs/examples/gateway_config.inline.example.json"
-    config = load_gateway_config(path)
+    path = Path(__file__).resolve().parents[2] / "docs/examples/notification_gateway.inline.example.json"
+    config = load_notification_gateway_config(path)
     assert len(config.destinations) == 2 and len(config.principals) == 1
     assert config.principals[0].token_env is None
     assert "REPLACE_WITH" not in repr(config)

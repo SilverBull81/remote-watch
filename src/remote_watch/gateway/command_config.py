@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек.
@@ -109,9 +109,9 @@ class CommandConfigError(ValueError):
                    r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
                    r"hub|state_dir|"
                    r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
-                   r"state_file|owner_id|allow_loopback_http|command_display_mode))?|"
+                   r"state_file|owner_id|allow_loopback_http|display_mode))?|"
                    r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes))?|"
-                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|\.command_display_mode|"
+                   r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|\.display_mode|"
                    r"\.settings(?:\.(?:token|token_env|topic|reply_topic|actor_id|private_topic_confirmed))?|"
                    r"\.access(?:\[[0-9]{1,3}\])?(?:\.(?:targets|scopes|actor_id|conversation_id))?)?)")
         self.field = field if type(field) is str and re.fullmatch(pattern, field) else "config"
@@ -311,7 +311,7 @@ def load_command_client(
         location = Path(path).resolve()
         value = read_command_json(location)
         _keys(value, {"schema_version", "identity", "endpoint", "state_file", "owner_id"},
-              {"token", "token_env", "ca_file", "allow_loopback_http", "command_display_mode"}, field_name)
+              {"token", "token_env", "ca_file", "allow_loopback_http", "display_mode"}, field_name)
         _schema(value)
         token = _credential(value, True)
         field_name = "client.identity"
@@ -319,10 +319,12 @@ def load_command_client(
         session = token_hex(16)
         field_name = "client.commands"
         capabilities = describe_commands(commands)
-        field_name = "client.command_display_mode"
+        field_name = "client.display_mode"
+        # Пользовательский JSON уже относится к командам; в протоколе сохраняем
+        # прежнее имя поля, чтобы не менять схемы и записанные запросы.
         registration = CommandRegistration(
             identity=identity, session_id=session, capabilities=capabilities,
-            command_display_mode=value.get("command_display_mode"))
+            command_display_mode=value.get("display_mode"))
         context = ssl.create_default_context()
         if value.get("ca_file") is not None:
             field_name = "client.ca_file"
@@ -491,7 +493,7 @@ def _gateway(
         # параметры клиентского HTTP-запроса не могут подменить эту политику.
         for index, raw in enumerate(_items(value["sources"], 8, field_name)):
             field_name = f"sources[{index}]"
-            _keys(raw, {"source_id", "provider", "settings", "access"}, {"command_display_mode"}, field_name)
+            _keys(raw, {"source_id", "provider", "settings", "access"}, {"display_mode"}, field_name)
             if raw["source_id"] in seen_sources:
                 raise CommandConfigError(field_name + ".source_id", "duplicate_source")
             seen_sources.add(raw["source_id"])
@@ -536,9 +538,9 @@ def _gateway(
                     raise CommandConfigError(field_name, "source_acl")
             field_name = f"sources[{index}].source_id"
             sources.append(CommandSource(source_id=raw["source_id"], token=token_hex(32), access=tuple(access)))
-            field_name = f"sources[{index}].command_display_mode"
+            field_name = f"sources[{index}].display_mode"
             providers.append(ProviderBinding(source_id=raw["source_id"], settings=config,
-                                            command_display_mode=raw.get("command_display_mode", "full")))
+                                            command_display_mode=raw.get("display_mode", "full")))
         field_name = "hub"
         # Только известные конечные пределы: неизвестное поле не должно молча
         # оставить более широкое значение по умолчанию вместо ожидаемого запрета.

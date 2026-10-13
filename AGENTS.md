@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.9
+Version 1.5.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-154837
+Дата и время последнего изменения: 261013-170523
 
 ## Project Intent
 
@@ -13,7 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.2.dev4.
+The package version is 0.4.2.dev5.
+Dev5 unifies notification module and API names without legacy aliases. Shared
+notification wire types live in notifications.gateway_protocol; gateway server
+modules use notification_ prefixes and provider modules use _notifications.
+Use NotificationGatewayClientConfig for the adapter and
+NotificationGatewayServerConfig/NotificationGateway for the server.
+Command client/source JSON now uses display_mode; CommandRegistration and durable
+wire records retain command_display_mode with unchanged schemas and hashes.
+Read docs/NAMING_MIGRATION.md before upgrading applications or component JSON.
+Existing CLI entry points are unchanged. Deploy remains the next stage 0.4.3;
+the running SpamBot pilot and production configuration were not modified.
+Final Windows CPython 3.12.2 wheel passed core 1022 tests (72 skips) and extras
+1432 tests, each with 2 live deselections. Core reported 3 Windows permission
+warnings while cleaning old pytest directories; final extras used a dedicated
+temporary directory and passed without warnings. Ruff/style: 139 files, no issues.
+See docs/VALIDATION.md for exact reports. No CI/Linux/live-provider run was added.
 Dev4 implements automatic command-client recovery after successful initial startup.
 Read docs/COMMAND_RECONNECT.md and ADR 0014 before changing this boundary.
 Live journal generation remains fixed; bind_session changes only future admissions
@@ -37,7 +52,7 @@ Historical version notes below retain their original scope;
 no stable 0.2.0 tag is implied.
 
 Dev3 history:
-Dev3 replaces RelayConfig/RelayChannel/RelayRequest with NotificationGatewayConfig,
+Dev3 replaces RelayConfig/RelayChannel/RelayRequest with NotificationGatewayClientConfig,
 NotificationGatewayChannel and NotificationGatewayRequest. Modules are now
 adapters.notification_gateway and notification_gateway_protocol. DeliveryMode/ResultSource
 use GATEWAY="gateway"; provider/diagnostic CLI/settings select gateway. Removed extra

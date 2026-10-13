@@ -1,10 +1,10 @@
 ﻿# Адаптеры Telegram и ntfy
 
-Version 1.1.0
+Version 1.1.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Реализовано в 0.1.0
 
@@ -52,8 +52,8 @@ TelegramConfig и NtfyConfig принимают token либо token_env. Зна
 
 ```python
 from remote_watch import Identity, RetryPolicy, Route, WatcherConfig
-from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.adapters.ntfy import NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramConfig
+from remote_watch.adapters.ntfy_notifications import NtfyConfig
 
 policy = RetryPolicy(connect_timeout=3, attempt_timeout=10, max_attempts=3)
 telegram = TelegramConfig(
@@ -172,7 +172,7 @@ Compact показывает источник JSON-массивом из пят�
 Для direct настройка находится в приложении. Для gateway серверный вариант задаётся
 в `destinations[].settings` **notification gateway**, поскольку текст формирует его
 Telegram/ntfy adapter. С **0.4.1.dev8** клиент может переопределить его через
-`NotificationGatewayConfig(display_mode="text")` и при необходимости display_fields. Без override
+`NotificationGatewayClientConfig(display_mode="text")` и при необходимости display_fields. Без override
 сохраняется настройка gateway; явный режим заменяет и режим, и состав полей для
 конкретной доставки. Сначала обновите notification gateway до dev8, далее для смены
 режима достаточно перезапуска приложения. [Примеры и совместимость](NOTIFICATION_GATEWAY.md#выбор-отображения-на-стороне-приложения).

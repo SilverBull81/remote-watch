@@ -1,10 +1,10 @@
 ﻿# Логотип, восстановление связи и термины Remote Watch
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-151745
+Дата и время последнего изменения: 261013-170523
 
 Статус на 13.10.2026: в **0.4.2.dev3** переименованы API/модули без старых алиасов
 по прямому решению владельца. Логотип уточнён по большому образцу; добавлена ICO
@@ -88,11 +88,11 @@ command source. Это логическое разделение, а не тре
 Владелец отменил первоначальное предложение совместимых алиасов: библиотека
 используется только в SpamBot, поэтому оставлять старый API не требуется.
 
-| До 0.4.2.dev3 | Теперь |
+| До 0.4.2.dev3 | Теперь, в 0.4.2.dev5 |
 | --- | --- |
-| `RelayConfig`, `RelayChannel` | `NotificationGatewayConfig`, `NotificationGatewayChannel` |
+| `RelayConfig`, `RelayChannel` | `NotificationGatewayClientConfig`, `NotificationGatewayChannel` |
 | `adapters/relay.py` | `adapters/notification_gateway.py` |
-| `relay_protocol.py`, `RelayRequest` | `notification_gateway_protocol.py`, `NotificationGatewayRequest` |
+| `relay_protocol.py`, `RelayRequest` | `notifications/gateway_protocol.py`, `NotificationGatewayRequest` |
 | `DeliveryMode.RELAY`, `ResultSource.RELAY` | `DeliveryMode.GATEWAY`, `ResultSource.GATEWAY` |
 | Значение режима/provider/source `relay` | `gateway` |
 | extra `relay` | extra `gateway` для клиента и сервера уведомлений |

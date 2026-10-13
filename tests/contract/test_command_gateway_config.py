@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети.
@@ -152,7 +152,7 @@ def test_command_config(
             "topic": "commands", "reply_topic": "replies", "actor_id": "owner",
                       "private_topic_confirmed": True, "token": "tk_" + "x" * 29})
         source["access"][0].update(actor_id="owner", conversation_id="commands")
-    path = write_config(tmp_path / "commands.local.json", value)
+    path = write_config(tmp_path / "command_gateway.local.json", value)
 
     if kind == "duplicate":
         path.write_text('{"schema_version":1,"schema_version":1}', encoding="utf-8")
@@ -248,7 +248,7 @@ def test_gateway_two_applications(
                     "endpoint": f"http://127.0.0.1:{gateway.server.port}", "allow_loopback_http": True,
                     "state_file": alias + ".sqlite", "owner_id": alias, "token": raw["principals"][index]["token"]}
                 if client_modes:
-                    client_config["command_display_mode"] = "text" if index == 0 else "compact"
+                    client_config["display_mode"] = "text" if index == 0 else "compact"
                 client = load_command_client(
                     write_config(tmp_path / (alias + ".local.json"), client_config), registry)
                 watcher = RemoteWatcher(WatcherConfig(identity=client.registration.identity, commands=registry),

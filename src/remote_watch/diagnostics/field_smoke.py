@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки.
@@ -525,8 +525,8 @@ def _destination(
     # settings - настройки провайдера из локального файла.
     # token_env - имя временной переменной с токеном.
 
-    from remote_watch.adapters.ntfy import NtfyConfig
-    from remote_watch.adapters.telegram import TelegramConfig
+    from remote_watch.adapters.ntfy_notifications import NtfyConfig
+    from remote_watch.adapters.telegram_notifications import TelegramConfig
 
     policy = RetryPolicy(max_attempts=3, ttl=120)
     if provider == "telegram":
@@ -535,11 +535,11 @@ def _destination(
                                 message_thread_id=settings.get("message_thread_id"),
                                 allow_http=settings.get("allow_http", False))
     elif provider == "gateway":
-        from remote_watch.adapters.notification_gateway import NotificationGatewayConfig
+        from remote_watch.adapters.notification_gateway import NotificationGatewayClientConfig
 
         # Alias и provider credentials остаются на gateway; клиент использует собственный
         # токен шлюза. Запас времени учитывает server_timeout и сетевой обмен.
-        config = NotificationGatewayConfig(
+        config = NotificationGatewayClientConfig(
             token_env=token_env, endpoint=settings.get("endpoint"), alias=settings.get("alias"),
             schema_version=settings.get("schema_version", 2),
             allow_http=settings.get("allow_http", False), server_timeout=settings.get("server_timeout", 8))

@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки.
@@ -49,11 +49,14 @@ from remote_watch import (
     RetryPolicy,
 )
 from remote_watch.diagnostics import field_smoke as field_smoke
-from remote_watch.gateway import server as cli
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
-from remote_watch.gateway.server import Gateway
-from remote_watch.notification_gateway_protocol import NotificationGatewayRequest, decode_response
+from remote_watch.gateway import notification_server as cli
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.gateway.notification_json_config import (
+    NotificationGatewayConfigError,
+    load_notification_gateway_config,
+)
+from remote_watch.gateway.notification_server import NotificationGateway
+from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest, decode_response
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -199,7 +202,7 @@ def test_cli_summary(
             # kwargs - параметры прослушивания.
 
             if mode == "startup":
-                raise cli.GatewayStartupError("providers")
+                raise cli.NotificationGatewayStartupError("providers")
             if mode == "cancel":
                 raise asyncio.CancelledError
             path.touch()
@@ -231,11 +234,12 @@ def test_cli_summary(
         #----------------------------------------------------------------------------------------------------------
     #--------------------------------------------------------------------------------------------------------------
 
-    monkeypatch.setattr(cli, "Gateway", Managed)
+    monkeypatch.setattr(cli, "NotificationGateway", Managed)
     if mode == "stop":
         asyncio.run(cli._serve(None, "127.0.0.1", 0, None, path))
     else:
-        expected = {"cancel": asyncio.CancelledError, "startup": cli.GatewayStartupError, "stale": ValueError}
+        expected = {"cancel": asyncio.CancelledError, "startup": cli.NotificationGatewayStartupError,
+            "stale": ValueError}
         with pytest.raises(expected[mode]):
             asyncio.run(cli._serve(None, "127.0.0.1", 0, None, path))
     output = capsys.readouterr().out
@@ -289,8 +293,8 @@ def test_config_categories(
     path = tmp_path / "private_config.json"
     if raw is not None:
         path.write_bytes(raw)
-    with pytest.raises(GatewayConfigError) as error:
-        load_gateway_config(path)
+    with pytest.raises(NotificationGatewayConfigError) as error:
+        load_notification_gateway_config(path)
     assert (error.value.code, error.value.field) == (code, field)
     assert cli.main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out
@@ -352,13 +356,14 @@ def test_shared_alias(
 
         provider = Provider()
         other = replace(notification, identity=replace(notification.identity, instance_id="two"))
-        config = GatewayConfig(destinations=(Destination(destination_id="shared", channel_factory=lambda: provider,
+        config = NotificationGatewayServerConfig(destinations=(Destination(destination_id="shared",
+            channel_factory=lambda: provider,
             retry=RetryPolicy(max_attempts=1)),), principals=tuple(
-                GatewayPrincipal(name=name, token_env=env, identity=event.identity,
+                NotificationGatewayPrincipal(name=name, token_env=env, identity=event.identity,
                                  aliases=("shared",), min_interval=0)
                 for name, env, event in (("one", "GW_ONE", notification), ("two", "GW_TWO", other))),
             destination_interval=0)
-        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         first = Delivery(notification=notification, destination_id="phone", delivery_id="first")
         second = Delivery(notification=other, destination_id="phone", delivery_id="second")
 
@@ -460,15 +465,17 @@ def test_cli_process_stop(
     factory = tmp_path / "synthetic_factory.py"
     factory.write_text(
         "from remote_watch import Destination, Identity, RetryPolicy\n"
-        "from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal\n"
+        "from remote_watch.gateway.notification_config import (\n"
+        "    NotificationGatewayServerConfig, NotificationGatewayPrincipal)\n"
         "class Channel:\n"
         "    async def open(self): pass\n"
         "    async def close(self): pass\n"
         "    async def send(self, delivery): raise AssertionError('no deliveries expected')\n"
         "def create():\n"
         "    identity = Identity(service='s', environment='e', region='r', host='h', instance_id='i')\n"
-        "    return GatewayConfig(destinations=(Destination(destination_id='phone', channel_factory=Channel,\n"
-        "        retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name='app',\n"
+        "    return NotificationGatewayServerConfig(destinations=(Destination(\n"
+        "        destination_id='phone', channel_factory=Channel,\n"
+        "        retry=RetryPolicy(max_attempts=1)),), principals=(NotificationGatewayPrincipal(name='app',\n"
         "        token_env='GW_PROCESS_TEST', identity=identity, aliases=('phone',)),))\n", encoding="utf-8")
     # Англоязычная Windows обычно использует cp1252 для файла/pipe: кириллица CLI
     # должна сохраняться и при таком окружении, а не завершать работающий gateway.
@@ -483,7 +490,7 @@ def test_cli_process_stop(
                                    stdout=stream, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 8
-            while "Gateway запущен".encode("utf-8") not in output.read_bytes():
+            while "NotificationGateway запущен".encode("utf-8") not in output.read_bytes():
                 assert process.poll() is None, output.read_bytes().decode("utf-8", errors="replace")
                 assert time.monotonic() < deadline
                 time.sleep(0.02)
@@ -628,9 +635,10 @@ def test_mixed_field(
         provider = Provider()
         provider.release.set()
         identity = replace(notification.identity, service="remote-watch-field", environment="field-test")
-        gateway = Gateway(GatewayConfig(destinations=(Destination(
+        gateway = NotificationGateway(NotificationGatewayServerConfig(destinations=(Destination(
             destination_id="tg", channel_factory=lambda: provider,
-            retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name="field", token_env="GW_FIELD",
+            retry=RetryPolicy(max_attempts=1)),),
+                principals=(NotificationGatewayPrincipal(name="field", token_env="GW_FIELD",
                 identity=identity, aliases=("tg",), min_interval=0),), destination_interval=0))
         credentials = tmp_path / "synthetic.json"
         output = tmp_path / "mixed.jsonl"

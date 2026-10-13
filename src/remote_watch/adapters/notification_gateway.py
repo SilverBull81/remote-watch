@@ -1,13 +1,13 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
-# -> NotificationGatewayConfig: Настройки адреса gateway и разрешённого назначения.
+# -> NotificationGatewayClientConfig: Настройки адреса gateway и разрешённого назначения.
 #    Интерфейс:
 #    -> destination(): Ленивое назначение с заданным способом доставки.
 #    Специальные методы:
@@ -44,14 +44,6 @@ from remote_watch.adapters._common import (
 )
 from remote_watch.adapters._http import HttpSender
 from remote_watch.config import DeliveryMode, Destination, RetryPolicy
-from remote_watch.notification_gateway_protocol import (
-    MAX_RESPONSE_BYTES,
-    NotificationGatewayRequest,
-    _decode,
-    decode_response,
-    encode_json,
-    validate_alias,
-)
 from remote_watch.notifications.delivery import (
     Delivery,
     DeliveryResult,
@@ -59,13 +51,21 @@ from remote_watch.notifications.delivery import (
     ResultSource,
 )
 from remote_watch.notifications.display import validate_display
+from remote_watch.notifications.gateway_protocol import (
+    MAX_RESPONSE_BYTES,
+    NotificationGatewayRequest,
+    _decode,
+    decode_response,
+    encode_json,
+    validate_alias,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки адреса gateway и разрешённого назначения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
-class NotificationGatewayConfig:
+class NotificationGatewayClientConfig:
     """Bind a destination to a fixed gateway endpoint and one authorized alias."""
 
     endpoint: str                       # Базовый HTTPS-адрес gateway, без токена и query.
@@ -183,7 +183,7 @@ class NotificationGatewayChannel:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: NotificationGatewayConfig,
+        config: NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy | None = None,
     ) -> None:
@@ -191,7 +191,7 @@ class NotificationGatewayChannel:
         """Prepare lazy HTTP ownership without accessing the network or credentials.
 
         :param config: Validated settings.
-        :type config: NotificationGatewayConfig
+        :type config: NotificationGatewayClientConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy | None
@@ -200,8 +200,8 @@ class NotificationGatewayChannel:
         # config - проверенные настройки выбранного сценария.
         # retry - общие ограничения runtime и канала.
 
-        if not isinstance(config, NotificationGatewayConfig):
-            raise TypeError("config must be NotificationGatewayConfig")
+        if not isinstance(config, NotificationGatewayClientConfig):
+            raise TypeError("config must be NotificationGatewayClientConfig")
         self._policy = retry if retry is not None else RetryPolicy()
         config._check_policy(self._policy)
         self._config = config

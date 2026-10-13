@@ -1,10 +1,10 @@
 ﻿# Явно включаемая проверка доставки одного синтетического сообщения реальному сервису.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_live_notification(): Явно разрешённая отправка реальному сервису.
@@ -21,8 +21,8 @@ import os
 import pytest
 
 from remote_watch import Delivery, DeliveryStatus, Notification
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
 pytestmark = [pytest.mark.integration, pytest.mark.skipif(
     os.environ.get("REMOTE_WATCH_LIVE") != "1", reason="set REMOTE_WATCH_LIVE=1 explicitly",

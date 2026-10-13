@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -47,10 +47,10 @@ from remote_watch import (
     Destination,
     RetryPolicy,
 )
-from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayClientConfig
 from remote_watch.diagnostics.smoke import _notification
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway.server import Gateway, main
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.gateway.notification_server import NotificationGateway, main
 
 aiohttp = pytest.importorskip("aiohttp")
 
@@ -201,8 +201,9 @@ def test_gateway_tls_cli(
     ca_path, cert_path, key_path = certificates(tmp_path, mode)
     provider = Provider()
     event = _notification()
-    config = GatewayConfig(destinations=(Destination(destination_id="phone", channel_factory=lambda: provider,
-        retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name="app",
+    config = NotificationGatewayServerConfig(destinations=(Destination(destination_id="phone",
+        channel_factory=lambda: provider,
+        retry=RetryPolicy(max_attempts=1)),), principals=(NotificationGatewayPrincipal(name="app",
         token_env="RW_TLS_TEST", identity=event.identity, aliases=("phone",)),))
     monkeypatch.setenv("RW_TLS_TEST", "synthetic_tls_credential_123456789012345")
     module = ModuleType("synthetic_tls_settings")
@@ -212,14 +213,14 @@ def test_gateway_tls_cli(
     if mode != "untrusted":
         client_context.load_verify_locations(cafile=str(ca_path))
     assert client_context.check_hostname and client_context.verify_mode == ssl.CERT_REQUIRED
-    # Реальный TLS использует публичный контекст NotificationGatewayConfig без подмены connector.
+    # Реальный TLS использует публичный контекст NotificationGatewayClientConfig без подмены connector.
     outcomes: list[DeliveryResult] = []
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Одна HTTPS-попытка вместо постоянного ожидания CLI
     #--------------------------------------------------------------------------------------------------------------
     async def serve(
-        config: GatewayConfig,
+        config: NotificationGatewayServerConfig,
         host: str,
         port: int,
         context: ssl.SSLContext | None,
@@ -228,7 +229,7 @@ def test_gateway_tls_cli(
         """Replace the endless CLI wait with one real HTTPS gateway attempt.
 
         :param config: Validated provider configuration.
-        :type config: GatewayConfig
+        :type config: NotificationGatewayServerConfig
 
         :param host: Explicit listener address.
         :type host: str
@@ -247,10 +248,10 @@ def test_gateway_tls_cli(
 
         assert context is not None
         assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
-        gateway = Gateway(config)
+        gateway = NotificationGateway(config)
         await gateway.start(host=host, port=port, ssl_context=context)
         scheme = "http" if mode == "plaintext" else "https"
-        notification_gateway = NotificationGatewayChannel(NotificationGatewayConfig(
+        notification_gateway = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint=f"{scheme}://127.0.0.1:{gateway.port}", alias="phone",
             token_env="RW_TLS_TEST", allow_http=mode == "plaintext",
             ssl_context=None if mode == "default_trust" else client_context))
@@ -263,7 +264,7 @@ def test_gateway_tls_cli(
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------
 
-    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.notification_server._serve", serve)
     assert main(["synthetic_tls_settings:build_config", "--port", "0",
                  "--cert", str(cert_path), "--key", str(key_path)]) == 0
     assert len(outcomes) == 1
@@ -312,8 +313,9 @@ def test_gateway_tls_bad_files(
     _, cert_path, key_path = certificates(tmp_path, "trusted")
     module = ModuleType("synthetic_tls_settings")
     event = _notification()
-    module.build_config = lambda: GatewayConfig(destinations=(Destination(destination_id="phone",
-        channel_factory=Provider, retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name="app",
+    module.build_config = lambda: NotificationGatewayServerConfig(destinations=(Destination(destination_id="phone",
+        channel_factory=Provider, retry=RetryPolicy(max_attempts=1)),),
+            principals=(NotificationGatewayPrincipal(name="app",
         token_env="RW_TLS_TEST", identity=event.identity, aliases=("phone",)),))
     monkeypatch.setitem(sys.modules, module.__name__, module)
     if mode == "invalid_cert":
@@ -325,7 +327,7 @@ def test_gateway_tls_bad_files(
     if mode != "missing_key":
         arguments += ["--key", str(key_path)]
     serve = AsyncMock()
-    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.notification_server._serve", serve)
     assert main(arguments) == 1
     serve.assert_not_awaited()
 #------------------------------------------------------------------------------------------------------------------

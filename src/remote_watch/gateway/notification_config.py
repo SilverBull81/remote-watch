@@ -1,17 +1,17 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
-# -> GatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
+# -> NotificationGatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
 #    Специальные методы:
 #    -> __post_init__(): Проверка настроек и защитное копирование.
 #
-# -> GatewayConfig: Общие ограничения и закрытые разрешения gateway.
+# -> NotificationGatewayServerConfig: Общие ограничения и закрытые разрешения gateway.
 #    Специальные методы:
 #    -> __post_init__(): Проверка настроек и защитное копирование.
 #
@@ -28,14 +28,14 @@ from remote_watch._credentials import validate_credentials
 from remote_watch._validation import require_int, require_number, text_tuple
 from remote_watch.config import DeliveryMode, Destination
 from remote_watch.events import Identity
-from remote_watch.notification_gateway_protocol import validate_alias
+from remote_watch.notifications.gateway_protocol import validate_alias
 
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Разрешённая принадлежность и назначения одного приложения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
-class GatewayPrincipal:
+class NotificationGatewayPrincipal:
     """Bind a service credential to one exact identity and a finite alias allowlist."""
 
     name: str                           # Локальное имя приложения для учёта доступа.
@@ -82,11 +82,11 @@ class GatewayPrincipal:
 # КЛАСС : Общие ограничения и закрытые разрешения gateway
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
-class GatewayConfig:
+class NotificationGatewayServerConfig:
     """Configure a finite gateway with one active attempt per direct destination."""
 
     destinations: tuple[Destination, ...]   # Прямые назначения; destination_id служит alias.
-    principals: tuple[GatewayPrincipal, ...]    # Приложения с отдельными токенами и точными правами.
+    principals: tuple[NotificationGatewayPrincipal, ...]    # Приложения с отдельными токенами и точными правами.
     capacity: int = 32                  # Общий предел чтения тел и выполняемых запросов.
     body_timeout: float = 2.0           # Максимальное время чтения одного тела, секунды.
     attempt_timeout: float = 8.0        # Верхний предел одной provider attempt, секунды.
@@ -105,7 +105,7 @@ class GatewayConfig:
 
         # Ограничиваем коллекции до копирования и проверки ссылок. Произвольные итераторы не принимаем.
         for name, item_type, maximum in (("destinations", Destination, 64),
-                ("principals", GatewayPrincipal, 256)):
+                ("principals", NotificationGatewayPrincipal, 256)):
             items = getattr(self, name)
             if not isinstance(items, (tuple, list)) or not 1 <= len(items) <= maximum:
                 raise ValueError(f"{name} must be a nonempty bounded list or tuple")
@@ -150,6 +150,6 @@ class GatewayConfig:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.gateway.config не предназначен для прямого запуска.",
+        "Модуль remote_watch.gateway.notification_config не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

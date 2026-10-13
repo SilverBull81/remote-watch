@@ -1,10 +1,10 @@
 ﻿# Запуск, остановка и наблюдение gateway
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-171854
+Дата и время последнего изменения: 261013-170523
 
 ## Локальная диагностика, dev7
 
@@ -72,8 +72,8 @@ Version 1.0.3
 по [GATEWAY_SERVER.md](GATEWAY_SERVER.md); при token переменные окружения не нужны.
 
 ```powershell
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\Work\RemoteWatch\gateway_config.json --check-config
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -u -m remote_watch.gateway --config C:\Work\RemoteWatch\gateway_config.json --host 127.0.0.1 --port 8765 --stop-file C:\Work\RemoteWatch\control\gateway.stop
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:\Work\RemoteWatch\notification_gateway.local.json --check-config
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -u -m remote_watch.gateway --config C:\Work\RemoteWatch\notification_gateway.local.json --host 127.0.0.1 --port 8765 --stop-file C:\Work\RemoteWatch\control\gateway.stop
 ```
 
 Это HTTP только для прокси на той же VM. Для подключения с другой машины нужны
@@ -117,13 +117,13 @@ Remove-Item -LiteralPath C:\Work\RemoteWatch\control\gateway.stop
 5. Для планового обслуживания создайте stop-file, дождитесь окончания задачи,
    внесите изменения, удалите stop-file и запустите задачу вручную.
 
-Если токены заданы через token в gateway_config.json, launcher не должен читать
+Если токены заданы через token в notification_gateway.local.json, launcher не должен читать
 дополнительный файл секретов или задавать переменные:
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 $logPath = 'C:\Work\RemoteWatch\logs\gateway-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log'
-& 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\gateway_config.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
+& 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\notification_gateway.local.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
 exit $LASTEXITCODE
 ```
 
@@ -143,7 +143,7 @@ try {
         $names += $property.Name
     }
     $logPath = 'C:\Work\RemoteWatch\logs\gateway-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log'
-    & 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\gateway_config.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
+    & 'C:\Work\RemoteWatch\.venv\Scripts\python.exe' -u -m remote_watch.gateway --config 'C:\Work\RemoteWatch\notification_gateway.local.json' --stop-file 'C:\Work\RemoteWatch\control\gateway.stop' *>> $logPath
     $gatewayExit = $LASTEXITCODE
 } catch {
     Write-Output 'Gateway launcher failed; check local configuration and permissions.'

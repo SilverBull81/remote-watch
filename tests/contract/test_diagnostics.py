@@ -1,10 +1,10 @@
 ﻿# Проверки безопасной диагностики ntfy, совместимости gateway и пределов уведомления.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_diagnostic_values(): Отклонение недопустимых значений диагностики.
@@ -36,12 +36,12 @@ from remote_watch import (
     RetryPolicy,
     SnapshotLimits,
 )
-from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayClientConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 from remote_watch.diagnostics.field_smoke import _Journal, _ObservedChannel
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway.server import Gateway
-from remote_watch.notification_gateway_protocol import (
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.gateway.notification_server import NotificationGateway
+from remote_watch.notifications.gateway_protocol import (
     DIAGNOSTIC_FIELDS,
     NotificationGatewayRequest,
     decode_response,
@@ -185,7 +185,7 @@ def test_notification_gateway_rejects_before_post(
         now = datetime.now(timezone.utc)
         event = replace(notification, message="x" * 10000, created_at=now, expires_at=now + timedelta(seconds=60),
                         limits=SnapshotLimits(message_max_bytes=12000, event_max_bytes=20000))
-        channel = NotificationGatewayChannel(NotificationGatewayConfig(
+        channel = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint="https://example.invalid", alias="phone",
                                             token_env="RW_DIAGNOSTIC_GATEWAY"))
 
@@ -309,9 +309,10 @@ def test_ntfy_diagnostics(
         event = replace(notification, message="Текст 📡 " * 450,
                         created_at=now, expires_at=now + timedelta(seconds=60))
         delivery = Delivery(notification=event, destination_id="phone", delivery_id="test")
-        gateway = Gateway(GatewayConfig(
+        gateway = NotificationGateway(NotificationGatewayServerConfig(
             destinations=(config.destination("phone", retry=RetryPolicy(max_attempts=1)),),
-            principals=(GatewayPrincipal(name="test", token_env="RW_DIAGNOSTIC_GATEWAY", identity=event.identity,
+            principals=(NotificationGatewayPrincipal(name="test", token_env="RW_DIAGNOSTIC_GATEWAY",
+                identity=event.identity,
                                          aliases=("phone",), min_interval=0),), destination_interval=0))
         channel = NtfyChannel(config)
         try:
@@ -329,7 +330,7 @@ def test_ntfy_diagnostics(
             assert "private_value" not in stream.getvalue()
 
             for schema in (1, 2):
-                notification_gateway = NotificationGatewayChannel(NotificationGatewayConfig(
+                notification_gateway = NotificationGatewayChannel(NotificationGatewayClientConfig(
                     endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
                     token_env="RW_DIAGNOSTIC_GATEWAY", allow_http=True, schema_version=schema))
                 try:

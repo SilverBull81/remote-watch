@@ -1,10 +1,10 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.3.9
+Version 1.4.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-151745
+Дата и время последнего изменения: 261013-170523
 
 ## Статус и границы
 
@@ -89,7 +89,7 @@ Telegram smoke с одним и двумя тестовыми приложени
 Контракт, пределы и семантика отказов: [COMMAND_HUB.md](docs/COMMAND_HUB.md).
 
 В dev8 gateway JSON поддерживает token как альтернативу token_env у провайдеров
-и principals. Типизированные TelegramConfig/NtfyConfig/GatewayPrincipal также
+и principals. Типизированные TelegramConfig/NtfyConfig/NotificationGatewayPrincipal также
 принимают literal-токен, скрытый из repr. Значения проверяются при создании
 настроек, окружение разрешается при open/start. В JSON нужен ровно один ключ;
 token_env=null сохраняет анонимный ntfy. Окружение процесса не изменяется.
@@ -116,7 +116,7 @@ gateway с точной auth/ACL, ограниченным приёмом, од�
 остановкой. Смешанный режим проверен на loopback; основной реальный маршрут подтверждён в dev9.
 В 0.2.0.dev4 добавлен необязательный JSON-файл серверных настроек, схема версии 1.
 Отдельный gateway_json преобразует его в прежние типизированные объекты и выбирает
-только Telegram/ntfy из фиксированного списка. Core и GatewayConfig не импортируют
+только Telegram/ntfy из фиксированного списка. Core и NotificationGatewayServerConfig не импортируют
 конкретные адаптеры. Файл не исполняет Python; с dev8 может содержать token либо ссылку token_env.
 Выбор источника секрета не меняет ACL: несколько principals могут использовать один процесс и разные aliases.
 Для пользовательских каналов остаётся явно доверенная Python-фабрика.
@@ -145,17 +145,28 @@ ntfy JSON. В 0.2.0.dev2 ntfy ограничивает как текст, так
 0.2: необязательный gateway. 0.3: отдельный приём и маршрутизация команд.
 Совместимость с `fin-data.TelegramBot` не является целью.
 
-## Структура пакета после реорганизации dev3
+## Структура пакета после унификации 0.4.2.dev5
 
 - `remote_watch`: основной фасад, RemoteWatcher, настройки и данные уведомлений.
 - `notifications`: handler, нормализация, маршрутизация, доставка и её runtime;
   здесь же находятся частные помощники очередей, повторов и остановки.
 - `commands`: registry, protocol, state, time, storage и sqlite_store.
   Старый неиспользуемый прототип подтверждения изолирован в `_confirmation`.
-- `gateway`: server, config, json_config и точка запуска `__main__`.
-- `adapters`: Telegram, ntfy, gateway и необязательные источники времени.
+- `gateway`: notification_server, notification_config, notification_json_config;
+  рядом — command_server, command_config, command_service и точки запуска.
+- `adapters`: telegram_notifications/telegram_commands, ntfy_notifications/ntfy_commands,
+  notification_gateway, command_http и необязательные источники времени.
 - `diagnostics`: smoke, field_smoke, ntfy_diagnostic и time_probe.
-- `notification_gateway_protocol.py`: общий формат gateway; `adapters/notification_gateway.py` — его сетевой клиент.
+- `notifications/gateway_protocol.py`: общий формат обмена уведомлениями через gateway;
+  `adapters/notification_gateway.py` — его сетевой клиент.
+
+В общей папке имя модуля указывает канал; внутри notifications/commands повторять
+его не требуется. Публичные настройки различают стороны соединения:
+NotificationGatewayClientConfig и NotificationGatewayServerConfig. Сервер
+уведомлений называется NotificationGateway. Старые имена и модули удалены.
+JSON командного клиента и sources использует display_mode; загрузчик переводит
+его в прежнее поле протокола command_display_mode. Сетевые схемы и журналы
+не меняются. Памятка обновления: [NAMING_MIGRATION.md](docs/NAMING_MIGRATION.md).
 
 Core не импортирует конкретные адаптеры. `commands.time` знает только TimeSource;
 выбранный TimeAPI подключает вызывающая сторона. Перенос не включает command hub,
@@ -165,11 +176,11 @@ Core не импортирует конкретные адаптеры. `command
 `remote_watch.commands` сохранены. `python -m remote_watch.gateway` работает через
 `gateway.__main__`. В 0.3.3.dev1 старые smoke/field_smoke/ntfy_diagnostic
 из корня удалены по решению владельца; запуск только через `remote_watch.diagnostics`.
-В корне пакета остаются семь Python-файлов. CommandHub/CommandClient находятся
+Общие настройки, Identity и фасад остаются в корне пакета. CommandHub/CommandClient находятся
 в `commands`, их HTTPS-транспорт — в `adapters.command_http`, отдельный сервер —
 в `gateway.command_server`. Core не импортирует эти сетевые реализации.
 Прямые импорты перенесённых модулей нужно обновить: например,
-`remote_watch.gateway_config` → `remote_watch.gateway.config`,
+`remote_watch.gateway_config` → `remote_watch.gateway.notification_config`,
 `remote_watch.command_time` → `remote_watch.commands.time`. Это намеренная смена
 путей в предварительной версии; широкая сеть псевдонимов не создаётся.
 
@@ -392,7 +403,7 @@ Provider retry-after задаёт нижнюю границу ожидания, 
 Для конкретного назначения deadline не позже Notification.expires_at и created_at
 плюс его RetryPolicy.ttl. UTC используется в данных, monotonic clock — для локальных задержек/deadlines.
 На входе gateway оставшийся TTL ограничивается его собственной политикой.
-С dev9 явный GatewayConfig.clock_skew_tolerance (0–3600 с, по умолчанию 0)
+С dev9 явный NotificationGatewayServerConfig.clock_skew_tolerance (0–3600 с, по умолчанию 0)
 ослабляет сравнения UTC клиента и сервера в обе стороны. Он не увеличивает
 относительные timeout/remaining_ttl или локальные монотонные сроки; даты события
 не меняются. В пределах допуска сервер не отличает задержанный запрос от свежего
@@ -472,7 +483,7 @@ Gateway — прикладной сервис Remote Watch, не HTTP proxy и �
 Gateway разрешает отправителю только назначенные aliases, не принимает произвольные
 URL, chat IDs, токены или цепочку следующего gateway из события.
 
-Первая итерация 0.2 реализует клиент NotificationGatewayChannel, NotificationGatewayConfig и NotificationGatewayRequest.
+Первая итерация 0.2 реализует клиент NotificationGatewayChannel, NotificationGatewayClientConfig и NotificationGatewayRequest.
 Протокол v1: POST /v1/notifications, Bearer auth, точный JSON envelope, 64 KiB request
 и 4 KiB response. Ответ коррелируется с delivery_id и attempt; malformed 2xx даёт UNKNOWN.
 В 0.2.0.dev3 сервер проверяет token → точная identity + aliases. Подробности: [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md),
@@ -615,7 +626,7 @@ CommandClient; восстановление командного пути всё
 
 ## Явное доверие CA gateway-клиента (0.4.1.dev5)
 
-NotificationGatewayConfig принимает проверяющий ssl_context, передаваемый собственному HTTP connector.
+NotificationGatewayClientConfig принимает проверяющий ssl_context, передаваемый собственному HTTP connector.
 Контекст добавляет частный CA только выбранному клиенту; библиотека не меняет окружение,
 глобальные TLS defaults или trust store ОС. None оставляет стандартное доверие.
 Контекст не входит в wire и repr. Проверки цепочки и имени обязательны при конфигурации
@@ -664,7 +675,7 @@ register нет. Подробнее: [контур команд](docs/COMMAND_EX
 
 ## Клиентский режим отображения gateway (0.4.1.dev8)
 
-NotificationGatewayConfig принимает display_mode/display_fields с теми же правилами, что и
+NotificationGatewayClientConfig принимает display_mode/display_fields с теми же правилами, что и
 TelegramConfig/NtfyConfig. Это закрытый набор параметров представления, без
 произвольного renderer, адресов и credentials. При отсутствии режима сохраняется
 настройка gateway. Явный режим заменяет серверный режим и набор полей целиком
@@ -678,7 +689,7 @@ render Telegram/ntfy использует их перед стандартным
 
 Wire schema 3 добавляет обязательное display=null либо {mode, fields} и сохраняет
 числовую диагностику схемы 2. Схемы 1/2 остаются без изменений и не могут неявно
-потерять переданный override. NotificationGatewayConfig без явной schema_version выбирает 1
+потерять переданный override. NotificationGatewayClientConfig без явной schema_version выбирает 1
 для прежнего клиента либо 3 при заданном display_mode. Явные версии 1/2 с режимом
 отклоняются до сети. Повтора с другой схемой и автоматического fallback нет.
 Маршрут /v1/notifications, пределы JSON, один POST на попытку и серверные права

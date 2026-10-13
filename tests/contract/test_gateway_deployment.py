@@ -1,10 +1,10 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> deployment(): Создание только подставных конфигов в отдельной папке.
@@ -65,7 +65,7 @@ def deployment(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
     directory = tmp_path / "с пробелом" / "настройки"
     directory.mkdir(parents=True)
     examples = Path(__file__).resolve().parents[2] / "docs" / "examples"
-    for source, target in (("gateway_config.example.json", "notifications.json"),
+    for source, target in (("notification_gateway.example.json", "notifications.json"),
                            ("command_gateway.telegram.example.json", "commands.json")):
         (directory / target).write_bytes((examples / source).read_bytes())
 

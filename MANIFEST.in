@@ -3,8 +3,8 @@ include logo/remote_watch.png
 include logo/remote_watch.ico
 include .gitattributes .gitignore
 recursive-include docs *.md
-include docs/examples/gateway_config.example.json
-include docs/examples/gateway_config.inline.example.json
+include docs/examples/notification_gateway.example.json
+include docs/examples/notification_gateway.inline.example.json
 include docs/examples/gateway-nginx.conf
 include docs/examples/command_gateway.telegram.example.json
 include docs/examples/command_gateway.ntfy.example.json

@@ -1,10 +1,10 @@
 ﻿# Проверка границ настройки адаптеров и освобождения частично созданного клиента.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_invalid_settings(): Отклонение неверных настроек до чтения токена.
@@ -24,8 +24,8 @@ import pytest
 
 from remote_watch import RetryPolicy
 from remote_watch.adapters._http import HttpSender
-from remote_watch.adapters.ntfy import NtfyConfig
-from remote_watch.adapters.telegram import TelegramConfig
+from remote_watch.adapters.ntfy_notifications import NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramConfig
 
 #******************************************************************************************************************
 # ТЕСТЫ

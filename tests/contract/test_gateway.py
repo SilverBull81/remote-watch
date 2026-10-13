@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -60,12 +60,12 @@ from remote_watch import (
     Route,
     WatcherConfig,
 )
-from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway.json_config import load_gateway_config
-from remote_watch.gateway.server import Gateway
-from remote_watch.notification_gateway_protocol import NotificationGatewayRequest, decode_response
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayClientConfig
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.gateway.notification_json_config import load_notification_gateway_config
+from remote_watch.gateway.notification_server import NotificationGateway
 from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest, decode_response
 
 aiohttp = pytest.importorskip("aiohttp")
 TOKEN = "synthetic_gateway_credential_1234567890"
@@ -177,7 +177,7 @@ def settings(
     notification: Notification,
     channel: Channel,
     **changes: Any,
-) -> GatewayConfig:
+) -> NotificationGatewayServerConfig:
 
     """Create exact grants and a one-attempt destination for tests.
 
@@ -190,16 +190,18 @@ def settings(
     :param changes: Explicit configuration overrides.
     :type changes: Any
 
-    :return: Gateway settings with isolated test destinations and credentials.
-    :rtype: GatewayConfig
+    :return: NotificationGateway settings with isolated test destinations and credentials.
+    :rtype: NotificationGatewayServerConfig
     """
 
     # notification - синтетическое уведомление с заданным временем.
     # channel - канал, принадлежащий серверу.
     # changes - переопределяемые настройки сценария.
 
-    return GatewayConfig(destinations=(Destination(destination_id="phone", channel_factory=lambda: channel,
-        retry=RetryPolicy(max_attempts=1)),), principals=(GatewayPrincipal(name="test", token_env="RW_GW_TEST",
+    return NotificationGatewayServerConfig(destinations=(Destination(destination_id="phone",
+        channel_factory=lambda: channel,
+        retry=RetryPolicy(max_attempts=1)),), principals=(NotificationGatewayPrincipal(name="test",
+            token_env="RW_GW_TEST",
         identity=notification.identity, aliases=("phone",), min_interval=0),),
         destination_interval=0, **changes)
 #------------------------------------------------------------------------------------------------------------------
@@ -283,7 +285,8 @@ def test_gateway_requests(
         """Send one controlled HTTP request to the actual gateway."""
 
         channel = Channel()
-        gateway = Gateway(settings(notification, channel, future_tolerance=30 if case == "expired" else 0),
+        gateway = NotificationGateway(settings(notification, channel,
+            future_tolerance=30 if case == "expired" else 0),
             utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         request = envelope(notification)
@@ -387,9 +390,9 @@ def test_gateway_attempt_outcomes(
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
         channel = Channel(mode)
-        gateway = Gateway(settings(event, channel, attempt_timeout=0.05))
+        gateway = NotificationGateway(settings(event, channel, attempt_timeout=0.05))
         await gateway.start(port=0)
-        client = NotificationGatewayChannel(NotificationGatewayConfig(
+        client = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
             token_env="RW_GW_TEST", allow_http=True))
         try:
@@ -441,7 +444,7 @@ def test_gateway_overload(
         config = settings(notification, channel, capacity=1 if limit == "global" else 32)
         if limit == "principal":
             config = replace(config, principals=(replace(config.principals[0], capacity=1),))
-        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
             async with aiohttp.ClientSession(headers={"Authorization": "Bearer " + TOKEN}) as client:
@@ -486,7 +489,7 @@ def test_gateway_body_deadline(notification: Notification) -> None:
         """Send headers without the advertised body using a raw loopback connection."""
 
         channel = Channel()
-        gateway = Gateway(settings(notification, channel, body_timeout=0.05),
+        gateway = NotificationGateway(settings(notification, channel, body_timeout=0.05),
             utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         reader, writer = await asyncio.open_connection("127.0.0.1", gateway.port)
@@ -540,7 +543,7 @@ def test_gateway_lifecycle(
         config = settings(notification, channel, startup_timeout=0.05, shutdown_timeout=0.15)
         config = replace(config, destinations=(*config.destinations, Destination(destination_id="other",
             channel_factory=lambda: other, retry=RetryPolicy(max_attempts=1))))
-        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         if mode in ("open_error", "open_wait", "cancel_start"):
             if mode == "cancel_start":
                 start = asyncio.create_task(gateway.start(port=0))
@@ -606,8 +609,8 @@ def test_gateway_mixed_runtime(
 
         from aiohttp import web
 
-        from remote_watch.adapters.ntfy import NtfyConfig
-        from remote_watch.adapters.telegram import TelegramConfig
+        from remote_watch.adapters.ntfy_notifications import NtfyConfig
+        from remote_watch.adapters.telegram_notifications import TelegramConfig
 
         received: list[str] = []
 
@@ -645,14 +648,15 @@ def test_gateway_mixed_runtime(
         await site.start()
         endpoint = f"http://127.0.0.1:{runner.addresses[0][1]}"
         direct = RetryPolicy(max_attempts=1)
-        grant = GatewayPrincipal(name="test", token_env="RW_GW_TEST",
+        grant = NotificationGatewayPrincipal(name="test", token_env="RW_GW_TEST",
             identity=notification.identity, aliases=("phone",))
-        config = GatewayConfig(principals=(grant,), destinations=(TelegramConfig(token_env="RW_GW_TELEGRAM",
+        config = NotificationGatewayServerConfig(principals=(grant,),
+            destinations=(TelegramConfig(token_env="RW_GW_TELEGRAM",
             chat_id=123, endpoint=endpoint, allow_http=True).destination("phone", retry=direct),))
-        gateway = Gateway(config)
+        gateway = NotificationGateway(config)
         try:
             await gateway.start(port=0)
-            notification_gateway = NotificationGatewayConfig(
+            notification_gateway = NotificationGatewayClientConfig(
                 endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone", token_env="RW_GW_TEST",
                 allow_http=True).destination("telegram", retry=direct)
             ntfy = NtfyConfig(topic="synthetic", token_env=None, endpoint=endpoint,
@@ -711,7 +715,7 @@ def test_gateway_start_guards(
             monkeypatch.delenv("RW_GW_TEST")
         elif case == "duplicate":
             config = replace(config, principals=(*config.principals, replace(config.principals[0], name="other")))
-        gateway = Gateway(config)
+        gateway = NotificationGateway(config)
         if case == "cancel_close":
             await gateway.start(port=0)
             task = asyncio.create_task(gateway.close())
@@ -753,7 +757,7 @@ def test_gateway_lost_reply(notification: Notification) -> None:
         """Discard the first response before validation, then retry the same delivery ID."""
 
         channel = Channel()
-        gateway = Gateway(settings(notification, channel), utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(settings(notification, channel), utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
             raw = json.dumps(envelope(notification).to_dict()).encode()
@@ -815,7 +819,7 @@ def test_gateway_rate_and_chunked(
             config = replace(config, principals=(replace(config.principals[0], min_interval=10),))
         elif case == "destination":
             config = replace(config, destination_interval=10)
-        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
             async with aiohttp.ClientSession(headers={"Authorization": "Bearer " + TOKEN}) as client:
@@ -865,7 +869,8 @@ def test_gateway_multiple_apps(
 
         """Exercise concurrent destinations and cross-application access denial."""
 
-        config = load_gateway_config(Path(__file__).parents[2] / "docs/examples/gateway_config.example.json")
+        config = load_notification_gateway_config(
+            Path(__file__).parents[2] / "docs/examples/notification_gateway.example.json")
         channels = [Channel("wait"), Channel(), Channel(), Channel()]
         principals = tuple(replace(item, min_interval=0) for item in config.principals)
         destinations = tuple(replace(item, channel_factory=lambda channel=channel: channel)
@@ -875,7 +880,7 @@ def test_gateway_multiple_apps(
         for principal, token in zip(principals, tokens):
             monkeypatch.setenv(principal.token_env, token)
 
-        gateway = Gateway(config, utc_now=lambda: notification.created_at)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
             async with aiohttp.ClientSession() as session:
@@ -984,10 +989,10 @@ def test_gateway_clock_tolerance(
     :param notification: Fixed synthetic notification.
     :type notification: Notification
 
-    :param schema: Gateway response schema.
+    :param schema: NotificationGateway response schema.
     :type schema: int
 
-    :param offset: Gateway UTC offset from the sender, in seconds.
+    :param offset: NotificationGateway UTC offset from the sender, in seconds.
     :type offset: int
 
     :param skew: Explicit two-sided allowance, in seconds.
@@ -1023,7 +1028,7 @@ def test_gateway_clock_tolerance(
         config = settings(event, channel, clock_skew_tolerance=skew, future_tolerance=future)
         destination = config.destinations[0]
         config = replace(config, destinations=(replace(destination, retry=replace(destination.retry, ttl=ttl)),))
-        gateway = Gateway(config, utc_now=lambda: event.created_at + timedelta(seconds=offset))
+        gateway = NotificationGateway(config, utc_now=lambda: event.created_at + timedelta(seconds=offset))
         request = replace(envelope(event), schema_version=schema)
         await gateway.start(port=0)
         try:
@@ -1091,7 +1096,7 @@ def test_gateway_elapsed_budget(
         """Model elapsed admission time directly at the dispatch boundary."""
 
         channel = Channel()
-        gateway = Gateway(settings(notification, channel, clock_skew_tolerance=3600),
+        gateway = NotificationGateway(settings(notification, channel, clock_skew_tolerance=3600),
             utc_now=lambda: notification.created_at)
         # Wire требует timeout <= remaining_ttl. Для второй ветки проверяем
         # защиту непосредственно на границе dispatch с уже истёкшим общим TTL.

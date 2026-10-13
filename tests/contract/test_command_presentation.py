@@ -1,14 +1,15 @@
 ﻿# Сохранение режима команд между решениями источника, SQLite и доставкой ответа.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_command_mode_recovery(): Восстановление решения и ответ по режиму исходной сессии.
 # -> test_command_mode_configuration(): Раздельные настройки клиента/источника и безопасные ошибки.
+# -> test_old_display_config_key_is_rejected(): Отказ от старого ключа JSON до открытия журнала.
 
 
 #******************************************************************************************************************
@@ -180,7 +181,7 @@ def test_command_mode_configuration(
     raw = settings()
     client_raw = {"schema_version": 1, "identity": raw["targets"]["one"],
                   "endpoint": "https://gateway.invalid", "state_file": "client.sqlite", "owner_id": "client",
-                  "token": "x" * 40, "command_display_mode": mode}
+                  "token": "x" * 40, "display_mode": mode}
     path = write_config(tmp_path / "client.json", client_raw)
     registry = CommandRegistry.from_callbacks({"status": lambda: "ok"})
     if mode in (None, "full", "compact", "text"):
@@ -189,16 +190,57 @@ def test_command_mode_configuration(
     else:
         with pytest.raises(CommandConfigError) as caught:
             load_command_client(path, registry)
-        assert caught.value.field == "client.command_display_mode" and "PRIVATE" not in str(caught.value)
+        assert caught.value.field == "client.display_mode" and "PRIVATE" not in str(caught.value)
 
-    raw["sources"][0]["command_display_mode"] = mode
+    raw["sources"][0]["display_mode"] = mode
     path = write_config(tmp_path / "gateway.json", raw)
     if mode in ("full", "compact", "text"):
         assert load_command_gateway(path).providers[0].command_display_mode == mode
     else:
         with pytest.raises(CommandConfigError) as caught:
             load_command_gateway(path)
-        assert caught.value.field == "sources[0].command_display_mode" and "PRIVATE" not in str(caught.value)
+        assert caught.value.field == "sources[0].display_mode" and "PRIVATE" not in str(caught.value)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Старое имя поля JSON не должно молча отключать выбранное оформление
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("location", ["client", "source"])
+def test_old_display_config_key_is_rejected(
+    tmp_path: Path,
+    location: str,
+) -> None:
+
+    """Reject the previous JSON key while keeping command wire fields unchanged.
+
+    :param tmp_path: Temporary directory containing synthetic configuration only.
+    :type tmp_path: Path
+
+    :param location: Client configuration or a gateway command source.
+    :type location: str
+    """
+
+    # tmp_path — временная папка с вымышленными настройками без реальных секретов.
+    # location — сторона, на которой проверяется отказ от старого ключа.
+
+    raw = settings()
+    registry = CommandRegistry.from_callbacks({"status": lambda: "ok"})
+    if location == "client":
+        value = {"schema_version": 1, "identity": raw["targets"]["one"],
+                 "endpoint": "https://example.test", "state_file": "client.sqlite",
+                 "owner_id": "test", "token": "x" * 40, "command_display_mode": "text"}
+        path = write_config(tmp_path / "command_client.json", value)
+        with pytest.raises(CommandConfigError):
+            load_command_client(path, registry)
+    else:
+        raw["sources"][0]["command_display_mode"] = "text"
+        path = write_config(tmp_path / "command_gateway.json", raw)
+        with pytest.raises(CommandConfigError):
+            load_command_gateway(path)
+
+    # Ошибка схемы должна обнаруживаться до открытия постоянного журнала.
+    assert not (tmp_path / "client.sqlite").exists()
 #------------------------------------------------------------------------------------------------------------------
 
 

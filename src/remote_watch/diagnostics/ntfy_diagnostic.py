@@ -1,10 +1,10 @@
 ﻿# Короткая проверка разных размеров ntfy с безопасным отчётом о каждой попытке.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Функции:
 # -> _delivery(): Подготовка уведомления с точным размером текста.
@@ -33,11 +33,11 @@ from uuid import uuid4
 
 from remote_watch._validation import require_number
 from remote_watch.adapters._common import render
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 from remote_watch.config import RetryPolicy
 from remote_watch.diagnostics.smoke import _load_settings, _notification, _Parser
-from remote_watch.notification_gateway_protocol import DIAGNOSTIC_FIELDS
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
+from remote_watch.notifications.gateway_protocol import DIAGNOSTIC_FIELDS
 
 CASES = tuple((alphabet, size) for alphabet in ("ascii", "unicode") for size in (512, 3500, 4095, 4096, 5000))
 

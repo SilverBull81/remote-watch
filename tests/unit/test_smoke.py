@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -45,7 +45,9 @@ from remote_watch import (
     DeliveryStatus,
     RetryPolicy,
 )
-from remote_watch.adapters import notification_gateway, ntfy, telegram
+from remote_watch.adapters import notification_gateway
+from remote_watch.adapters import ntfy_notifications as ntfy
+from remote_watch.adapters import telegram_notifications as telegram
 from remote_watch.diagnostics import smoke as smoke
 
 
@@ -60,7 +62,7 @@ class FakeChannel:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy,
     ) -> None:
@@ -68,7 +70,7 @@ class FakeChannel:
         """Keep the real validated configuration but skip the HTTP client.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig
+        :type config: TelegramConfig | NtfyConfig | NotificationGatewayClientConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
@@ -94,7 +96,7 @@ class FakeChannel:
         """Check temporary authentication or reproduce a private startup error."""
 
         expected = ("synthetic_service_token_01234567890123456789"
-                    if isinstance(self.config, notification_gateway.NotificationGatewayConfig)
+                    if isinstance(self.config, notification_gateway.NotificationGatewayClientConfig)
                     else "123:synthetic_secret")
         assert os.environ[self.config.token_env] == expected
         if self.open_error:
@@ -161,7 +163,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
     # ФУНКЦИЯ : Создание и сохранение тестовой сессии
     #--------------------------------------------------------------------------------------------------------------
     def create(
-        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy,
     ) -> FakeChannel:
@@ -169,7 +171,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         """Capture a channel constructed by the smoke command.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig
+        :type config: TelegramConfig | NtfyConfig | NotificationGatewayClientConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy

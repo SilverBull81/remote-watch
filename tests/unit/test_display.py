@@ -1,10 +1,10 @@
 ﻿# Отображение уведомлений без изменения исходных данных и протокола доставки.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_display_modes(): Прежний full, различимый compact и только текст с исключением.
@@ -27,11 +27,15 @@ import pytest
 
 from remote_watch import Notification
 from remote_watch.adapters._common import render
-from remote_watch.adapters.notification_gateway import NotificationGatewayConfig
-from remote_watch.adapters.ntfy import NtfyConfig
-from remote_watch.adapters.telegram import TelegramConfig
-from remote_watch.notification_gateway_protocol import NotificationGatewayRequest, decode_response, encode_response
+from remote_watch.adapters.notification_gateway import NotificationGatewayClientConfig
+from remote_watch.adapters.ntfy_notifications import NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramConfig
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
+from remote_watch.notifications.gateway_protocol import (
+    NotificationGatewayRequest,
+    decode_response,
+    encode_response,
+)
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -209,14 +213,14 @@ def test_notification_gateway_display_configuration(notification: Notification) 
 
     # Настройки принадлежат назначению, не общей Notification и не logging extra.
     base = {"endpoint": "https://gateway.invalid", "alias": "phone", "token": "x" * 32}
-    assert NotificationGatewayConfig(**base).schema_version == 1
-    assert NotificationGatewayConfig(**base, display_mode="text").schema_version == 3
-    assert NotificationGatewayConfig(**base, schema_version=3).display_mode is None
+    assert NotificationGatewayClientConfig(**base).schema_version == 1
+    assert NotificationGatewayClientConfig(**base, display_mode="text").schema_version == 3
+    assert NotificationGatewayClientConfig(**base, schema_version=3).display_mode is None
     for changes in ({"display_mode": "text", "schema_version": 1},
                     {"display_mode": "full", "schema_version": 2},
                     {"display_fields": []}, {"display_mode": "other"}, {"schema_version": 4}):
         with pytest.raises(ValueError):
-            NotificationGatewayConfig(**base, **changes)
+            NotificationGatewayClientConfig(**base, **changes)
 
     delivery = Delivery(notification=notification, destination_id="phone", delivery_id="one")
     fields = ["identity", "level"]

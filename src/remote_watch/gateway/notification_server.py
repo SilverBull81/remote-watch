@@ -1,21 +1,21 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
 #    Интерфейс:
 #    -> error(): Отказ без вывода значений аргументов.
 #
-# -> GatewayStartupError: Безопасный этап ошибки запуска.
+# -> NotificationGatewayStartupError: Безопасный этап ошибки запуска.
 #    Конструктор:
 #    -> __init__(): Создание объекта.
 #
-# -> Gateway: Исходящий HTTP-сервер с управляемым временем работы.
+# -> NotificationGateway: Исходящий HTTP-сервер с управляемым временем работы.
 #    Конструктор:
 #    -> __init__(): Подготовка состояния без запуска ресурсов.
 #    Интерфейс:
@@ -67,15 +67,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from remote_watch._credentials import CREDENTIAL_HINTS, resolve_token
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.notification_gateway_protocol import (
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.notifications._context import delivery_context
+from remote_watch.notifications.channels import NotificationChannel
+from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus, ResultSource
+from remote_watch.notifications.gateway_protocol import (
     MAX_REQUEST_BYTES,
     NotificationGatewayRequest,
     encode_response,
 )
-from remote_watch.notifications._context import delivery_context
-from remote_watch.notifications.channels import NotificationChannel
-from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus, ResultSource
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -126,7 +126,7 @@ class _GatewayParser(argparse.ArgumentParser):
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасный этап ошибки запуска
 #------------------------------------------------------------------------------------------------------------------
-class GatewayStartupError(RuntimeError):
+class NotificationGatewayStartupError(RuntimeError):
     """Describe a startup stage without copying transport exceptions."""
 
     #--------------------------------------------------------------------------------------------------------------
@@ -154,7 +154,7 @@ class GatewayStartupError(RuntimeError):
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Исходящий HTTP-сервер с управляемым временем работы
 #------------------------------------------------------------------------------------------------------------------
-class Gateway:
+class NotificationGateway:
     """Own a single-loop outbound server; construction has no network side effects."""
 
     #--------------------------------------------------------------------------------------------------------------
@@ -162,7 +162,7 @@ class Gateway:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: GatewayConfig,
+        config: NotificationGatewayServerConfig,
         *,
         utc_now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -170,7 +170,7 @@ class Gateway:
         """Store validated configuration without reading tokens or starting channels.
 
         :param config: Validated server configuration.
-        :type config: GatewayConfig
+        :type config: NotificationGatewayServerConfig
 
         :param utc_now: Aware UTC clock used for expiry checks.
         :type utc_now: Callable[[], datetime]
@@ -179,8 +179,8 @@ class Gateway:
         # config - проверенные настройки сервера.
         # utc_now - часы UTC для проверки срока уведомления.
 
-        if not isinstance(config, GatewayConfig) or not callable(utc_now):
-            raise TypeError("gateway requires GatewayConfig and a clock")
+        if not isinstance(config, NotificationGatewayServerConfig) or not callable(utc_now):
+            raise TypeError("gateway requires NotificationGatewayServerConfig and a clock")
         self._config = config
         self._utc_now = utc_now
         self._state = "new"
@@ -188,7 +188,7 @@ class Gateway:
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._channels: dict[str, NotificationChannel] = {}
-        self._tokens: list[tuple[bytes, GatewayPrincipal]] = []
+        self._tokens: list[tuple[bytes, NotificationGatewayPrincipal]] = []
         self._active: set[asyncio.Task[object]] = set()
         self._principal_active: Counter[str] = Counter()
         self._busy: set[str] = set()
@@ -318,7 +318,7 @@ class Gateway:
             raise
         except Exception:
             await self.close()
-            raise GatewayStartupError(stage) from None
+            raise NotificationGatewayStartupError(stage) from None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -433,7 +433,7 @@ class Gateway:
     def _authenticate(
         self,
         request: web.Request,
-    ) -> GatewayPrincipal | None:
+    ) -> NotificationGatewayPrincipal | None:
 
         """Compare bounded bearer hashes without accepting alternate credential locations.
 
@@ -441,7 +441,7 @@ class Gateway:
         :type request: web.Request
 
         :return: Matching configured application policy, or None on authentication failure.
-        :rtype: GatewayPrincipal | None
+        :rtype: NotificationGatewayPrincipal | None
         """
 
         # request - входящий HTTP-запрос.
@@ -736,7 +736,7 @@ def _consume_task(task: asyncio.Task[object]) -> None:
 # ФУНКЦИЯ : Работа отдельного процесса до сигнала остановки
 #------------------------------------------------------------------------------------------------------------------
 async def _serve(
-    config: GatewayConfig,
+    config: NotificationGatewayServerConfig,
     host: str,
     port: int,
     context: ssl.SSLContext | None,
@@ -746,7 +746,7 @@ async def _serve(
     """Run the configured gateway until the process is interrupted.
 
     :param config: Validated server configuration.
-    :type config: GatewayConfig
+    :type config: NotificationGatewayServerConfig
 
     :param host: Explicit bind address.
     :type host: str
@@ -767,7 +767,7 @@ async def _serve(
     # context - настройки шифрования серверного соединения.
     # stop_file - локальный файл запроса остановки; содержимое не читается.
 
-    gateway = Gateway(config)
+    gateway = NotificationGateway(config)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     signal_installed = False
@@ -781,7 +781,7 @@ async def _serve(
         except NotImplementedError:
             pass
         await gateway.start(host=host, port=port, ssl_context=context)
-        print(f"Gateway запущен, TCP-порт {gateway.port}. Для остановки нажмите Ctrl+C.", flush=True)
+        print(f"NotificationGateway запущен, TCP-порт {gateway.port}. Для остановки нажмите Ctrl+C.", flush=True)
         # Одна ограниченная проверка в секунду позволяет корректно остановить Windows-задачу
         # без публичного admin endpoint и без принудительного уничтожения процесса.
         while not stop.is_set():
@@ -837,16 +837,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Фабрика остаётся альтернативой для пользовательских адаптеров и выполняется
         # как доверенный код, в том числе при --check-config.
         if args.config is not None:
-            from remote_watch.gateway.json_config import load_gateway_config
+            from remote_watch.gateway.notification_json_config import load_notification_gateway_config
 
-            config = load_gateway_config(args.config)
+            config = load_notification_gateway_config(args.config)
         else:
             module, name = args.factory.split(":")
             if not name.isidentifier():
                 raise ValueError("invalid factory")
             config = getattr(importlib.import_module(module), name)()
-        if not isinstance(config, GatewayConfig):
-            raise TypeError("factory must return GatewayConfig")
+        if not isinstance(config, NotificationGatewayServerConfig):
+            raise TypeError("factory must return NotificationGatewayServerConfig")
         stage = "tls"
         if bool(args.cert) != bool(args.key):
             raise ValueError("both certificate and key are required")
@@ -867,19 +867,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
     except Exception as error:
-        from remote_watch.gateway.json_config import GatewayConfigError
+        from remote_watch.gateway.notification_json_config import NotificationGatewayConfigError
 
         # Выбираем только заранее известные категории. Не печатаем str(error), traceback
         # или аргументы пользователя: в них могут оказаться токены и частные адреса.
-        if isinstance(error, GatewayConfigError):
+        if isinstance(error, NotificationGatewayConfigError):
             code, field = error.code, error.field
-        elif isinstance(error, GatewayStartupError):
+        elif isinstance(error, NotificationGatewayStartupError):
             code, field = "startup_failed", error.stage
         elif isinstance(error, ImportError):
             code, field = "dependency_missing", stage
         else:
             code, field = "operation_failed", stage
-        hint = CREDENTIAL_HINTS.get(error.reason, "") if isinstance(error, GatewayConfigError) else ""
+        hint = CREDENTIAL_HINTS.get(error.reason, "") if isinstance(error, NotificationGatewayConfigError) else ""
         print(f"Ошибка gateway: code={code} field={field}. {hint or 'Значения и детали скрыты.'}", flush=True)
         return 1
     return 0
@@ -890,5 +890,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль remote_watch.gateway.server не предназначен для прямого запуска.")
+    print("Модуль remote_watch.gateway.notification_server не предназначен для прямого запуска.")
 #------------------------------------------------------------------------------------------------------------------

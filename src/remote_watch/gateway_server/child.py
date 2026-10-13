@@ -1,10 +1,10 @@
 ﻿# Закрытый bootstrap серверного компонента с heartbeat его рабочего event loop.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-164040
 #
 # Функции:
 # -> failure_kind(): Классификация известных ошибок без их текста.
@@ -27,8 +27,8 @@ from remote_watch.commands.storage import StoreConflict, StoreError
 from remote_watch.commands.transport import CommandError
 from remote_watch.gateway.command_config import load_command_gateway
 from remote_watch.gateway.command_service import CommandGateway
-from remote_watch.gateway.json_config import load_gateway_config
-from remote_watch.gateway.server import Gateway, GatewayStartupError
+from remote_watch.gateway.notification_json_config import load_notification_gateway_config
+from remote_watch.gateway.notification_server import NotificationGateway, NotificationGatewayStartupError
 from remote_watch.gateway_server.messages import REASONS, read_limited, status_message
 from remote_watch.gateway_server.processes import parent_guard
 
@@ -56,7 +56,7 @@ def failure_kind(error: BaseException) -> str:
     if isinstance(error, CommandError):
         return {"denied": "authorization", "conflict": "ownership", "unavailable": "storage",
                 "capacity": "storage", "invalid": "configuration"}.get(error.code, "crash")
-    if isinstance(error, (ValueError, TypeError, ImportError, GatewayStartupError, OSError)):
+    if isinstance(error, (ValueError, TypeError, ImportError, NotificationGatewayStartupError, OSError)):
         return "configuration"
     return "crash"
 #------------------------------------------------------------------------------------------------------------------
@@ -98,7 +98,7 @@ async def run_child(settings: dict) -> None:
 
                 lock = ProcessLock(Path(settings["config"]).with_suffix(".gateway.lock"))
                 lock.open()
-                component = Gateway(load_gateway_config(settings["config"]))
+                component = NotificationGateway(load_notification_gateway_config(settings["config"]))
                 startup = asyncio.create_task(component.start(host=settings["host"], port=settings["port"]))
             elif name == "caddy":
                 from remote_watch.gateway_server.caddy import ManagedCaddy

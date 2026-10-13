@@ -1,10 +1,10 @@
 ﻿# Клиентское отображение через работающий gateway без изменения его конфигурации.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> test_gateway_display_override(): Разные режимы клиентов при одном неизменном provider-канале.
@@ -25,11 +25,11 @@ import pytest
 
 from remote_watch import Delivery, DeliveryStatus, Destination, Notification, RetryPolicy
 from remote_watch.adapters._common import render
-from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
-from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
-from remote_watch.gateway.server import Gateway
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayClientConfig
+from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
+from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
+from remote_watch.gateway.notification_server import NotificationGateway
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -106,10 +106,10 @@ def test_gateway_display_override(
         #----------------------------------------------------------------------------------------------------------
 
         monkeypatch.setattr(channel._http, "post", post)
-        gateway = Gateway(GatewayConfig(
+        gateway = NotificationGateway(NotificationGatewayServerConfig(
             destinations=(Destination(destination_id="phone", channel_factory=lambda: channel,
                                       retry=RetryPolicy(max_attempts=1)),),
-            principals=(GatewayPrincipal(name="application", token="x" * 32, identity=event.identity,
+            principals=(NotificationGatewayPrincipal(name="application", token="x" * 32, identity=event.identity,
                                          aliases=("phone",), min_interval=0),), destination_interval=0))
         await gateway.start(port=0)
         base = {"endpoint": f"http://127.0.0.1:{gateway.port}", "alias": "phone", "token": "x" * 32,
@@ -118,7 +118,7 @@ def test_gateway_display_override(
             for changes in ({}, {"schema_version": 2}, {"schema_version": 3},
                             {"display_mode": "full"}, {"display_mode": "compact"}, {"display_mode": "text"},
                             {"display_mode": "full", "display_fields": ["level"]}, {}):
-                client = NotificationGatewayChannel(NotificationGatewayConfig(**base, **changes))
+                client = NotificationGatewayChannel(NotificationGatewayClientConfig(**base, **changes))
                 try:
                     await client.open()
                     result = await client.send(delivery)
@@ -136,7 +136,7 @@ def test_gateway_display_override(
             assert delivery.display_mode is None and delivery.notification is event
 
             # Клиентский text не меняет проверку Identity/alias до provider.send.
-            client = NotificationGatewayChannel(NotificationGatewayConfig(**base, display_mode="text"))
+            client = NotificationGatewayChannel(NotificationGatewayClientConfig(**base, display_mode="text"))
             try:
                 await client.open()
                 foreign = replace(delivery, notification=replace(event,
@@ -145,7 +145,7 @@ def test_gateway_display_override(
             finally:
                 await client.close()
             client = NotificationGatewayChannel(
-                NotificationGatewayConfig(**{**base, "alias": "other"}, display_mode="text"))
+                NotificationGatewayClientConfig(**{**base, "alias": "other"}, display_mode="text"))
             try:
                 await client.open()
                 assert (await client.send(delivery)).reason_code == "gateway_auth_denied"
@@ -189,7 +189,7 @@ def test_display_old_gateway(
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
-        client = NotificationGatewayChannel(NotificationGatewayConfig(
+        client = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint="https://gateway.invalid", alias="phone",
                                           token="x" * 32, display_mode="text"))
         calls = []

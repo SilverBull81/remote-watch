@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Статус
 
@@ -66,14 +66,14 @@ Session ID создаётся на каждый runtime. Метаданные Lo
 
 Для direct необходимы provider settings. Для gateway необходимы HTTPS gateway URL,
 service secret reference и remote alias; provider credentials у приложения не нужны.
-NotificationGatewayConfig не содержит provider credentials и создаёт gateway factory. В 0.2.0.dev3
+NotificationGatewayClientConfig не содержит provider credentials и создаёт gateway factory. В 0.2.0.dev3
 реализованы клиент и сервер: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Сам mode не подменяет произвольную
 пользовательскую фабрику. См. [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
 
 Для серверного процесса в 0.2.0.dev4 добавлена необязательная JSON-конфигурация:
-`python -m remote_watch.gateway --config gateway_config.json`. Она преобразуется
-в обычные GatewayConfig/GatewayPrincipal; формат настроек приложений не меняется.
+`python -m remote_watch.gateway --config notification_gateway.local.json`. Она преобразуется
+в обычные NotificationGatewayServerConfig/NotificationGatewayPrincipal; формат настроек приложений не меняется.
 Файл, пример четырёх приложений и проверка без запуска описаны в
 [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Развёртывание Windows/HTTPS — в
 [GATEWAY_TLS.md](GATEWAY_TLS.md).
@@ -85,7 +85,7 @@ outstanding_capacity и RetryPolicy. Фабрика — синхронный cal
 создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
 соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
 Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
-TelegramConfig/NtfyConfig/NotificationGatewayConfig создают готовые фабрики через destination(); токены читаются
+TelegramConfig/NtfyConfig/NotificationGatewayClientConfig создают готовые фабрики через destination(); токены читаются
 из переменных окружения при open. Общего secret resolver пока нет. Неизвестные provider-имена
 не импортируются: так подключаются пользовательские реализации без registry SDK.
 

@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Класс:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца.
@@ -37,7 +37,7 @@ from pathlib import Path
 from remote_watch._validation import require_int, require_number
 from remote_watch.config import DeliveryMode, Destination, Route, RuntimeConfig, WatcherConfig
 from remote_watch.events import Identity
-from remote_watch.gateway.json_config import _destination
+from remote_watch.gateway.notification_json_config import _destination
 from remote_watch.gateway_server.messages import REASONS, STATES
 from remote_watch.watcher import RemoteWatcher
 

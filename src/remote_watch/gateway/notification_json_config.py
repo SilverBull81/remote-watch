@@ -1,18 +1,18 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
-# -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
+# -> NotificationGatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
 #    Конструктор:
 #    -> __init__(): Создание объекта.
 #
 # Функции:
-# -> load_gateway_config(): Чтение и проверка локального JSON-файла.
+# -> load_notification_gateway_config(): Чтение и проверка локального JSON-файла.
 # -> _object(): Проверка допустимых и обязательных полей.
 # -> _items(): Проверка размера списка настроек.
 # -> _unique_object(): Запрет повторяющихся ключей JSON.
@@ -38,7 +38,7 @@ from typing import Any
 from remote_watch._credentials import CREDENTIAL_HINTS, CredentialError
 from remote_watch.config import Destination, RetryPolicy
 from remote_watch.events import Identity
-from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 
 #******************************************************************************************************************
 # КОНСТАНТЫ
@@ -49,7 +49,7 @@ MAX_CONFIG_BYTES = 1024 * 1024
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ошибка с фиксированной категорией и разделом схемы
 #------------------------------------------------------------------------------------------------------------------
-class GatewayConfigError(ValueError):
+class NotificationGatewayConfigError(ValueError):
     """Expose only fixed validation categories and schema field names."""
 
     #--------------------------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ class GatewayConfigError(ValueError):
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение и проверка локального JSON-файла
 #------------------------------------------------------------------------------------------------------------------
-def load_gateway_config(path: str | Path) -> GatewayConfig:
+def load_notification_gateway_config(path: str | Path) -> NotificationGatewayServerConfig:
 
     """Read schema version 1 without resolving secrets or opening network clients.
 
@@ -104,7 +104,7 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
     :type path: str | Path
 
     :return: Validated server configuration with lazy provider factories.
-    :rtype: GatewayConfig
+    :rtype: NotificationGatewayServerConfig
     """
 
     # path - путь к локальному файлу настроек.
@@ -137,7 +137,7 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             try:
                 destinations.append(_destination(item))
             except CredentialError as error:
-                raise GatewayConfigError(
+                raise NotificationGatewayConfigError(
                     code, f"destinations[{index}].settings.{error.field}", error.reason,
                 ) from None
         field = "principals"
@@ -146,21 +146,22 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             try:
                 principals.append(_principal(item))
             except CredentialError as error:
-                raise GatewayConfigError(code, f"principals[{index}].{error.field}", error.reason) from None
+                raise NotificationGatewayConfigError(
+                    code, f"principals[{index}].{error.field}", error.reason) from None
         field = "gateway"
         options = _object(root.get("gateway", {}), {
             "capacity", "body_timeout", "attempt_timeout", "startup_timeout",
             "shutdown_timeout", "future_tolerance", "clock_skew_tolerance", "destination_interval",
         })
-        return GatewayConfig(
+        return NotificationGatewayServerConfig(
             destinations=tuple(destinations),
             principals=tuple(principals),
             **options,
         )
-    except GatewayConfigError:
+    except NotificationGatewayConfigError:
         raise
     except (OSError, ValueError, TypeError, RecursionError):
-        raise GatewayConfigError(code, field) from None
+        raise NotificationGatewayConfigError(code, field) from None
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -274,7 +275,7 @@ def _invalid_constant(value: str) -> None:
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Создание точных прав одного приложения
 #------------------------------------------------------------------------------------------------------------------
-def _principal(value: Any) -> GatewayPrincipal:
+def _principal(value: Any) -> NotificationGatewayPrincipal:
 
     """Construct one explicitly authorized application identity.
 
@@ -282,7 +283,7 @@ def _principal(value: Any) -> GatewayPrincipal:
     :type value: Any
 
     :return: Validated application credential and exact gateway permissions.
-    :rtype: GatewayPrincipal
+    :rtype: NotificationGatewayPrincipal
     """
 
     # value - значение, прочитанное из JSON.
@@ -292,7 +293,7 @@ def _principal(value: Any) -> GatewayPrincipal:
     _credential_source(settings)
     identity_fields = {"service", "environment", "region", "host", "instance_id"}
     settings["identity"] = Identity(**_object(settings["identity"], identity_fields, identity_fields))
-    return GatewayPrincipal(**settings)
+    return NotificationGatewayPrincipal(**settings)
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -320,7 +321,7 @@ def _destination(value: Any) -> Destination:
     # остаются доступны через явно доверенную Python-фабрику. Здесь создаются
     # только настройки: literal-токены проверяются сразу, окружение читается при запуске.
     if settings["provider"] == "telegram":
-        from remote_watch.adapters.telegram import TelegramConfig
+        from remote_watch.adapters.telegram_notifications import TelegramConfig
 
         options = _object(settings["settings"], {
             "token", "token_env", "chat_id", "endpoint", "message_thread_id", "disable_notification", "allow_http",
@@ -329,7 +330,7 @@ def _destination(value: Any) -> Destination:
         _credential_source(options)
         provider = TelegramConfig(**options)
     elif settings["provider"] == "ntfy":
-        from remote_watch.adapters.ntfy import NtfyConfig
+        from remote_watch.adapters.ntfy_notifications import NtfyConfig
 
         options = _object(settings["settings"], {
             "topic", "token", "token_env", "endpoint", "title", "priority", "tags", "allow_http",
@@ -370,6 +371,6 @@ def _credential_source(settings: dict[str, Any]) -> None:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.gateway.json_config не предназначен для прямого запуска.",
+        "Модуль remote_watch.gateway.notification_json_config не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

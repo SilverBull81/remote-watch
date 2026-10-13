@@ -1,10 +1,10 @@
 ﻿# Общие настройки deployment и их проверка без запуска серверов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига.
@@ -567,7 +567,7 @@ def _check_components(config: DeploymentConfig) -> None:
     # config — проверенные ссылки; загрузчики компонентов не получают новую базу путей.
 
     from ..gateway.command_config import CommandConfigError, check_command_gateway
-    from ..gateway.json_config import GatewayConfigError, load_gateway_config
+    from ..gateway.notification_json_config import NotificationGatewayConfigError, load_notification_gateway_config
 
     for name in ("notifications", "commands"):
         component = getattr(config, name)
@@ -575,10 +575,10 @@ def _check_components(config: DeploymentConfig) -> None:
             continue
         try:
             if name == "notifications":
-                load_gateway_config(component.config)
+                load_notification_gateway_config(component.config)
             else:
                 check_command_gateway(component.config)
-        except (GatewayConfigError, CommandConfigError):
+        except (NotificationGatewayConfigError, CommandConfigError):
             raise DeploymentConfigError("component_config", name) from None
 #------------------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -47,7 +47,7 @@ from remote_watch.notifications.delivery import Delivery, DeliveryResult, Delive
 _FAILURE_HINTS = {
     "gateway_expired": "Истёк срок сообщения или обработки; проверьте также расхождение часов VM.",
     "gateway_clock_skew": "Время создания сообщения опережает часы gateway сверх разрешённого допуска.",
-    "gateway_auth_denied": "Gateway отклонил токен, identity или права на alias.",
+    "gateway_auth_denied": "NotificationGateway отклонил токен, identity или права на alias.",
     "tls_certificate": "Не удалось проверить сертификат gateway или провайдера.",
     "gateway_budget_exhausted": "Срок отправки закончился на клиенте до обращения к gateway.",
 }
@@ -201,7 +201,7 @@ async def _send(
     os.environ[token_env] = token
     try:
         if provider == "telegram":
-            from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
+            from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
             channel = TelegramChannel(TelegramConfig(
                 token_env=token_env,
@@ -211,7 +211,7 @@ async def _send(
                 allow_http=settings.get("allow_http", False),
             ), retry=policy)
         elif provider == "ntfy":
-            from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
+            from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 
             channel = NtfyChannel(NtfyConfig(
                 token_env=token_env,
@@ -222,10 +222,10 @@ async def _send(
         elif provider == "gateway":
             from remote_watch.adapters.notification_gateway import (
                 NotificationGatewayChannel,
-                NotificationGatewayConfig,
+                NotificationGatewayClientConfig,
             )
 
-            channel = NotificationGatewayChannel(NotificationGatewayConfig(
+            channel = NotificationGatewayChannel(NotificationGatewayClientConfig(
                 token_env=token_env,
                 endpoint=settings.get("endpoint"),
                 alias=settings.get("alias"),

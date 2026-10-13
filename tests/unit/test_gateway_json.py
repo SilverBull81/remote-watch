@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-164040
 #
 # Тесты:
 # -> document(): Синтетический файл настроек без секретов.
@@ -30,8 +30,8 @@ from typing import Any
 import pytest
 
 from remote_watch import DeliveryMode
-from remote_watch.gateway.json_config import MAX_CONFIG_BYTES, load_gateway_config
-from remote_watch.gateway.server import main
+from remote_watch.gateway.notification_json_config import MAX_CONFIG_BYTES, load_notification_gateway_config
+from remote_watch.gateway.notification_server import main
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def test_json_valid(
     path = tmp_path / "config.json"
     # BOM принимается для файлов, сохранённых стандартными средствами Windows.
     path.write_text(json.dumps(value), encoding="utf-8-sig")
-    config = load_gateway_config(path)
+    config = load_notification_gateway_config(path)
     assert config.capacity == 10
     assert config.clock_skew_tolerance == 600
     assert config.principals[0].aliases == ("phone",)
@@ -194,7 +194,7 @@ def test_json_rejects(
     if case != "missing":
         path.write_bytes(data)
     with pytest.raises(ValueError, match="Invalid gateway JSON configuration") as error:
-        load_gateway_config(path)
+        load_notification_gateway_config(path)
     assert "PRIVATE_VALUE" not in str(error.value)
     assert error.value.__suppress_context__
 #------------------------------------------------------------------------------------------------------------------
@@ -234,7 +234,7 @@ def test_json_cli(
     path = tmp_path / "config.json"
     path.write_text(json.dumps(document()), encoding="utf-8")
     module = ModuleType("synthetic_gateway_settings")
-    module.build_config = lambda: load_gateway_config(path)
+    module.build_config = lambda: load_notification_gateway_config(path)
     monkeypatch.setitem(sys.modules, module.__name__, module)
     arguments = ["synthetic_gateway_settings:build_config"] if factory else ["--config", str(path)]
     assert main([*arguments, "--check-config"]) == 0
@@ -276,7 +276,7 @@ def test_json_cli(
         calls.append((config, host, port, context))
     #--------------------------------------------------------------------------------------------------------------
 
-    monkeypatch.setattr("remote_watch.gateway.server._serve", serve)
+    monkeypatch.setattr("remote_watch.gateway.notification_server._serve", serve)
     assert main(arguments) == 0
     assert calls[0][0].principals[0].name == "app"
     assert calls[0][1:] == ("127.0.0.1", 8765, None)
@@ -337,7 +337,8 @@ def test_json_example() -> None:
 
     """Validate the distributed four-application example as executable configuration."""
 
-    config = load_gateway_config(Path(__file__).parents[2] / "docs/examples/gateway_config.example.json")
+    config = load_notification_gateway_config(
+        Path(__file__).parents[2] / "docs/examples/notification_gateway.example.json")
     assert len(config.principals) == len(config.destinations) == 4
     assert len({item.token_env for item in config.principals}) == 4
     for principal, destination in zip(config.principals, config.destinations):

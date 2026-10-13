@@ -1,10 +1,10 @@
 ﻿# ADR 0013: названия notification gateway без переходных алиасов
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 ## Статус и основание
 
@@ -15,17 +15,17 @@ Version 1.0.0
 
 ## Решение
 
-Клиент: `NotificationGatewayConfig` и `NotificationGatewayChannel` из
+Клиент: `NotificationGatewayClientConfig` и `NotificationGatewayChannel` из
 `remote_watch.adapters.notification_gateway`. Модель wire: `NotificationGatewayRequest`
-из `remote_watch.notification_gateway_protocol`. Режим доставки и источник результата:
+из `remote_watch.notifications.gateway_protocol`. Режим доставки и источник результата:
 `DeliveryMode.GATEWAY`, `ResultSource.GATEWAY`, значение `gateway`.
 Provider назначения, диагностический CLI и секция smoke тоже называются `gateway`.
 Причины: `gateway_*` и `invalid_gateway_response`. Extra `relay` удалён;
 существующий `[gateway]` используется и для клиента, и для сервера уведомлений.
 
 Старые модули удалены; нет wrappers, re-exports, enum aliases или автоматического
-исправления старого конфига. Серверный `GatewayConfig` сохраняет имя: он отличается
-от `NotificationGatewayConfig` клиента и уже обозначает gateway.
+исправления старого конфига. Серверный `NotificationGatewayServerConfig` сохраняет имя: он отличается
+от `NotificationGatewayClientConfig` клиента и уже обозначает gateway.
 Notifications и commands остаются раздельными возможностями; reconnect не добавлен.
 
 ## Протокол и постоянные данные

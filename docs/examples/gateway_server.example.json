@@ -4,7 +4,7 @@
   "control_dir": "control",
   "log_dir": "logs",
   "notifications": {
-    "config": "gateway_config.example.json",
+    "config": "notification_gateway.example.json",
     "host": "127.0.0.1",
     "port": 8765
   },

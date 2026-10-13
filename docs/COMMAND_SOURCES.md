@@ -1,10 +1,10 @@
 ﻿# Команды из Telegram и закрытых топиков ntfy
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-170523
 
 В 0.3.5.dev1 реализован путь «сообщение → командный gateway → конкретный запуск
 приложения → пользовательский callback → ответ». Telegram и ntfy используют общий
@@ -254,8 +254,11 @@ Usage: /rw loader-ru command [arg_name=value]
 
 ## Отображение ответов команд на телефоне
 
-С **0.4.1.dev9** отдельная настройка `command_display_mode` управляет ответами
-Telegram и закрытого ntfy. Она не связана с `display_mode` outbound-уведомлений.
+С **0.4.1.dev9** отдельная настройка управляет ответами Telegram и закрытого ntfy.
+Начиная с **0.4.2.dev5**, в пользовательском JSON она называется `display_mode`;
+в Python CommandRegistration и сетевом протоколе остаётся `command_display_mode`.
+Она независима от `display_mode` уведомлений. Прежний ключ JSON не принимается;
+см. [памятку обновления](NAMING_MIGRATION.md).
 
 | Режим | Ответ команды |
 | --- | --- |
@@ -272,7 +275,7 @@ UNKNOWN/timeout в text выглядит как `Command outcome is unknown (tim
 Предпочтительный способ — поле в **клиентском командном JSON**:
 
 ```json
-"command_display_mode": "compact"
+"display_mode": "compact"
 ```
 
 Разместите его рядом с endpoint/identity/state_file и перезапустите приложение.
@@ -288,7 +291,7 @@ null оставляет настройку источника gateway. Для в
 {
   "source_id": "telegram",
   "provider": "telegram",
-  "command_display_mode": "full"
+  "display_mode": "full"
 }
 ```
 
