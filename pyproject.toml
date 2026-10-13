@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "0.4.2.dev1"
+version = "0.4.2.dev2"
 description = "Standard logging integration and bounded asynchronous remote notifications"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,6 +30,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 remote_watch = ["py.typed"]
+"remote_watch.gateway_server" = ["assets/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

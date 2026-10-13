@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-124741
 #
 # Класс:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи.
@@ -215,7 +215,8 @@ class GatewayManager:
                 from remote_watch.gateway_server.tray import GatewayTray
 
                 loop = asyncio.get_running_loop()
-                self._tray = GatewayTray(lambda: loop.call_soon_threadsafe(self.stop_event.set))
+                self._tray = GatewayTray(lambda: loop.call_soon_threadsafe(self.stop_event.set),
+                                         icon_path=self.config.application.icon_path)
                 await asyncio.to_thread(self._tray.start)
             # SIGINT обрабатывается в asyncio.run; SIGTERM также идёт через общий stop.
             if sys.platform == "linux":

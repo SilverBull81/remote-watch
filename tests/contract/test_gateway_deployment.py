@@ -1,10 +1,10 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-184007
+# Дата и время последнего изменения: 261013-124741
 #
 # Тесты:
 # -> deployment(): Создание только подставных конфигов в отдельной папке.
@@ -15,6 +15,7 @@
 # -> test_component_failure(): Проверка вложенного конфига и безопасная подсказка.
 # -> test_cli(): Успех, отказ и обязательность явного режима проверки.
 # -> test_typed_models(): Ограничения Python API и приватность repr.
+# -> test_icon_path(): Путь иконки относится к конфигу и проверяется без GUI.
 
 
 #******************************************************************************************************************
@@ -157,6 +158,8 @@ def test_modes_are_read_only(
     ("restart", {"max_delay": 1e300}), ("restart", {"max_restarts": -1}),
     ("lifecycle", {"heartbeat_timeout": 2}), ("lifecycle", {"heartbeat_interval": 0.01}),
     ("lifecycle", {"startup_timeout": 2}), ("lifecycle", {"kill_timeout": 0}),
+    ("application", {"icon_path": ""}), ("application", {"icon_path": False}),
+    ("application", {"icon_path": []}),
 ])
 def test_invalid_deployment(
     deployment: tuple[Path, dict[str, Any]],
@@ -188,6 +191,54 @@ def test_invalid_deployment(
     assert "secret-value" not in str(caught.value)
     assert "secret-unknown" not in str(caught.value)
     assert str(path) not in str(caught.value)
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Путь иконки относится к конфигу и проверяется без GUI
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["default", "relative", "absolute", "missing"])
+def test_icon_path(
+    deployment: tuple[Path, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+
+    """Resolve an optional icon from the deployment directory without loading optional GUI libraries.
+
+    :param deployment: Synthetic deployment location and configuration.
+    :type deployment: tuple[Path, dict[str, Any]]
+
+    :param monkeypatch: Change cwd independently of the config location.
+    :type monkeypatch: pytest.MonkeyPatch
+
+    :param mode: Default, relative, absolute or missing icon case.
+    :type mode: str
+    """
+
+    # deployment/monkeypatch — запуск из другой папки не меняет смысл ссылки.
+    # mode — проверяем встроенную иконку, оба вида пути и раннюю безопасную ошибку.
+    path, value = deployment
+    icon = path.parent / "свой логотип.ico"
+    if mode != "missing":
+        icon.write_bytes(b"not decoded during config validation")
+    value["application"] = {"icon_path": None if mode == "default" else
+                            str(icon) if mode == "absolute" else icon.name}
+    path.write_text(json.dumps(value), encoding="utf-8")
+    monkeypatch.chdir(path.parent.parent)
+
+    if mode == "missing":
+        with pytest.raises(DeploymentConfigError) as caught:
+            load_deployment_config(path)
+        assert caught.value.code == "path_unavailable"
+        assert caught.value.field == "application.icon_path"
+        assert str(icon) not in str(caught.value)
+        return
+
+    config = load_deployment_config(path)
+    assert config.application.icon_path == (None if mode == "default" else icon)
+    assert str(icon) not in repr(config.application)
+    assert not config.control_dir.exists()
 #------------------------------------------------------------------------------------------------------------------
 
 

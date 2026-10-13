@@ -1,10 +1,10 @@
 ﻿# Общие настройки deployment и их проверка без запуска серверов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-124741
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига.
@@ -89,7 +89,7 @@ class DeploymentConfigError(ValueError):
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
                  "component_config", "path_unavailable", "operation_failed")
         fields = ("config", "schema_version", "endpoint", "control_dir", "log_dir", "notifications",
-                  "commands", "caddy", "lifecycle", "restart", "application")
+                  "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path")
         self.code = code if code in codes else "config_value"
         self.field = field_name if field_name in fields else "config"
         super().__init__(f"Invalid deployment: code={self.code} field={self.field}")
@@ -341,7 +341,9 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         restart = RestartPolicy(**value)
 
         section = "application"
-        application = application_config(root.get(section, {}))
+        application = application_config(root.get(section, {}), location.parent)
+        if application.icon_path is not None and not application.icon_path.is_file():
+            raise DeploymentConfigError("path_unavailable", "application.icon_path")
 
         section = "config"
         deployment = DeploymentConfig(endpoint=root["endpoint"], caddy=caddy, lifecycle=lifecycle,

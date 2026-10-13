@@ -18,6 +18,7 @@
   },
   "application": {
     "ui": "headless",
+    "icon_path": null,
     "log_max_bytes": 1048576,
     "log_backups": 5,
     "alerts": {

@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние manager и общая команда остановки.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-124741
 #
 # Класс:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows.
@@ -31,6 +31,8 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Callable
+from importlib.resources import files
+from pathlib import Path
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -46,16 +48,22 @@ class GatewayTray:
     def __init__(
         self,
         stop: Callable[[], None],
+        icon_path: Path | None = None,
     ) -> None:
 
         """Retain only a thread-safe stop callback.
 
         :param stop: Schedule common manager shutdown from the tray thread.
         :type stop: Callable[[], None]
+
+        :param icon_path: Custom local ICO or PNG file, or None for the packaged icon.
+        :type icon_path: Path | None
         """
 
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
+        # icon_path — файл читается только при явном запуске GUI.
         self._stop = stop
+        self._icon_path = icon_path
         self._icon = None
         self._thread = None
         self._ready = threading.Event()
@@ -73,13 +81,14 @@ class GatewayTray:
         if os.name != "nt":
             raise RuntimeError("tray_requires_windows")
         import pystray
-        from PIL import Image, ImageDraw
+        from PIL import Image
 
-        bitmap = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(bitmap)
-        draw.rounded_rectangle((4, 4, 60, 60), radius=12, fill="#28618c")
-        for top in (16, 28, 40):
-            draw.rounded_rectangle((14, top, 50, top + 7), radius=2, fill="white")
+        # Ресурс поставляется в wheel: папка исходного проекта для трея не нужна.
+        # convert загружает пиксели до закрытия файла; backend не удерживает дескриптор.
+        source = self._icon_path or files("remote_watch.gateway_server").joinpath("assets/remote_watch.ico")
+        with source.open("rb") as stream, Image.open(stream) as original:
+            bitmap = original.convert("RGBA")
+
         self._icon = pystray.Icon("remote-watch-gateway", bitmap, "Remote Watch: starting",
                                   menu=pystray.Menu(pystray.MenuItem("Stop gateway server", self._request_stop)))
         self._thread = threading.Thread(target=self._run, name="gateway-tray", daemon=True)

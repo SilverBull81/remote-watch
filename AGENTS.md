@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.6
+Version 1.4.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261008-205235
+Дата и время последнего изменения: 261013-131234
 
 ## Project Intent
 
@@ -13,7 +13,17 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.2.dev1; no stable 0.2.0 tag is implied.
+The package version is 0.4.2.dev2; no stable 0.2.0 tag is implied.
+Dev2 bundles a multi-resolution robot tray icon and accepts application.icon_path
+relative to the deployment JSON. Null/absent selects the packaged default; headless
+does not decode images. Configuration checks file presence without importing Pillow.
+User reference logos are not package assets. See docs/GATEWAY_FOLLOW_UP.md for the
+terminology map and proposed reconnect/rename steps: those steps are not implemented.
+Direct/gateway is currently a notification-destination choice; messenger commands
+use the command gateway, whose replies do not depend on notification logging routes.
+Dev2 clean Windows CPython 3.12.2 wheels passed core 1002 tests (71 skips)
+and extras 1411 tests, each with 2 live deselections. Ruff/style: 138 files, no issues.
+Icon loading/menu tests use a fake GUI; no new CI/Linux/live or production changes.
 Stage 0.4.2 now implements gateway_server --start/--status/--stop with independent
 notification/command processes, loop-owned heartbeats, finite recovery and startup rollback.
 Windows x64 uses per-component kill-on-close Jobs; Linux uses gated parent-death protection.

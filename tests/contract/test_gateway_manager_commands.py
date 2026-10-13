@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-124741
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -31,7 +31,7 @@ from dataclasses import replace
 from pathlib import Path
 from time import monotonic
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from test_command_hub import Rig
@@ -375,26 +375,47 @@ def test_operator_delivery() -> None:
 # ТЕСТ : Трей передаёт Stop в общий lifecycle без самостоятельного управления процессами
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.skipif(os.name != "nt", reason="Windows tray contract")
-def test_tray_stop(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("custom", [False, True])
+def test_tray_stop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    custom: bool,
+) -> None:
 
     """Exercise tray lifecycle and menu wiring with a fake GUI backend and no visible window.
 
     :param monkeypatch: Replace optional GUI imports only within this test.
     :type monkeypatch: pytest.MonkeyPatch
+
+    :param tmp_path: Isolated directory for a custom icon.
+    :type tmp_path: Path
+
+    :param custom: Select an explicit file instead of the bundled resource.
+    :type custom: bool
     """
 
     # monkeypatch — тест не показывает пользователю окно и не требует установленного GUI extra.
+    # tmp_path/custom — проверяем выбор файла и освобождение его дескриптора.
     ended = threading.Event()
     icon = Mock()
     icon.run.side_effect = lambda setup: (setup(icon), ended.wait(5))
     icon.stop.side_effect = ended.set
     pystray = SimpleNamespace(Icon=Mock(return_value=icon), Menu=Mock(), MenuItem=Mock())
     monkeypatch.setitem(sys.modules, "pystray", pystray)
-    monkeypatch.setitem(sys.modules, "PIL", SimpleNamespace(Image=Mock(), ImageDraw=Mock()))
+    image = MagicMock()
+    monkeypatch.setitem(sys.modules, "PIL", SimpleNamespace(Image=image))
+    source = tmp_path / "custom.ico" if custom else None
+    if source is not None:
+        source.write_bytes(b"synthetic icon")
     stop = Mock()
-    tray = GatewayTray(stop)
+    tray = GatewayTray(stop, icon_path=source)
     try:
         tray.start()
+        stream = image.open.call_args.args[0]
+        assert stream.closed
+        assert Path(stream.name) == source if custom else Path(stream.name).name == "remote_watch.ico"
+        bitmap = image.open.return_value.__enter__.return_value.convert.return_value
+        assert pystray.Icon.call_args.args[1] is bitmap
         tray.update("degraded")
         assert icon.title == "Remote Watch: degraded"
         pystray.MenuItem.call_args.args[1](icon, None)

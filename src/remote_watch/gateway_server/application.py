@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-124741
 #
 # Класс:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца.
@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 from remote_watch._validation import require_int, require_number
 from remote_watch.config import DeliveryMode, Destination, Route, RuntimeConfig, WatcherConfig
@@ -54,6 +55,7 @@ class ApplicationConfig:
     log_backups: int = 5                         # Количество архивов журнала.
     cooldown: float = 60.0                      # Минимальный интервал сообщений одного компонента.
     destinations: tuple[Destination, ...] = field(default=(), repr=False)  # Прямые каналы владельца.
+    icon_path: Path | None = field(default=None, repr=False)  # Своя иконка; None — встроенный логотип.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и конечных пределов настроек
@@ -64,6 +66,11 @@ class ApplicationConfig:
 
         if self.ui not in ("headless", "tray"):
             raise ValueError("invalid application UI")
+
+        if self.icon_path is not None and (
+                not isinstance(self.icon_path, Path) or not self.icon_path.is_absolute()):
+            raise ValueError("absolute icon path required")
+
         require_int(self.log_max_bytes, "log_max_bytes", 4096)
         require_int(self.log_backups, "log_backups", 1)
         require_number(self.cooldown, "cooldown")
@@ -84,21 +91,40 @@ class ApplicationConfig:
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор настроек без разрешения секретов или сетевых вызовов.
 #------------------------------------------------------------------------------------------------------------------
-def application_config(value: object) -> ApplicationConfig:
+def application_config(
+    value: object,
+    base_dir: Path | None = None,
+) -> ApplicationConfig:
 
     """Parse a small JSON section using the existing direct-provider configuration schema.
 
     :param value: Untrusted application section from the deployment file.
     :type value: object
 
+    :param base_dir: Deployment directory for relative icon paths, or None for absolute paths only.
+    :type base_dir: Path | None
 
     :return: Validated lazy settings without credential resolution or filesystem writes.
     :rtype: ApplicationConfig
     """
 
     # value — только фиксированные ключи; тела ошибок провайдера не выводятся.
-    if type(value) is not dict or set(value) - {"ui", "log_max_bytes", "log_backups", "alerts"}:
+    # base_dir — путь считается от конфига, а не от текущей папки запуска.
+    if type(value) is not dict or set(value) - {"ui", "icon_path", "log_max_bytes", "log_backups", "alerts"}:
         raise ValueError("invalid application settings")
+
+    settings = {key: item for key, item in value.items() if key not in {"alerts", "icon_path"}}
+    icon = value.get("icon_path")
+    if icon is not None:
+        if type(icon) is not str or not icon.strip() or "\x00" in icon:
+            raise ValueError("invalid icon path")
+        path = Path(icon)
+        if not path.is_absolute():
+            if base_dir is None:
+                raise ValueError("icon base directory required")
+            path = base_dir / path
+        settings["icon_path"] = path.resolve()
+
     alerts = value.get("alerts", {})
     if type(alerts) is not dict or set(alerts) - {"destinations", "cooldown"}:
         raise ValueError("invalid alert settings")
@@ -107,8 +133,7 @@ def application_config(value: object) -> ApplicationConfig:
         raise ValueError("invalid alert destinations")
     # Малые независимые очереди, без relay к самому себе и без чтения команд бота.
     channels = tuple(replace(_destination(item), outstanding_capacity=16) for item in destinations)
-    return ApplicationConfig(**{key: item for key, item in value.items() if key != "alerts"},
-                             cooldown=alerts.get("cooldown", 60), destinations=channels)
+    return ApplicationConfig(**settings, cooldown=alerts.get("cooldown", 60), destinations=channels)
 #------------------------------------------------------------------------------------------------------------------
 
 

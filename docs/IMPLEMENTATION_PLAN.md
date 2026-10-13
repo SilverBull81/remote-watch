@@ -1,10 +1,10 @@
 ﻿# План реализации
 
-Version 1.3.2
+Version 1.3.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-103703
+Дата и время последнего изменения: 261013-131234
 
 ## Текущее состояние
 
@@ -318,8 +318,10 @@ CLI сообщает смену состояния, при фатальном о
 notifications и commands в реальном приложении. В dev8 добавлен клиентский режим
 уведомлений, в dev9 — отдельный command_display_mode, обновлённое меню и английские
 служебные ответы. Проверка последних доработок на рабочих машинах остаётся за владельцем.
-Причина инцидента с сертификатами Caddy пока не установлена; запуск supervisor
-сам по себе не доказывает исправление обновления сертификатов.
+В инциденте Caddy подтверждена остановка обслуживания из-за выделения текста
+в консоли: Esc восстановил работу и продление без смены PID/root. Caddy переведён
+в отдельную службу; владелец сообщил о перезагрузке VM и дальнейшей нормальной работе.
+Границы доказательств и критерии наблюдения: [CADDY_RECOVERY.md](CADDY_RECOVERY.md).
 
 Согласованный порядок: контракт deployment/health → gateway_server → deploy →
 doctor → служба ОС и приёмка восстановления. Один управляющий процесс,
@@ -330,10 +332,13 @@ doctor → служба ОС и приёмка восстановления. О�
 [GATEWAY_OPERATIONS_PLAN.md](GATEWAY_OPERATIONS_PLAN.md).
 **0.4.1 реализован в 0.4.1.dev1**: [ADR 0012](adr/0012-gateway-deployment-and-supervision.md),
 typed deployment config, проверка связанных файлов без ресурсов и ограниченный
-RestartBudget. Доступен только `python -m remote_watch.gateway_server --check-config --config ...`.
+RestartBudget и `python -m remote_watch.gateway_server --check-config --config ...`.
 Схема и ограничения: [GATEWAY_DEPLOYMENT.md](GATEWAY_DEPLOYMENT.md).
-Следующий шаг 0.4.2 — реальные процессы, ownership, heartbeat, start/stop/status
-и fault injection. Deploy/doctor/служба ещё не реализованы; stable tag не создаётся.
+**0.4.2 реализован в 0.4.2.dev1**: реальные процессы, ownership, heartbeat,
+start/stop/status, Windows tray и прямые сообщения владельцу. В 0.4.2.dev2 добавлены
+свой логотип и настройка пути иконки. Deploy/doctor/установка службы manager ещё
+не реализованы; stable tag не создаётся. Предложение отдельного reconnect и
+уточнение терминов: [GATEWAY_FOLLOW_UP.md](GATEWAY_FOLLOW_UP.md).
 Первое настоящее приложение уже интегрировано и принято владельцем; эксплуатационный
 слой и проверка восстановления после перезапусков остаются следующими задачами.
 
