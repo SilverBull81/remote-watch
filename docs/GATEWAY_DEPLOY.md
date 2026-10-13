@@ -1,12 +1,12 @@
 ﻿# Подготовка установки gateway server
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-185134
+Дата и время последнего изменения: 261013-200317
 
-Этап **0.4.3**, версия **0.4.3.dev2**. Команда
+Этап **0.4.3**, версия **0.4.3.dev3**. Команда
 `python -m remote_watch.gateway_server.deploy` создаёт файлы установки из ресурсов
 wheel, без checkout, сети, запуска компонентов и обращения к журналам команд.
 Она работает и с новой папкой, и рядом с существующей установкой.
@@ -18,12 +18,12 @@ wheel, без checkout, сети, запуска компонентов и об�
 из Git, фиксируйте commit, а не обновляйте main при каждом запуске.
 Перед обновлением приложений учтите [переименования API и JSON](NAMING_MIGRATION.md).
 
-Ниже сохранены известные из настройки имена старых файлов. Если реальные имена
+Ниже указаны проверенные имена текущих файлов на LV. Если в другой установке имена
 отличаются, замените только соответствующие пути. Внешний адрес должен совпадать
 с именем/IP действующего TLS-сертификата; вместо АДРЕС_LV укажите свой адрес.
 
 ```powershell
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server.deploy --directory C:\Work\RemoteWatch --endpoint https://АДРЕС_LV:8443 --notifications-config C:\Work\RemoteWatch\gateway_config.json --commands-config C:\Work\RemoteWatch\command_gateway.json --dry-run
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server.deploy --directory C:\Work\RemoteWatch --endpoint https://АДРЕС_LV:8443 --notifications-config C:\Work\RemoteWatch\notification_gateway.local.json --commands-config C:\Work\RemoteWatch\command_gateway.local.json --dry-run
 ```
 
 Preview перечислит планируемые файлы и ничего не запишет. Повторите ту же команду
@@ -49,6 +49,7 @@ RemoteWatchCaddy это основной вариант. Служба сохра
 В другом окне доступны `.\status.ps1` и `.\stop.ps1`. Start остаётся работающим
 процессом; до этапа службы ОС не закрывайте его окно/RDP-сессию с завершением
 процессов. Для трея задайте application.ui=tray и установите extra tray.
+В меню трея доступны About (версия и описание) и Stop gateway server.
 
 Сначала проверьте уведомления и команды каждого приложения, затем рестарт manager
 и reconnect клиентов с прежними журналами. При UNKNOWN возможна намеренная
@@ -72,6 +73,7 @@ Telegram для одного приложения с согласованной 
 Комплект содержит:
 
 - gateway_server.local.json и конфиги включённых компонентов;
+- logo/remote_watch.ico и относительный application.icon_path в новом конфиге;
 - clients/command_client.example.json и памятку notification_client.example.json;
 - Caddyfile.example, либо новый Caddyfile в явно выбранном managed-режиме;
 - start/stop/status/check-config в вариантах .ps1 и .sh;
@@ -79,6 +81,11 @@ Telegram для одного приложения с согласованной 
 - deploy-manifest.json с версией пакета и SHA-256 подготовленных шаблонов.
 
 Manifest — инвентарь предложенных файлов, а не разрешение перезаписывать найденное.
+Повторный deploy добавит отсутствующий logo/remote_watch.ico, но сохранит свою
+иконку и прежний gateway_server.local.json. В существующем конфиге задайте
+`application.icon_path: "logo/remote_watch.ico"` вручную и перезапустите manager.
+Клиентским приложениям эта папка не нужна. В wheel исходная иконка остаётся
+ресурсом для подготовки нового серверного комплекта; GUI-зависимости необязательны.
 Пример notification_client не является новым JSON API: его поля переносятся в
 конфиг приложения/NotificationGatewayClientConfig согласно START_HERE.
 Для новых CA клиенты доверяют root.crt; ключи CA и серверные leaf-сертификаты

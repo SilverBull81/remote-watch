@@ -1,10 +1,10 @@
 ﻿# HTTPS для gateway на Windows
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-170523
+Дата и время последнего изменения: 261013-200317
 
 ## Повторное истечение сертификата, 06.10.2026
 
@@ -64,7 +64,7 @@ C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway --config C:
 ```
 
 ```powershell
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.json --host 127.0.0.1 --port 8766 --allow-loopback-http
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --host 127.0.0.1 --port 8766 --allow-loopback-http
 ```
 
 Если конфиг назван `command_gateway.local.json`, укажите именно это имя в

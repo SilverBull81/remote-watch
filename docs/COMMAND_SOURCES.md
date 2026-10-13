@@ -1,10 +1,10 @@
 ﻿# Команды из Telegram и закрытых топиков ntfy
 
-Version 1.1.0
+Version 1.1.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-170523
+Дата и время последнего изменения: 261013-200317
 
 В 0.3.5.dev1 реализован путь «сообщение → командный gateway → конкретный запуск
 приложения → пользовательский callback → ответ». Telegram и ntfy используют общий
@@ -48,7 +48,7 @@ Version 1.1.0
 
 ```powershell
 C:\Work\RemoteWatch\.venv\Scripts\python.exe -m pip show remote-watch
-C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.json --check-config
+C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --config C:\Work\RemoteWatch\command_gateway.local.json --check-config
 ```
 
 После обновления до 0.4.1.dev2 доступна короткая проверка версии:

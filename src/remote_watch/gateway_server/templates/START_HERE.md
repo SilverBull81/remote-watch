@@ -1,10 +1,10 @@
 ﻿# Gateway server: настройка и первый запуск
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-184704
+Дата и время последнего изменения: 261013-200317
 
 Этот комплект подготовлен remote-watch **@@VERSION@@**. Deploy только записывает
 отсутствующие файлы. Серверы, службы, Caddy и сетевые проверки он не запускает.
@@ -124,7 +124,12 @@ C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway.commands --
 
 Логи manager находятся в log_dir, готовность компонентов — в status. Для трея
 задайте application.ui=tray на Windows и установите extra tray. Логотип берётся
-из установленного пакета; свой путь можно задать через application.icon_path.
+из logo/remote_watch.ico рядом с конфигом; application.icon_path уже содержит
+этот относительный путь. Клиентам копировать logo не требуется. В меню доступны
+About (версия и описание) и Stop gateway server. Можно указать свою иконку.
+Повторный deploy сохраняет существующие файлы: если обновляете прежний комплект,
+добавьте application.icon_path="logo/remote_watch.ico" в рабочий конфиг сами;
+отсутствующий ICO будет создан, существующий не перезаписывается.
 Оповещения владельцу настраиваются отдельно в application.alerts.destinations;
 используйте прямые Telegram/ntfy назначения с явными получателями.
 

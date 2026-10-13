@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-174601
+# Дата и время последнего изменения: 261013-200317
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки новой или существующей установки.
@@ -40,6 +40,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from remote_watch.gateway_server.config import _origin
+from remote_watch.gateway_server.tray import default_icon
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -220,7 +221,9 @@ def prepare_files(options: DeployOptions) -> dict[str, bytes]:
     deployment = json.loads(_resource("gateway_server.json"))
     deployment.update(endpoint=options.endpoint.rstrip("/"), caddy=caddy)
     deployment["application"]["ui"] = options.ui
-    result = {}
+    # Сервер получает собственную копию логотипа рядом с конфигом. Путь остаётся
+    # относительным, чтобы комплект можно было перенести вместе с папкой logo.
+    result = {"logo/remote_watch.ico": default_icon().read_bytes()}
     routes = []
     for component, reference, port, template in (
         ("notifications", options.notifications_config, options.notification_port, "notification_gateway.json"),

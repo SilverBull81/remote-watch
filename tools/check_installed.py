@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.4
+# Version 1.1.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-180233
+# Дата и время последнего изменения: 261013-200317
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -157,7 +157,10 @@ def main() -> int:
         assert prepared.returncode == 0, prepared.stderr
         assert (target / "START_HERE.md").is_file() and (target / "check-config.ps1").is_file()
         from remote_watch.gateway_server.config import load_deployment_config
-        assert load_deployment_config(target / "gateway_server.local.json").commands.port == 8766
+        deployment = load_deployment_config(target / "gateway_server.local.json")
+        assert deployment.commands.port == 8766
+        assert deployment.application.icon_path == target / "logo" / "remote_watch.ico"
+        assert deployment.application.icon_path.read_bytes() == default_icon().read_bytes()
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

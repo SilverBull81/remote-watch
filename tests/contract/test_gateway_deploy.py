@@ -1,10 +1,10 @@
 ﻿# Проверки комплекта установки, сохранения рабочих данных и безопасного CLI.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-174601
+# Дата и время последнего изменения: 261013-200317
 #
 # Тесты:
 # -> test_new_installation(): Согласованность адресов и режимов новой установки.
@@ -41,6 +41,7 @@ import pytest
 from remote_watch.gateway_server.config import load_deployment_config
 from remote_watch.gateway_server.deploy import main
 from remote_watch.gateway_server.deployment import DeployError, DeployOptions, _write_new, deploy, prepare_files
+from remote_watch.gateway_server.tray import default_icon
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -76,6 +77,8 @@ def test_new_installation(
         assert all(state == "create" for _, state in deploy(options))
         config = load_deployment_config(root / "gateway_server.local.json")
     assert config.endpoint == options.endpoint and config.caddy.mode == "external"
+    assert config.application.icon_path == root / "logo" / "remote_watch.ico"
+    assert config.application.icon_path.read_bytes() == default_icon().read_bytes()
     for component in ("notifications", "commands"):
         assert (getattr(config, component) is not None) == (components in ("both", component))
     caddy = (root / "Caddyfile.example").read_text(encoding="utf-8")
@@ -114,8 +117,11 @@ def test_existing_installation(tmp_path: Path) -> None:
     assert config["commands"]["config"] == str(previous / "commands.json")
     assert not (root / "command_gateway.local.json").exists()
     (root / "gateway_server.local.json").write_bytes(b"PRIVATE-operator-change")
+    (root / "logo" / "remote_watch.ico").write_bytes(b"operator-custom-icon")
     report = dict(deploy(options))
     assert report["gateway_server.local.json"] == "preserved"
+    assert report["logo/remote_watch.ico"] == "preserved"
+    assert (root / "logo" / "remote_watch.ico").read_bytes() == b"operator-custom-icon"
     assert (root / "gateway_server.local.json").read_bytes() == b"PRIVATE-operator-change"
     assert all(path.read_bytes() == data for path, data in before.items())
 #------------------------------------------------------------------------------------------------------------------

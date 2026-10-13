@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-200317
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -416,6 +416,11 @@ def test_tray_stop(
         assert Path(stream.name) == source if custom else Path(stream.name).name == "remote_watch.ico"
         bitmap = image.open.return_value.__enter__.return_value.convert.return_value
         assert pystray.Icon.call_args.args[1] is bitmap
+        labels = [call.args[0] for call in pystray.MenuItem.call_args_list]
+        assert labels[-2:] == ["About", "Stop gateway server"]
+        assert labels[0].startswith("Remote Watch Gateway (v.")
+        for call in pystray.MenuItem.call_args_list[:3]:
+            assert call.args[1] is None and call.kwargs["enabled"] is False
         tray.update("degraded")
         assert icon.title == "Remote Watch: degraded"
         pystray.MenuItem.call_args.args[1](icon, None)

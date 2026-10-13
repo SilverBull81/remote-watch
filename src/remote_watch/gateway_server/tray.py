@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние manager и общая команда остановки.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-153353
+# Дата и время последнего изменения: 261013-200317
 #
 # Класс:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows.
@@ -34,7 +34,8 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Callable
-from importlib.metadata import distribution
+from datetime import date
+from importlib.metadata import distribution, version
 from pathlib import Path
 
 
@@ -92,8 +93,16 @@ class GatewayTray:
         with source.open("rb") as stream, Image.open(stream) as original:
             bitmap = original.convert("RGBA")
 
+        # About устроен как в SpamBot: статическое подменю, без отдельного окна
+        # и без обращения к конфигам или сети из GUI-потока.
+        about = pystray.Menu(
+            pystray.MenuItem("Remote Watch Gateway (v." + version("remote-watch") + ")", None, enabled=False),
+            pystray.MenuItem("Notifications and application commands.", None, enabled=False),
+            pystray.MenuItem(f"(C) SilverBull, {date.today().year}", None, enabled=False),
+        )
         self._icon = pystray.Icon("remote-watch-gateway", bitmap, "Remote Watch: starting",
-                                  menu=pystray.Menu(pystray.MenuItem("Stop gateway server", self._request_stop)))
+                                  menu=pystray.Menu(pystray.MenuItem("About", about),
+                                                    pystray.MenuItem("Stop gateway server", self._request_stop)))
         self._thread = threading.Thread(target=self._run, name="gateway-tray", daemon=True)
         self._thread.start()
         if not self._ready.wait(5) or not self._thread.is_alive():
