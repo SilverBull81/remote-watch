@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-151745
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
@@ -855,6 +855,18 @@ class CommandHub:
 
         # token — отдельный секрет команд, не выводимый в сообщения и журнал.
         # result — точный итог выполнения с идентификаторами исходной команды.
+
+        # После рестарта разрешено вернуть только квитанцию точного старого итога.
+        # Здесь нет перехода состояния: поздний COMPLETED не заменяет UNKNOWN,
+        # а право на Identity и исходный claim проверяются заново по сохранённой записи.
+        if type(result) is CommandResult and result.ref.hub_epoch != self.epoch:
+            principal = self.authenticate(token)
+            if result.ref.identity not in principal.identities:
+                raise CommandError("denied")
+            stored = await self._worker.call(lambda: self._worker.store.get(result.ref))
+            if stored is None or result.claim_id is None or stored.record.result != result:
+                raise CommandError("outcome_conflict")
+            return CommandReceipt(ref=result.ref, claim_id=result.claim_id, result_digest=message_digest(result))
 
         entry = self._ref_entry(token, result.ref, live=False)
         registration = entry.registration

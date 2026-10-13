@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195347
+# Дата и время последнего изменения: 261013-151745
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -13,6 +13,7 @@
 #    Интерфейс:
 #    -> open(): Открытие и восстановление нового поколения журнала.
 #    -> close(): Освобождение соединения SQLite.
+#    -> bind_session(): Новая сессия при прежнем живом владельце журнала.
 #    -> cursor(): Чтение сохранённой позиции источника.
 #    -> admit(): Атомарная запись решения и позиции источника.
 #    -> get(): Поиск команды с проверкой всех полей цели.
@@ -142,6 +143,7 @@ class SQLiteCommandStore:
         self._path = Path(path)
         self._owner = owner_id
         self._generation = generation
+        self._client_session = generation
         self._role = role
         self._limits = limits
         self._clock = clock
@@ -259,6 +261,30 @@ class SQLiteCommandStore:
             self._failed = True
         finally:
             self._lock.release()
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Привязка новой сессии без смены владельца журнала
+    #--------------------------------------------------------------------------------------------------------------
+    def bind_session(
+        self,
+        session_id: str,
+    ) -> None:
+
+        """Bind future admissions to a fresh session within the same live owner generation.
+
+        :param session_id: Fresh registration nonce after old work has been settled.
+        :type session_id: str
+        """
+
+        # session_id — меняется только адрес новых команд, существующие записи сохраняются.
+        _nonce(session_id)
+        with self._transaction() as (db, _):
+            if self._role is not StoreRole.CLIENT:
+                raise StoreConflict("client session required")
+            if db.execute("SELECT 1 FROM commands WHERE acknowledged=0 OR running=1 LIMIT 1").fetchone():
+                raise StoreConflict("unresolved client work")
+            self._client_session = session_id
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -776,7 +802,8 @@ class SQLiteCommandStore:
         # ref — полная ссылка на команду и её цель.
 
         actual = ref.hub_epoch if self._role is StoreRole.HUB else ref.session_id
-        if actual != self._generation:
+        expected = self._generation if self._role is StoreRole.HUB else self._client_session
+        if actual != expected:
             raise StoreConflict("command generation expired")
     #--------------------------------------------------------------------------------------------------------------
 

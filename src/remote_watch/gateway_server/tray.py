@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние manager и общая команда остановки.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-153353
 #
 # Класс:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows.
@@ -21,6 +21,9 @@
 #    -> _run(): Цикл сообщений Windows без вывода приватных исключений.
 #    -> _stop_icon(): Остановка GUI без вывода исключения backend.
 #
+# Функции:
+# -> default_icon(): Поиск ICO из корневой logo или установленного окружения.
+#
 
 
 #******************************************************************************************************************
@@ -31,7 +34,7 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Callable
-from importlib.resources import files
+from importlib.metadata import distribution
 from pathlib import Path
 
 
@@ -85,7 +88,7 @@ class GatewayTray:
 
         # Ресурс поставляется в wheel: папка исходного проекта для трея не нужна.
         # convert загружает пиксели до закрытия файла; backend не удерживает дескриптор.
-        source = self._icon_path or files("remote_watch.gateway_server").joinpath("assets/remote_watch.ico")
+        source = self._icon_path or default_icon()
         with source.open("rb") as stream, Image.open(stream) as original:
             bitmap = original.convert("RGBA")
 
@@ -219,6 +222,37 @@ class GatewayTray:
         except Exception:
             self._failed = True
     #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Поиск стандартной иконки в исходном проекте либо установленном окружении
+#------------------------------------------------------------------------------------------------------------------
+def default_icon() -> Path:
+
+    """Locate the canonical checkout icon or its installed data-file copy.
+
+    :return: Absolute icon path independent of the current working directory.
+    :rtype: Path
+    """
+
+    # В checkout логотип хранится только в корне logo. В wheel setuptools переносит
+    # этот же файл в каталог данных Python-окружения, не создавая копии внутри src.
+    checkout = Path(__file__).resolve().parents[3]
+    source = checkout / "logo" / "remote_watch.ico"
+    if (checkout / "pyproject.toml").is_file() and source.is_file():
+        return source
+    # pip --target помещает data-files прямо под target, иногда без записи в RECORD.
+    target = Path(__file__).resolve().parents[2] / "share" / "remote-watch" / "logo" / "remote_watch.ico"
+    if target.is_file():
+        return target
+    # Для обычной установки и --user RECORD указывает фактическое размещение data-files.
+    # sys.prefix здесь недостаточен: пользовательская установка может лежать вне venv.
+    package = distribution("remote-watch")
+    for entry in package.files or ():
+        if entry.as_posix().endswith("share/remote-watch/logo/remote_watch.ico"):
+            return Path(package.locate_file(entry)).resolve()
+    raise FileNotFoundError("default_gateway_icon_missing")
 #------------------------------------------------------------------------------------------------------------------
 
 

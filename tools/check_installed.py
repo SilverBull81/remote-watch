@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-151745
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -75,7 +75,9 @@ def main() -> int:
 
     assert Path(sys.prefix).resolve() in Path(remote_watch.__file__).resolve().parents
     assert Path(remote_watch.__file__).with_name("py.typed").is_file()
-    assert (Path(remote_watch.__file__).parent / "gateway_server/assets/remote_watch.ico").is_file()
+    from remote_watch.gateway_server.tray import default_icon
+    assert default_icon().is_file()
+    assert not (Path(remote_watch.__file__).parent / "gateway_server/assets").exists()
     assert importlib.metadata.version("remote-watch") == args.version
     assert "aiohttp" not in sys.modules
     assert "pystray" not in sys.modules and "PIL" not in sys.modules

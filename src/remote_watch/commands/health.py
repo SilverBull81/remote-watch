@@ -1,10 +1,10 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261013-151745
 #
 # Классы:
 # -> StageHealth: Ошибка одного этапа и счётчики восстановления.
@@ -15,6 +15,7 @@
 #    Интерфейс:
 #    -> snapshot(): Чтение состояния без изменения истории.
 #    -> lease(): Установка проверенного срока регистрации.
+#    -> recovery(): Состояние восстановления и его конечные причины.
 #    -> close(): Отметка начала остановки.
 #    -> pending(): Отметка неподтверждённых результатов.
 #    -> failure(): Учёт одного отказа без повторного счёта при передаче исключения.
@@ -82,6 +83,10 @@ class CommandHealth:
     heartbeat: StageHealth              # Подтверждение и продление регистрации.
     storage: StageHealth                # Завершение операций локального журнала.
     result: StageHealth                 # Передача результата и получение устойчивой квитанции.
+    connection_state: str = "starting"  # Состояние: starting/connected/reconnecting/blocked/closed.
+    reconnect_reason: str | None = None # Фиксированная причина ожидания или блокировки.
+    reconnect_attempts: int = 0         # Число попыток восстановления, включая неудачные.
+    reconnects: int = 0                 # Число успешно заменённых сессий этого процесса.
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -106,6 +111,10 @@ class HealthState:
         self._pending = True
         self._last_error: str | None = None
         self._last_stage: str | None = None
+        self._connection = "starting"
+        self._reconnect_reason: str | None = None
+        self._reconnect_attempts = 0
+        self._reconnects = 0
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -133,10 +142,13 @@ class HealthState:
         with self._lock:
             valid = (math.isfinite(now) and floor <= now < self._expires
                      and not self._closed and not self._fenced)
-            ready = valid and not self._pending and all(s.current_error is None for s in self._stages.values())
+            ready = (valid and self._connection == "connected" and not self._pending
+                     and all(s.current_error is None for s in self._stages.values()))
             return CommandHealth(ready=ready, closed=self._closed, session_valid=valid,
                 has_pending_results=self._pending, last_error=self._last_error,
-                last_error_stage=self._last_stage, **self._stages)
+                last_error_stage=self._last_stage, connection_state=self._connection,
+                reconnect_reason=self._reconnect_reason, reconnect_attempts=self._reconnect_attempts,
+                reconnects=self._reconnects, **self._stages)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -156,6 +168,54 @@ class HealthState:
         # expires — проверенный срок; ранее потерянная сессия не возрождается.
         with self._lock:
             self._expires = expires
+            if self._connection == "starting":
+                self._connection = "connected"
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Состояние восстановления без стирания истории отказов
+    #--------------------------------------------------------------------------------------------------------------
+    def recovery(
+        self,
+        state: str,
+        reason: str | None = None,
+        *,
+        attempt: bool = False,
+    ) -> None:
+
+        """Record bounded recovery observations and clear only obsolete session fencing.
+
+        :param state: Library-controlled connection state.
+        :type state: str
+
+        :param reason: Fixed local reason without external values.
+        :type reason: str | None
+
+        :param attempt: Whether a new recovery pass has begun.
+        :type attempt: bool
+        """
+
+        # state/reason — только фиксированные значения; токены и ответы сервера сюда не попадают.
+        with self._lock:
+            if self._closed:
+                return
+            self._reconnect_attempts += int(attempt)
+            if state == "connected" and self._connection == "reconnecting":
+                self._reconnects += 1
+                self._fenced = False
+                # Новый handshake снимает старый stale_session, но не маскирует ошибки
+                # хранения/доставки. Их сбрасывают только соответствующие успешные операции.
+                for stage in ("poll", "heartbeat"):
+                    old = self._stages[stage]
+                    if (old.current_error == "stale_session" or
+                            old.current_error == "closed" and old.http_status == 503 or
+                            stage == "heartbeat" and old.current_error == "conflict"):
+                        self._stages[stage] = replace(old, current_error=None, http_status=None,
+                                                     recoveries=old.recoveries + 1)
+            elif state in ("reconnecting", "blocked"):
+                self._fenced = True
+            self._connection = state
+            self._reconnect_reason = reason
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -167,6 +227,7 @@ class HealthState:
 
         with self._lock:
             self._closed = True
+            self._connection = "closed"
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -247,7 +308,10 @@ class HealthState:
             previous = self._stages[stage]
             if stage == "result" and self._pending:
                 return
-            if previous.current_error in _TRANSIENT:
+            if previous.current_error in _TRANSIENT or (stage == "result"
+                    and (previous.current_error == "stale_session" or
+                         previous.current_error == "closed" and previous.http_status == 503)
+                    and not self._pending):
                 self._stages[stage] = replace(previous, current_error=None, http_status=None,
                                             error_kind=None, verify_code=None, tls_reason=None, busy_reason=None,
                                             recoveries=previous.recoveries + 1)

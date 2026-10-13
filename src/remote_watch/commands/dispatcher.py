@@ -1,10 +1,10 @@
 ﻿# Выполнение пользовательских команд с явным владением потоками и неизвестными исходами.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261013-151745
 #
 # Классы:
 # -> DispatcherStats: Счётчики и состояние исполнителя без приватных данных.
@@ -271,7 +271,9 @@ class CommandDispatcher:
                     self._error = error.code
                     if getattr(error, "_health_observation", (None,))[0] is not self.client._health:
                         self.client._health.failure("poll", error, object())
-                    if error.code not in ("busy", "unavailable", "capacity"):
+                    if ((error.code not in ("busy", "unavailable", "capacity", "stale_session")
+                            and not (error.code == "closed" and error.http_status == 503))
+                            or self.client.health.connection_state == "blocked"):
                         break
                     await asyncio.sleep(self._retry_interval)
         except asyncio.CancelledError:
@@ -544,7 +546,9 @@ class CommandDispatcher:
                 self._error = error.code
                 if getattr(error, "_health_observation", (None,))[0] is not self.client._health:
                     self.client._health.failure("result", error, object())
-                if error.code not in ("busy", "unavailable", "capacity"):
+                if ((error.code not in ("busy", "unavailable", "capacity", "stale_session")
+                        and not (error.code == "closed" and error.http_status == 503))
+                        or self.client.health.connection_state == "blocked"):
                     raise
                 await asyncio.sleep(self._retry_interval)
     #--------------------------------------------------------------------------------------------------------------

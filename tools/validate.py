@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261013-151745
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -113,7 +113,10 @@ def main() -> int:
                                  str(output / "wheel"), str(sdist)])
         wheel = next((output / "wheel").glob("*.whl"))
         with zipfile.ZipFile(wheel) as archive:
-            assert all(name.startswith(("remote_watch/", f"remote_watch-{version}.dist-info/"))
+            icon_entry = f"remote_watch-{version}.data/data/share/remote-watch/logo/remote_watch.ico"
+            assert archive.read(icon_entry) == (root / "logo/remote_watch.ico").read_bytes()
+            assert all(name == icon_entry or
+                       name.startswith(("remote_watch/", f"remote_watch-{version}.dist-info/"))
                        for name in archive.namelist())
             # После переноса модулей в wheel не должны остаться старые копии из build.
             expected_python = {path.relative_to(root / "src").as_posix()

@@ -1,10 +1,51 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.5.1
+Version 1.5.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-154837
+
+## Reconnect командных клиентов и корневой логотип — 0.4.2.dev4
+
+Windows x64, CPython 3.12.2. Финальный wheel собран из sdist и проверен
+`tools/validate.py --mode core --output build/validation-0424-core-release`:
+**1020 passed, 72 skipped, 2 live deselected за 44,86 с**.
+Отчёт: `build/validation-0424-core-release/report.json`.
+
+Чистое окружение extras подготовлено тем же инструментом в
+`build/validation-0424-extras`: первоначальный полный проход — **1430 passed,
+2 live deselected за 111,45 с**. Затем в это окружение без изменения зависимостей
+переустановлен именно финальный wheel из `validation-0424-core-release/wheel`
+и повторён полный pytest с `-I -o pythonpath= -m "not integration"`:
+**1430 passed, 2 live deselected за 108,99 с**, без предупреждений.
+Итоговый лог: `build/validation-0424-extras/pytest-final-wheel.log`.
+
+17 новых сценариев покрывают рестарт hub, expiry, настоящий локальный HTTPS,
+dispatcher с callback, две Identity, потерю register/ACK/grant, активный callback,
+UNKNOWN, storage, авторизацию/TLS/конфликт, разницу клиентского/server lease и shutdown.
+Проверяются неизменность журнала/курсора и отсутствие повторного callback.
+Финальная проверка форматирования: **139 Python-файлов, 0 замечаний**; Ruff и
+`git diff --check` пройдены. Ссылки документации проверены.
+
+Первый повтор core выявил неточность нового теста: одновременное чтение журнала
+координатором допускает штатный busy, а тест ожидал немедленный outcome_conflict.
+Тест исправлен: повторяются только фиксация и доставка уже полученного результата,
+как в dispatcher; callback не повторяется. После исправления пройдены целевые
+17 сценариев из установленного extras wheel и окончательные полные прогоны выше.
+
+Сборка проверяет точные байты ICO из корневой `logo/`, отсутствие старой папки
+`gateway_server/assets` в установленном пакете, lazy imports и восемь CLI.
+ICO ищется через RECORD обычной установки и отдельный layout `pip --target`.
+Последний проверен настоящей установкой финального wheel с `--no-index --no-deps`
+в `build/icon-target-final`; изолированный Python подтвердил наличие файла.
+В checkout нет второй копии ICO внутри src. GUI по-прежнему проверяется подставным
+backend; настоящая иконка в трее в этом проходе глазами не проверялась.
+
+CI/Linux/Python 3.10, live providers и production deployment не запускались/не
+обновлялись. Caddy и недельный прогон SpamBot не затронуты. Полевой reconnect
+с обновлёнными приложением и hub остаётся отдельной проверкой по
+[COMMAND_RECONNECT.md](COMMAND_RECONNECT.md); прежний пилот её не заменяет.
 
 ## Переименования notification gateway без алиасов — 0.4.2.dev3
 

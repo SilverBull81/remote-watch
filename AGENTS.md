@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.8
+Version 1.4.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-141730
+Дата и время последнего изменения: 261013-154837
 
 ## Project Intent
 
@@ -13,7 +13,30 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.2.dev3; no stable 0.2.0 tag is implied.
+The package version is 0.4.2.dev4.
+Dev4 implements automatic command-client recovery after successful initial startup.
+Read docs/COMMAND_RECONNECT.md and ADR 0014 before changing this boundary.
+Live journal generation remains fixed; bind_session changes only future admissions
+after pending/running work is settled. One heartbeat coordinator uses bounded jittered
+backoff and one candidate nonce; dispatcher survives stale_session and remote closed/503.
+No callback retry, journal reopen/cursor reset or UNKNOWN resolution is introduced.
+Old-epoch result calls only acknowledge an exactly matching durable outcome under
+current principal Identity authorization; they cannot write results or release execution.
+Conflicting late outcomes block recovery and retain evidence. Server-ready is not
+application-ready. Default ICO is canonical in root logo/; src assets is removed.
+Wheel installs it as a data file in the Python environment, source runs use root logo.
+Production deployment, ongoing SpamBot pilot and Caddy are not modified.
+Final Windows CPython 3.12.2 wheel passed core 1020 tests (72 skips) and extras
+1430 tests, each with 2 live deselections. Ruff/style: 139 Python files, no issues.
+The same final wheel was reinstalled into the isolated extras environment before
+its full final rerun. Real pip --target installation also locates the ICO.
+One new test was corrected to handle legitimate concurrent storage busy before
+asserting outcome_conflict; no callback retry was added. Exact reports and limits
+are in docs/VALIDATION.md. No new CI/Linux/live provider or field reconnect acceptance.
+Historical version notes below retain their original scope;
+no stable 0.2.0 tag is implied.
+
+Dev3 history:
 Dev3 replaces RelayConfig/RelayChannel/RelayRequest with NotificationGatewayConfig,
 NotificationGatewayChannel and NotificationGatewayRequest. Modules are now
 adapters.notification_gateway and notification_gateway_protocol. DeliveryMode/ResultSource

@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261013-151745
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
@@ -39,6 +39,7 @@
 #    -> _reject(): Фиксация отказа до получения разрешения на исполнение.
 #    -> _release_remote(): Доставка отдельного подтверждения фактической остановки.
 #    -> _reconcile_ticket(): Восстановление занятости в памяти по подтверждённой записи журнала.
+#    -> _reconnect_once(): Сверка журнала и новая сессия без повторного callback.
 #    -> _keep_alive(): Последовательный heartbeat без накопления повторных запросов.
 #
 
@@ -50,7 +51,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from random import uniform
 from secrets import token_hex
 from time import monotonic
 from typing import TypeVar
@@ -109,6 +111,8 @@ class CommandClient:
         stream_id: str = 'command_hub',
         storage_timeout: float = 3.0,
         shutdown_timeout: float = 5.0,
+        reconnect_delay: float = 1.0,
+        reconnect_max_delay: float = 30.0,
         clock: Callable[[], float] = monotonic,
     ) -> None:
 
@@ -132,6 +136,12 @@ class CommandClient:
         :param shutdown_timeout: Maximum asynchronous journal shutdown wait, seconds.
         :type shutdown_timeout: float
 
+        :param reconnect_delay: Initial recovery delay, seconds; jitter never exceeds the upper bound.
+        :type reconnect_delay: float
+
+        :param reconnect_max_delay: Maximum exponential recovery delay, seconds.
+        :type reconnect_max_delay: float
+
         :param clock: Shared local monotonic clock, also used by the journal.
         :type clock: Callable[[], float]
         """
@@ -142,6 +152,7 @@ class CommandClient:
         # stream_id — постоянное имя последовательности этого журнала hub.
         # storage_timeout — конечное ожидание одной синхронной операции журнала, секунды.
         # shutdown_timeout — конечное ожидание закрытия журнала, секунды.
+        # reconnect_delay/reconnect_max_delay — начальная и предельная паузы восстановления, секунды.
         # clock — монотонные часы, общие с соответствующим журналом.
 
         if type(registration) is not CommandRegistration or not callable(clock):
@@ -153,6 +164,16 @@ class CommandClient:
             if value > 30:
                 raise ValueError("invalid client timeout")
         self.registration = registration
+        # Задержки ограничивают нагрузку при длительном разрыве; очередь попыток не создаётся.
+        require_number(reconnect_delay, "reconnect delay")
+        require_number(reconnect_max_delay, "reconnect maximum")
+        if not 0.01 <= reconnect_delay <= reconnect_max_delay <= 300:
+            raise ValueError("invalid reconnect delay")
+        self._reconnect_delay = reconnect_delay
+        self._reconnect_max_delay = reconnect_max_delay
+        self._recovering = False
+        self._candidate: CommandRegistration | None = None
+        self._server_lease_until = 0.0
         self._transport = transport
         self._worker = StoreWorker(store, storage_timeout)
         self._stream = stream_id
@@ -771,7 +792,7 @@ class CommandClient:
 
         self._check()
 
-        if not self.health.session_valid:
+        if self._recovering or not self.health.session_valid:
             raise CommandError("stale_session")
         return self._lease
     #--------------------------------------------------------------------------------------------------------------
@@ -810,6 +831,7 @@ class CommandClient:
             raise CommandError("stale_session")
         self._session = response
         self._lease = lease
+        self._server_lease_until = self._now() + response.remaining_ttl
         self._health.lease(lease.expires_at)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -955,24 +977,131 @@ class CommandClient:
 
 
     #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Сверка старой работы перед новой регистрацией
+    #--------------------------------------------------------------------------------------------------------------
+    async def _reconnect_once(self) -> bool:
+
+        """Reconcile the old session before installing one idempotent replacement.
+
+        :return: True when registration completed; False while application work remains active.
+        :rtype: bool
+        """
+
+        self._check()
+        self._health.recovery("reconnecting", attempt=True)
+        # acquire может ожидать grant/валидатор. Пока он не завершился, менять
+        # сессию нельзя: его продолжение всё ещё использует исходные разрешения.
+        if self._acquiring:
+            self._health.recovery("reconnecting", "execution_pending")
+            return False
+
+        await self.reconcile()
+        if self._active is not None:
+            stored = await self.lookup(self._active.grant.request.ref)
+            if stored is None or stored.execution_active or stored.record.result is None:
+                self._health.recovery("reconnecting", "execution_pending")
+                return False
+            # Ожидание записи могло оборваться уже после commit. Сохранённое
+            # окончание исполнения позволяет доставить итог и сверить _active.
+        rows = await self.pending()
+        if any(row.execution_active or (row.record.result is not None
+               and row.record.result.outcome is CommandOutcome.UNKNOWN) for row in rows):
+            self._health.recovery("blocked", "unknown_execution")
+            return False
+        # Потерянный ACK допускает повтор точного результата. Противоречие с
+        # UNKNOWN hub оставляет обе записи для разбора, а не запускает callback снова.
+        await self.flush_results()
+        if await self.pending():
+            self._health.recovery("blocked", "unresolved_results")
+            return False
+
+        if self._candidate is None:
+            self._candidate = replace(self.registration, session_id=token_hex(16))
+        sent = self._now()
+        response = await self._transport.exchange("register", self._candidate)
+        if (type(response) is not CommandSession or response.identity != self._candidate.identity
+                or response.session_id != self._candidate.session_id):
+            raise CommandError("invalid")
+        # При потерянном ответе повторяется тот же nonce. Новый ID не создаётся
+        # на каждой сетевой попытке и не вытесняет чужую живую Identity.
+        lease = CommandDeadline.from_response(response.remaining_ttl, sent, self._now(), response.hub_epoch)
+        if lease.remaining(self._now(), response.hub_epoch) <= 0:
+            raise CommandError("stale_session")
+        await self._storage(lambda: self._worker.store.bind_session(self._candidate.session_id))
+        self.registration = self._candidate
+        self._session = response
+        self._lease = lease
+        self._server_lease_until = self._now() + response.remaining_ttl
+        self._candidate = None
+        self._recovering = False
+        self._health.lease(lease.expires_at)
+        self._health.recovery("connected")
+        self._health.success("heartbeat")
+        return True
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Последовательный heartbeat без накопления повторных запросов
     #--------------------------------------------------------------------------------------------------------------
     async def _keep_alive(self) -> None:
 
         """Send sequential heartbeats without an accumulating retry queue."""
 
+        delay = self._reconnect_delay
         while not self._closed:
-            await asyncio.sleep(max(0.01, self._session.remaining_ttl / 3))
+            wait = uniform(delay / 2, delay) if self._recovering else max(0.01, self._session.remaining_ttl / 3)
+            await asyncio.sleep(wait)
             try:
-                await self._heartbeat_once()
+                if self._recovering:
+                    if await self._reconnect_once():
+                        delay = self._reconnect_delay
+                    else:
+                        delay = min(self._reconnect_max_delay, delay * 2)
+                    if self.health.connection_state == "blocked":
+                        return
+                else:
+                    await self._heartbeat_once()
+                    delay = self._reconnect_delay
             except CommandError as error:
-                # Сбой сети не продлевает локальную регистрацию. После её истечения
-                # клиент остаётся закрыт для новых действий до нового запуска.
-                if error.code == "stale_session" or not self.health.session_valid:
+                retrying = self._recovering
+                if getattr(error, "_health_observation", (None,))[0] is not self._health:
+                    self._health.failure("heartbeat", error, object())
+                try:
+                    now = self._now()
+                except (CommandError, ValueError, TypeError):
+                    self._health.recovery("blocked", "clock_failed")
                     return
+                # Клиент вычитает полный RTT, поэтому его lease может истечь чуть
+                # раньше серверного. До консервативной верхней границы старого
+                # lease повторяем тот же nonce; бесконечного ожидания конфликта нет.
+                if (self._recovering and error.code == "conflict"
+                        and self.health.last_error_stage == "heartbeat"
+                        and now < self._server_lease_until):
+                    self._health.recovery("reconnecting", "previous_lease")
+                    delay = min(self._reconnect_max_delay, delay * 2)
+                    continue
+                # Отказ доверия/прав/корреляции требует вмешательства. Цикл не
+                # ослабляет TLS и не создаёт новые сессии в ответ на такой отказ.
+                remote_closed = error.code == "closed" and error.http_status == 503
+                if error.error_kind or (error.code not in {"busy", "unavailable", "capacity", "stale_session"}
+                                        and not remote_closed):
+                    self._health.recovery("blocked", error.error_kind or error.code)
+                    return
+                if self._failed_clock:
+                    self._health.recovery("blocked", "clock_failed")
+                    return
+                if error.code == "stale_session" or remote_closed or not self.health.session_valid:
+                    self._recovering = True
+                    self._health.recovery("reconnecting", error.code)
+                    # Окончательно отзываем локальный lease; старый callback не
+                    # приобретает свежий срок даже при быстром восстановлении сети.
+                    self._lease = replace(self._lease, hub_epoch=token_hex(16))
+                    if error.code == "stale_session" and self._candidate is not None:
+                        self._candidate = None
+                delay = min(self._reconnect_max_delay, delay * 2) if retrying else self._reconnect_delay
             except Exception:
-                # Неожиданная ошибка уже отражена наблюдателем heartbeat. Не отдаём
-                # приватный traceback в стандартный обработчик исключений event loop.
+                self._health.failure("heartbeat", CommandError("unavailable"), object())
+                self._health.recovery("blocked", "local_failure")
                 return
     #--------------------------------------------------------------------------------------------------------------
 
