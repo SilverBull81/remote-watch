@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.4
+Version 1.5.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-230511
+Дата и время последнего изменения: 261013-232656
 
 ## Project Intent
 
@@ -13,7 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.4.dev1.
+The package version is 0.4.4.dev2.
+Dev2 includes prior-process unacknowledged results in client health and retries only
+completed, nonrunning results of the same Identity with their original refs/claims.
+Matching durable receipts remain mandatory; old UNKNOWN/running work is not resolved.
+Read docs/COMMAND_RECONNECT.md: the 2026-10-13 SpamBot field journal has a prior
+kill_bot COMPLETED without ACK, while the LV hub retains the same request/claim as
+UNKNOWN/timeout with execution_active. Both journals were inspected read-only.
+The field reconnect blocks after one attempt; dev2 fixes hidden pending state and
+skipped old results, but does not resolve this real outcome conflict. No journal
+deletion, manual ACK/reset or implicit UNKNOWN adjudication is authorized. A separate
+explicit administrative resolution workflow remains needed; do not claim field recovery.
+Dev2 clean Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1074 tests
+(73 skips, 2 live deselections), extras 1505 (2 live deselections), no warnings.
+Ruff/style: 147 files, no issues. Targeted reconnect/health: 25 passed. Reports:
+build/validation-0442-core and build/validation-0442-extras. No new CI/Linux/Python 3.10,
+live-provider or field acceptance; production processes and journals remain unchanged.
 Stage 0.4.4 provides diagnostics.gateway_doctor with explicit server/client modes,
 offline default and opt-in --online. Client checks use separate authenticated probe
 endpoints, never registration/heartbeat/poll/send as a ping. Probe Identity and all

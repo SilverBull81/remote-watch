@@ -1,10 +1,10 @@
 ﻿# Восстановление командной сессии без повторного исполнения и потери результатов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261013-231723
 #
 # Функции:
 # -> restart(): Новый hub над тем же журналом.
@@ -24,6 +24,7 @@
 # -> test_reconnect_storage_failure(): Ошибка локальной фиксации новой сессии.
 # -> test_two_reconnecting_clients(): Независимое восстановление двух Identity.
 # -> test_reconnect_conservative_lease(): Разница локального и серверного lease.
+# -> test_previous_process_result(): Сверка завершённого результата предыдущего запуска приложения.
 
 
 #******************************************************************************************************************
@@ -41,6 +42,7 @@ from unittest.mock import patch
 import pytest
 from test_command_hub import APP_TOKEN, SOURCE_TOKEN, Rig
 
+from remote_watch.commands.client import CommandClient
 from remote_watch.commands.hub import CommandHub
 from remote_watch.commands.protocol import CommandMessage, callback_result
 from remote_watch.commands.sqlite_store import SQLiteCommandStore
@@ -820,6 +822,94 @@ def test_reconnect_conservative_lease(tmp_path: Path) -> None:
             await wait_for(lambda: rig.client.health.reconnects == 1)
             assert len(rig.hub._issued) == 2
             assert rig.client.health.heartbeat.current_error is None
+        finally:
+            await rig.close()
+    #--------------------------------------------------------------------------------------------------------------
+
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Завершённый результат прежнего процесса не теряется при новой регистрации
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["confirmed", "same_hub", "on_reconnect", "unknown"])
+def test_previous_process_result(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+
+    """Recover a lost receipt across application and hub restarts without replaying execution.
+
+    :param tmp_path: Isolated persistent journals retained by both process generations.
+    :type tmp_path: Path
+
+    :param mode: Whether the previous hub persisted the exact completed result.
+    :type mode: str
+    """
+
+    # tmp_path/mode — результат клиента есть в обоих случаях; истина на hub различается.
+    async def scenario() -> None:
+
+        """Retain old references and require a matching durable gateway receipt."""
+
+        rig = Rig(tmp_path)
+        await rig.start()
+        executions = 0
+        try:
+            await rig.submit(rig.request())
+            ticket = await rig.client.acquire()
+            assert rig.client.begin(ticket)
+            executions += 1
+            result = callback_result(ticket.grant.request.ref, ticket.grant.claim_id, "previous process")
+            if mode != "unknown":
+                rig.transport.lose = "result"
+                with pytest.raises(CommandError, match="unavailable"):
+                    await rig.client.complete(ticket, result)
+            else:
+                # Потеря до записи hub: после его restart останется UNKNOWN.
+                with patch.object(rig.transport, "exchange", side_effect=CommandError("unavailable")):
+                    with pytest.raises(CommandError, match="unavailable"):
+                        await rig.client.complete(ticket, result)
+            await rig.client.close()
+            if mode == "same_hub":
+                rig.now += 61
+            else:
+                await restart(rig, tmp_path)
+
+            # Новый процесс использует ту же БД, но новый owner generation и session_id.
+            generation = token_hex(16)
+            rig.local = SQLiteCommandStore(tmp_path / "client.sqlite", owner_id="app", generation=generation,
+                                          role=StoreRole.CLIENT, clock=lambda: rig.now)
+            rig.registration = replace(rig.registration, session_id=generation)
+            rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now)
+            await rig.client.start()
+            fast_client(rig)
+            assert rig.client.health.has_pending_results
+            assert not rig.client.health.ready
+            if mode == "unknown":
+                with pytest.raises(CommandError, match="outcome_conflict"):
+                    await rig.client.flush_results()
+                assert not (await rig.client.lookup(result.ref)).acknowledged
+                assert rig.store.get(result.ref).record.result.outcome.value == "unknown"
+                assert executions == 1
+                return
+
+            if mode == "on_reconnect":
+                await restart(rig, tmp_path)
+                await wait_for(lambda: rig.client.health.reconnects == 1)
+            else:
+                await rig.client.flush_results()
+            saved = await rig.client.lookup(result.ref)
+            assert saved.acknowledged and saved.record.result == result
+            assert not rig.client.health.has_pending_results
+            assert executions == 1
+            if mode != "on_reconnect":
+                await restart(rig, tmp_path)
+                await wait_for(lambda: rig.client.health.reconnects == 1)
+            assert rig.client.health.ready
+            assert await rig.client.acquire() is None
+            assert executions == 1
         finally:
             await rig.close()
     #--------------------------------------------------------------------------------------------------------------

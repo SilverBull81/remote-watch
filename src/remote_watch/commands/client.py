@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261013-231723
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
@@ -499,7 +499,16 @@ class CommandClient:
 
         for stored in rows:
             result = stored.record.result
-            if result is not None and not stored.acknowledged and result.ref.matches(self.session):
+            if result is None or stored.acknowledged:
+                continue
+            current_session = result.ref.matches(self.session)
+            # После перезапуска приложения journal может хранить COMPLETED прежней
+            # сессии без квитанции. Повторяем только сохранённый итог той же Identity;
+            # исходные ref/claim/digest не меняются. UNKNOWN и живую работу не переносим.
+            previous_completed = (result.ref.identity == self.session.identity
+                and stored.record.phase.value == "completed" and result.outcome is CommandOutcome.COMPLETED
+                and not stored.execution_active)
+            if current_session or previous_completed:
                 # Истёкшие до START команды сообщает сам hub; клиент не подменяет его итог.
                 if stored.record.phase.value not in ("completed", "unknown", "rejected"):
                     await self._storage(lambda: self._worker.store.acknowledge(result))
@@ -723,8 +732,9 @@ class CommandClient:
 
         rows = await self._storage(lambda: self._worker.store.pending(limit=1000))
         # Полная порция может скрывать продолжение. В этом случае готовность консервативна.
-        pending = len(rows) >= 1000 or any(row.record.result is not None and not row.acknowledged
-            and row.record.result.ref.matches(self._session) for row in rows)
+        # Старый результат тоже может блокировать reconnect. Его нельзя скрывать
+        # только потому, что новый запуск уже зарегистрировал другую session_id.
+        pending = len(rows) >= 1000 or any(row.record.result is not None and not row.acknowledged for row in rows)
         self._health.pending(pending)
     #--------------------------------------------------------------------------------------------------------------
 
