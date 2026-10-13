@@ -1,20 +1,21 @@
-﻿# Контракт relay-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
+﻿# Контракт gateway-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-180651
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> fresh_delivery(): Попытка со свежим сроком UTC.
 # -> test_wire_roundtrip(): Сохранение identity и корреляции при передаче JSON.
 # -> test_invalid_wire(): Отклонение неоднозначных и неверных запросов.
 # -> test_invalid_response(): Отклонение неверного подтверждения gateway.
-# -> test_relay_configuration(): Ленивое назначение и согласованные сроки клиента.
-# -> test_relay_http(): Настоящий HTTP-клиент и подставной gateway на loopback.
+# -> test_notification_gateway_configuration(): Ленивое назначение и согласованные сроки клиента.
+# -> test_notification_gateway_http(): Настоящий HTTP-клиент и подставной gateway на loopback.
 # -> test_no_request_after_budget_expiry(): Запрет новой отправки при исчерпании остатка времени.
-# -> test_runtime_budget_and_mixed_modes(): Общие повторы runtime для direct и relay назначений.
+# -> test_runtime_budget_and_mixed_modes(): Общие повторы runtime для direct и gateway назначений.
+# -> test_gateway_names(): Отсутствие старых модулей, имён классов и значений режима.
 
 
 #******************************************************************************************************************
@@ -23,6 +24,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import logging
 import socket
@@ -46,10 +48,10 @@ from remote_watch import (
     Route,
     WatcherConfig,
 )
-from remote_watch.adapters.relay import RelayChannel, RelayConfig
-from remote_watch.relay_protocol import (
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
+from remote_watch.notification_gateway_protocol import (
     MAX_REQUEST_BYTES,
-    RelayRequest,
+    NotificationGatewayRequest,
     decode_response,
     encode_response,
 )
@@ -91,16 +93,16 @@ def test_wire_roundtrip(notification: Notification) -> None:
     # notification - уведомление с заданными тестовыми данными.
 
     delivery = fresh_delivery(notification)
-    request = RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
+    request = NotificationGatewayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
     data = json.dumps(request.to_dict()).encode()
-    decoded = RelayRequest.from_bytes(data)
+    decoded = NotificationGatewayRequest.from_bytes(data)
     assert decoded.delivery.notification == delivery.notification
     assert decoded.delivery.destination_id == "phone"
     assert b"local-phone" not in data
     response = encode_response(delivery, DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED,
                                                         provider_message_id="receipt-1"))
     result = decode_response(json.loads(response), delivery)
-    assert result.source is ResultSource.RELAY and result.provider_message_id == "receipt-1"
+    assert result.source is ResultSource.GATEWAY and result.provider_message_id == "receipt-1"
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -125,7 +127,7 @@ def test_invalid_wire(
     # notification - уведомление с заданными тестовыми данными.
     # mode - выбранный сценарий ответа сервера.
 
-    payload = RelayRequest(delivery=fresh_delivery(notification), alias="phone",
+    payload = NotificationGatewayRequest(delivery=fresh_delivery(notification), alias="phone",
                            remaining_ttl=10, timeout=8).to_dict()
     if mode == "version":
         payload["schema_version"] = True
@@ -143,7 +145,7 @@ def test_invalid_wire(
     if mode == "oversize":
         data = b" " * (MAX_REQUEST_BYTES + 1)
     with pytest.raises(ValueError):
-        RelayRequest.from_bytes(data)
+        NotificationGatewayRequest.from_bytes(data)
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -189,15 +191,16 @@ def test_invalid_response(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ленивое назначение и согласованные сроки клиента
 #------------------------------------------------------------------------------------------------------------------
-def test_relay_configuration() -> None:
+def test_notification_gateway_configuration() -> None:
 
-    """Keep a lazy relay factory and require room for the network within attempt timeout."""
+    """Keep a lazy gateway factory and require room for the network within attempt timeout."""
 
-    config = RelayConfig(endpoint="https://gateway.invalid", alias="phone", token_env="RW_RELAY_TEST")
+    config = NotificationGatewayConfig(
+        endpoint="https://gateway.invalid", alias="phone", token_env="RW_GATEWAY_TEST")
     destination = config.destination("local-phone")
     literal = replace(config, token_env=None, token="x" * 32)
     assert "x" * 32 not in repr(literal)
-    assert "RW_RELAY_TEST" not in repr(config)
+    assert "RW_GATEWAY_TEST" not in repr(config)
     for credentials in ({"token": "x" * 32}, {"token_env": None},
                         {"token_env": None, "token": "short"},
                         {"token_env": None, "token": "x" * 32 + "\n"}):
@@ -214,8 +217,8 @@ def test_relay_configuration() -> None:
             replace(config, ssl_context=invalid)
         assert "PRIVATE" not in str(caught.value)
 
-    assert destination.mode is DeliveryMode.RELAY
-    assert isinstance(destination.channel_factory(), RelayChannel)
+    assert destination.mode is DeliveryMode.GATEWAY
+    assert isinstance(destination.channel_factory(), NotificationGatewayChannel)
     with pytest.raises(ValueError, match="exceed"):
         config.destination("phone", retry=RetryPolicy(attempt_timeout=5))
     for endpoint in ("http://gateway.invalid", "https://user:password@gateway.invalid",
@@ -232,7 +235,7 @@ def test_relay_configuration() -> None:
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("literal", [False, True])
 @pytest.mark.parametrize("mode", ["accepted", "mismatch", "duplicate", "oversize", "auth", "rate", "disconnect"])
-def test_relay_http(
+def test_notification_gateway_http(
     literal: bool,
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,7 +262,7 @@ def test_relay_http(
     # mode - выбранный сценарий ответа сервера.
 
     web = pytest.importorskip("aiohttp.web")
-    monkeypatch.setenv("RW_RELAY_TEST", "synthetic_service_token_01234567890123456789")
+    monkeypatch.setenv("RW_GATEWAY_TEST", "synthetic_service_token_01234567890123456789")
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение асинхронного сценария проверки
@@ -280,14 +283,14 @@ def test_relay_http(
             :param request: Incoming loopback HTTP request.
             :type request: web.Request
 
-            :return: Synthetic relay response for the selected validation scenario.
+            :return: Synthetic gateway response for the selected validation scenario.
             :rtype: web.Response
             """
 
             # request - HTTP-запрос к подставному gateway.
 
             assert request.headers["Authorization"].startswith("Bearer synthetic_service_token_")
-            decoded = RelayRequest.from_bytes(await request.read())
+            decoded = NotificationGatewayRequest.from_bytes(await request.read())
             deliveries.append(decoded)
             result = DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED)
             body = encode_response(decoded.delivery, result)
@@ -316,9 +319,9 @@ def test_relay_http(
             site = web.SockSite(runner, sock)
             await site.start()
             credential = "synthetic_service_token_01234567890123456789"
-            channel = RelayChannel(RelayConfig(
+            channel = NotificationGatewayChannel(NotificationGatewayConfig(
                 endpoint=f"http://127.0.0.1:{port}", alias="phone", allow_http=True,
-                token=credential if literal else None, token_env=None if literal else "RW_RELAY_TEST",
+                token=credential if literal else None, token_env=None if literal else "RW_GATEWAY_TEST",
             ))
             try:
                 await channel.open()
@@ -328,9 +331,9 @@ def test_relay_http(
                 assert deliveries[0].remaining_ttl <= 3
                 expected = {"accepted": DeliveryStatus.PROVIDER_ACCEPTED, "auth": DeliveryStatus.PERMANENT_FAILURE,
                             "rate": DeliveryStatus.RATE_LIMITED}.get(mode, DeliveryStatus.UNKNOWN)
-                assert result.status is expected and result.source is ResultSource.RELAY
+                assert result.status is expected and result.source is ResultSource.GATEWAY
                 if mode == "auth":
-                    assert result.reason_code == "relay_auth_denied"
+                    assert result.reason_code == "gateway_auth_denied"
                 if mode == "rate":
                     assert result.retry_after == 5
             finally:
@@ -362,7 +365,7 @@ def test_no_request_after_budget_expiry(
     # notification - уведомление с заданными тестовыми данными.
     # monkeypatch - фикстура подмены зависимостей и окружения.
 
-    monkeypatch.setenv("RW_RELAY_TEST", "synthetic_service_token_01234567890123456789")
+    monkeypatch.setenv("RW_GATEWAY_TEST", "synthetic_service_token_01234567890123456789")
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -372,12 +375,13 @@ def test_no_request_after_budget_expiry(
 
         """Open a client without connecting and exercise a locally exhausted budget."""
 
-        channel = RelayChannel(RelayConfig(endpoint="https://gateway.invalid", alias="phone",
-                                            token_env="RW_RELAY_TEST"))
+        channel = NotificationGatewayChannel(NotificationGatewayConfig(
+            endpoint="https://gateway.invalid", alias="phone",
+                                            token_env="RW_GATEWAY_TEST"))
         await channel.open()
         try:
             result = await channel.send(replace(fresh_delivery(notification), remaining_timeout=0.5))
-            assert result.reason_code == "relay_budget_exhausted"
+            assert result.reason_code == "gateway_budget_exhausted"
         finally:
             await channel.close()
     #--------------------------------------------------------------------------------------------------------------
@@ -387,14 +391,14 @@ def test_no_request_after_budget_expiry(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Общие повторы runtime для direct и relay назначений
+# ТЕСТ : Общие повторы runtime для direct и gateway назначений
 #------------------------------------------------------------------------------------------------------------------
 def test_runtime_budget_and_mixed_modes(
     identity: Identity,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
-    """Keep retries in runtime while direct and relay destinations receive one event independently.
+    """Keep retries in runtime while direct and gateway destinations receive one event independently.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -432,7 +436,7 @@ def test_runtime_budget_and_mixed_modes(
             delivery: Delivery,
         ) -> DeliveryResult:
 
-            """Fail the first relay attempt and accept its runtime-owned retry.
+            """Fail the first gateway attempt and accept its runtime-owned retry.
 
             :param delivery: Immutable delivery attempt.
             :type delivery: Delivery
@@ -444,8 +448,8 @@ def test_runtime_budget_and_mixed_modes(
             # delivery - подготовленные данные одной попытки.
 
             sent.append(delivery)
-            if delivery.destination_id == "relay" and delivery.attempt == 1:
-                return DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, source=ResultSource.RELAY)
+            if delivery.destination_id == "gateway" and delivery.attempt == 1:
+                return DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, source=ResultSource.GATEWAY)
             return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED)
         #----------------------------------------------------------------------------------------------------------
 
@@ -462,17 +466,43 @@ def test_runtime_budget_and_mixed_modes(
 
     policy = RetryPolicy(max_attempts=2, backoff_base=0.001, backoff_cap=0.001, ttl=0.5)
     destinations = tuple(Destination(destination_id=mode.value, mode=mode, channel_factory=Channel, retry=policy)
-                         for mode in (DeliveryMode.DIRECT, DeliveryMode.RELAY))
+                         for mode in (DeliveryMode.DIRECT, DeliveryMode.GATEWAY))
     runtime = NotificationRuntime(WatcherConfig(identity=identity, destinations=destinations,
-                                               routes=(Route(destination_ids=("direct", "relay")),)))
+                                               routes=(Route(destination_ids=("direct", "gateway")),)))
     logger = logging.Logger("mixed", logging.INFO)
     logger.addHandler(runtime.handler)
     with runtime:
         logger.error("one event")
-    relay = [d for d in sent if d.destination_id == "relay"]
-    assert len(relay) == 2 and relay[0].delivery_id == relay[1].delivery_id
+    notification_gateway = [d for d in sent if d.destination_id == "gateway"]
+    assert len(notification_gateway) == 2
+    assert notification_gateway[0].delivery_id == notification_gateway[1].delivery_id
     assert all(0 < d.remaining_timeout <= 0.5 for d in sent)
-    assert runtime.stats("direct").accepted == runtime.stats("relay").accepted == 1
+    assert runtime.stats("direct").accepted == runtime.stats("gateway").accepted == 1
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Новые имена не оставляют неявных переходников старого API
+#------------------------------------------------------------------------------------------------------------------
+def test_gateway_names() -> None:
+
+    """Reject retired modules, enum values and type aliases instead of silently accepting legacy config."""
+
+    # Проверяем именно установленную поверхность API: старый режим требует явной миграции.
+    adapter = importlib.import_module("remote_watch.adapters.notification_gateway")
+    protocol = importlib.import_module("remote_watch.notification_gateway_protocol")
+    assert adapter.NotificationGatewayConfig is NotificationGatewayConfig
+    assert protocol.NotificationGatewayRequest is NotificationGatewayRequest
+    assert not hasattr(adapter, "RelayConfig") and not hasattr(adapter, "RelayChannel")
+    assert not hasattr(protocol, "RelayRequest")
+    for module in ("remote_watch.adapters.relay", "remote_watch.relay_protocol"):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(module)
+    for enum in (DeliveryMode, ResultSource):
+        assert enum("gateway") is enum.GATEWAY
+        assert not hasattr(enum, "RELAY")
+        with pytest.raises(ValueError):
+            enum("relay")
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -480,5 +510,6 @@ def test_runtime_budget_and_mixed_modes(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль tests.contract.test_relay не предназначен для прямого запуска. Используйте pytest.")
+    print("Модуль tests.contract.test_notification_gateway не предназначен для прямого запуска. "
+          "Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

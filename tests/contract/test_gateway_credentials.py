@@ -1,10 +1,10 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> document(): Конфигурация с вымышленными токенами.
@@ -39,7 +39,7 @@ from remote_watch.adapters.telegram import TelegramConfig
 from remote_watch.gateway.config import GatewayPrincipal
 from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
 from remote_watch.gateway.server import Gateway, GatewayStartupError, main
-from remote_watch.relay_protocol import RelayRequest
+from remote_watch.notification_gateway_protocol import NotificationGatewayRequest
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -347,7 +347,8 @@ def test_inline_delivery(
             await gateway.start(port=0)
             async with ClientSession() as session:
                 for alias in ("tg", "ntfy"):
-                    payload = RelayRequest(delivery=Delivery(notification=notification, destination_id=alias,
+                    payload = NotificationGatewayRequest(delivery=Delivery(
+                        notification=notification, destination_id=alias,
                         delivery_id=alias), alias=alias, remaining_ttl=30, timeout=8).to_dict()
                     endpoint = f"http://127.0.0.1:{gateway.port}/v1/notifications"
                     async with session.post(endpoint, json=payload,

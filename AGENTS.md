@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.4.7
+Version 1.4.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
 
 ## Project Intent
 
@@ -13,12 +13,28 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.2.dev2; no stable 0.2.0 tag is implied.
+The package version is 0.4.2.dev3; no stable 0.2.0 tag is implied.
+Dev3 replaces RelayConfig/RelayChannel/RelayRequest with NotificationGatewayConfig,
+NotificationGatewayChannel and NotificationGatewayRequest. Modules are now
+adapters.notification_gateway and notification_gateway_protocol. DeliveryMode/ResultSource
+use GATEWAY="gateway"; provider/diagnostic CLI/settings select gateway. Removed extra
+relay is replaced by gateway; fixed diagnostic codes use gateway_* / invalid_gateway_response.
+The owner explicitly rejected legacy aliases: do not restore old imports or enum names.
+Historical entries below retain the names used at that time; current API is in ADR 0013.
+POST /v1/notifications, envelope schemas 1/2/3, commands, SQLite and Caddy CA are unchanged;
+there is no alternate route, downgrade POST or new reconnect. See docs/GATEWAY_FOLLOW_UP.md
+for the breaking migration. SpamBot/LV deployment was not modified. Owner reports that
+the week-long SpamBot run continues without remote-watch issues; it is not final acceptance.
+The updated purple robot icon uses robot_quik.png as face reference; logo/remote_watch.ico
+is an exact export of the packaged ICO. Reference logos remain untracked and are not shipped.
+Dev3 clean Windows CPython 3.12.2 wheels passed core 1004 tests (71 skips)
+and extras 1413 tests, each with 2 live deselections. Ruff/style: 138 files, no issues.
+No new CI/Linux, live-provider or production update was performed. See docs/VALIDATION.md.
 Dev2 bundles a multi-resolution robot tray icon and accepts application.icon_path
 relative to the deployment JSON. Null/absent selects the packaged default; headless
 does not decode images. Configuration checks file presence without importing Pillow.
 User reference logos are not package assets. See docs/GATEWAY_FOLLOW_UP.md for the
-terminology map and proposed reconnect/rename steps: those steps are not implemented.
+terminology map and reconnect plan; renaming is implemented in dev3 above, reconnect is not.
 Direct/gateway is currently a notification-destination choice; messenger commands
 use the command gateway, whose replies do not depend on notification logging routes.
 Dev2 clean Windows CPython 3.12.2 wheels passed core 1002 tests (71 skips)
@@ -95,7 +111,7 @@ Absent mode inherits gateway presentation; explicit mode replaces it only for th
 The owner chose client config changes with application restart, not live config reload.
 Upgrade notification gateway once; later client display changes do not restart it.
 Schemas 1/2 retain their exact envelope; no downgrade/repeated POST fallback is allowed.
-Identity, routing, credentials, ACL and execution contracts are unchanged. See docs/RELAY.md.
+Identity, routing, credentials, ACL and execution contracts are unchanged. See docs/NOTIFICATION_GATEWAY.md.
 Dev8 passed 1235 local tests (2 live deselections) on Windows Python 3.12.2;
 clean core/extras wheel checks passed 842/1235 tests. Ruff/style: 121 Python files,
 no issues. No CI/Linux/live-provider rerun; schema 3 field acceptance is pending.
@@ -309,7 +325,7 @@ were modified. See docs/VALIDATION.md for exact evidence and limits.
   Functions, partials and explicit CommandSpec declarations are supported.
 - Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
 - Read `docs/ADAPTERS.md` for provider configuration, HTTP behavior and opt-in live tests.
-- Read `docs/RELAY.md`, `docs/GATEWAY_SERVER.md` and ADRs 0005/0006 for relay behavior,
+- Read `docs/NOTIFICATION_GATEWAY.md`, `docs/GATEWAY_SERVER.md` and ADRs 0005/0006 for relay behavior,
   server admission/lifecycle and the external TCP/TLS ingress limits required for deployment.
 - Read `docs/FIELD_SMOKE.md` for finite field runs, reports and manual phone observations.
 - Read `docs/NTFY_DIAGNOSTIC.md` for bounded size probes and `docs/GATEWAY_TLS.md`

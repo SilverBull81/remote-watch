@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав.
@@ -47,7 +47,7 @@ from remote_watch import (
     Destination,
     RetryPolicy,
 )
-from remote_watch.adapters.relay import RelayChannel, RelayConfig
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
 from remote_watch.diagnostics.smoke import _notification
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 from remote_watch.gateway.server import Gateway, main
@@ -212,7 +212,7 @@ def test_gateway_tls_cli(
     if mode != "untrusted":
         client_context.load_verify_locations(cafile=str(ca_path))
     assert client_context.check_hostname and client_context.verify_mode == ssl.CERT_REQUIRED
-    # Реальный TLS использует публичный контекст RelayConfig без подмены connector.
+    # Реальный TLS использует публичный контекст NotificationGatewayConfig без подмены connector.
     outcomes: list[DeliveryResult] = []
 
     #--------------------------------------------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def test_gateway_tls_cli(
         context: ssl.SSLContext | None,
     ) -> None:
 
-        """Replace the endless CLI wait with one real HTTPS relay attempt.
+        """Replace the endless CLI wait with one real HTTPS gateway attempt.
 
         :param config: Validated provider configuration.
         :type config: GatewayConfig
@@ -250,15 +250,16 @@ def test_gateway_tls_cli(
         gateway = Gateway(config)
         await gateway.start(host=host, port=port, ssl_context=context)
         scheme = "http" if mode == "plaintext" else "https"
-        relay = RelayChannel(RelayConfig(endpoint=f"{scheme}://127.0.0.1:{gateway.port}", alias="phone",
+        notification_gateway = NotificationGatewayChannel(NotificationGatewayConfig(
+            endpoint=f"{scheme}://127.0.0.1:{gateway.port}", alias="phone",
             token_env="RW_TLS_TEST", allow_http=mode == "plaintext",
             ssl_context=None if mode == "default_trust" else client_context))
         try:
-            await relay.open()
+            await notification_gateway.open()
             delivery = Delivery(notification=event, destination_id="phone", delivery_id="tls")
-            outcomes.append(await relay.send(delivery))
+            outcomes.append(await notification_gateway.send(delivery))
         finally:
-            await relay.close()
+            await notification_gateway.close()
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------
 

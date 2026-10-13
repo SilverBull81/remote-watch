@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки.
@@ -21,7 +21,7 @@
 # -> test_cli_private_arguments(): Отсутствие приватных аргументов в ошибке CLI.
 # -> test_shared_alias(): Конкуренция двух приложений за общего получателя.
 # -> test_cli_process_stop(): Штатная остановка настоящего дочернего процесса.
-# -> test_mixed_field(): Полевой сценарий через relay и прямой ntfy.
+# -> test_mixed_field(): Полевой сценарий через gateway и прямой ntfy.
 
 
 #******************************************************************************************************************
@@ -53,7 +53,7 @@ from remote_watch.gateway import server as cli
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 from remote_watch.gateway.json_config import GatewayConfigError, load_gateway_config
 from remote_watch.gateway.server import Gateway
-from remote_watch.relay_protocol import RelayRequest, decode_response
+from remote_watch.notification_gateway_protocol import NotificationGatewayRequest, decode_response
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -372,7 +372,7 @@ def test_shared_alias(
             alias: str = 'shared',
         ) -> tuple[int, dict]:
 
-            """Submit a correlated relay envelope with the selected principal token.
+            """Submit a correlated gateway envelope with the selected principal token.
 
             :param client: Local HTTP client.
             :type client: aiohttp.ClientSession
@@ -395,7 +395,8 @@ def test_shared_alias(
             # env - имя переменной тестового токена.
             # alias - запрошенный получатель.
 
-            body = RelayRequest(delivery=delivery, alias=alias, remaining_ttl=10, timeout=8).to_dict()
+            body = NotificationGatewayRequest(
+                delivery=delivery, alias=alias, remaining_ttl=10, timeout=8).to_dict()
             async with client.post(f"http://127.0.0.1:{gateway.port}/v1/notifications", json=body,
                                    headers={"Authorization": "Bearer " + os.environ[env]}) as response:
                 return response.status, await response.json()
@@ -502,7 +503,7 @@ def test_cli_process_stop(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Полевой сценарий через relay и прямой ntfy
+# ТЕСТ : Полевой сценарий через gateway и прямой ntfy
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("authorized", [True, False])
 def test_mixed_field(
@@ -512,9 +513,9 @@ def test_mixed_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
-    """Run the mixed CLI through real relay HTTP and direct ntfy without Telegram credentials.
+    """Run the mixed CLI through real gateway HTTP and direct ntfy without Telegram credentials.
 
-    :param authorized: Whether the relay token is authorized.
+    :param authorized: Whether the gateway token is authorized.
     :type authorized: bool
 
     :param notification: Synthetic notification.
@@ -527,7 +528,7 @@ def test_mixed_field(
     :type monkeypatch: pytest.MonkeyPatch
     """
 
-    # authorized - допустимость токена relay.
+    # authorized - допустимость токена gateway.
     # notification - синтетическое уведомление.
     # tmp_path - временный каталог.
     # monkeypatch - подмена окружения и зависимостей.
@@ -637,7 +638,7 @@ def test_mixed_field(
         try:
             await gateway.start(port=0)
             credentials.write_text(json.dumps({
-                "relay": {"token": os.environ["GW_FIELD"] if authorized else "invalid_private_token" * 2,
+                "gateway": {"token": os.environ["GW_FIELD"] if authorized else "invalid_private_token" * 2,
                           "endpoint": f"http://127.0.0.1:{gateway.port}", "alias": "tg", "allow_http": True},
                 "ntfy": {"token": "ntfy_private_token", "topic": "private_topic", "allow_http": True,
                          "endpoint": f"http://127.0.0.1:{server.sockets[0].getsockname()[1]}"},
@@ -648,7 +649,7 @@ def test_mixed_field(
             code = await asyncio.wait_for(asyncio.to_thread(field_smoke.main, arguments), 10)
             assert code == (0 if authorized else 1)
             rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
-            assert rows[0]["delivery_modes"] == {"telegram": "relay", "ntfy": "direct"}
+            assert rows[0]["delivery_modes"] == {"telegram": "gateway", "ntfy": "direct"}
             assert rows[-1]["provider_acceptance_complete"] is authorized
             assert len(ntfy_calls) == 4
             assert len(provider.seen) == (4 if authorized else 0)

@@ -1,10 +1,10 @@
 ﻿# Клиентское отображение через работающий gateway без изменения его конфигурации.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> test_gateway_display_override(): Разные режимы клиентов при одном неизменном provider-канале.
@@ -25,8 +25,8 @@ import pytest
 
 from remote_watch import Delivery, DeliveryStatus, Destination, Notification, RetryPolicy
 from remote_watch.adapters._common import render
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
 from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.relay import RelayChannel, RelayConfig
 from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 from remote_watch.gateway.server import Gateway
@@ -42,7 +42,7 @@ def test_gateway_display_override(
     provider: str,
 ) -> None:
 
-    """Exercise real relay HTTP and provider rendering while retaining one gateway lifecycle.
+    """Exercise real gateway HTTP and provider rendering while retaining one gateway lifecycle.
 
     :param notification: Immutable event fixture with synthetic identity.
     :type notification: Notification
@@ -118,7 +118,7 @@ def test_gateway_display_override(
             for changes in ({}, {"schema_version": 2}, {"schema_version": 3},
                             {"display_mode": "full"}, {"display_mode": "compact"}, {"display_mode": "text"},
                             {"display_mode": "full", "display_fields": ["level"]}, {}):
-                client = RelayChannel(RelayConfig(**base, **changes))
+                client = NotificationGatewayChannel(NotificationGatewayConfig(**base, **changes))
                 try:
                     await client.open()
                     result = await client.send(delivery)
@@ -136,18 +136,19 @@ def test_gateway_display_override(
             assert delivery.display_mode is None and delivery.notification is event
 
             # Клиентский text не меняет проверку Identity/alias до provider.send.
-            client = RelayChannel(RelayConfig(**base, display_mode="text"))
+            client = NotificationGatewayChannel(NotificationGatewayConfig(**base, display_mode="text"))
             try:
                 await client.open()
                 foreign = replace(delivery, notification=replace(event,
                                   identity=replace(event.identity, host="other")))
-                assert (await client.send(foreign)).reason_code == "relay_auth_denied"
+                assert (await client.send(foreign)).reason_code == "gateway_auth_denied"
             finally:
                 await client.close()
-            client = RelayChannel(RelayConfig(**{**base, "alias": "other"}, display_mode="text"))
+            client = NotificationGatewayChannel(
+                NotificationGatewayConfig(**{**base, "alias": "other"}, display_mode="text"))
             try:
                 await client.open()
-                assert (await client.send(delivery)).reason_code == "relay_auth_denied"
+                assert (await client.send(delivery)).reason_code == "gateway_auth_denied"
             finally:
                 await client.close()
             assert len(payloads) == 8
@@ -188,7 +189,8 @@ def test_display_old_gateway(
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
-        client = RelayChannel(RelayConfig(endpoint="https://gateway.invalid", alias="phone",
+        client = NotificationGatewayChannel(NotificationGatewayConfig(
+            endpoint="https://gateway.invalid", alias="phone",
                                           token="x" * 32, display_mode="text"))
         calls = []
 
@@ -218,7 +220,7 @@ def test_display_old_gateway(
 
             # Содержимое ответа не раскрывает подробностей сервера.
             calls.append(payload)
-            return 400, {"retry-after": None}, {"code": "relay_invalid_request"}
+            return 400, {"retry-after": None}, {"code": "gateway_invalid_request"}
         #----------------------------------------------------------------------------------------------------------
 
         monkeypatch.setattr(client._http, "post", post)
@@ -239,5 +241,5 @@ def test_display_old_gateway(
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("Модуль test_relay_display не предназначен для прямого запуска. Используйте pytest.")
+    print("Модуль test_notification_gateway_display не предназначен для прямого запуска. Используйте pytest.")
 #------------------------------------------------------------------------------------------------------------------

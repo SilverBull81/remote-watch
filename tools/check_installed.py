@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-141219
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -46,9 +46,9 @@ def main() -> int:
     # -I и отдельный venv исключают src и пользовательские site-packages.
     import remote_watch
     from remote_watch.adapters.command_http import HttpsCommandTransport
+    from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
     from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
     from remote_watch.adapters.ntfy_commands import NtfyCommandProvider
-    from remote_watch.adapters.relay import RelayChannel, RelayConfig
     from remote_watch.adapters.telegram import TelegramChannel, TelegramConfig
     from remote_watch.adapters.telegram_commands import TelegramCommandProvider
     from remote_watch.adapters.time_source import HttpsDateTimeSource
@@ -83,6 +83,10 @@ def main() -> int:
     assert tuple(logging.getLogger().handlers) == handlers
     assert importlib.util.find_spec("cryptography") is None
     assert (importlib.util.find_spec("aiohttp") is not None) == (args.mode == "extras")
+    # Установка новой версии не должна возвращать удалённые имена через файлы из старой сборки.
+    for removed in ("remote_watch.adapters.relay", "remote_watch.relay_protocol"):
+        assert importlib.util.find_spec(removed) is None
+    assert "relay" not in importlib.metadata.metadata("remote-watch").get_all("Provides-Extra", [])
     assert all("extra ==" in item for item in importlib.metadata.requires("remote-watch") or [])
 
     assert all(item is not None for item in (CommandChallenge, CommandRegistration, decode_command, CommandRecord))
@@ -126,8 +130,9 @@ def main() -> int:
         assert "--help" in result.stdout.decode("utf-8")
 
     # Импорт всех интерфейсов не должен сам создавать ресурсы или читать токены.
-    assert all(item is not None for item in (RelayChannel, RelayConfig, TelegramChannel,
-                                            TelegramConfig, Gateway, load_gateway_config))
+    assert all(item is not None for item in (
+        NotificationGatewayChannel, NotificationGatewayConfig, TelegramChannel,
+        TelegramConfig, Gateway, load_gateway_config))
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

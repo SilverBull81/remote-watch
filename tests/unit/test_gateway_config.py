@@ -1,15 +1,15 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> configuration(): Конфигурация без запуска фабрики канала.
 # -> test_config_bounds(): Отклонение неверных ограничений до запуска.
-# -> test_config_grants(): Запрет каскадов relay и неоднозначных прав.
+# -> test_config_grants(): Запрет каскадов gateway и неоднозначных прав.
 # -> test_config_copy(): Отделение настроек от изменяемых списков приложения.
 
 
@@ -86,7 +86,7 @@ def test_config_bounds(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Запрет каскадов relay и неоднозначных прав
+# ТЕСТ : Запрет каскадов gateway и неоднозначных прав
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("case", ["cascade", "retry", "alias", "duplicate_alias", "duplicate_principal",
     "unknown_alias", "token_env", "empty_aliases", "principal_capacity"])
@@ -95,7 +95,7 @@ def test_config_grants(
     case: str,
 ) -> None:
 
-    """Reject ambiguous credentials, unauthorized aliases and relay cascades.
+    """Reject ambiguous credentials, unauthorized aliases and gateway cascades.
 
     :param identity: Exact synthetic application identity.
     :type identity: Identity
@@ -112,7 +112,7 @@ def test_config_grants(
     principal = config.principals[0]
     with pytest.raises((ValueError, TypeError)):
         if case == "cascade":
-            replace(config, destinations=(replace(destination, mode=DeliveryMode.RELAY),))
+            replace(config, destinations=(replace(destination, mode=DeliveryMode.GATEWAY),))
         elif case == "retry":
             replace(config, destinations=(replace(destination, retry=RetryPolicy()),))
         elif case == "alias":

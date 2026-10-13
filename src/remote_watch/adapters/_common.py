@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-141219
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
@@ -198,7 +198,7 @@ def render(
     event = delivery.notification
     identity = event.identity
     # Настройка конкретной доставки имеет приоритет над режимом канала.
-    # При отсутствии override старые direct/relay назначения работают как прежде.
+    # При отсутствии override старые direct/gateway назначения работают как прежде.
     if delivery.display_mode is not None:
         mode, fields = delivery.display_mode, delivery.display_fields
     selected = fields if fields is not None else (

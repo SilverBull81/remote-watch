@@ -1,13 +1,13 @@
 ﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
-# -> RelayRequest: Версионированный запрос одной попытки через gateway.
+# -> NotificationGatewayRequest: Версионированный запрос одной попытки через gateway.
 #    Интерфейс:
 #    -> to_dict(): Данные запроса без секретов и локальных настроек.
 #    -> from_bytes(): Проверка входящего JSON и создание запроса.
@@ -82,7 +82,7 @@ def validate_alias(alias: str) -> None:
     # alias - логическое имя получателя на gateway.
 
     if not isinstance(alias, str) or re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_-]{0,63}", alias) is None:
-        raise ValueError("relay alias must be a short ASCII identifier")
+        raise ValueError("gateway alias must be a short ASCII identifier")
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -135,13 +135,13 @@ def _decode(
     # limit - предел размера тела, байты.
 
     if not isinstance(data, bytes) or len(data) > limit:
-        raise ValueError("relay body exceeds its byte limit")
+        raise ValueError("gateway body exceeds its byte limit")
     try:
         value = json.loads(data.decode("utf-8"), object_pairs_hook=_object)
     except (ValueError, UnicodeError, RecursionError):
-        raise ValueError("invalid relay JSON") from None
+        raise ValueError("invalid gateway JSON") from None
     if not isinstance(value, dict):
-        raise ValueError("relay body must be an object")
+        raise ValueError("gateway body must be an object")
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -167,9 +167,9 @@ def _keys(
     # expected - точный набор допустимых полей.
 
     if set(payload) != expected:
-        raise ValueError("relay envelope has missing or unknown fields")
+        raise ValueError("gateway envelope has missing or unknown fields")
     if type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2, 3):
-        raise ValueError("unsupported relay schema version")
+        raise ValueError("unsupported gateway schema version")
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -177,7 +177,7 @@ def _keys(
 # КЛАСС : Версионированный запрос одной попытки через gateway
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RelayRequest:
+class NotificationGatewayRequest:
     """Describe one attempt, never asynchronous acceptance or a durable receipt."""
 
     delivery: Delivery                  # Подготовленная попытка с неизменяемым уведомлением.
@@ -216,15 +216,15 @@ class RelayRequest:
     def from_bytes(
         cls,
         data: bytes,
-    ) -> RelayRequest:
+    ) -> NotificationGatewayRequest:
 
         """Decode a bounded request; authentication, ACL and expiry checks belong to the gateway.
 
         :param data: Bounded UTF-8 JSON bytes.
         :type data: bytes
 
-        :return: Validated relay request reconstructed from its wire fields.
-        :rtype: RelayRequest
+        :return: Validated gateway request reconstructed from its wire fields.
+        :rtype: NotificationGatewayRequest
         """
 
         # data - байты JSON с ограниченным размером.
@@ -240,9 +240,9 @@ class RelayRequest:
             if display is not None:
                 if (type(display) is not dict or set(display) != {"mode", "fields"}
                         or type(display["mode"]) is not str):
-                    raise ValueError("invalid relay display")
+                    raise ValueError("invalid gateway display")
                 if display["fields"] is not None and type(display["fields"]) is not list:
-                    raise ValueError("invalid relay display fields")
+                    raise ValueError("invalid gateway display fields")
             return cls(alias=payload["alias"], remaining_ttl=payload["remaining_ttl"], timeout=payload["timeout"],
                        schema_version=payload["schema_version"],
                        delivery=Delivery(notification=Notification.from_dict(payload["notification"]),
@@ -251,7 +251,7 @@ class RelayRequest:
                                          display_mode=None if display is None else display["mode"],
                                          display_fields=None if display is None else display["fields"]))
         except (TypeError, ValueError, OverflowError):
-            raise ValueError("invalid relay request") from None
+            raise ValueError("invalid gateway request") from None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -264,9 +264,9 @@ class RelayRequest:
         if not isinstance(self.delivery, Delivery):
             raise TypeError("delivery must be Delivery")
         if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
-            raise ValueError("unsupported relay schema version")
+            raise ValueError("unsupported gateway schema version")
         if self.schema_version != 3 and self.delivery.display_mode is not None:
-            raise ValueError("client display requires relay schema 3")
+            raise ValueError("client display requires gateway schema 3")
 
         # Все версии wire используют стандартные пределы Notification. Увеличенные
         # локальные SnapshotLimits не расширяют доверие принимающей стороны.
@@ -276,10 +276,10 @@ class RelayRequest:
         require_number(self.remaining_ttl, "remaining_ttl")
         require_number(self.timeout, "timeout")
         if self.timeout > self.remaining_ttl:
-            raise ValueError("relay timeout exceeds remaining TTL")
+            raise ValueError("gateway timeout exceeds remaining TTL")
         encoded = encode_json(self.to_dict()).encode("utf-8")
         if len(encoded) > MAX_REQUEST_BYTES:
-            raise ValueError("relay request exceeds its byte limit")
+            raise ValueError("gateway request exceeds its byte limit")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -294,7 +294,7 @@ def encode_response(
     schema_version: int = 1,
 ) -> bytes:
 
-    """Encode a correlated relay response without arbitrary provider error text.
+    """Encode a correlated gateway response without arbitrary provider error text.
 
     :param delivery: Immutable delivery attempt.
     :type delivery: Delivery
@@ -316,7 +316,7 @@ def encode_response(
     if not isinstance(delivery, Delivery) or not isinstance(result, DeliveryResult):
         raise TypeError("delivery and result must use validated models")
     if type(schema_version) is not int or schema_version not in (1, 2, 3):
-        raise ValueError("unsupported relay schema version")
+        raise ValueError("unsupported gateway schema version")
     payload = {"schema_version": schema_version, "delivery_id": delivery.delivery_id, "attempt": delivery.attempt,
                "result": {"status": result.status.value, "reason_code": result.reason_code,
                           "provider_message_id": result.provider_message_id, "retry_after": result.retry_after}}
@@ -324,7 +324,7 @@ def encode_response(
         payload["result"].update({name: getattr(result, name) for name in DIAGNOSTIC_FIELDS})
     data = encode_json(payload).encode("utf-8")
     if len(data) > MAX_RESPONSE_BYTES:
-        raise ValueError("relay response exceeds its byte limit")
+        raise ValueError("gateway response exceeds its byte limit")
     return data
 #------------------------------------------------------------------------------------------------------------------
 
@@ -350,7 +350,7 @@ def decode_response(
     :param schema_version: Version selected for this attempt, without automatic fallback.
     :type schema_version: int
 
-    :return: Validated delivery outcome from the relay response.
+    :return: Validated delivery outcome from the gateway response.
     :rtype: DeliveryResult
     """
 
@@ -359,28 +359,28 @@ def decode_response(
     # schema_version - версия текущей попытки; тихое понижение не допускается.
 
     if not isinstance(payload, dict):
-        raise ValueError("relay response must be an object")
+        raise ValueError("gateway response must be an object")
     _keys(payload, {"schema_version", "delivery_id", "attempt", "result"})
     if type(schema_version) is not int or payload["schema_version"] != schema_version:
-        raise ValueError("relay response version mismatch")
+        raise ValueError("gateway response version mismatch")
     if payload["delivery_id"] != delivery.delivery_id or type(payload["attempt"]) is not int:
-        raise ValueError("relay response correlation mismatch")
+        raise ValueError("gateway response correlation mismatch")
     if payload["attempt"] != delivery.attempt:
-        raise ValueError("relay response attempt mismatch")
+        raise ValueError("gateway response attempt mismatch")
     result = payload["result"]
     expected = {"status", "reason_code", "provider_message_id", "retry_after"}
     if schema_version in (2, 3):
         expected.update(DIAGNOSTIC_FIELDS)
     if not isinstance(result, dict) or set(result) != expected:
-        raise ValueError("invalid relay result fields")
+        raise ValueError("invalid gateway result fields")
     try:
-        return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus(result["status"]),
+        return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus(result["status"]),
                               reason_code=result["reason_code"], provider_message_id=result["provider_message_id"],
                               retry_after=result["retry_after"],
                               **({name: result[name] for name in DIAGNOSTIC_FIELDS}
                                  if schema_version in (2, 3) else {}))
     except (ValueError, TypeError, OverflowError):
-        raise ValueError("invalid relay result") from None
+        raise ValueError("invalid gateway result") from None
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -389,6 +389,6 @@ def decode_response(
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.relay_protocol не предназначен для прямого запуска.",
+        "Модуль remote_watch.notification_gateway_protocol не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

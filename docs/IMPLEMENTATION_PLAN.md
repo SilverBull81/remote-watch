@@ -1,10 +1,10 @@
 ﻿# План реализации
 
-Version 1.3.3
+Version 1.3.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
 
 ## Текущее состояние
 
@@ -147,7 +147,7 @@ Windows/Linux и минимальном Python. Лицензия/metadata опр
 приложения, чтобы сразу внедрить весь новый интерфейс. Compatibility shim не требуется.
 Потери до отправки, возможные дубликаты и ограничения Android остаются явными.
 
-## 0.2 — необязательный outbound relay
+## 0.2 — необязательный outbound gateway
 
 Статус: программная часть и основной полевой сценарий завершены для личного
 использования. Последняя реализация — dev9: JSON/token, безопасные ошибки,
@@ -159,12 +159,12 @@ TLS, clock_skew_tolerance, CLI summary/stop-file и mixed field smoke.
 1. Выбрать packaging и серверный transport; определить wire schema и auth.
 2. Реализовать client transport как замену direct transport в одном назначении.
 3. Реализовать gateway с aliases/ACL, bounded concurrency, одной provider attempt.
-4. Проверить смешанный режим: Telegram через relay, ntfy напрямую в том же runtime.
+4. Проверить смешанный режим: Telegram через gateway, ntfy напрямую в том же runtime.
 5. Проверить timeout после provider success, overload, expiry и неправильную identity.
 
-Готово, когда смена direct/relay не меняет вызовы logger, приложение в relay-режиме
+Готово, когда смена direct/gateway не меняет вызовы logger, приложение в gateway-режиме
 не требует provider token/SDK, а недоступность gateway подчиняется общей retry policy.
-Command endpoints в relay-only deployment отсутствуют.
+Command endpoints в gateway-only deployment отсутствуют.
 
 ## 0.3 — команды проверки и управления приложением
 
@@ -241,7 +241,7 @@ API и существенные ограничения: [COMMAND_HUB.md](COMMAND
 session binding, heartbeat и HTTPS long polling клиента. Один hub обслуживает
 несколько приложений и чатов; на RU не нужен входящий порт. Запрос без живой
 однозначной цели отклоняется. Старые сессии не получают новые команды.
-Конкуренция, очереди, запросы хранения и shutdown конечны; relay-only ничего не включает.
+Конкуренция, очереди, запросы хранения и shutdown конечны; gateway-only ничего не включает.
 
 Готово, когда fake source → hub → клиент → fake callback → результат проходит
 локально, а чужой actor/chat/instance/scope и старая сессия отклоняются.
@@ -336,9 +336,10 @@ RestartBudget и `python -m remote_watch.gateway_server --check-config --config 
 Схема и ограничения: [GATEWAY_DEPLOYMENT.md](GATEWAY_DEPLOYMENT.md).
 **0.4.2 реализован в 0.4.2.dev1**: реальные процессы, ownership, heartbeat,
 start/stop/status, Windows tray и прямые сообщения владельцу. В 0.4.2.dev2 добавлены
-свой логотип и настройка пути иконки. Deploy/doctor/установка службы manager ещё
-не реализованы; stable tag не создаётся. Предложение отдельного reconnect и
-уточнение терминов: [GATEWAY_FOLLOW_UP.md](GATEWAY_FOLLOW_UP.md).
+свой логотип и настройка пути иконки; в dev3 унифицированы имена gateway без
+старых алиасов и уточнён логотип. Следующий согласованный шаг — reconnect,
+затем deploy/doctor/установка службы manager. Они ещё не реализованы;
+stable tag не создаётся. План: [GATEWAY_FOLLOW_UP.md](GATEWAY_FOLLOW_UP.md).
 Первое настоящее приложение уже интегрировано и принято владельцем; эксплуатационный
 слой и проверка восстановления после перезапусков остаются следующими задачами.
 

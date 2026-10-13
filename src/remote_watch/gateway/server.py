@@ -1,10 +1,10 @@
-﻿# Исходящий relay-сервер с точными правами приложений и ограниченной обработкой.
+﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки.
@@ -68,10 +68,14 @@ from typing import TYPE_CHECKING
 
 from remote_watch._credentials import CREDENTIAL_HINTS, resolve_token
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
+from remote_watch.notification_gateway_protocol import (
+    MAX_REQUEST_BYTES,
+    NotificationGatewayRequest,
+    encode_response,
+)
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.channels import NotificationChannel
 from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus, ResultSource
-from remote_watch.relay_protocol import MAX_REQUEST_BYTES, RelayRequest, encode_response
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -383,7 +387,7 @@ class Gateway:
 
         # request - входящий HTTP-запрос.
 
-        return self._reject(417, "relay_expect_unsupported")
+        return self._reject(417, "gateway_expect_unsupported")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -466,7 +470,7 @@ class Gateway:
         :param request: Incoming HTTP request.
         :type request: web.Request
 
-        :return: Bounded relay response after authentication and request validation.
+        :return: Bounded gateway response after authentication and request validation.
         :rtype: web.Response
         """
 
@@ -474,28 +478,28 @@ class Gateway:
 
         self._counts["requests"] += 1
         if self._state != "running":
-            return self._reject(503, "relay_closing")
+            return self._reject(503, "gateway_closing")
         principal = self._authenticate(request)
         if principal is None:
             self._counts["auth_denied"] += 1
-            return self._reject(401, "relay_auth_denied")
+            return self._reject(401, "gateway_auth_denied")
         if (len(self._active) >= self._config.capacity or
                 self._principal_active[principal.name] >= principal.capacity):
             self._counts["overloaded"] += 1
-            return self._reject(429, "relay_overloaded")
+            return self._reject(429, "gateway_overloaded")
         now = asyncio.get_running_loop().time()
         delay = self._principal_next.get(principal.name, 0) - now
         if delay > 0:
             self._counts["rate_limited"] += 1
-            return self._reject(429, "relay_principal_rate", delay)
+            return self._reject(429, "gateway_principal_rate", delay)
         self._principal_next[principal.name] = now + principal.min_interval
         # Сжатие запрещено до чтения; parser не распаковывает тело автоматически.
         if request.query_string or request.headers.get("Content-Encoding", "identity") != "identity":
-            return self._reject(400, "relay_invalid_request")
+            return self._reject(400, "gateway_invalid_request")
         if request.content_type != "application/json":
-            return self._reject(415, "relay_content_type")
+            return self._reject(415, "gateway_content_type")
         if request.content_length is not None and request.content_length > MAX_REQUEST_BYTES:
-            return self._reject(413, "relay_request_too_large")
+            return self._reject(413, "gateway_request_too_large")
 
         task = asyncio.current_task()
         assert task is not None
@@ -508,25 +512,25 @@ class Gateway:
             data = await asyncio.wait_for(self._read_body(request), self._config.body_timeout)
             if data is None:
                 self._counts["invalid"] += 1
-                return self._reject(413, "relay_request_too_large")
-            envelope = RelayRequest.from_bytes(data)
+                return self._reject(413, "gateway_request_too_large")
+            envelope = NotificationGatewayRequest.from_bytes(data)
             if (envelope.delivery.notification.identity != principal.identity or
                     envelope.alias not in principal.aliases):
                 self._counts["auth_denied"] += 1
-                return self._reject(403, "relay_auth_denied")
+                return self._reject(403, "gateway_auth_denied")
             return await self._dispatch(envelope, started)
         except asyncio.CancelledError:
             self._counts["cancelled_requests"] += 1
             raise
         except asyncio.TimeoutError:
             self._counts["body_timeout"] += 1
-            return self._reject(408, "relay_body_timeout")
+            return self._reject(408, "gateway_body_timeout")
         except (ValueError, TypeError, UnicodeError, RecursionError, OverflowError):
             self._counts["invalid"] += 1
-            return self._reject(400, "relay_invalid_request")
+            return self._reject(400, "gateway_invalid_request")
         except Exception:
             self._counts["request_errors"] += 1
-            return self._reject(500, "relay_request_failed")
+            return self._reject(500, "gateway_request_failed")
         finally:
             self._active.discard(task)
             self._principal_active[principal.name] -= 1
@@ -565,14 +569,14 @@ class Gateway:
     #--------------------------------------------------------------------------------------------------------------
     async def _dispatch(
         self,
-        envelope: RelayRequest,
+        envelope: NotificationGatewayRequest,
         started: float,
     ) -> web.Response:
 
         """Authorize one direct attempt with server, expiry and elapsed-time budgets.
 
-        :param envelope: Validated relay request.
-        :type envelope: RelayRequest
+        :param envelope: Validated gateway request.
+        :type envelope: NotificationGatewayRequest
 
         :param started: Monotonic request admission time.
         :type started: float
@@ -589,11 +593,11 @@ class Gateway:
         alias = envelope.alias
         if alias in self._busy:
             self._counts["overloaded"] += 1
-            return self._reject(429, "relay_destination_busy")
+            return self._reject(429, "gateway_destination_busy")
         delay = self._destination_next.get(alias, 0) - asyncio.get_running_loop().time()
         if delay > 0:
             self._counts["rate_limited"] += 1
-            return self._reject(429, "relay_destination_rate", delay)
+            return self._reject(429, "gateway_destination_rate", delay)
         destination = next(item for item in self._config.destinations if item.destination_id == alias)
         now = self._utc_now()
         event = envelope.delivery.notification
@@ -616,10 +620,10 @@ class Gateway:
         future_limit = max(self._config.future_tolerance, skew)
         if remaining <= 0:
             self._counts["expired"] += 1
-            result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="relay_expired")
+            result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="gateway_expired")
         elif (event.created_at - now).total_seconds() > future_limit:
             self._counts["clock_skew"] += 1
-            result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="relay_clock_skew")
+            result = DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="gateway_clock_skew")
         else:
             # В одном alias работает только один канал. Очереди ожидания и второго retry loop нет.
             self._busy.add(alias)
@@ -635,7 +639,7 @@ class Gateway:
                 raise
             except Exception:
                 # Provider мог успеть принять сообщение до timeout/ошибки. Повтор решает клиент.
-                result = DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="relay_attempt_unknown")
+                result = DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="gateway_attempt_unknown")
             finally:
                 self._busy.remove(alias)
             self._counts[result.status.value] += 1
@@ -803,7 +807,7 @@ async def _serve(
 #------------------------------------------------------------------------------------------------------------------
 def main(argv: Sequence[str] | None = None) -> int:
 
-    """Load local JSON or a trusted Python factory and run a separate relay process.
+    """Load local JSON or a trusted Python factory and run a separate gateway process.
 
     :param argv: Explicit CLI arguments or None.
     :type argv: Sequence[str] | None

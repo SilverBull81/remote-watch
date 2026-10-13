@@ -1,10 +1,10 @@
 ﻿# Повторное ревью этапов 0.1 и 0.2
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-112704
+Дата и время последнего изменения: 261013-141730
 
 ## Итог на 30.09.2026 после регионального relay smoke
 
@@ -113,7 +113,7 @@ CI выявил падение CLI при перенаправлении рус�
 **Обновление 0.2.0.dev5:** реализована программная часть пунктов 1–3: числовая
 диагностика и конечный ntfy-сценарий, фиксированные wire-пределы с ранним отказом,
 совместимые схемы relay 1/2, настоящие локальные TLS-тесты. Инструкции:
-[NTFY_DIAGNOSTIC.md](NTFY_DIAGNOSTIC.md), [RELAY.md](RELAY.md),
+[NTFY_DIAGNOSTIC.md](NTFY_DIAGNOSTIC.md), [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md),
 [GATEWAY_TLS.md](GATEWAY_TLS.md). Причина реальных ntfy-отказов ещё не подтверждена;
 пункт 1 полностью закрывается после диагностического запуска и проверки long text.
 Ниже сохранены исходные замечания ревью для сопоставления с исправлениями.
@@ -188,7 +188,7 @@ HTTP-ошибка сама по себе также не доказывает о
 
 ### 2. Явные ограничения уведомления для relay — средний приоритет
 
-[RelayRequest](../src/remote_watch/relay_protocol.py) на отправителе принимает Notification
+[NotificationGatewayRequest](../src/remote_watch/notification_gateway_protocol.py) на отправителе принимает Notification
 с пользовательскими SnapshotLimits, но from_bytes создаёт Notification со стандартными
 ограничениями. [GatewayConfig](../src/remote_watch/gateway/config.py) не позволяет
 настроить эти пределы, а документация relay описывает прежде всего 64 KiB всего запроса.

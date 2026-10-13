@@ -1,10 +1,10 @@
 ﻿# Контракт конфигурации
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260929-180009
+Дата и время последнего изменения: 261013-141730
 
 ## Статус
 
@@ -12,7 +12,8 @@ Version 1.0.8
 Route и WatcherConfig. Они проверяют данные без запуска runtime. Добавлены
 TelegramConfig/NtfyConfig и их ленивые фабрики. RemoteWatcher, ConsoleConfig и
 RotatingFileConfig описаны в [WATCHER.md](WATCHER.md). Обязательного формата файла нет;
-локальный JSON используется только явной smoke-командой.
+для gateway/commands и диагностики есть отдельные JSON loaders, а приложение
+может собирать объекты настроек из собственного формата.
 В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
 YAML, JSON, TOML или специальных URL. Интеграция со стандартным logging реализована
 через NotificationRuntime.handler; отдельный loader расширений dictConfig не входит
@@ -24,7 +25,7 @@ YAML, JSON, TOML или специальных URL. Интеграция со с
 | --- | --- |
 | identity | service, environment, region, host, instance_id |
 | local logging | Явно запрошенные handlers, уровни, формат, rotation и владение |
-| destinations | Уникальные ID, provider kind, direct/relay, policy |
+| destinations | Уникальные ID, provider kind, direct/gateway, policy |
 | routing | Remote-порог, topic/tags/identity predicates, destination IDs |
 | runtime | Входная очередь, lifecycle deadlines, лимит числа назначений |
 | delivery policy | Outstanding budget, TTL, attempts, timeouts, backoff |
@@ -60,14 +61,14 @@ Session ID создаётся на каждый runtime. Метаданные Lo
 
 | ID назначения | Provider | Mode | Где адресат и provider secret |
 | --- | --- | --- | --- |
-| operations-chat | telegram | relay (0.2) | На gateway под разрешённым alias |
+| operations-chat | telegram | gateway (0.2) | На gateway под разрешённым alias |
 | phone-alerts | ntfy | direct | В локальных настройках topic и secret reference |
 
-Для direct необходимы provider settings. Для relay необходимы HTTPS gateway URL,
+Для direct необходимы provider settings. Для gateway необходимы HTTPS gateway URL,
 service secret reference и remote alias; provider credentials у приложения не нужны.
-RelayConfig не содержит provider credentials и создаёт relay factory. В 0.2.0.dev3
+NotificationGatewayConfig не содержит provider credentials и создаёт gateway factory. В 0.2.0.dev3
 реализованы клиент и сервер: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Сам mode не подменяет произвольную
-пользовательскую фабрику. См. [RELAY.md](RELAY.md). Нет автоматического переключения
+пользовательскую фабрику. См. [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Нет автоматического переключения
 на direct при недоступности gateway и нет автоматического выбора канала по стране.
 
 Для серверного процесса в 0.2.0.dev4 добавлена необязательная JSON-конфигурация:
@@ -84,7 +85,7 @@ outstanding_capacity и RetryPolicy. Фабрика — синхронный cal
 создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
 соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
 Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
-TelegramConfig/NtfyConfig/RelayConfig создают готовые фабрики через destination(); токены читаются
+TelegramConfig/NtfyConfig/NotificationGatewayConfig создают готовые фабрики через destination(); токены читаются
 из переменных окружения при open. Общего secret resolver пока нет. Неизвестные provider-имена
 не импортируются: так подключаются пользовательские реализации без registry SDK.
 
@@ -156,7 +157,7 @@ TTL назначения хранится в RetryPolicy.ttl. Эффективн
 ## Валидация, секреты и изменение настроек
 
 Проверяются типы, положительные конечные бюджеты, уникальность IDs, ссылки правил,
-доступность optional adapter, взаимоисключение direct/relay и безопасный URL.
+доступность optional adapter, взаимоисключение direct/gateway и безопасный URL.
 Неизвестные поля отклоняются. Сетевая проверка не является частью schema validation.
 
 Секрет задаётся через явно выбранный environment name или injected provider.
@@ -171,4 +172,5 @@ Hot reload в 0.1 отсутствует. Для изменения настро
 Команды регистрируются локально через WatcherConfig.commands. Конфигурация принимает
 либо CommandRegistry, либо mapping имён на функции без оставшихся обязательных
 аргументов; partial позволяет привязать состояние приложения. Подробности:
-[COMMANDS.md](COMMANDS.md). Сетевого command mode в этом каркасе нет.
+[COMMANDS.md](COMMANDS.md). Подключение сетевого CommandClient и dispatcher
+описано отдельно в [COMMAND_EXECUTION.md](COMMAND_EXECUTION.md).

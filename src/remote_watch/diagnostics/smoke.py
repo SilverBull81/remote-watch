@@ -1,10 +1,10 @@
 ﻿# Явный запуск одной пробной отправки с локальными настройками доступа.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195308
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> _Parser: Разбор аргументов без вывода ошибочных значений.
@@ -45,11 +45,11 @@ from remote_watch.notifications.delivery import Delivery, DeliveryResult, Delive
 # КОНСТАНТЫ
 #******************************************************************************************************************
 _FAILURE_HINTS = {
-    "relay_expired": "Истёк срок сообщения или обработки; проверьте также расхождение часов VM.",
-    "relay_clock_skew": "Время создания сообщения опережает часы gateway сверх разрешённого допуска.",
-    "relay_auth_denied": "Gateway отклонил токен, identity или права на alias.",
+    "gateway_expired": "Истёк срок сообщения или обработки; проверьте также расхождение часов VM.",
+    "gateway_clock_skew": "Время создания сообщения опережает часы gateway сверх разрешённого допуска.",
+    "gateway_auth_denied": "Gateway отклонил токен, identity или права на alias.",
     "tls_certificate": "Не удалось проверить сертификат gateway или провайдера.",
-    "relay_budget_exhausted": "Срок отправки закончился на клиенте до обращения к gateway.",
+    "gateway_budget_exhausted": "Срок отправки закончился на клиенте до обращения к gateway.",
 }
 
 #******************************************************************************************************************
@@ -185,7 +185,7 @@ async def _send(
     :rtype: DeliveryResult
     """
 
-    # provider - telegram, ntfy или relay; команда проверяет ровно один выбранный путь.
+    # provider - telegram, ntfy или gateway; команда проверяет ровно один выбранный путь.
     # settings - локальные настройки; их содержимое не входит в Notification и журнал.
 
     token = settings.get("token")
@@ -219,10 +219,13 @@ async def _send(
                 endpoint=settings.get("endpoint", "https://ntfy.sh"),
                 allow_http=settings.get("allow_http", False),
             ), retry=policy)
-        elif provider == "relay":
-            from remote_watch.adapters.relay import RelayChannel, RelayConfig
+        elif provider == "gateway":
+            from remote_watch.adapters.notification_gateway import (
+                NotificationGatewayChannel,
+                NotificationGatewayConfig,
+            )
 
-            channel = RelayChannel(RelayConfig(
+            channel = NotificationGatewayChannel(NotificationGatewayConfig(
                 token_env=token_env,
                 endpoint=settings.get("endpoint"),
                 alias=settings.get("alias"),
@@ -261,7 +264,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv - имя сервиса и необязательный путь к файлу; токены через командную строку не принимаются.
 
     parser = _Parser(description="Отправить одно синтетическое уведомление Remote Watch.")
-    parser.add_argument("provider", choices=("telegram", "ntfy", "relay"))
+    parser.add_argument("provider", choices=("telegram", "ntfy", "gateway"))
     parser.add_argument("--credentials", type=Path, default=Path("credentials.local.json"))
 
     try:

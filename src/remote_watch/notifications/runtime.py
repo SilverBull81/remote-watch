@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -967,7 +967,8 @@ class NotificationRuntime:
             self._count("retries", destination_id=destination_id)
 
         try:
-            # Relay должен ограничить срок gateway остатком TTL/остановки, а не исходной политикой.
+            # Клиент шлюза ограничивает серверный срок остатком TTL/остановки,
+            # а не заново выдаёт время из исходной политики отправки.
             bounded = replace(delivery, remaining_timeout=timeout)
             result = await asyncio.wait_for(state.channel.send(bounded), timeout)
 
@@ -987,7 +988,7 @@ class NotificationRuntime:
         except Exception:
             self._count("adapter_errors", destination_id=destination_id)
 
-        source = ResultSource.RELAY if state.destination.mode is DeliveryMode.RELAY else ResultSource.PROVIDER
+        source = ResultSource.GATEWAY if state.destination.mode is DeliveryMode.GATEWAY else ResultSource.PROVIDER
         return DeliveryResult(status=DeliveryStatus.UNKNOWN, source=source)
     #--------------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Учётные данные и правила доступа к командам приложений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> CommandPrincipal: Права приложения с отдельным секретом команд.
@@ -72,7 +72,7 @@ class CommandPrincipal:
     """Authorize an application credential for exact identities and scopes."""
 
     name: str                           # Имя приложения в настройках hub.
-    token: str = field(repr=False)      # Отдельный секрет команд; не токен relay.
+    token: str = field(repr=False)      # Отдельный секрет команд; не токен шлюза уведомлений.
     identities: tuple[Identity, ...]    # Точные разрешённые экземпляры приложения.
     scopes: frozenset[str]              # Максимальные права регистрируемых команд.
 

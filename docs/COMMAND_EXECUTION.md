@@ -1,10 +1,10 @@
 ﻿# Исполнение пользовательских команд
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261006-103703
+Дата и время последнего изменения: 261013-141730
 
 ## Реализовано в 0.3.4.dev1
 
@@ -17,7 +17,7 @@ command_display_mode=full/compact/text. Режим не влияет на зап
 `CommandDispatcher` связывает неизменяемый `CommandRegistry` с `CommandClient`.
 `RemoteWatcher(..., command_client=client)` явно включает этот исполнитель вместе
 с уведомлениями. Без `command_client` словарь остаётся только регистрацией;
-настройки outbound relay сами командный контур не включают.
+настройки outbound gateway сами командный контур не включают.
 
 Проверены функции, bound methods, callable-объекты, `partial`, async callbacks,
 `CommandSpec` с контекстом и проверкой аргументов. Имена определяет приложение;

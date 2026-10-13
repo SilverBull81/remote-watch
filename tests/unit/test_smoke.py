@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки.
@@ -23,6 +23,7 @@
 # -> test_cleanup_on_failure(): Очистка после отмены и ошибок запуска или доставки.
 # -> test_argument_errors_are_private(): Ошибочные аргументы не попадают в вывод.
 # -> test_failure_diagnostics(): Известные причины видны, произвольные строки скрыты.
+# -> test_removed_provider(): Старое имя CLI отвергается до чтения настроек.
 
 
 #******************************************************************************************************************
@@ -34,6 +35,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -43,7 +45,7 @@ from remote_watch import (
     DeliveryStatus,
     RetryPolicy,
 )
-from remote_watch.adapters import ntfy, relay, telegram
+from remote_watch.adapters import notification_gateway, ntfy, telegram
 from remote_watch.diagnostics import smoke as smoke
 
 
@@ -58,7 +60,7 @@ class FakeChannel:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig,
         *,
         retry: RetryPolicy,
     ) -> None:
@@ -66,7 +68,7 @@ class FakeChannel:
         """Keep the real validated configuration but skip the HTTP client.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig
+        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
@@ -92,7 +94,8 @@ class FakeChannel:
         """Check temporary authentication or reproduce a private startup error."""
 
         expected = ("synthetic_service_token_01234567890123456789"
-                    if isinstance(self.config, relay.RelayConfig) else "123:synthetic_secret")
+                    if isinstance(self.config, notification_gateway.NotificationGatewayConfig)
+                    else "123:synthetic_secret")
         assert os.environ[self.config.token_env] == expected
         if self.open_error:
             raise RuntimeError("synthetic_secret")
@@ -158,7 +161,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
     # ФУНКЦИЯ : Создание и сохранение тестовой сессии
     #--------------------------------------------------------------------------------------------------------------
     def create(
-        config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig,
+        config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig,
         *,
         retry: RetryPolicy,
     ) -> FakeChannel:
@@ -166,7 +169,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         """Capture a channel constructed by the smoke command.
 
         :param config: Validated provider configuration.
-        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | relay.RelayConfig
+        :type config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy
@@ -185,7 +188,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 
     monkeypatch.setattr(telegram, "TelegramChannel", create)
     monkeypatch.setattr(ntfy, "NtfyChannel", create)
-    monkeypatch.setattr(relay, "RelayChannel", create)
+    monkeypatch.setattr(notification_gateway, "NotificationGatewayChannel", create)
     return created
 #------------------------------------------------------------------------------------------------------------------
 
@@ -194,7 +197,7 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 # ТЕСТ : Выбор одного сервиса, свежие данные и очистка временного токена
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("provider,address", [("telegram", "chat"), ("telegram", "chat_id"),
-    ("ntfy", "chat"), ("ntfy", "topic"), ("relay", "alias")])
+    ("ntfy", "chat"), ("ntfy", "topic"), ("gateway", "alias")])
 def test_smoke_command(
     provider: str,
     address: str,
@@ -230,7 +233,7 @@ def test_smoke_command(
     path = tmp_path / "credentials.local.json"
     target = "-123" if provider == "telegram" else "test-topic"
     settings = {"token": "123:synthetic_secret", address: target}
-    if provider == "relay":
+    if provider == "gateway":
         settings.update(token="synthetic_service_token_01234567890123456789", endpoint="https://gateway.invalid")
     path.write_text(json.dumps({provider: settings,
         "unused": {"token": ""}}), encoding="utf-8-sig")
@@ -428,8 +431,8 @@ def test_argument_errors_are_private(capsys: pytest.CaptureFixture[str]) -> None
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Известные причины видны, произвольные строки скрыты
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("reason", ["relay_expired", "relay_clock_skew", "relay_auth_denied",
-    "tls_certificate", "relay_budget_exhausted", "synthetic_private_secret", None])
+@pytest.mark.parametrize("reason", ["gateway_expired", "gateway_clock_skew", "gateway_auth_denied",
+    "tls_certificate", "gateway_budget_exhausted", "synthetic_private_secret", None])
 def test_failure_diagnostics(
     reason: str | None,
     monkeypatch: pytest.MonkeyPatch,
@@ -479,12 +482,31 @@ def test_failure_diagnostics(
 
     monkeypatch.setattr(smoke, "_load_settings", lambda path, provider: {})
     monkeypatch.setattr(smoke, "_send", send)
-    assert smoke.main(["relay"]) == 1
+    assert smoke.main(["gateway"]) == 1
     output = capsys.readouterr().out
     assert "http_status=403; provider_code=50001" in output
     assert "synthetic_private_secret" not in output
     if reason is not None and reason != "synthetic_private_secret":
         assert f"reason_code={reason}" in output
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Старое имя CLI отвергается до чтения настроек
+#------------------------------------------------------------------------------------------------------------------
+def test_removed_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+
+    """Reject the removed CLI selector before touching a local credentials file.
+
+    :param monkeypatch: Fail immediately if configuration loading is attempted.
+    :type monkeypatch: pytest.MonkeyPatch
+    """
+
+    # monkeypatch — неверный режим не должен случайно запустить другой канал.
+    loader = Mock(side_effect=AssertionError("credentials accessed"))
+    monkeypatch.setattr(smoke, "_load_settings", loader)
+    assert smoke.main(["relay"]) == 2
+    loader.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
 

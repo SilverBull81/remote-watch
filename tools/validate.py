@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261013-141219
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -127,7 +127,7 @@ def main() -> int:
 
         venv.EnvBuilder(with_pip=True).create(output / "env")
         python = output / "env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        suffix = "[telegram,ntfy,relay,gateway,commands,tray]" if args.mode == "extras" else ""
+        suffix = "[telegram,ntfy,gateway,commands,tray]" if args.mode == "extras" else ""
         run("install", [str(python), "-I", "-m", "pip", "install", str(wheel) + suffix])
         run("installed", [str(python), "-I", str(root / "tools/check_installed.py"), args.mode, version])
         run("test-dependencies", [str(python), "-I", "-m", "pip", "install", "pytest>=8", "cryptography>=43"])

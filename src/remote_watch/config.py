@@ -1,13 +1,13 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
-# -> DeliveryMode: Отправка напрямую или через будущий шлюз.
+# -> DeliveryMode: Отправка напрямую или через шлюз уведомлений.
 #
 # -> RetryPolicy: Число попыток и время на отправку уведомления.
 #    Специальные методы:
@@ -61,10 +61,10 @@ from remote_watch.notifications.channels import NotificationChannel
 # КЛАСС : Способ отправки выбранному получателю
 #------------------------------------------------------------------------------------------------------------------
 class DeliveryMode(str, Enum):
-    """Name the direct mode and the reserved, currently unsupported relay mode."""
+    """Select direct delivery or delivery through a notification gateway."""
 
     DIRECT = "direct"
-    RELAY = "relay"
+    GATEWAY = "gateway"
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -157,7 +157,7 @@ class Destination:
     destination_id is a unique routing name; provider is descriptive, not an import.
     channel_factory takes no arguments and creates a NotificationChannel when the
     runtime starts. The factory owns provider configuration/secret references
-    and is excluded from repr. mode describes the selected DIRECT or RELAY factory. outstanding_capacity
+    and is excluded from repr. mode describes the selected DIRECT or GATEWAY factory. outstanding_capacity
     covers queued, active and retrying deliveries. retry is the delivery policy.
     """
 
@@ -185,7 +185,8 @@ class Destination:
             raise TypeError("mode must be DeliveryMode")
 
         # Способ доставки описывает выбранную фабрику; сам enum не подменяет прямой канал шлюзом.
-        # RelayConfig.destination задаёт согласованную пару mode/factory без зависимости core от адаптера.
+        # NotificationGatewayConfig.destination согласует mode/factory;
+        # самому core при этом не нужна зависимость от конкретного адаптера.
 
         require_int(self.outstanding_capacity, "outstanding_capacity")
 

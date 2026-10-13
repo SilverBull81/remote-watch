@@ -1,10 +1,10 @@
 ﻿# Проверки маршрутизации, прав, сроков и отказов двух постоянных журналов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> DirectTransport: Подставной транспорт с потерей уже записанного ответа.
@@ -27,7 +27,7 @@
 # Тесты:
 # -> test_command_end_to_end(): Полный обмен с callback, квитанцией и подтверждением источника.
 # -> test_command_acl_and_freshness(): Отказ чужим и просроченным сообщениям с сохранением cursor.
-# -> test_command_credentials_separate(): Разделение секретов источника, приложения и relay.
+# -> test_command_credentials_separate(): Разделение секретов источника, приложения и gateway.
 # -> test_command_session_fencing(): Запрет второй живой цели и возрождения истёкшей сессии.
 # -> test_command_lost_response_no_reexecution(): Потеря ответа после commit без повторного callback.
 # -> test_command_capacity_and_scope(): Ограничение хранения и запрет повышения прав.
@@ -396,15 +396,15 @@ def test_command_acl_and_freshness(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Разделение секретов источника, приложения и relay
+# ТЕСТ : Разделение секретов источника, приложения и gateway
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("token", [SOURCE_TOKEN, "relay_secret_" + "x" * 32, "", "bad"])
+@pytest.mark.parametrize("token", [SOURCE_TOKEN, "gateway_secret_" + "x" * 32, "", "bad"])
 def test_command_credentials_separate(
     tmp_path: Path,
     token: str,
 ) -> None:
 
-    """Reject provider and relay credentials at application registration.
+    """Reject provider and gateway credentials at application registration.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path

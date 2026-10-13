@@ -1,14 +1,14 @@
 ﻿# Исходящий gateway: настройка и запуск
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261005-222720
+Дата и время последнего изменения: 261013-141730
 
 ## Реализовано в 0.2.0.dev3
 
-Gateway принимает одну попытку по [relay-протоколу](RELAY.md), проверяет сервисный
+Gateway принимает одну попытку по [gateway-протоколу](NOTIFICATION_GATEWAY.md), проверяет сервисный
 токен, точную Identity и разрешённый alias, вызывает прямой NotificationChannel
 и возвращает его результат. Telegram/ntfy используют прежние адаптеры. Контур команд
 отсутствует; `/v1/commands` не существует. Проверки выполнялись на loopback с
@@ -16,8 +16,8 @@ Gateway принимает одну попытку по [relay-протокол�
 RU → HTTPS gateway LV → Telegram и получение на телефоне; [итоги](REVIEW_0_1_0_2.md).
 
 Установка на машине gateway: `python -m pip install ".[gateway,telegram]"` из checkout.
-Для ntfy добавьте extra ntfy. Приложению, использующему только relay, достаточно extra
-relay: provider token и chat/topic ему не нужны. Ни импорт, ни создание настроек
+Для ntfy добавьте extra ntfy. Приложению, использующему только gateway, достаточно extra
+gateway: provider token и chat/topic ему не нужны. Ни импорт, ни создание настроек
 не запускают сеть. Отдельный процесс стартует только явной командой.
 
 ## Конфигурация
@@ -46,9 +46,9 @@ Telegram, удалите ntfy из destinations и соответствующи�
 отдельный сервисный токен приложения для доступа к gateway: 32–512 символов
 латиницы, цифр, `_` или `-`. Не используйте вместо него токен Telegram-бота.
 Создать случайное значение можно локально: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
-Сохраните его в конфиге gateway и настройках соответствующего relay-клиента.
+Сохраните его в конфиге gateway и настройках соответствующего gateway-клиента.
 У разных principals должны быть разные сервисные токены независимо от источника.
-RelayConfig клиента по-прежнему использует token_env; smoke читает token из локальных credentials.
+NotificationGatewayConfig клиента по-прежнему использует token_env; smoke читает token из локальных credentials.
 
 Для каталога владельца проверка выглядит так:
 
@@ -67,12 +67,12 @@ repr настроек скрывает token; обычные ошибки и ж�
 
 Для каждого Telegram/ntfy назначения начиная с 0.4.1.dev7 можно независимо
 задать `display_mode` (`full`, `compact`, `text`) и `display_fields` в settings.
-Relay-клиент передаёт полные данные; сокращает только видимый текст серверный
+Gateway-клиент передаёт полные данные; сокращает только видимый текст серверный
 provider adapter. Формат JSON, поля и примеры: [ADAPTERS.md](ADAPTERS.md#текст-ошибки-и-ресурсы).
-С 0.4.1.dev8 клиент также может задать режим в своём RelayConfig: он имеет
+С 0.4.1.dev8 клиент также может задать режим в своём NotificationGatewayConfig: он имеет
 приоритет для этой доставки, не меняя config/канал gateway и настройки других
 клиентов. Gateway достаточно обновить один раз; последующие смены режима
-не требуют его перезапуска. [Настройка на клиенте](RELAY.md#выбор-отображения-на-стороне-приложения).
+не требуют его перезапуска. [Настройка на клиенте](NOTIFICATION_GATEWAY.md#выбор-отображения-на-стороне-приложения).
 
 Один процесс gateway обслуживает несколько приложений, серверов и получателей.
 Для четырёх программ на российском сервере достаточно одного gateway в Латвии,
@@ -92,11 +92,11 @@ provider adapter. Формат JSON, поля и примеры: [ADAPTERS.md](A
 токены приложений всё равно отдельные: это ключи доступа к gateway, не токены бота.
 Нескольким приложениям можно явно разрешить один общий alias. Одному приложению
 можно разрешить несколько aliases, в том числе Telegram и ntfy одновременно.
-На клиенте каждое назначение настраивается отдельно через RelayConfig.
+На клиенте каждое назначение настраивается отдельно через NotificationGatewayConfig.
 
 Чаты обслуживаются независимо: ожидание одного канала не останавливает соседние.
 Общая ёмкость и остановка процесса остаются общими; при отказе машины gateway
-все использующие её relay-направления временно недоступны. Прямые направления
+все использующие её gateway-направления временно недоступны. Прямые направления
 ntfy на клиентах от этого не зависят.
 
 ### JSON без собственного Python-кода
@@ -168,7 +168,7 @@ from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 
 
 def build_config() -> GatewayConfig:
-    """Build a gateway for the explicit synthetic relay smoke identity."""
+    """Build a gateway for the explicit synthetic gateway smoke identity."""
 
     return GatewayConfig(
         destinations=(
@@ -191,7 +191,7 @@ def build_config() -> GatewayConfig:
     )
 ```
 
-Пример специально разрешает Identity одноразового `remote_watch.diagnostics.smoke relay`.
+Пример специально разрешает Identity одноразового `remote_watch.diagnostics.smoke gateway`.
 Для рабочего приложения добавьте отдельный GatewayPrincipal с его **точными пятью
 полями Identity** и отдельным токеном. Имена хоста или приложения из текста сообщения
 не дают прав. Session ID может меняться при перезапуске, identity остаётся привязанной
@@ -208,7 +208,7 @@ def build_config() -> GatewayConfig:
 При создании GatewayConfig проверяются ссылки aliases, дубликаты имён, конечные
 числа, размеры списков и способ доставки. Принимаются только DIRECT-назначения
 с `max_attempts=1`. Пользовательская фабрика должна создавать отдельный прямой канал
-и соблюдать async/cancellation-контракт; нельзя скрывать за ней следующий relay.
+и соблюдать async/cancellation-контракт; нельзя скрывать за ней следующий gateway.
 
 ## Запуск
 
@@ -227,7 +227,7 @@ python -m remote_watch.gateway gateway_settings:build_config --host 0.0.0.0 --po
 Пути замените реальными локальными путями сертификата и ключа. Без TLS разрешены
 только числовые loopback-адреса; даже строка `localhost` не является обходом проверки.
 Клиент проверяет сертификат и имя сервера. Для работы за reverse proxy оставьте
-gateway на loopback, а в RelayConfig укажите публичный HTTPS-адрес proxy.
+gateway на loopback, а в NotificationGatewayConfig укажите публичный HTTPS-адрес proxy.
 Forwarded-заголовки не меняют права и настройки сервера.
 
 Для публичного размещения перед gateway нужен HTTP reverse proxy с ограничениями
@@ -283,8 +283,8 @@ Content-Type должен быть application/json. JSON разбирается
 Сервер вычитает время чтения/разбора из timeout и remaining_ttl клиента, проверяет
 UTC expires_at и срок `created_at + Destination.retry.ttl`, затем ограничивает попытку
 server/destination attempt_timeout и Destination.retry.ttl. Истёкший запрос получает
-постоянный `relay_expired` без provider send. С dev9 время создания из будущего сверх
-допуска даёт отдельный `relay_clock_skew`; счётчик clock_skew отделён от expired.
+постоянный `gateway_expired` без provider send. С dev9 время создания из будущего сверх
+допуска даёт отдельный `gateway_clock_skew`; счётчик clock_skew отделён от expired.
 
 ### Если часы VM расходятся
 
@@ -353,14 +353,14 @@ Remote Watch. Сторонний адаптер сам отвечает за о�
 
 ## Проверка с приложений
 
-На клиенте заполните секцию relay в `credentials.local.json` по [RELAY.md](RELAY.md)
-и запустите `python -m remote_watch.diagnostics.smoke relay`. В примере выше smoke должен пройти
+На клиенте заполните секцию gateway в `credentials.local.json` по [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md)
+и запустите `python -m remote_watch.diagnostics.smoke gateway`. В примере выше smoke должен пройти
 точную проверку Identity. Для смешанного режима передайте в WatcherConfig одно
-RelayConfig.destination и одно NtfyConfig.destination: вызовы logger остаются прежними.
+NotificationGatewayConfig.destination и одно NtfyConfig.destination: вызовы logger остаются прежними.
 
 До реального размещения проверены offline: auth/ACL, ограничения тела и частоты,
 overload, expiry, cancellation, startup rollback, shutdown, возможный дубликат после
-потери ответа и полный путь logger → relay HTTP → Telegram HTTP рядом с direct ntfy HTTP.
+потери ответа и полный путь logger → gateway HTTP → Telegram HTTP рядом с direct ntfy HTTP.
 Провайдеры в этих тестах подставные. Отдельный региональный smoke RU → LV →
 Telegram подтверждён владельцем 30.09 на dev9, включая немедленный показ на телефоне.
 Длительный mixed, автозапуск VM и реальная одновременная работа четырёх приложений

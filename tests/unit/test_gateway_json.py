@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> document(): Синтетический файл настроек без секретов.
@@ -87,7 +87,7 @@ def test_json_valid(
     # tmp_path - временный каталог теста.
     # provider - сервис, выбранный для проверки.
     # monkeypatch - фикстура подмены зависимостей и окружения.
-    # display — режим именно серверного provider adapter, а не настройки relay-клиента.
+    # display — режим именно серверного provider adapter, а не настройки gateway-клиента.
 
     monkeypatch.delenv("RW_JSON_FAKE_TG", raising=False)
     monkeypatch.delenv("RW_JSON_FAKE_APP", raising=False)

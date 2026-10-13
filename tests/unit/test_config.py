@@ -1,10 +1,10 @@
 ﻿# Проверки конфигурации, ленивых фабрик и результатов доставки.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 #
@@ -172,8 +172,8 @@ def test_runtime_and_destination_validation() -> None:
 
     """Accept explicit transport modes and reject invalid queue/factory values eagerly."""
 
-    destination = Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.RELAY)
-    assert destination.mode is DeliveryMode.RELAY
+    destination = Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.GATEWAY)
+    assert destination.mode is DeliveryMode.GATEWAY
 
     with pytest.raises(TypeError, match="mode"):
         Destination(destination_id="phone", channel_factory=unused_factory, mode="direct")

@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261013-141219
 #
 # Класс:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца.
@@ -131,7 +131,7 @@ def application_config(
     destinations = alerts.get("destinations", [])
     if type(destinations) is not list or len(destinations) > 8:
         raise ValueError("invalid alert destinations")
-    # Малые независимые очереди, без relay к самому себе и без чтения команд бота.
+    # Малые независимые очереди; отправка напрямую, без обращения к себе через шлюз и без чтения команд бота.
     channels = tuple(replace(_destination(item), outstanding_capacity=16) for item in destinations)
     return ApplicationConfig(**settings, cooldown=alerts.get("cooldown", 60), destinations=channels)
 #------------------------------------------------------------------------------------------------------------------

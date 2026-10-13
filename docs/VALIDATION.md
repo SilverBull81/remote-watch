@@ -1,10 +1,38 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.5.0
+Version 1.5.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
+
+## Переименования notification gateway без алиасов — 0.4.2.dev3
+
+Windows x64, CPython 3.12.2. Целевые проверки imports/режимов, CLI и исполняемых
+документационных примеров: **70 passed за 1,95 с**.
+Чистый core wheel из sdist: **1004 passed, 71 skipped, 2 live deselected
+за 40,38 с**; отчёт `build/validation-0423-core/report.json`.
+
+Чистый extras wheel из sdist: **1413 passed, 2 live deselected**;
+отчёт `build/validation-0423-extras/report.json`. Между core и extras уточнены
+только комментарии/docstrings и их метаданные, логика исполнения не менялась.
+Оба прогона выполнил `tools/validate.py`: установка, lazy imports, восемь CLI,
+соответствие Python-файлов wheel текущим исходникам и полный набор для комплектации.
+
+Удалённые модули `adapters.relay`/`relay_protocol` отсутствуют в wheel и не
+импортируются; классы и enum не имеют старых алиасов. Extra `relay` отсутствует
+в metadata. CLI отвергает старый provider до чтения credentials. Новые имена
+проверяются существующими HTTP/TLS, auth/ACL, display и runtime-контрактами.
+Первый общий source-прогон выявил ошибку нового теста CLI: ожидался SystemExit,
+хотя main штатно возвращает 2. Исправлено ожидание и добавлено assert_not_called
+для loader; производственное поведение CLI при этом не менялось.
+
+Ruff/style: **138 Python-файлов, 0 замечаний**. ICO проверен через Pillow:
+RGBA с прозрачностью, кадры 16/24/32/48/64/128/256, экспорт в logo побайтно
+совпадает с ресурсом wheel. Исходный PNG и ICO экспорт включены в sdist,
+пользовательские образцы не включены. Настоящий Windows tray, live providers,
+CI/Linux и рабочая установка SpamBot не запускались/не обновлялись.
+Изменение имён не реализует reconnect; журнал/сессии/CA сохраняют прежний контракт.
 
 ## Логотип и настройка трея — 0.4.2.dev2
 

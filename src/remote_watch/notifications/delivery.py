@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата попытки.
@@ -57,10 +57,10 @@ class DeliveryStatus(str, Enum):
 # КЛАСС : Источник результата
 #------------------------------------------------------------------------------------------------------------------
 class ResultSource(str, Enum):
-    """Identify whether the provider or relay originated the result."""
+    """Identify whether the provider or gateway originated the result."""
 
     PROVIDER = "provider"
-    RELAY = "relay"
+    GATEWAY = "gateway"
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -156,7 +156,7 @@ class DeliveryResult:
         if not isinstance(self.source, ResultSource):
             raise TypeError("source must be ResultSource")
 
-        # Поля относятся к локальному HTTPS-соединению. Relay wire сохраняет свой
+        # Поля относятся к локальному HTTPS-соединению. Gateway wire сохраняет свой
         # прежний формат: удалённые provider-ошибки не выдают себя за TLS клиента.
         if self.error_kind is not None:
             if type(self.error_kind) is not str or self.error_kind not in {"tls_certificate", "tls_handshake"}:

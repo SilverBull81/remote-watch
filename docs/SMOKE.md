@@ -1,10 +1,10 @@
 ﻿# Ручная проверка доставки одной командой
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-112704
+Дата и время последнего изменения: 261013-141730
 
 ## Запуск
 
@@ -79,17 +79,17 @@ Endpoint по умолчанию: официальный Bot API для Telegram
 Токен относится к учётной записи на конкретном сервере; topic — имя канала на нём.
 Токен ntfy.sh нельзя использовать на другом сервере ntfy.
 
-## Relay, начиная с 0.2.0.dev1
+## Gateway, начиная с 0.2.0.dev1
 
-Для совместимого gateway добавлена команда `python -m remote_watch.diagnostics.smoke relay`.
-Она использует extra relay и отдельную секцию credentials `relay` с endpoint, alias
+Для совместимого gateway добавлена команда `python -m remote_watch.diagnostics.smoke gateway`.
+Она использует extra gateway и отдельную секцию credentials `gateway` с endpoint, alias
 и сервисным token. Сервер 0.2.0.dev3 настраивается по [GATEWAY_SERVER.md](GATEWAY_SERVER.md);
 нужно разрешить точную синтетическую Identity smoke. Схема и границы готовности
-описаны в [RELAY.md](RELAY.md). Короткие Telegram/ntfy smoke продолжают работать как раньше.
+описаны в [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Короткие Telegram/ntfy smoke продолжают работать как раньше.
 
 С dev9 при отказе команда показывает http_status/provider_code и фиксированные
-пояснения известных кодов relay_expired, relay_clock_skew, relay_auth_denied,
-relay_budget_exhausted и tls_certificate. Произвольные строки сервера скрываются.
+пояснения известных кодов gateway_expired, gateway_clock_skew, gateway_auth_denied,
+gateway_budget_exhausted и tls_certificate. Произвольные строки сервера скрываются.
 Для расхождения часов между VM см. [GATEWAY_SERVER.md](GATEWAY_SERVER.md).
 
 ## Что уже проверено

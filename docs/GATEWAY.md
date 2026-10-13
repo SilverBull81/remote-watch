@@ -1,53 +1,55 @@
 ﻿# Необязательный gateway
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-153531
+Дата и время последнего изменения: 261013-141730
 
 ## Текущая реализация
 
-В 0.2.0.dev3 готовы wire-контракт, relay-клиент и серверный gateway с auth/ACL,
+В 0.2.0.dev3 готовы wire-контракт, gateway-клиент и серверный gateway с auth/ACL,
 ограниченным приёмом и одной provider attempt. Смешанный режим проверен на loopback.
 Настройка: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Конкретная
-схема и сроки: [RELAY.md](RELAY.md); упаковка: [ADR 0005](adr/0005-relay-wire-and-packaging.md).
+схема и сроки: [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md); упаковка: [ADR 0005](adr/0005-relay-wire-and-packaging.md).
 Outbound-разделы реализованы в описанных границах. 30.09.2026 владелец подтвердил
 реальный RU → HTTPS gateway LV → Telegram smoke после обновления venv до dev9.
 Длительная эксплуатация и автозапуск не подтверждены; [итоги](REVIEW_0_1_0_2.md).
-В 0.3.3.dev1 реализованы отдельные CommandHub, HTTPS-клиент и CommandHubServer
-с правами команд и двумя постоянными журналами. Это пока typed Python API;
-командный source Telegram и JSON/CLI относятся к 0.3.5. Обычный gateway CLI
-по-прежнему запускает только outbound relay. [Текущий контракт](COMMAND_HUB.md).
+Реализованы отдельные CommandHub, HTTPS-клиент, CommandHubServer и источники
+Telegram/закрытого ntfy с JSON/CLI. `remote_watch.gateway` запускает компонент
+уведомлений, `remote_watch.gateway.commands` — компонент команд, а
+`remote_watch.gateway_server` управляет обоими. [Контракт команд](COMMAND_HUB.md).
+Имена notification-клиента и extra унифицированы в 0.4.2.dev3 без алиасов:
+[ADR 0013](adr/0013-notification-gateway-names.md).
 
 ## Две отдельные возможности
 
 | Возможность | Задача | Когда требуется |
 | --- | --- | --- |
-| Outbound relay, 0.2 | Доставлять события через сервер с доступом к провайдеру | Только для назначений, настроенных на relay |
+| Notification gateway, 0.2 | Доставлять события через сервер с доступом к провайдеру | Только для назначений, настроенных на gateway |
 | Command hub, 0.3 | Владеть входящим каналом и направлять команды instances | Для общего двустороннего канала по архитектуре проекта |
 
-Один gateway может обслуживать обе функции, но relay-only конфигурация не создаёт
+Один gateway может обслуживать обе функции, но конфигурация только уведомлений не создаёт
 command source, registry или command endpoint. Общая исходящая отправка нескольких
-instances сама по себе gateway не требует. Relay не является универсальным proxy.
+instances сама по себе gateway не требует. Gateway не является универсальным proxy.
 
 ## Конфигурационная граница
 
 Приложение задаёт способ доставки каждому назначению. Router выбирает прежний
-destination ID, независимо от direct/relay. Для relay приложение хранит только
+destination ID, независимо от direct/gateway. Для gateway приложение хранит только
 адрес gateway, собственную credential и alias, разрешённый на gateway.
 Provider token и chat/topic находятся на стороне gateway.
 
 Gateway сопоставляет service credential с допустимой identity и destination aliases.
 Alias не превращается в URL из запроса. Произвольная переадресация, передача provider
-credentials приложением и каскад relay отключены. Разные instances могут иметь
+credentials приложением и каскад gateway отключены. Разные instances могут иметь
 отдельные credentials для отзыва доступа без изменения общего provider token.
 
-## Контракт первой relay-версии
+## Контракт первой gateway-версии
 
-Предлагаемый transport — HTTPS request/response с версионированным JSON envelope.
+Реализованный transport — HTTPS request/response с версионированным JSON envelope.
 Это wire-формат границы сервиса, он не навязывает JSON пользовательской конфигурации.
-Путь /v1/notifications и schema v1 зафиксированы в RELAY.md и contract tests 0.2.0.dev1.
+Путь /v1/notifications и schema v1 зафиксированы в NOTIFICATION_GATEWAY.md и contract tests 0.2.0.dev1.
 
 Запрос: schema version, неизменяемый Notification, destination alias, delivery ID,
 номер попытки и remaining TTL. TTL на gateway ограничивается server policy;
@@ -60,11 +62,11 @@ UTC expiry дополнительно проверяется с документ
    failure, rate limited или unknown; безопасный код причины и optional message ID.
 
 Запрос ожидает результат в пределах server deadline; очереди асинхронного
-«принято relay, будет отправлено потом» пока нет. Capacity и concurrency ограничены;
+«принято gateway, будет отправлено потом» пока нет. Capacity и concurrency ограничены;
 перегрузка возвращает отказ с возможным retry-after. Server deadline меньше
 client attempt timeout на согласованный запас для сети/сериализации.
 
-Повторы принадлежат runtime приложения. Relay и provider SDK не добавляют свои
+Повторы принадлежат runtime приложения. Gateway и provider SDK не добавляют свои
 циклы retry. Потеря HTTP-ответа после успеха провайдера даёт unknown у приложения;
 повтор может создать дубликат. Delivery ID помогает корреляции, но сам по себе
 не является гарантией дедупликации. Disconnect клиента не доказывает отмену
@@ -75,7 +77,7 @@ client attempt timeout на согласованный запас для сет�
 provider_accepted до подтверждения провайдера. Хранение durable receipts,
 дедупликация между рестартами и asynchronous acceptance требуют отдельного ADR.
 
-## Безопасность и эксплуатация relay
+## Безопасность и эксплуатация gateway
 
 - Проверка сертификатов, отдельная credential на отправителя и закрытые ACL.
 - Ограничения на service и provider destination; отсутствие общей квоты между
@@ -85,7 +87,7 @@ provider_accepted до подтверждения провайдера. Хран
 - Локальные health/diagnostics без рекурсивных уведомлений о каждой ошибке отправки.
 - Graceful shutdown с отказом новым запросам и ограниченным завершением активных.
 
-Relay добавляет зависимость от его доступности. Он полезен только если достижим
+Gateway добавляет зависимость от его доступности. Он полезен только если достижим
 с приложений и сам может достичь провайдера. Это проверяется отдельно от чтения
 архитектуры. Один gateway не означает наличие высокой доступности или failover.
 
@@ -99,7 +101,7 @@ Relay добавляет зависимость от его доступност
 
 Первый provider source — Telegram для проверки общего протокола; Matrix добавляется
 следующим двусторонним адаптером. Command source и outbound adapter имеют отдельные
-контракты даже при использовании одного аккаунта. Настройки relay не включают команды.
+контракты даже при использовании одного аккаунта. Настройки gateway не включают команды.
 
 ```mermaid
 sequenceDiagram
@@ -137,5 +139,5 @@ Broadcast и расширенные операции вроде reload_config о
 Никакого произвольного shell или eval, даже для администратора.
 
 Используется тот же репозиторий/distribution и отдельный extra gateway с aiohttp.
-Core приложения не устанавливает серверный framework. Исходящий relay-клиент
-устанавливается через extra relay; упаковка будущего командного клиента уточняется в 0.3.1.
+Core приложения не устанавливает серверный framework. Исходящий gateway-клиент
+устанавливается через extra gateway; упаковка будущего командного клиента уточняется в 0.3.1.

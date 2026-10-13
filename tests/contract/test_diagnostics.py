@@ -1,16 +1,16 @@
-﻿# Проверки безопасной диагностики ntfy, совместимости relay и пределов уведомления.
+﻿# Проверки безопасной диагностики ntfy, совместимости gateway и пределов уведомления.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261013-141219
 #
 # Тесты:
 # -> test_diagnostic_values(): Отклонение недопустимых значений диагностики.
 # -> test_response_versions(): Совместимость прежнего ответа и новой диагностики.
-# -> test_relay_limits(): Единые ограничения уведомления на обеих сторонах relay.
-# -> test_relay_rejects_before_post(): Отказ по размеру до сетевой попытки.
+# -> test_notification_gateway_limits(): Единые ограничения уведомления на обеих сторонах gateway.
+# -> test_notification_gateway_rejects_before_post(): Отказ по размеру до сетевой попытки.
 # -> test_ntfy_diagnostics(): Сохранение безопасных чисел через обе сетевые границы.
 
 
@@ -36,14 +36,14 @@ from remote_watch import (
     RetryPolicy,
     SnapshotLimits,
 )
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
 from remote_watch.adapters.ntfy import NtfyChannel, NtfyConfig
-from remote_watch.adapters.relay import RelayChannel, RelayConfig
 from remote_watch.diagnostics.field_smoke import _Journal, _ObservedChannel
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 from remote_watch.gateway.server import Gateway
-from remote_watch.relay_protocol import (
+from remote_watch.notification_gateway_protocol import (
     DIAGNOSTIC_FIELDS,
-    RelayRequest,
+    NotificationGatewayRequest,
     decode_response,
     encode_json,
     encode_response,
@@ -98,7 +98,7 @@ def test_response_versions(
     """
 
     # notification - уведомление с заданными тестовыми данными.
-    # schema_version - явная версия данных relay.
+    # schema_version - явная версия данных gateway.
 
     delivery = Delivery(notification=notification, destination_id="phone", delivery_id="test")
     result = DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, http_status=503, provider_code=50301,
@@ -120,10 +120,10 @@ def test_response_versions(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Единые ограничения уведомления на обеих сторонах relay
+# ТЕСТ : Единые ограничения уведомления на обеих сторонах gateway
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("size", [8192, 8193, 10000])
-def test_relay_limits(
+def test_notification_gateway_limits(
     notification: Notification,
     size: int,
 ) -> None:
@@ -145,10 +145,10 @@ def test_relay_limits(
     delivery = Delivery(notification=event, destination_id="phone", delivery_id="test")
     if size > 8192:
         with pytest.raises(ValueError):
-            RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
+            NotificationGatewayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
     else:
-        request = RelayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
-        decoded = RelayRequest.from_bytes(encode_json(request.to_dict()).encode())
+        request = NotificationGatewayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=8)
+        decoded = NotificationGatewayRequest.from_bytes(encode_json(request.to_dict()).encode())
         assert decoded.delivery.notification.to_dict() == event.to_dict()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -156,7 +156,7 @@ def test_relay_limits(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ по размеру до сетевой попытки
 #------------------------------------------------------------------------------------------------------------------
-def test_relay_rejects_before_post(
+def test_notification_gateway_rejects_before_post(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -173,7 +173,7 @@ def test_relay_rejects_before_post(
     # notification - уведомление с заданными тестовыми данными.
     # monkeypatch - фикстура подмены зависимостей и окружения.
 
-    monkeypatch.setenv("RW_DIAGNOSTIC_RELAY", "synthetic_gateway_token_123456789012345")
+    monkeypatch.setenv("RW_DIAGNOSTIC_GATEWAY", "synthetic_gateway_token_123456789012345")
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение асинхронного сценария проверки
@@ -185,8 +185,9 @@ def test_relay_rejects_before_post(
         now = datetime.now(timezone.utc)
         event = replace(notification, message="x" * 10000, created_at=now, expires_at=now + timedelta(seconds=60),
                         limits=SnapshotLimits(message_max_bytes=12000, event_max_bytes=20000))
-        channel = RelayChannel(RelayConfig(endpoint="https://example.invalid", alias="phone",
-                                            token_env="RW_DIAGNOSTIC_RELAY"))
+        channel = NotificationGatewayChannel(NotificationGatewayConfig(
+            endpoint="https://example.invalid", alias="phone",
+                                            token_env="RW_DIAGNOSTIC_GATEWAY"))
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Один HTTP POST без скрытых повторов
@@ -216,7 +217,7 @@ def test_relay_rejects_before_post(
             await channel.open()
             result = await channel.send(Delivery(notification=event, destination_id="phone", delivery_id="test"))
             assert result.status is DeliveryStatus.PERMANENT_FAILURE
-            assert result.reason_code == "relay_payload_limits"
+            assert result.reason_code == "gateway_payload_limits"
         finally:
             await channel.close()
     #--------------------------------------------------------------------------------------------------------------
@@ -263,7 +264,7 @@ def test_ntfy_diagnostics(
 
     from aiohttp import web
 
-    monkeypatch.setenv("RW_DIAGNOSTIC_RELAY", "synthetic_gateway_token_123456789012345")
+    monkeypatch.setenv("RW_DIAGNOSTIC_GATEWAY", "synthetic_gateway_token_123456789012345")
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение асинхронного сценария проверки
@@ -310,7 +311,7 @@ def test_ntfy_diagnostics(
         delivery = Delivery(notification=event, destination_id="phone", delivery_id="test")
         gateway = Gateway(GatewayConfig(
             destinations=(config.destination("phone", retry=RetryPolicy(max_attempts=1)),),
-            principals=(GatewayPrincipal(name="test", token_env="RW_DIAGNOSTIC_RELAY", identity=event.identity,
+            principals=(GatewayPrincipal(name="test", token_env="RW_DIAGNOSTIC_GATEWAY", identity=event.identity,
                                          aliases=("phone",), min_interval=0),), destination_interval=0))
         channel = NtfyChannel(config)
         try:
@@ -328,16 +329,17 @@ def test_ntfy_diagnostics(
             assert "private_value" not in stream.getvalue()
 
             for schema in (1, 2):
-                relay = RelayChannel(RelayConfig(endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
-                    token_env="RW_DIAGNOSTIC_RELAY", allow_http=True, schema_version=schema))
+                notification_gateway = NotificationGatewayChannel(NotificationGatewayConfig(
+                    endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
+                    token_env="RW_DIAGNOSTIC_GATEWAY", allow_http=True, schema_version=schema))
                 try:
-                    await relay.open()
-                    result = await relay.send(delivery)
+                    await notification_gateway.open()
+                    result = await notification_gateway.send(delivery)
                     assert result.status is direct.status
                     for field in DIAGNOSTIC_FIELDS:
                         assert getattr(result, field) == (getattr(direct, field) if schema == 2 else None)
                 finally:
-                    await relay.close()
+                    await notification_gateway.close()
             assert len(requests) == 3
             expected_code = code if status != 200 and type(code) is int and code <= 999999 else None
             assert direct.provider_code == expected_code

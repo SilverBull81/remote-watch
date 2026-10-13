@@ -1,27 +1,27 @@
 ﻿# Remote Watch
 
-Version 1.3.1
+Version 1.3.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
 
 Python-библиотека для стандартного логирования, уведомлений на телефон
 и адресных команд приложениям на удалённых серверах.
 
 **Состояние: базовые 0.1/0.2 завершены; код этапов 0.3.1–0.3.5 реализован.
 Telegram smoke с одним и двумя приложениями подтверждён владельцем.
-Пакет 0.4.2.dev2 для личного использования.** Обычный logger передаёт выбранные
+Пакет 0.4.2.dev3 для личного использования.** Обычный logger передаёт выбранные
 уведомления через ограниченные очереди в каналы фонового runtime. Реализованы
 подготовка текста, маршрутизация, ограниченные повторы с full jitter и retry-after,
 TTL, sync/async запуск и остановка, счётчики по получателям и ограниченный atexit.
 По умолчанию разрешены три попытки; `max_attempts=1` отключает повторы.
 Core собирается без runtime-зависимостей; адаптеры подключают aiohttp через extras.
 RemoteWatcher подключает доставку и необязательные console/rotating-file handlers
-к обычному logger. Добавлены relay-клиент и серверный outbound gateway с auth/ACL.
+к обычному logger. Добавлены gateway-клиент и серверный outbound gateway с auth/ACL.
 В gateway JSON можно задать token прямо в локальном файле либо использовать token_env.
 Запуск и границы размещения: [GATEWAY_SERVER.md](docs/GATEWAY_SERVER.md).
-Прямая доставка принята по длительному RU/LV-сценарию; relay RU → LV → Telegram
+Прямая доставка принята по длительному RU/LV-сценарию; gateway RU → LV → Telegram
 подтверждён пользователем на телефоне. Длительный mixed и автозапуск VM пока
 не проверены. [Итоги и остаток](docs/REVIEW_0_1_0_2.md).
 Добавлены [модели, wire и правила исполнения команд](docs/COMMAND_PROTOCOL.md).
@@ -35,6 +35,10 @@ RemoteWatcher подключает доставку и необязательн�
 Серверное приложение управляет обоими gateway, предоставляет status/stop,
 Windows tray и сообщения владельцу: [GATEWAY_DEPLOYMENT.md](docs/GATEWAY_DEPLOYMENT.md).
 Встроенный логотип и `application.icon_path` доступны с 0.4.2.dev2.
+В 0.4.2.dev3 имена `Relay*` заменены на `NotificationGateway*` без алиасов;
+режим и extra теперь `gateway`. До обновления приложения прочитайте
+[таблицу миграции](docs/GATEWAY_FOLLOW_UP.md). Новая фиолетовая иконка:
+[logo/remote_watch.ico](logo/remote_watch.ico).
 [Термины, предложение reconnect и дальнейший план](docs/GATEWAY_FOLLOW_UP.md).
 
 ## Установка для локальной разработки
@@ -83,7 +87,7 @@ command_client в RemoteWatcher. Входящие Telegram/ntfy-команды �
 - Исходящие Telegram и ntfy в первой версии; Matrix — следующий чат для команд.
 - Независимую фоновую доставку с ограниченными очередями и явными потерями.
 - Пользовательские адаптеры без зависимости core от провайдеров.
-- Дополнительный режим `direct`/`relay` для каждого remote-назначения.
+- Дополнительный режим `direct`/`gateway` для каждого remote-назначения.
 - Отдельный command hub для общего чата и нескольких instances.
 
 Совместимость с `fin-data.TelegramBot` не требуется. MAX в текущий план не входит.
@@ -91,7 +95,7 @@ command_client в RemoteWatcher. Входящие Telegram/ntfy-команды �
 используется бесплатный аккаунт без резервирования темы; закрытый доступ не подтверждён.
 30.09.2026 владелец принял базовую прямую доставку после примерно 12 часов
 полевого наблюдения RU/LV и проверки Android. Результаты и границы —
-в [FIELD_SMOKE.md](docs/FIELD_SMOKE.md); основной relay RU → LV также подтверждён,
+в [FIELD_SMOKE.md](docs/FIELD_SMOKE.md); основной gateway RU → LV также подтверждён,
 длительный mixed-сценарий остаётся отдельной эксплуатационной проверкой.
 
 ## Документация
@@ -107,12 +111,12 @@ command_client в RemoteWatcher. Входящие Telegram/ntfy-команды �
 | [RUNTIME.md](docs/RUNTIME.md) | Работающий путь logging → очереди → тестовые каналы |
 | [ADAPTERS.md](docs/ADAPTERS.md) | Telegram/ntfy, токены, ошибки HTTP и реальная отправка |
 | [FIELD_SMOKE.md](docs/FIELD_SMOKE.md) | Суточный сценарий на трёх серверах и отчёт |
-| [RELAY.md](docs/RELAY.md) | Relay-клиент, wire-контракт и границы текущей итерации |
+| [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md) | Gateway-клиент, wire-контракт и границы текущей итерации |
 | [SMOKE.md](docs/SMOKE.md) | Одна пробная отправка выбранному сервису |
 | [NTFY_SETUP.md](docs/NTFY_SETUP.md) | Закрытый topic, права отправителя/телефона и токен |
 | [COMMAND_HUB.md](docs/COMMAND_HUB.md) | Hub, HTTPS-клиент, права, сроки и границы этапа 0.3.3 |
 | [COMMANDS.md](docs/COMMANDS.md) | Пользовательские callbacks, partial и расширенный контракт |
-| [GATEWAY.md](docs/GATEWAY.md) | Необязательный relay и отдельный command hub |
+| [GATEWAY.md](docs/GATEWAY.md) | Необязательный gateway и отдельный command hub |
 | [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Порядок реализации и результаты этапов |
 | [VALIDATION.md](docs/VALIDATION.md) | Приёмка, тестовые сценарии и статус проверки |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Tooling, Git и рабочий процесс |

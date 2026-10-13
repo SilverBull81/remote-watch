@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195308
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки.
@@ -534,15 +534,15 @@ def _destination(
                                 endpoint=settings.get("endpoint", "https://api.telegram.org"),
                                 message_thread_id=settings.get("message_thread_id"),
                                 allow_http=settings.get("allow_http", False))
-    elif provider == "relay":
-        from remote_watch.adapters.relay import RelayConfig
+    elif provider == "gateway":
+        from remote_watch.adapters.notification_gateway import NotificationGatewayConfig
 
         # Alias и provider credentials остаются на gateway; клиент использует собственный
-        # токен relay. Запас времени учитывает server_timeout и сетевой обмен.
-        config = RelayConfig(token_env=token_env, endpoint=settings.get("endpoint"), alias=settings.get("alias"),
-                             schema_version=settings.get("schema_version", 2),
-                             allow_http=settings.get("allow_http", False),
-                             server_timeout=settings.get("server_timeout", 8))
+        # токен шлюза. Запас времени учитывает server_timeout и сетевой обмен.
+        config = NotificationGatewayConfig(
+            token_env=token_env, endpoint=settings.get("endpoint"), alias=settings.get("alias"),
+            schema_version=settings.get("schema_version", 2),
+            allow_http=settings.get("allow_http", False), server_timeout=settings.get("server_timeout", 8))
         policy = replace(policy, attempt_timeout=config.server_timeout + config.network_margin)
         return config.destination("telegram", retry=policy, outstanding_capacity=16)
     else:
@@ -583,7 +583,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = FieldConfig(identity=Identity(service="remote-watch-field", environment="field-test",
                                                region=args.region, host=args.host, instance_id=args.instance_id),
                              duration=args.duration, interval=args.interval)
-        providers = (("relay", "ntfy") if args.provider == "mixed" else
+        providers = (("gateway", "ntfy") if args.provider == "mixed" else
                      ("telegram", "ntfy") if args.provider == "both" else (args.provider,))
         output = args.output or Path("runs") / ("field-" + uuid4().hex + ".jsonl")
         with ExitStack() as cleanup:

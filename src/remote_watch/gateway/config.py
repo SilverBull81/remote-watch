@@ -1,10 +1,10 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> GatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
@@ -28,7 +28,7 @@ from remote_watch._credentials import validate_credentials
 from remote_watch._validation import require_int, require_number, text_tuple
 from remote_watch.config import DeliveryMode, Destination
 from remote_watch.events import Identity
-from remote_watch.relay_protocol import validate_alias
+from remote_watch.notification_gateway_protocol import validate_alias
 
 
 #------------------------------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ class GatewayPrincipal:
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GatewayConfig:
-    """Configure a finite relay with one active attempt per direct destination."""
+    """Configure a finite gateway with one active attempt per direct destination."""
 
     destinations: tuple[Destination, ...]   # Прямые назначения; destination_id служит alias.
     principals: tuple[GatewayPrincipal, ...]    # Приложения с отдельными токенами и точными правами.
@@ -101,7 +101,7 @@ class GatewayConfig:
     #--------------------------------------------------------------------------------------------------------------
     def __post_init__(self) -> None:
 
-        """Copy finite collections and reject relay cascades or ambiguous grants."""
+        """Copy finite collections and reject gateway cascades or ambiguous grants."""
 
         # Ограничиваем коллекции до копирования и проверки ссылок. Произвольные итераторы не принимаем.
         for name, item_type, maximum in (("destinations", Destination, 64),
@@ -113,7 +113,7 @@ class GatewayConfig:
                 raise TypeError(f"invalid {name}")
             object.__setattr__(self, name, tuple(items))
 
-        # Alias однозначно выбирает локальный прямой канал. Сервер не строит цепочки relay.
+        # Alias однозначно выбирает локальный прямой канал. Сервер не строит цепочки gateway.
         aliases = set()
         for destination in self.destinations:
             validate_alias(destination.destination_id)

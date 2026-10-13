@@ -1,20 +1,23 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.3.7
+Version 1.3.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
 
 ## Статус и границы
 
 Текущий словарь: notifications — события приложения; commands — запросы и ответы;
-relay — пересылка уведомлений через notification gateway, не отдельный третий контур.
+gateway — промежуточный сервер для этих возможностей, не отдельный третий контур.
 Direct/gateway выбирается у уведомлений; готового прямого приёма команд в приложении нет.
 Ответы команд обходят notification logging/фильтры. В 0.4.2.dev2 приложение сервера
 получило встроенный логотип и `application.icon_path`; протоколы и журналы не менялись.
-Предложения переименований и автоматического восстановления сессий описаны отдельно
-в [GATEWAY_FOLLOW_UP.md](docs/GATEWAY_FOLLOW_UP.md) и пока не реализованы.
+В 0.4.2.dev3 переименования выполнены без совместимых Python-имён, модулей и enum
+значений по решению владельца: [ADR 0013](docs/adr/0013-notification-gateway-names.md).
+Примеры ниже используют текущие имена независимо от даты появления возможности.
+Автоматическое восстановление сессий — следующий шаг, пока не реализованный;
+план и миграция: [GATEWAY_FOLLOW_UP.md](docs/GATEWAY_FOLLOW_UP.md).
 
 В 0.4.1.dev12 штатные пересечения poll/source/sweep проходят через ограниченное
 FIFO-ожидание StoreWorker только на hub: 64 waiter по умолчанию, максимум 256.
@@ -90,7 +93,7 @@ token_env=null сохраняет анонимный ntfy. Окружение п
 В dev7 добавлены эксплуатационные возможности CLI: агрегированная сводка после
 очистки, фиксированные коды этапа ошибки и локальный stop-file для штатной остановки.
 Это не сетевой административный API. Полевой mixed-сценарий использует существующие
-RelayChannel и NtfyChannel; настройки транспорта остаются на уровне назначения.
+NotificationGatewayChannel и NtfyChannel; настройки транспорта остаются на уровне назначения.
 Счётчики не включают токены, адреса, alias или содержимое уведомлений.
 Два отчёта dev6 и подтверждение владельца закрыли long text ntfy: 20/20 на телефоне.
 Матрица CI и инструменты проверки установленного wheel описаны в [CI.md](docs/CI.md),
@@ -102,7 +105,7 @@ NotificationChannel и реестр пользовательских коман�
 logging → подготовка данных → очереди → канал. Приватная версия 0.1.0 поддерживает
 ограниченные повторы, full jitter, retry-after, TTL, sync/async lifecycle и счётчики
 по получателям. Реализованы исходящие Telegram/ntfy. В 0.2.0.dev1 добавлены
-relay-клиент, wire-контракт и длительный field smoke. В 0.2.0.dev3 реализован outbound
+gateway-клиент, wire-контракт и длительный field smoke. В 0.2.0.dev3 реализован outbound
 gateway с точной auth/ACL, ограниченным приёмом, одной provider attempt и управляемой
 остановкой. Смешанный режим проверен на loopback; основной реальный маршрут подтверждён в dev9.
 В 0.2.0.dev4 добавлен необязательный JSON-файл серверных настроек, схема версии 1.
@@ -111,7 +114,7 @@ gateway с точной auth/ACL, ограниченным приёмом, од�
 конкретные адаптеры. Файл не исполняет Python; с dev8 может содержать token либо ссылку token_env.
 Выбор источника секрета не меняет ACL: несколько principals могут использовать один процесс и разные aliases.
 Для пользовательских каналов остаётся явно доверенная Python-фабрика.
-В 0.2.0.dev5 добавлены ограниченная числовая HTTP/ntfy-диагностика, relay schema 2
+В 0.2.0.dev5 добавлены ограниченная числовая HTTP/ntfy-диагностика, gateway schema 2
 при сохранении schema 1 по умолчанию и ранняя проверка фиксированных wire-пределов
 Notification. Обновление не меняет схему самого Notification и не включает
 автоматическую повторную отправку при несовпадении протокола. Проверен настоящий
@@ -133,7 +136,7 @@ ntfy JSON. В 0.2.0.dev2 ntfy ограничивает как текст, так
 [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 0.1: локальное logging и прямые исходящие Telegram/ntfy-уведомления.
-0.2: необязательный relay. 0.3: отдельный приём и маршрутизация команд.
+0.2: необязательный gateway. 0.3: отдельный приём и маршрутизация команд.
 Совместимость с `fin-data.TelegramBot` не является целью.
 
 ## Структура пакета после реорганизации dev3
@@ -144,9 +147,9 @@ ntfy JSON. В 0.2.0.dev2 ntfy ограничивает как текст, так
 - `commands`: registry, protocol, state, time, storage и sqlite_store.
   Старый неиспользуемый прототип подтверждения изолирован в `_confirmation`.
 - `gateway`: server, config, json_config и точка запуска `__main__`.
-- `adapters`: Telegram, ntfy, relay и необязательные источники времени.
+- `adapters`: Telegram, ntfy, gateway и необязательные источники времени.
 - `diagnostics`: smoke, field_smoke, ntfy_diagnostic и time_probe.
-- `relay_protocol.py`: общий формат relay; `adapters/relay.py` — его сетевой клиент.
+- `notification_gateway_protocol.py`: общий формат gateway; `adapters/notification_gateway.py` — его сетевой клиент.
 
 Core не импортирует конкретные адаптеры. `commands.time` знает только TimeSource;
 выбранный TimeAPI подключает вызывающая сторона. Перенос не включает command hub,
@@ -173,7 +176,7 @@ Core не импортирует конкретные адаптеры. `command
 - Консоль/файл и удалённые уведомления обслуживаются независимо.
 - Вызов logging не выполняет сеть, не ждёт освобождения очереди и не делает retry.
 - Core знает протоколы и назначения, конкретные адаптеры изолированы.
-- Назначение выбирает `direct` или `relay`; код приложения от этого не зависит.
+- Назначение выбирает `direct` или `gateway`; код приложения от этого не зависит.
 - Все очереди, активные отправки и отложенные повторы имеют конечные бюджеты.
 - Один gateway владеет приёмом команд из общего канала, но исходящей отправке
   нескольких процессов gateway сам по себе не требуется.
@@ -190,7 +193,7 @@ flowchart TD
     R --> D1[Бюджет и очередь назначения A]
     R --> D2[Бюджет и очередь назначения B]
     D1 --> P[Прямой provider adapter]
-    D2 --> T[Relay transport, этап 0.2]
+    D2 --> T[Gateway transport, этап 0.2]
     T --> G[Gateway: разрешённое назначение]
     G --> P2[Provider adapter на gateway]
 ```
@@ -242,13 +245,13 @@ LogRecord, traceback, произвольные `args` и ссылки на из�
 ### Destination и Delivery
 
 `Destination` — логическое именованное назначение с фиксированными настройками:
-провайдер, способ доставки, ссылка на прямую конфигурацию или relay binding,
+провайдер, способ доставки, ссылка на прямую конфигурацию или gateway binding,
 политика очереди/retry. Один Telegram-чат и один ntfy-topic — разные назначения.
 Router возвращает уникальные destination IDs, без provider-specific параметров.
 
 `Delivery` связывает событие и одно назначение: стабильный `delivery_id`,
 номер попытки и необязательный remaining_timeout. Перед send runtime задаёт
-остаток срока попытки с учётом монотонного TTL и остановки; relay использует его,
+остаток срока попытки с учётом монотонного TTL и остановки; gateway использует его,
 чтобы не продлевать обработку новым полным таймаутом. Все повторы одной доставки используют
 тот же ID. Снимок события не изменяется при рендеринге разных провайдеров.
 
@@ -258,12 +261,12 @@ Router возвращает уникальные destination IDs, без provide
 | --- | --- | --- |
 | `provider_accepted` | Провайдер подтвердил приём | Завершить доставку |
 | `transient_failure` | Известный временный отказ | Повтор в пределах политики |
-| `rate_limited` | Провайдер/relay ограничил частоту | Учесть минимальное время повтора |
+| `rate_limited` | Провайдер/gateway ограничил частоту | Учесть минимальное время повтора |
 | `permanent_failure` | Известный неповторяемый отказ | Завершить с ошибкой |
 | `unknown` | Отправка могла состояться, подтверждения нет | Повтор по политике, возможен дубликат |
 
 Результат содержит безопасный код причины, необязательные provider message ID
-и `retry_after`, источник результата (`provider`/`relay`). Произвольное исключение
+и `retry_after`, источник результата (`provider`/`gateway`). Произвольное исключение
 или тело HTTP-ответа не являются публичным результатом. Ошибка адаптера учитывается
 как отдельная диагностика; если нельзя исключить отправку, исход считается unknown.
 
@@ -280,14 +283,14 @@ Runtime поддерживает sync/async lifecycle и повторы без �
 | Граница | Ответственность |
 | --- | --- |
 | `NotificationChannel` | Реализован протокол: async open(), send(Delivery) → DeliveryResult, close() |
-| Delivery transport | Общий контракт отправки для direct adapter или relay client |
+| Delivery transport | Общий контракт отправки для direct adapter или gateway client |
 | `PolicyRouter` | Чистое сопоставление снимка с настроенными destination IDs |
 | `NotificationHandler` | Logging integration, снимок, неблокирующий приём |
 | `NotificationRuntime` | Поток/loop, очереди, расписание попыток, stats и lifecycle |
 | `CommandSource` (0.3) | Отдельный поток проверяемых входящих provider events |
 
 Send получает Delivery, а не только Notification: адаптеру нужны стабильный
-delivery ID и номер попытки, в том числе для будущего relay. Фабрика Destination
+delivery ID и номер попытки, в том числе для будущего gateway. Фабрика Destination
 создаёт канал без аргументов только при запуске runtime; конструктор
 конфигурации не создаёт provider client. Close должен допускать cleanup после
 частично неудачного open. Методы протокола не являются реализованной доставкой.
@@ -302,7 +305,7 @@ required scope, timeout, read_only и idempotent. Регистрация нич�
 решение: [ADR 0004](docs/adr/0004-application-command-registry.md).
 
 Не нужно создавать два одинаковых публичных протокола отправки: общий минимальный
-контракт используется как каналом, так и relay transport. Адаптер владеет своим
+контракт используется как каналом, так и gateway transport. Адаптер владеет своим
 клиентом, создаёт и закрывает его в loop runtime и не запускает скрытые повторы.
 SDK retries должны быть отключены или включены в явно определённый бюджет.
 В 0.1 custom adapter передаётся объектом/фабрикой; entry-point discovery отложен.
@@ -315,7 +318,7 @@ SDK retries должны быть отключены или включены в 
 Один POST, запрет redirects/cookies/env proxy, проверка TLS и ограничение ответа 64 KiB
 делают попытку явной и ограниченной. Неясный успех классифицируется как unknown.
 Текст сокращается до ограничений канала с видимым маркером, без разделения на сообщения.
-HTTP и базовые адреса сервисов настраиваются явно; это не реализация relay.
+HTTP и базовые адреса сервисов настраиваются явно; это не реализация gateway.
 Точные настройки, причины выбора клиента и классификация: [ADAPTERS.md](docs/ADAPTERS.md).
 
 В 0.1.0.dev4 добавлена явная команда `python -m remote_watch.diagnostics.smoke telegram|ntfy`.
@@ -382,7 +385,7 @@ Provider retry-after задаёт нижнюю границу ожидания, 
 или shutdown deadline. Истечение TTL завершает доставку до следующей попытки.
 Для конкретного назначения deadline не позже Notification.expires_at и created_at
 плюс его RetryPolicy.ttl. UTC используется в данных, monotonic clock — для локальных задержек/deadlines.
-На входе relay оставшийся TTL ограничивается его собственной политикой.
+На входе gateway оставшийся TTL ограничивается его собственной политикой.
 С dev9 явный GatewayConfig.clock_skew_tolerance (0–3600 с, по умолчанию 0)
 ослабляет сравнения UTC клиента и сервера в обе стороны. Он не увеличивает
 относительные timeout/remaining_ttl или локальные монотонные сроки; даты события
@@ -452,27 +455,27 @@ shutdown_unknown, not_running. Snapshot статистики потокобез�
 ## Необязательная доставка через gateway
 
 Способ доставки — настройка назначения, не новый тип события или logging API.
-В direct-режиме клиент и provider credentials находятся у приложения. В relay-режиме
+В direct-режиме клиент и provider credentials находятся у приложения. В gateway-режиме
 приложение знает HTTPS endpoint, собственную service credential и remote destination
 alias; provider credentials и адресат находятся на gateway. Приложению не нужен
-provider SDK для relayed-назначения.
+provider SDK для gateway-routed-назначения.
 
-Один процесс может одновременно отправлять Telegram через relay, а ntfy напрямую.
-Relay — прикладной сервис Remote Watch, не HTTP proxy и не собственный сервер ntfy.
-Переключение direct/relay явно задаётся при старте; автоматического fallback нет.
+Один процесс может одновременно отправлять Telegram через gateway, а ntfy напрямую.
+Gateway — прикладной сервис Remote Watch, не HTTP proxy и не собственный сервер ntfy.
+Переключение direct/gateway явно задаётся при старте; автоматического fallback нет.
 Gateway разрешает отправителю только назначенные aliases, не принимает произвольные
-URL, chat IDs, токены или цепочку следующего relay из события.
+URL, chat IDs, токены или цепочку следующего gateway из события.
 
-Первая итерация 0.2 реализует клиент RelayChannel, RelayConfig и RelayRequest.
+Первая итерация 0.2 реализует клиент NotificationGatewayChannel, NotificationGatewayConfig и NotificationGatewayRequest.
 Протокол v1: POST /v1/notifications, Bearer auth, точный JSON envelope, 64 KiB request
 и 4 KiB response. Ответ коррелируется с delivery_id и attempt; malformed 2xx даёт UNKNOWN.
-В 0.2.0.dev3 сервер проверяет token → точная identity + aliases. Подробности: [RELAY.md](docs/RELAY.md),
+В 0.2.0.dev3 сервер проверяет token → точная identity + aliases. Подробности: [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md),
 [ADR 0005](docs/adr/0005-relay-wire-and-packaging.md).
 
-Полный этап 0.2 использует ограниченный одноступенчатый relay: запрос приводит к одной попытке
-provider adapter; ответ сообщает её результат. Relay не отвечает успехом лишь
+Полный этап 0.2 использует ограниченный одноступенчатый gateway: запрос приводит к одной попытке
+provider adapter; ответ сообщает её результат. Gateway не отвечает успехом лишь
 потому, что запрос поставлен в память. Повторы выполняет исходный runtime;
-relay не добавляет второй скрытый цикл retry. Timeout ответа допускает дубликаты.
+gateway не добавляет второй скрытый цикл retry. Timeout ответа допускает дубликаты.
 Gateway ограничивает concurrency, размеры и частоту на service/destination;
 при перегрузке возвращает явный временный отказ. Wire schema версионируется,
 `delivery_id` сохраняется, несовместимые версии отклоняются.
@@ -483,13 +486,13 @@ Gateway ограничивает concurrency, размеры и частоту �
 Настройки и честные границы: [GATEWAY_SERVER.md](docs/GATEWAY_SERVER.md),
 [ADR 0006](docs/adr/0006-gateway-admission-and-lifecycle.md).
 
-Переход к асинхронному `relay_accepted`/receipt и durable хранению является отдельным
+Переход к асинхронному `gateway_accepted`/receipt и durable хранению является отдельным
 расширением с новыми гарантиями. Детали: [GATEWAY.md](docs/GATEWAY.md).
 
 ## Команды и безопасность
 
 Command hub имеет отдельный inbound protocol, credentials, очереди и ACL.
-Outbound relay не включает приём команд. Для общего command channel gateway
+Outbound gateway не включает приём команд. Для общего command channel gateway
 является единственным владельцем polling/webhook/sync state по политике проекта;
 конкретные гарантии потребления зависят от провайдера, не от общего предположения
 о едином типе update stream для всех мессенджеров.
@@ -528,7 +531,7 @@ Gateway сверяет identity с service credential. ACL закрыты по �
 
 Реализованный layout — `src/remote_watch`, `tests/unit`, `tests/contract`,
 `tests/integration`. Модули появляются только вместе с поведением: модели,
-logging integration, routing, runtime, адаптеры, затем relay и commands.
+logging integration, routing, runtime, адаптеры, затем gateway и commands.
 Core не импортирует Telegram/ntfy/Matrix SDK. Provider dependencies — optional
 extras с первого релиза. Импорт core работает без них.
 
@@ -547,7 +550,7 @@ distribution для сервера в 0.2 не потребовалась.
 из произвольных Python-путей и не определяет callbacks вместо приложения.
 
 Отдельный `python -m remote_watch.gateway.commands` по умолчанию использует порт
-8766. Уведомления через relay 8765 и входящие команды не включают друг друга.
+8766. Уведомления через gateway 8765 и входящие команды не включают друг друга.
 Общий state_dir хранит hub и source SQLite; блокировка процесса предшествует
 открытию нового поколения hub. Перезапуск сохраняет выбранный command_id/session,
 а очистка ID оставляет необратимую границу дат. Это предотвращает переназначение
@@ -603,9 +606,9 @@ SourceStats отделяет текущие receive/reply ошибки от ис
 Перезапуск hub не регистрирует клиентские сессии автоматически; восстановление
 командного пути приложения требует отдельной проверки и согласованного lifecycle.
 
-## Явное доверие CA relay-клиента (0.4.1.dev5)
+## Явное доверие CA gateway-клиента (0.4.1.dev5)
 
-RelayConfig принимает проверяющий ssl_context, передаваемый собственному HTTP connector.
+NotificationGatewayConfig принимает проверяющий ssl_context, передаваемый собственному HTTP connector.
 Контекст добавляет частный CA только выбранному клиенту; библиотека не меняет окружение,
 глобальные TLS defaults или trust store ОС. None оставляет стандартное доверие.
 Контекст не входит в wire и repr. Проверки цепочки и имени обязательны при конфигурации
@@ -636,7 +639,7 @@ Identity для actor/chat; live sessions и capabilities не сокращаю�
 по строкам максимум на два сообщения. ntfy сохраняет прежний явный синтаксис.
 
 Политика full/compact/text принадлежит TelegramConfig/NtfyConfig назначения.
-В dev7 relay использует её на gateway; в dev8 добавлен клиентский override ниже.
+В dev7 gateway использует её на gateway; в dev8 добавлен клиентский override ниже.
 Выбор групп identity/level/logger/time/ids не изменяет Notification, ID и журнал.
 Compact всегда содержит полную Identity, text явно отказывается от видимого источника.
 
@@ -652,15 +655,15 @@ Stale_session не восстанавливается поздним heartbeat; 
 register нет. Подробнее: [контур команд](docs/COMMAND_EXECUTION.md),
 [источники](docs/COMMAND_SOURCES.md), [отображение](docs/ADAPTERS.md).
 
-## Клиентский режим отображения relay (0.4.1.dev8)
+## Клиентский режим отображения gateway (0.4.1.dev8)
 
-RelayConfig принимает display_mode/display_fields с теми же правилами, что и
+NotificationGatewayConfig принимает display_mode/display_fields с теми же правилами, что и
 TelegramConfig/NtfyConfig. Это закрытый набор параметров представления, без
 произвольного renderer, адресов и credentials. При отсутствии режима сохраняется
 настройка gateway. Явный режим заменяет серверный режим и набор полей целиком
 только для этой доставки; provider config и другие клиенты не меняются.
 
-Delivery получает два необязательных поля представления. RelayChannel создаёт
+Delivery получает два необязательных поля представления. NotificationGatewayChannel создаёт
 копию задания для своего назначения; Notification, Identity и delivery ID сохраняются.
 Gateway после прежних auth/ACL/TTL проверок передаёт проверенные поля адаптеру;
 render Telegram/ntfy использует их перед стандартным усечением текста. Общая проверка
@@ -668,11 +671,11 @@ render Telegram/ntfy использует их перед стандартным
 
 Wire schema 3 добавляет обязательное display=null либо {mode, fields} и сохраняет
 числовую диагностику схемы 2. Схемы 1/2 остаются без изменений и не могут неявно
-потерять переданный override. RelayConfig без явной schema_version выбирает 1
+потерять переданный override. NotificationGatewayConfig без явной schema_version выбирает 1
 для прежнего клиента либо 3 при заданном display_mode. Явные версии 1/2 с режимом
 отклоняются до сети. Повтора с другой схемой и автоматического fallback нет.
 Маршрут /v1/notifications, пределы JSON, один POST на попытку и серверные права
-сохраняются. Детали и порядок обновления: [RELAY.md](docs/RELAY.md).
+сохраняются. Детали и порядок обновления: [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md).
 
 Владелец выбрал изменение клиентского конфига с перезапуском приложения.
 Notification gateway нужно один раз обновить до dev8; при дальнейшей смене режима

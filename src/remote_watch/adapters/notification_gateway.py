@@ -1,13 +1,13 @@
 ﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-221259
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
-# -> RelayConfig: Настройки адреса gateway и разрешённого назначения.
+# -> NotificationGatewayConfig: Настройки адреса gateway и разрешённого назначения.
 #    Интерфейс:
 #    -> destination(): Ленивое назначение с заданным способом доставки.
 #    Специальные методы:
@@ -15,7 +15,7 @@
 #    Служебные методы:
 #    -> _check_policy(): Проверка резерва времени на сетевой обмен.
 #
-# -> RelayChannel: Доставка через gateway без provider credentials.
+# -> NotificationGatewayChannel: Доставка через gateway без provider credentials.
 #    Конструктор:
 #    -> __init__(): Подготовка состояния без запуска работы.
 #    Интерфейс:
@@ -44,6 +44,14 @@ from remote_watch.adapters._common import (
 )
 from remote_watch.adapters._http import HttpSender
 from remote_watch.config import DeliveryMode, Destination, RetryPolicy
+from remote_watch.notification_gateway_protocol import (
+    MAX_RESPONSE_BYTES,
+    NotificationGatewayRequest,
+    _decode,
+    decode_response,
+    encode_json,
+    validate_alias,
+)
 from remote_watch.notifications.delivery import (
     Delivery,
     DeliveryResult,
@@ -51,21 +59,13 @@ from remote_watch.notifications.delivery import (
     ResultSource,
 )
 from remote_watch.notifications.display import validate_display
-from remote_watch.relay_protocol import (
-    MAX_RESPONSE_BYTES,
-    RelayRequest,
-    _decode,
-    decode_response,
-    encode_json,
-    validate_alias,
-)
 
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки адреса gateway и разрешённого назначения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RelayConfig:
+class NotificationGatewayConfig:
     """Bind a destination to a fixed gateway endpoint and one authorized alias."""
 
     endpoint: str                       # Базовый HTTPS-адрес gateway, без токена и query.
@@ -91,7 +91,7 @@ class RelayConfig:
         outstanding_capacity: int = 256,
     ) -> Destination:
 
-        """Create a relay-mode destination whose retries remain owned by the application runtime.
+        """Create a gateway-mode destination whose retries remain owned by the application runtime.
 
         :param destination_id: Logical routing identifier.
         :type destination_id: str
@@ -112,8 +112,8 @@ class RelayConfig:
 
         policy = retry if retry is not None else RetryPolicy()
         self._check_policy(policy)
-        return Destination(destination_id=destination_id, mode=DeliveryMode.RELAY, provider="relay",
-                           channel_factory=partial(RelayChannel, self, retry=policy),
+        return Destination(destination_id=destination_id, mode=DeliveryMode.GATEWAY, provider="gateway",
+                           channel_factory=partial(NotificationGatewayChannel, self, retry=policy),
                            retry=policy, outstanding_capacity=outstanding_capacity)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -129,7 +129,7 @@ class RelayConfig:
         validate_credentials(self.token, self.token_env, "gateway")
         if self.ssl_context is not None and (not isinstance(self.ssl_context, ssl.SSLContext)
                 or self.ssl_context.verify_mode != ssl.CERT_REQUIRED or not self.ssl_context.check_hostname):
-            raise ValueError("relay TLS context must verify certificates and hostnames")
+            raise ValueError("gateway TLS context must verify certificates and hostnames")
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
         if self.display_mode is None:
@@ -143,9 +143,9 @@ class RelayConfig:
         if self.schema_version is None:
             object.__setattr__(self, "schema_version", 3 if self.display_mode is not None else 1)
         if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
-            raise ValueError("unsupported relay schema version")
+            raise ValueError("unsupported gateway schema version")
         if self.display_mode is not None and self.schema_version != 3:
-            raise ValueError("client display requires relay schema 3")
+            raise ValueError("client display requires gateway schema 3")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -167,7 +167,7 @@ class RelayConfig:
         if not isinstance(policy, RetryPolicy):
             raise TypeError("retry must be RetryPolicy")
         if self.server_timeout + self.network_margin > policy.attempt_timeout:
-            raise ValueError("relay server timeout and network margin exceed attempt_timeout")
+            raise ValueError("gateway server timeout and network margin exceed attempt_timeout")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -175,7 +175,7 @@ class RelayConfig:
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Доставка через gateway без provider credentials
 #------------------------------------------------------------------------------------------------------------------
-class RelayChannel:
+class NotificationGatewayChannel:
     """Send one correlated request; it does not import a concrete provider or retry internally."""
 
     #--------------------------------------------------------------------------------------------------------------
@@ -183,7 +183,7 @@ class RelayChannel:
     #--------------------------------------------------------------------------------------------------------------
     def __init__(
         self,
-        config: RelayConfig,
+        config: NotificationGatewayConfig,
         *,
         retry: RetryPolicy | None = None,
     ) -> None:
@@ -191,7 +191,7 @@ class RelayChannel:
         """Prepare lazy HTTP ownership without accessing the network or credentials.
 
         :param config: Validated settings.
-        :type config: RelayConfig
+        :type config: NotificationGatewayConfig
 
         :param retry: Shared runtime and channel policy.
         :type retry: RetryPolicy | None
@@ -200,8 +200,8 @@ class RelayChannel:
         # config - проверенные настройки выбранного сценария.
         # retry - общие ограничения runtime и канала.
 
-        if not isinstance(config, RelayConfig):
-            raise TypeError("config must be RelayConfig")
+        if not isinstance(config, NotificationGatewayConfig):
+            raise TypeError("config must be NotificationGatewayConfig")
         self._policy = retry if retry is not None else RetryPolicy()
         config._check_policy(self._policy)
         self._config = config
@@ -259,37 +259,37 @@ class RelayChannel:
                         delivery.remaining_timeout if delivery.remaining_timeout is not None else float("inf"))
         timeout = min(self._config.server_timeout, remaining - self._config.network_margin)
         if timeout <= 0:
-            return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.PERMANENT_FAILURE,
-                                  reason_code="relay_budget_exhausted")
+            return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus.PERMANENT_FAILURE,
+                                  reason_code="gateway_budget_exhausted")
         try:
             # Копия относится только к этому получателю: другие каналы того же
             # события и общая immutable Notification не получают чужой режим.
             if self._config.display_mode is not None:
                 delivery = replace(delivery, display_mode=self._config.display_mode,
                                    display_fields=self._config.display_fields)
-            request = RelayRequest(delivery=delivery, alias=self._config.alias,
+            request = NotificationGatewayRequest(delivery=delivery, alias=self._config.alias,
                                    remaining_ttl=remaining, timeout=timeout,
                                    schema_version=self._config.schema_version)
         except (ValueError, TypeError, OverflowError):
             # Неверный для wire размер не является неизвестным исходом: сеть ещё не начата.
-            return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.PERMANENT_FAILURE,
-                                  reason_code="relay_payload_limits")
+            return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus.PERMANENT_FAILURE,
+                                  reason_code="gateway_payload_limits")
         response = await self._http.post(self._config.endpoint.rstrip("/") + "/v1/notifications",
                                          request.to_dict(), self._token)
         if isinstance(response, DeliveryResult):
-            return replace(response, source=ResultSource.RELAY)
+            return replace(response, source=ResultSource.GATEWAY)
         status, headers, body = response
         if not 200 <= status <= 299:
             result = http_failure(status, retry_after(headers["retry-after"]))
             # Ошибку доступа к gateway не выдаём за отказ сервиса Telegram/ntfy.
             if status in (401, 403):
-                result = replace(result, reason_code="relay_auth_denied")
-            return replace(result, source=ResultSource.RELAY)
+                result = replace(result, reason_code="gateway_auth_denied")
+            return replace(result, source=ResultSource.GATEWAY)
         try:
             return decode_response(body, delivery, schema_version=self._config.schema_version)
         except (ValueError, TypeError, OverflowError):
-            return DeliveryResult(source=ResultSource.RELAY, status=DeliveryStatus.UNKNOWN,
-                                  reason_code="invalid_relay_response")
+            return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus.UNKNOWN,
+                                  reason_code="invalid_gateway_response")
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -312,6 +312,6 @@ class RelayChannel:
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     print(
-        "Модуль remote_watch.adapters.relay не предназначен для прямого запуска.",
+        "Модуль remote_watch.adapters.notification_gateway не предназначен для прямого запуска.",
     )
 #------------------------------------------------------------------------------------------------------------------

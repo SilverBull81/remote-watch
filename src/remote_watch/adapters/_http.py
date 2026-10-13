@@ -1,10 +1,10 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
@@ -123,7 +123,8 @@ class HttpSender:
             import aiohttp
         except ImportError:
             raise ImportError(
-                "install remote-watch[telegram], remote-watch[ntfy] or remote-watch[relay] to send notifications",
+                "install remote-watch[telegram], remote-watch[ntfy] or remote-watch[gateway] "
+                "to send notifications",
             ) from None
 
         # Один канал обрабатывается последовательно. Cookies, proxy из окружения и распаковка не нужны.

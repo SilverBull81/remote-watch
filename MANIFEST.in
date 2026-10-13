@@ -1,5 +1,6 @@
 include AGENTS.md ARCHITECTURE.md PROJECT_BRIEF.md
 include logo/remote_watch.png
+include logo/remote_watch.ico
 include .gitattributes .gitignore
 recursive-include docs *.md
 include docs/examples/gateway_config.example.json

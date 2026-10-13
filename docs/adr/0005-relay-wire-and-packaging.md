@@ -1,12 +1,16 @@
 ﻿# ADR 0005: wire-контракт relay и границы упаковки
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260930-172038
+Дата и время последнего изменения: 261013-141730
 
 ## Статус
+
+С 0.4.2.dev3 названия клиента и extra заменены без переходных алиасов:
+[ADR 0013](0013-notification-gateway-names.md). Ниже сохранено исходное решение;
+имена API из него относятся к исторической версии.
 
 Контракт и клиент реализованы в 0.2.0.dev1. Серверный HTTP transport выбран для
 следующей итерации. В 0.2.0.dev3 сервер и auth/ACL реализованы;
@@ -22,7 +26,7 @@ Version 1.0.2
 gateway до появления реализации не создаётся.
 
 Одна provider attempt передаётся через HTTPS POST `/v1/notifications`, versioned JSON.
-Точная схема, лимиты и интерпретация ответа: [RELAY.md](../RELAY.md). Request содержит
+Точная схема, лимиты и интерпретация ответа: [NOTIFICATION_GATEWAY.md](../NOTIFICATION_GATEWAY.md). Request содержит
 alias, Notification, delivery ID, attempt, remaining TTL и server timeout. Credential
 передаётся отдельно через Bearer. Ответ коррелируется с попыткой; enqueue receipt
 не признаётся успешной доставкой.

@@ -1,39 +1,43 @@
 ﻿# Логотип, восстановление связи и термины Remote Watch
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-131234
+Дата и время последнего изменения: 261013-141730
 
-Статус на 13.10.2026: логотип и `application.icon_path` реализованы в **0.4.2.dev2**.
-Ниже reconnect и переименование API — предложения, а не возможности этой версии.
+Статус на 13.10.2026: в **0.4.2.dev3** переименованы API/модули без старых алиасов
+по прямому решению владельца. Логотип уточнён по большому образцу; добавлена ICO
+в папку `logo`. Reconnect пока остаётся следующим согласованным шагом.
 Основание — пожелания владельца после запуска недельного prod-пилота SpamBot.
-Итоги недели ещё не получены; production deployment в этом проходе не менялся.
+Владелец сообщил, что недельный прогон идёт без вопросов к remote-watch;
+итоги недели ещё не получены. Production deployment в этом проходе не менялся.
 
 ## Логотип и конфигурация
 
-Встроенная иконка: [remote_watch.ico](../src/remote_watch/gateway_server/assets/remote_watch.ico).
+Иконка для копирования: [logo/remote_watch.ico](../logo/remote_watch.ico).
+Встроенная копия: [remote_watch.ico](../src/remote_watch/gateway_server/assets/remote_watch.ico).
 Исходное изображение: [remote_watch.png](../logo/remote_watch.png).
 ICO содержит 16, 24, 32, 48, 64, 128 и 256 px, как SpamBot; PNG — 1254×1254 RGBA.
 Файлы других приложений остаются пользовательскими образцами и не входят в пакет.
 `application.icon_path` выбирает свою иконку; отсутствие/null — встроенную.
 Настройка и правила пути: [GATEWAY_DEPLOYMENT.md](GATEWAY_DEPLOYMENT.md).
 
-Изображение создано встроенным инструментом imagegen по двум образцам:
-`spam_robot.ico` и `load_robot.ico`. Затем выполнено только преобразование
-формата/размера в многоразмерный ICO с сохранением прозрачности.
-Запрос генерации:
+Изображение обновлено встроенным инструментом imagegen: `robot_quik.png` задаёт
+образец лица и геометрии, прежний `remote_watch.png` — одобренный символ глаза
+с двумя узлами. Фиолетовый фон эмблемы отличается от синего, голубого, зелёного,
+красного и жёлтого других приложений. После генерации выполнено только преобразование
+формата/размера в многоразмерный ICO с сохранением прозрачности. Запрос:
 
-> Create one new square transparent-background application icon for Remote Watch
-> gateway server. Keep the reference family: friendly grey robot, dark grey outlines,
-> large round white eyes with black pupils, rectangular wide head, grey torso,
-> red round buttons, cropped arms and lower torso, flat clean cartoon clip-art style.
-> Replace the chest panel symbol with a clear white eye above two short branching
-> network connections on a deep blue panel: remote monitoring and gateway connectivity.
-> Bold simple silhouette legible at 24px. Robot fills the square canvas. No text,
-> no letters, no additional scenery or border; modest grey shading as in references.
-> Genuine transparent alpha background; source suitable for a multiresolution Windows ICO.
+> Use robot_quik.png as the master robot geometry and sharply drawn face reference,
+> and the previous Remote Watch icon only for the approved white eye connected to
+> two circular network nodes. Preserve the grey wide rectangular face, clean round
+> eyes, polygonal jaw outline, red buttons, torso and arms. Replace the cyan Q panel
+> with saturated violet/purple #853BC2 and the approved white symbol. Crisp flat
+> vector-like edges and uniform sharp outlines; no blur, grain, speckles or glow.
+> Preserve the master robot proportions. No text, Q or scenery. Square composition
+> filling the frame, transparent alpha background, high-resolution source for small
+> Windows tray icons. Preserve the eye/network symbol geometry.
 
 ## Единый словарь
 
@@ -46,7 +50,7 @@ ICO содержит 16, 24, 32, 48, 64, 128 и 256 px, как SpamBot; PNG — 
 | Notification gateway | Серверный компонент, пересылающий уведомления к провайдеру |
 | Command gateway / hub | Компонент, принимающий команды, адресующий их приложениям и возвращающий ответы |
 | Gateway server | Управляющее приложение: запускает компоненты, следит за ними, предоставляет status/stop и трей |
-| Relay | Прежнее техническое название пересылки уведомлений через notification gateway; не третий контур |
+| Relay (в старых документах) | Прежнее название пересылки уведомлений через notification gateway; не третий контур |
 
 Сейчас direct/gateway выбирается **для назначения уведомлений**. Путь команд
 из Telegram/ntfy использует command gateway. Прямой приём команд в приложении
@@ -76,25 +80,46 @@ ACL actor/chat/target/scopes, привязка к сессии, журнал д�
 использовать один бот/чат; единственный читатель входящих сообщений остаётся
 command source. Это логическое разделение, а не требование двух ботов/серверов.
 
-## Предложение переименований
+## Выполненные переименования и обновление SpamBot
 
-В пользовательских инструкциях предпочтительны «напрямую» и «через gateway»;
-`relay` оставляем пояснением старых конфигов/протокола. Для кода предлагается:
+В пользовательских инструкциях используются «напрямую» и «через gateway».
+Владелец отменил первоначальное предложение совместимых алиасов: библиотека
+используется только в SpamBot, поэтому оставлять старый API не требуется.
 
-| Сейчас | Предлагаемое основное имя |
+| До 0.4.2.dev3 | Теперь |
 | --- | --- |
 | `RelayConfig`, `RelayChannel` | `NotificationGatewayConfig`, `NotificationGatewayChannel` |
 | `adapters/relay.py` | `adapters/notification_gateway.py` |
-| `relay_protocol.py` | `notification_gateway_protocol.py` |
-| `DeliveryMode.RELAY` | `DeliveryMode.GATEWAY` с совместимым старым значением |
+| `relay_protocol.py`, `RelayRequest` | `notification_gateway_protocol.py`, `NotificationGatewayRequest` |
+| `DeliveryMode.RELAY`, `ResultSource.RELAY` | `DeliveryMode.GATEWAY`, `ResultSource.GATEWAY` |
+| Значение режима/provider/source `relay` | `gateway` |
+| extra `relay` | extra `gateway` для клиента и сервера уведомлений |
+| `smoke relay` | `smoke gateway` |
+| Ключ `relay` в локальном файле smoke | `gateway` |
+| Причины `relay_*`, `invalid_relay_response` | `gateway_*`, `invalid_gateway_response` |
 
-Не переименовывать всё одним поиском/заменой. Сначала добавить новые имена
-и изменить примеры, сохранив старые imports/re-exports и значения конфигов.
-Перенос реализации в файлы с новыми именами — отдельный проверяемый коммит.
-Прежние wire schemas, URL, hash/canonical serialization, журналы и extra `relay`
-сохраняются. Удаление совместимых имён не требуется для работающих приложений.
-Новые имена не должны создавать впечатление, что notification adapter также
-регистрирует команды. Это предложение ещё не изменяет публичный API.
+Длительный `field_smoke mixed` сохраняет имя режима: это gateway + прямой ntfy.
+В его файле настроек меняется только секция `relay` на `gateway`.
+
+Обновите imports, сборку настроек назначения и сравнения режима/source/reason_code
+в приложении. `token_env` по-прежнему принимает произвольное имя: переименовывать
+рабочие переменные среды и менять сами секреты не требуется. В новых примерах
+используется `REMOTE_WATCH_GATEWAY_TOKEN`. Старый extra отсутствует; pip может
+выдать лишь предупреждение о неизвестном extra, поэтому явно выбирайте `[gateway]`.
+
+На плановой остановке обновите библиотеку на notification gateway и клиенте,
+затем запускайте приложение с новыми imports/настройками и проверьте smoke.
+Работающий недельный прогон автоматически не обновляется. В этом проходе
+SpamBot и конфиги LV не менялись. Командная часть и её сессии не переименованы;
+перезапуск command hub пока требует новой клиентской сессии по прежнему lifecycle.
+
+Адрес POST `/v1/notifications`, поля JSON и схемы 1/2/3 сохраняют назначение;
+это не совместимые переходники старых Python-имён. Числа схем не меняются ради
+переименования: diagnostic reason_code и ранее был ограниченной строкой.
+Успешные envelopes остаются прежними; новые ошибки возвращают новые коды.
+Нет повторного POST/fallback к старому маршруту, адаптеров-обёрток или re-export.
+Журналы SQLite, cursor, source_id, токены, Identity и Caddy CA сохраняются.
+Решение и границы: [ADR 0013](adr/0013-notification-gateway-names.md).
 
 ## Автоматическое восстановление командной связи
 

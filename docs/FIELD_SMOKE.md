@@ -1,10 +1,10 @@
 ﻿# Длительная полевая проверка серверов и Android
 
-Version 1.1.0
+Version 1.1.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-112704
+Дата и время последнего изменения: 261013-141730
 
 ## Принятая полевая проверка базовой доставки, 30.09.2026
 
@@ -50,18 +50,18 @@ smoke на dev9 и немедленный показ на телефоне. Эт
 WSL Ubuntu 24.04 находится на локальной российской машине; владелец не использует
 её как gateway. Успешная CI-матрица Linux не зависит от этого WSL.
 
-## Смешанный режим dev7: Telegram через relay, ntfy напрямую
+## Смешанный режим dev7: Telegram через gateway, ntfy напрямую
 
-Команда `mixed` читает секции relay и ntfy из локального credentials-файла.
+Команда `mixed` читает секции gateway и ntfy из локального credentials-файла.
 Секция telegram на клиенте не нужна: provider token и chat остаются на gateway.
-Alias секции relay должен указывать на Telegram-получателя сервера.
+Alias секции gateway должен указывать на Telegram-получателя сервера.
 
 ```json
 {
-  "relay": {
+  "gateway": {
     "endpoint": "https://gateway.example.com",
     "alias": "telegram-alerts",
-    "token": "REPLACE_WITH_APPLICATION_RELAY_TOKEN",
+    "token": "REPLACE_WITH_APPLICATION_GATEWAY_TOKEN",
     "schema_version": 2
   },
   "ntfy": {"topic": "REPLACE_WITH_TOPIC", "token": "REPLACE_WITH_NTFY_TOKEN"}
@@ -70,7 +70,7 @@ Alias секции relay должен указывать на Telegram-полу�
 
 Для полевого приложения на gateway должны быть разрешены точные identity:
 service=remote-watch-field, environment=field-test и region/host/instance_id из CLI.
-Это другая identity, чем у одноразового relay smoke; создайте отдельный principal
+Это другая identity, чем у одноразового gateway smoke; создайте отдельный principal
 для проверки, а не ослабляйте существующее правило. Нужен gateway dev5 или новее
 для схемы 2; схема 1 задаётся явно при проверке старого сервера.
 
@@ -80,15 +80,15 @@ python -m remote_watch.diagnostics.field_smoke mixed --region ru --host server-r
 
 Для длительного запуска уберите --duration и задайте --interval 1800, как ниже.
 Ключи статистики остаются telegram и ntfy; новая карта delivery_modes в run-записи
-различает relay и direct. Попытки relay имеют ResultSource.RELAY; успешный исход
+различает gateway и direct. Попытки gateway имеют ResultSource.GATEWAY; успешный исход
 означает подтверждение провайдером через gateway. Числовые поля переносятся согласно
-схеме relay, а не заполняются вымышленными значениями при их отсутствии у адаптера.
+схеме gateway, а не заполняются вымышленными значениями при их отсутствии у адаптера.
 
-В mixed нет автоматического переключения на прямой Telegram. Недоступность relay
+В mixed нет автоматического переключения на прямой Telegram. Недоступность gateway
 не останавливает независимый ntfy; общий успех требует приёма обоими каналами.
-Локально проверены четыре образца через настоящий HTTP, отказ прав relay и
+Локально проверены четыре образца через настоящий HTTP, отказ прав gateway и
 продолжающаяся доставка ntfy, очистка временных токенов и отсутствие их в отчёте.
-Один региональный relay/HTTPS smoke подтверждён; длительная mixed-проверка ещё не проведена.
+Один региональный gateway/HTTPS smoke подтверждён; длительная mixed-проверка ещё не проведена.
 
 ## Что проверяет команда
 

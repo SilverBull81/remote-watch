@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-165638
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены.
@@ -24,7 +24,7 @@
 # -> test_gateway_overload(): Немедленный отказ при превышении ёмкости.
 # -> test_gateway_body_deadline(): Ограничение времени чтения незавершённого тела.
 # -> test_gateway_lifecycle(): Очистка при ошибках и отмене запуска или остановки.
-# -> test_gateway_mixed_runtime(): Настоящие HTTP-адаптеры в смешанном direct и relay режиме.
+# -> test_gateway_mixed_runtime(): Настоящие HTTP-адаптеры в смешанном direct и gateway режиме.
 # -> test_gateway_start_guards(): Защита запуска и независимость очистки от отмены владельца.
 # -> test_gateway_rate_and_chunked(): Ограничение частоты и размера chunked-запроса.
 # -> test_gateway_lost_reply(): Возможный дубликат при потере подтверждения провайдера.
@@ -60,12 +60,12 @@ from remote_watch import (
     Route,
     WatcherConfig,
 )
-from remote_watch.adapters.relay import RelayChannel, RelayConfig
+from remote_watch.adapters.notification_gateway import NotificationGatewayChannel, NotificationGatewayConfig
 from remote_watch.gateway.config import GatewayConfig, GatewayPrincipal
 from remote_watch.gateway.json_config import load_gateway_config
 from remote_watch.gateway.server import Gateway
+from remote_watch.notification_gateway_protocol import NotificationGatewayRequest, decode_response
 from remote_watch.notifications._context import delivery_context
-from remote_watch.relay_protocol import RelayRequest, decode_response
 
 aiohttp = pytest.importorskip("aiohttp")
 TOKEN = "synthetic_gateway_credential_1234567890"
@@ -145,8 +145,8 @@ class Channel:
                 await self.release.wait()
             if self.mode == "error":
                 raise OSError("synthetic private provider details")
-            if self.mode == "relay":
-                return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, source=ResultSource.RELAY)
+            if self.mode == "gateway":
+                return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, source=ResultSource.GATEWAY)
             if self.mode == "rate":
                 return DeliveryResult(status=DeliveryStatus.RATE_LIMITED, retry_after=2)
             return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id="synthetic")
@@ -208,20 +208,21 @@ def settings(
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запрос с заданным сроком и идентификатором доставки
 #------------------------------------------------------------------------------------------------------------------
-def envelope(notification: Notification) -> RelayRequest:
+def envelope(notification: Notification) -> NotificationGatewayRequest:
 
     """Create a finite request while preserving the fixture's controlled UTC time.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
 
-    :return: Synthetic relay request with bounded lifetime and exact test identity.
-    :rtype: RelayRequest
+    :return: Synthetic gateway request with bounded lifetime and exact test identity.
+    :rtype: NotificationGatewayRequest
     """
 
     # notification - синтетическое уведомление с заданным временем.
 
-    return RelayRequest(delivery=Delivery(notification=notification, destination_id="phone", delivery_id="one"),
+    return NotificationGatewayRequest(
+        delivery=Delivery(notification=notification, destination_id="phone", delivery_id="one"),
         alias="phone", remaining_ttl=10, timeout=8)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -342,7 +343,7 @@ def test_gateway_requests(
                     body = await response.read()
             if case in ("expired", "future"):
                 assert decode_response(json.loads(body), request.delivery).reason_code == (
-                    "relay_expired" if case == "expired" else "relay_clock_skew")
+                    "gateway_expired" if case == "expired" else "gateway_clock_skew")
             assert len(channel.calls) == int(case == "success")
             assert gateway.stats()["active"] == 0
         finally:
@@ -358,7 +359,7 @@ def test_gateway_requests(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Классификация одной попытки без повторов сервера
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("mode", ["error", "wait", "rate", "relay"])
+@pytest.mark.parametrize("mode", ["error", "wait", "rate", "gateway"])
 def test_gateway_attempt_outcomes(
     notification: Notification,
     mode: str,
@@ -381,20 +382,21 @@ def test_gateway_attempt_outcomes(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use the real relay client against one configured provider attempt."""
+        """Use the real gateway client against one configured provider attempt."""
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
         channel = Channel(mode)
         gateway = Gateway(settings(event, channel, attempt_timeout=0.05))
         await gateway.start(port=0)
-        client = RelayChannel(RelayConfig(endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
+        client = NotificationGatewayChannel(NotificationGatewayConfig(
+            endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone",
             token_env="RW_GW_TEST", allow_http=True))
         try:
             await client.open()
             result = await client.send(envelope(event).delivery)
             expected = DeliveryStatus.RATE_LIMITED if mode == "rate" else DeliveryStatus.UNKNOWN
-            assert result.status is expected and result.source is ResultSource.RELAY
+            assert result.status is expected and result.source is ResultSource.GATEWAY
             assert len(channel.calls) == 1
             assert 0 < channel.calls[0].remaining_timeout <= 0.05
             if mode == "wait":
@@ -574,7 +576,7 @@ def test_gateway_lifecycle(
 
 
 #------------------------------------------------------------------------------------------------------------------
-# ТЕСТ : Настоящие HTTP-адаптеры в смешанном direct и relay режиме
+# ТЕСТ : Настоящие HTTP-адаптеры в смешанном direct и gateway режиме
 #------------------------------------------------------------------------------------------------------------------
 def test_gateway_mixed_runtime(
     notification: Notification,
@@ -650,11 +652,13 @@ def test_gateway_mixed_runtime(
         gateway = Gateway(config)
         try:
             await gateway.start(port=0)
-            relay = RelayConfig(endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone", token_env="RW_GW_TEST",
+            notification_gateway = NotificationGatewayConfig(
+                endpoint=f"http://127.0.0.1:{gateway.port}", alias="phone", token_env="RW_GW_TEST",
                 allow_http=True).destination("telegram", retry=direct)
             ntfy = NtfyConfig(topic="synthetic", token_env=None, endpoint=endpoint,
                 allow_http=True).destination("ntfy", retry=direct)
-            watcher = RemoteWatcher(WatcherConfig(identity=notification.identity, destinations=(relay, ntfy),
+            watcher = RemoteWatcher(WatcherConfig(
+                identity=notification.identity, destinations=(notification_gateway, ntfy),
                 routes=(Route(destination_ids=("telegram", "ntfy")),)))
             async with watcher:
                 watcher.logger.error("Смешанная доставка через gateway и напрямую")
@@ -950,18 +954,18 @@ def test_gateway_multiple_apps(
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("schema", [1, 2])
 @pytest.mark.parametrize("offset,skew,lifetime,ttl,future,reason", [
-    (120, 0, 60, 300, 0, "relay_expired"),
+    (120, 0, 60, 300, 0, "gateway_expired"),
     (120, 180, 60, 300, 0, None),
-    (-120, 0, 60, 300, 0, "relay_clock_skew"),
+    (-120, 0, 60, 300, 0, "gateway_clock_skew"),
     (-120, 180, 60, 300, 0, None),
     (-180, 180, 60, 300, 0, None),
-    (-181, 180, 60, 300, 0, "relay_clock_skew"),
-    (240, 180, 60, 300, 0, "relay_expired"),
+    (-181, 180, 60, 300, 0, "gateway_clock_skew"),
+    (240, 180, 60, 300, 0, "gateway_expired"),
     (120, 180, 600, 5, 0, None),
-    (185, 180, 600, 5, 0, "relay_expired"),
+    (185, 180, 600, 5, 0, "gateway_expired"),
     (0, 600, 60, 300, 0, None),
     (-20, 0, 60, 300, 30, None),
-    (-35, 10, 60, 300, 30, "relay_clock_skew"),
+    (-35, 10, 60, 300, 30, "gateway_clock_skew"),
     (3600, 3600, 60, 300, 0, None),
 ])
 def test_gateway_clock_tolerance(
@@ -980,7 +984,7 @@ def test_gateway_clock_tolerance(
     :param notification: Fixed synthetic notification.
     :type notification: Notification
 
-    :param schema: Relay response schema.
+    :param schema: Gateway response schema.
     :type schema: int
 
     :param offset: Gateway UTC offset from the sender, in seconds.
@@ -1040,7 +1044,7 @@ def test_gateway_clock_tolerance(
             else:
                 assert result.status is DeliveryStatus.PERMANENT_FAILURE
                 assert not channel.calls
-                counter = "clock_skew" if reason == "relay_clock_skew" else "expired"
+                counter = "clock_skew" if reason == "gateway_clock_skew" else "expired"
                 assert gateway.stats()[counter] == 1
         finally:
             await gateway.close()
@@ -1093,7 +1097,7 @@ def test_gateway_elapsed_budget(
         # защиту непосредственно на границе dispatch с уже истёкшим общим TTL.
         request = replace(envelope(notification), timeout=min(timeout, remaining_ttl), remaining_ttl=remaining_ttl)
         response = await gateway._dispatch(request, asyncio.get_running_loop().time() - elapsed)
-        assert decode_response(json.loads(response.body), request.delivery).reason_code == "relay_expired"
+        assert decode_response(json.loads(response.body), request.delivery).reason_code == "gateway_expired"
         assert not channel.calls and gateway.stats()["expired"] == 1
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())

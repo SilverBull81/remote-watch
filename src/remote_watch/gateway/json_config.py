@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> GatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
@@ -281,7 +281,7 @@ def _principal(value: Any) -> GatewayPrincipal:
     :param value: Decoded JSON value.
     :type value: Any
 
-    :return: Validated application credential and exact relay permissions.
+    :return: Validated application credential and exact gateway permissions.
     :rtype: GatewayPrincipal
     """
 

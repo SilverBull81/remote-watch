@@ -1,10 +1,10 @@
-﻿# Отдельный HTTP-сервер команд, не включаемый настройками relay.
+﻿# Отдельный HTTP-сервер команд, не включаемый настройками notification gateway.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261013-141219
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
@@ -45,7 +45,7 @@ from remote_watch.commands.transport import CommandError
 # КЛАСС : Сетевые endpoints регистрации и выполнения команд
 #------------------------------------------------------------------------------------------------------------------
 class CommandHubServer:
-    """Expose client command routes independently of outbound relay routes and credentials."""
+    """Expose client command routes independently of outbound gateway routes and credentials."""
 
 
     #--------------------------------------------------------------------------------------------------------------
