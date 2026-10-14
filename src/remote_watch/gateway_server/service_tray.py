@@ -1,12 +1,14 @@
 ﻿# Отдельный интерактивный controller службы, не владеющий gateway и журналами команд.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Функции:
+# -> launch_tray(): Запрос запуска контроллера в сеансе выбранного оператора
+#
 # -> tray_settings(): Чтение только выбранных полей UI без связанных конфигов
 #
 # -> run_tray(): Наблюдение за службой и запрос остановки без запуска второго сервера
@@ -21,6 +23,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import os
+import subprocess
 import threading
 from pathlib import Path
 
@@ -38,6 +41,38 @@ from .tray import GatewayTray
 #******************************************************************************************************************
 # ФУНКЦИИ
 #******************************************************************************************************************
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Запрос запуска контроллера в сеансе выбранного оператора
+#------------------------------------------------------------------------------------------------------------------
+def launch_tray(
+    spec: ServiceSpec,
+    ) -> str:
+
+    """
+    Request a hidden controller from the operator's start CLI without crossing user sessions.
+
+    :param spec: Exact service and operator binding already accepted by SCM.
+    :type spec: ServiceSpec
+
+    :return: Fixed launch-request status; never a claim that the GUI or gateways are ready.
+    :rtype: str
+    """
+
+    # spec — служба не получает право создавать GUI чужого пользователя. Только
+    # CLI самого оператора может запустить его контроллер в текущем сеансе.
+    if not tray_settings(spec.config)[0]:
+        return "headless"
+    session = ctypes.c_uint32()
+    if (os.name != "nt" or current_sid() != spec.operator_sid
+            or not ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session))
+            or session.value == 0):
+        return "operator_session_required"
+    subprocess.Popen(spec.arguments("tray"), cwd=spec.config.parent, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
+    return "launch_requested"
+#------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение только выбранных полей UI без связанных конфигов
@@ -108,16 +143,14 @@ def run_tray(
         return 0
     close = threading.Event()
     stop = threading.Event()
-    tray = GatewayTray(stop.set, icon_path=icon, exit_callback=close.set,
-                       title_prefix="Remote Watch service: ")
+    tray = GatewayTray(stop.set, icon_path=icon, title_prefix="Remote Watch service: ")
     try:
         backend = WindowsService(spec)
-        tray.start()
+        tray.start(visible=False)
         while not close.is_set() and tray.ready:
             config_error = False
             try:
-                if not tray_settings(spec.config)[0]:
-                    break
+                enabled = tray_settings(spec.config)[0]
             except Exception:
                 # Не закрываем исправный UI, если JSON временно не читается
                 # во время редактирования: Stop должен остаться доступным.
@@ -127,9 +160,12 @@ def run_tray(
                     stop.clear()
                     backend.stop()
                 state = backend.status()["state"]
-            except Exception:
-                state = "unavailable"
+            except Exception as error:
+                state = "not_found" if getattr(error, "winerror", None) == 1060 else "unavailable"
             tray.update("configuration_error" if config_error else state)
+            # Скрываем именно иконку: оставшийся контроллер увидит следующий start
+            # из CLI или services.msc. UI=headless также не останавливает службу.
+            tray.set_visible(enabled and state not in ("stopped", "not_found"))
             close.wait(2)
         return 0
     finally:

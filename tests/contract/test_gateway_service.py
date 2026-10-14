@@ -1,10 +1,10 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Функции:
 # -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
@@ -809,7 +809,7 @@ def test_controller(
     monkeypatch.setattr(controller, "threading", SimpleNamespace(Event=Mock(side_effect=[close, stop])))
     tray = Mock(ready=True)
     factory = Mock(return_value=tray)
-    tray.start.side_effect = stop.set
+    tray.start.side_effect = lambda **kwargs: stop.set()
     tray.update.side_effect = lambda state: setattr(tray, "ready", False)
     monkeypatch.setattr(controller, "GatewayTray", factory)
     native = Mock()
@@ -819,7 +819,9 @@ def test_controller(
     native.stop.assert_called_once()
     tray.update.assert_called_once_with("running")
     tray.close.assert_called_once()
-    assert factory.call_args.kwargs["exit_callback"] == close.set
+    assert "exit_callback" not in factory.call_args.kwargs
+    tray.start.assert_called_once_with(visible=False)
+    tray.set_visible.assert_called_once_with(True)
     # Без ui controller не создаёт ни GUI, ни native backend.
     data = json.loads(service_plan.spec.config.read_text())
     data["application"]["ui"] = "headless"

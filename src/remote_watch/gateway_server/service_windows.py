@@ -1,13 +1,17 @@
 ﻿# Ограниченные операции SCM, права виртуального аккаунта и автозапуск пользовательского UI.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Классы:
 # -> ServiceInstallError: Безопасная стадия частично завершённой установки
+#    Конструктор:
+#    -> __init__(): Подготовка состояния объекта.
+#
+# -> ServiceControlError: Причина отказа проверки владельца без раскрытия путей и текста ОС
 #    Конструктор:
 #    -> __init__(): Подготовка состояния объекта.
 #
@@ -24,12 +28,17 @@
 #    Служебные методы:
 #    -> _sync_entry(): Проверка и изменение своей записи Run
 #    -> _open(): Открытие handle с проверкой binary/account
+#    -> _has_grant(): Проверка уже выданных прав без повторной записи DACL
+#       Вложенные объявления:
+#       -> allowed(): Проверка полного разрешения для конкретного файла или каталога
 #    -> _grant(): Выдача прав только виртуальному SID на проверенный путь
 #
 # Функции:
 # -> managed(): Гарантированное закрытие native SCM handle
 #
 # -> checked_tree(): Запрет рекурсивного ACL через reparse point
+#
+# -> installation_owner(): Удержание блокировки manager без записи в существующий файл службы
 
 
 #******************************************************************************************************************
@@ -38,13 +47,12 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-
-from remote_watch.commands.source_store import ProcessLock
 
 from .deployment import _path
 from .service import ServicePlan, ServiceSpec
@@ -88,6 +96,42 @@ class ServiceInstallError(ValueError):
                       else "unknown")
         self.winerror = winerror if type(winerror) is int and 0 <= winerror < 2**31 else None
         super().__init__("service_install_partial")
+    #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Причина отказа проверки владельца без раскрытия путей и текста ОС
+#------------------------------------------------------------------------------------------------------------------
+class ServiceControlError(ValueError):
+    """
+    Distinguish an active owner from denied access and other lock failures.
+    """
+
+    #--------------------------------------------------------------------------------------------------------------
+    # КОНСТРУКТОР
+    #--------------------------------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        code: str,
+        winerror: int | None = None,
+        ) -> None:
+
+        """
+        Retain only an allowlisted ownership code and a numeric native error.
+
+        :param code: Fixed ownership failure category.
+        :type code: str
+
+        :param winerror: Observed native error, or None when unavailable.
+        :type winerror: int | None
+        """
+
+        # code/winerror — исходные исключения могут содержать приватный путь.
+        allowed = {"service_manager_running", "service_control_access", "service_control_io"}
+        self.code = code if code in allowed else "service_control_io"
+        self.stage = "ownership"
+        self.winerror = winerror if type(winerror) is int and 0 <= winerror < 2**31 else None
+        super().__init__(self.code)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -145,6 +189,70 @@ def checked_tree(
             info = (Path(directory) / name).lstat()
             if getattr(info, "st_file_attributes", 0) & 0x400 or (Path(directory) / name).is_symlink():
                 raise ValueError("service_linked_path")
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Удержание блокировки manager без записи в существующий файл службы
+#------------------------------------------------------------------------------------------------------------------
+@contextmanager
+def installation_owner(
+    path: Path,
+    ) -> Iterator[None]:
+
+    """
+    Hold the manager's exact OS lock using read access for an existing service-owned file.
+
+    :param path: Previously validated manager lock path in the original control directory.
+    :type path: Path
+
+    :return: Context retaining exclusive ownership until installation exits.
+    :rtype: Iterator[None]
+    """
+
+    # path — оператору намеренно оставлено только чтение control. Для блокировки
+    # существующего файла запись не нужна; его содержимое и DACL не изменяются.
+    handle = None
+    try:
+        try:
+            handle = path.open("rb")
+        except FileNotFoundError:
+            # Первая установка создаёт пустой файл без перезаписи существующего.
+            # Блокировка диапазона за концом файла поддерживается Windows/POSIX;
+            # запись данных не нужна даже при одновременном старте manager.
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                handle = path.open("a+b")
+            except PermissionError as error:
+                raise ServiceControlError("service_control_access", getattr(error, "winerror", None)) from None
+            except OSError as error:
+                raise ServiceControlError("service_control_io", getattr(error, "winerror", None)) from None
+        except PermissionError as error:
+            raise ServiceControlError("service_control_access", getattr(error, "winerror", None)) from None
+        except OSError as error:
+            raise ServiceControlError("service_control_io", getattr(error, "winerror", None)) from None
+
+        if handle is not None:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as error:
+                busy = error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK)
+                busy = busy or getattr(error, "winerror", None) == 33
+                code = "service_manager_running" if busy else "service_control_io"
+                raise ServiceControlError(code, getattr(error, "winerror", None)) from None
+        yield
+    finally:
+        # Дескриптор остаётся открытым во время регистрации и изменения прав.
+        # Закрытие освобождает блокировку; удалять или заменять pathname нельзя.
+        if handle is not None:
+            handle.close()
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -257,12 +365,7 @@ class WindowsService:
         # SQLite; manager.lock исключает установку при уже работающем сервере.
         for directory in (plan.environment, *plan.write_dirs):
             checked_tree(directory)
-        owner = ProcessLock(plan.deployment.control_dir / "manager.lock")
-        try:
-            owner.open()
-        except Exception:
-            raise ValueError("service_manager_running") from None
-        try:
+        with installation_owner(plan.deployment.control_dir / "manager.lock"):
             with managed(self.api.OpenSCManager(None, None, 3)) as manager:
                 try:
                     existing = self.api.OpenService(manager, self.spec.name, 1)
@@ -313,8 +416,6 @@ class WindowsService:
                                 pass
                         self.api.DeleteService(handle)
                         raise ServiceInstallError(stage, getattr(error, "winerror", None)) from None
-        finally:
-            owner.close()
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -434,6 +535,92 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка уже выданных прав без повторной записи DACL
+    #--------------------------------------------------------------------------------------------------------------
+    def _has_grant(
+        self,
+        path: Path,
+        sid: str,
+        rights: str,
+        tree: bool,
+        ) -> bool:
+
+        """
+        Recognize existing explicit service access without rewriting service-owned child ACL.
+
+        :param path: Validated original access target.
+        :type path: Path
+
+        :param sid: Exact newly resolved service SID.
+        :type sid: str
+
+        :param rights: One of this installer's fixed access patterns.
+        :type rights: str
+
+        :param tree: Require matching access on every existing descendant.
+        :type tree: bool
+
+        :return: True only when all observed ACL already grant the complete requested access.
+        :rtype: bool
+        """
+
+        # path/sid/rights/tree — после удаления службы прежний SID может уже иметь
+        # все права. Повторный icacls /T тогда не нужен и может получить отказ на
+        # файле, созданном службой: оператор читает его, но не меняет его DACL.
+        mask = {"RX": 0x1200A9, "(OI)(CI)RX": 0x1200A9, "(OI)(CI)F": 0x1F01FF}.get(rights)
+        if mask is None:
+            return False
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Проверка полного разрешения для конкретного файла или каталога
+        #----------------------------------------------------------------------------------------------------------
+        def allowed(
+            target: Path,
+            ) -> bool:
+
+            """
+            Require a sufficient service allow ACE and reject uncertain or denied access.
+
+            :param target: One existing target, never file contents or journal data.
+            :type target: Path
+
+            :return: Whether its observed DACL already meets the complete requested grant.
+            :rtype: bool
+            """
+
+            # target — неизвестные типы ACE и любой deny запрещают быстрый путь.
+            # Для каталога проверяем также наследование будущими детьми.
+            acl = self.security.GetFileSecurity(str(target), 4).GetSecurityDescriptorDacl()
+            if acl is None:
+                return False
+            matched = False
+            for index in range(acl.GetAceCount()):
+                (kind, flags), access, principal = acl.GetAce(index)
+                if kind != 0:
+                    return False
+                inherited = not tree or not target.is_dir() or flags & 3 == 3
+                if (self.security.ConvertSidToStringSid(principal) == sid and access & mask == mask
+                        and not flags & 8 and inherited):
+                    matched = True
+            return matched
+        #----------------------------------------------------------------------------------------------------------
+
+        try:
+            if not allowed(path):
+                return False
+            failures = []
+            if tree and path.is_dir():
+                for directory, names, files in os.walk(path, followlinks=False, onerror=failures.append):
+                    if any(not allowed(Path(directory) / name) for name in (*names, *files)):
+                        return False
+            return not failures
+        except Exception:
+            # Недостаток чтения не доказывает наличие разрешения. Обычная выдача
+            # прав остаётся единственным путём; отказ сохраняет стадию acl.
+            return False
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Выдача прав только виртуальному SID на проверенный путь
     #--------------------------------------------------------------------------------------------------------------
     def _grant(
@@ -462,6 +649,8 @@ class WindowsService:
 
         # path/sid/rights/tree — не shell-текст. Ошибки icacls могут содержать пути,
         # поэтому вывод не пересылается ни в CLI, ни в уведомления владельцу.
+        if self._has_grant(path, sid, rights, tree):
+            return
         import win32api
 
         command = [str(Path(win32api.GetSystemDirectory()) / "icacls.exe"), str(path),

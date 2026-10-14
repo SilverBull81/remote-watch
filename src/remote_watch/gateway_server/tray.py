@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние сервера и общая команда остановки.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Классы:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows
@@ -12,6 +12,7 @@
 #    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
 #    -> start(): Подготовка ресурсов и запуск фоновой работы
+#    -> set_visible(): Показ и скрытие иконки без завершения пользовательского контроллера
 #    -> update(): Обновление подписи иконки по состоянию сервера
 #    -> ready(): Проверка живого цикла трея без обращения к GUI
 #    -> close(): Освобождение только собственных ресурсов
@@ -61,7 +62,6 @@ class GatewayTray:
         stop: Callable[[], None],
         icon_path: Path | None = None,
         *,
-        exit_callback: Callable[[], None] | None = None,
         title_prefix: str = "Remote Watch: ",
         ) -> None:
 
@@ -74,18 +74,14 @@ class GatewayTray:
         :param icon_path: Custom local ICO or PNG file, or None for the packaged icon.
         :type icon_path: Path | None
 
-        :param exit_callback: Optional controller-only exit, never a service stop.
-        :type exit_callback: Callable[[], None] | None
-
         :param title_prefix: Fixed tooltip prefix distinguishing SCM state from manager readiness.
         :type title_prefix: str
         """
 
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
         # icon_path — файл читается только при явном запуске GUI.
-        # exit_callback/title_prefix — служебный контроллер трея работает отдельно от управляющего процесса.
+        # title_prefix — служебный контроллер работает отдельно от управляющего процесса.
         self._stop = stop
-        self._exit_callback = exit_callback
         self._title_prefix = title_prefix
         self._icon_path = icon_path
         self._icon = None
@@ -93,6 +89,7 @@ class GatewayTray:
         self._ready = threading.Event()
         self._state = "starting"
         self._failed = False
+        self._visible = True
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -100,12 +97,19 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
     def start(
         self,
+        visible: bool = True,
         ) -> None:
 
         """
         Start the optional Windows UI without blocking its host console.
+
+        :param visible: Initial icon visibility; a hidden controller still owns its GUI loop.
+        :type visible: bool
         """
 
+        # visible — служебный контроллер запускает скрытый цикл и показывает иконку
+        # лишь после чтения SCM, чтобы при stopped не было краткой вспышки в трее.
+        self._visible = visible
         if os.name != "nt":
             raise RuntimeError("tray_requires_windows")
         import pystray
@@ -126,8 +130,6 @@ class GatewayTray:
         )
         items = [pystray.MenuItem("About", about),
                  pystray.MenuItem("Stop gateway server", self._request_stop)]
-        if self._exit_callback is not None:
-            items.append(pystray.MenuItem("Exit tray", lambda icon, item: self._exit_callback()))
         self._icon = pystray.Icon("remote-watch-gateway", bitmap, self._title_prefix + "starting",
                                   menu=pystray.Menu(*items))
         self._thread = threading.Thread(target=self._run, name="gateway-tray", daemon=True)
@@ -135,6 +137,30 @@ class GatewayTray:
         if not self._ready.wait(5) or not self._thread.is_alive():
             self.close()
             raise RuntimeError("tray_unavailable")
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Показ и скрытие иконки без завершения пользовательского контроллера
+    #--------------------------------------------------------------------------------------------------------------
+    def set_visible(
+        self,
+        visible: bool,
+        ) -> None:
+
+        """
+        Change icon visibility while retaining the single initialized GUI loop.
+
+        :param visible: Whether the icon should be present in this user's tray.
+        :type visible: bool
+        """
+
+        # visible — изменение не запускает manager и не отправляет команду службе.
+        if visible != self._visible and self._icon is not None:
+            try:
+                self._icon.visible = visible
+                self._visible = visible
+            except Exception:
+                self._failed = True
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -231,14 +257,14 @@ class GatewayTray:
         ) -> None:
 
         """
-        Signal readiness only after the icon becomes visible.
+        Signal message-loop readiness after applying the requested initial visibility.
 
         :param icon: Initialized pystray icon.
         :type icon: object
         """
 
         # icon — подтверждение запуска GUI, не готовности gateway listeners.
-        icon.visible = True
+        icon.visible = self._visible
         self._ready.set()
     #--------------------------------------------------------------------------------------------------------------
 

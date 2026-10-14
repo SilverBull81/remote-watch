@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -431,10 +431,12 @@ def test_operator_delivery() -> None:
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.skipif(os.name != "nt", reason="Windows tray contract")
 @pytest.mark.parametrize("custom", [False, True])
+@pytest.mark.parametrize("visible", [False, True])
 def test_tray_stop(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     custom: bool,
+    visible: bool,
     ) -> None:
 
     """
@@ -448,10 +450,14 @@ def test_tray_stop(
 
     :param custom: Select an explicit file instead of the bundled resource.
     :type custom: bool
+
+    :param visible: Requested initial visibility of the single message loop.
+    :type visible: bool
     """
 
     # monkeypatch — тест не показывает пользователю окно и не требует установленного GUI extra.
     # tmp_path/custom — проверяем выбор файла и освобождение его дескриптора.
+    # visible — скрытый контроллер тоже готов и не создаёт второй цикл при показе.
     ended = threading.Event()
     icon = Mock()
     icon.run.side_effect = lambda setup: (setup(icon), ended.wait(5))
@@ -466,7 +472,12 @@ def test_tray_stop(
     stop = Mock()
     tray = GatewayTray(stop, icon_path=source)
     try:
-        tray.start()
+        tray.start(visible=visible)
+        assert icon.visible is visible and tray.ready
+        tray.set_visible(not visible)
+        assert icon.visible is not visible and tray.ready
+        tray.set_visible(visible)
+        assert icon.visible is visible and tray.ready
         stream = image.open.call_args.args[0]
         assert stream.closed
         assert Path(stream.name) == source if custom else Path(stream.name).name == "remote_watch.ico"

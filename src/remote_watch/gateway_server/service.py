@@ -1,10 +1,10 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-154136
 #
 # Классы:
 # -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
@@ -336,10 +336,21 @@ def main(
         else:
             print(json.dumps(backend.status()), flush=True)
             return 0
+        if args.action in ("start", "sync-tray"):
+            # Запуск службы уже принят SCM. Ошибка необязательной иконки не должна
+            # объявлять этот запуск неудачным или останавливать работающий сервер.
+            try:
+                from .service_tray import launch_tray
+
+                tray = launch_tray(spec)
+            except Exception:
+                tray = "unavailable"
+            print(json.dumps({"action": args.action, "accepted": True, "tray": tray}), flush=True)
+            return 0
         print(json.dumps({"action": args.action, "accepted": True}), flush=True)
         return 0
     except Exception as error:
-        from .service_windows import ServiceInstallError
+        from .service_windows import ServiceControlError, ServiceInstallError
 
         # Ошибки внешних API содержат пути/имена. Разрешаем лишь фиксированные коды
         # нашей утилиты, а от Windows оставляем только числовой winerror.
@@ -353,11 +364,14 @@ def main(
         winerror = getattr(error, "winerror", None)
         if type(error) is ServiceInstallError:
             code = "service_install_partial"
+        elif type(error) is ServiceControlError:
+            code = error.code
         elif winerror == 5:
             code = "service_access_denied"
         elif winerror == 1060:
             code = "service_not_found"
-        print(json.dumps({"code": code, "stage": error.stage if type(error) is ServiceInstallError else None,
+        staged = type(error) in (ServiceInstallError, ServiceControlError)
+        print(json.dumps({"code": code, "stage": error.stage if staged else None,
                           "winerror": winerror if type(winerror) is int else None}), flush=True)
         return 1
 #------------------------------------------------------------------------------------------------------------------

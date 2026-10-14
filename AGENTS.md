@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.6.1
+Version 1.6.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-142954
+Дата и время последнего изменения: 261014-161558
 
 ## Project Intent
 
@@ -13,7 +13,29 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.5.dev2.
+The package version is 0.4.5.dev3.
+Dev3 follows owner-reported service field tests: both channels, single manager/readers,
+tray stop, console start and client reconnect worked; remove deleted the service.
+Read-only LV inspection confirmed SCM 1060, service/System full control, operator read,
+and manager.lock rb allowed / r+b denied. Installer now locks the existing file read-only,
+retains the exact OS exclusion and distinguishes ownership access/I/O from a live manager.
+Sufficient existing service grants are checked per descendant before skipping ACL writes.
+The owner selected a persistent interactive controller: hide icon on stopped/not_found/headless,
+restore on the next active SCM state, remove Exit tray. start/sync-tray request this operator's
+hidden pythonw controller; no cross-session GUI or second manager is created.
+The server doctor report doctor-journals.local.json passed all 12 checks: hub pending=0,
+unresolved_unknown=0, execution_active=0, capacity=ok; historical unknown=1/resolutions=1
+do not prove a specific administrative reconciliation. Owner reports SpamBot health integration,
+but failure-to-recovery field acceptance, reboot, crash/budget and fixed reinstall/UI are pending.
+Production services/configs/ACL/journals and SpamBot source remain unchanged by this work.
+Dev3 validation on Windows CPython 3.12.2: core 1189 passed, 75 skipped, 2 deselected in 67.14s (0:01:07);
+extras 1622 passed, 2 deselected in 136.89s (0:02:16). Both clean wheel-from-sdist, no pytest warnings.
+Ruff/style: 161 files, zero issues; 93 wheel modules/resources match source;
+12 installed CLIs passed. Targeted service/tray recovery: 60 passed (19.72s).
+Reports: build/validation-0453-core and build/validation-0453-extras.
+Native own-file ACL/locking tests do not prove a new production install or GUI acceptance.
+
+
 Dev2 unifies Python formatting with SpamBot CODE_STYLE 1.0.8 by owner request.
 Read docs/CODE_STYLE.md: next-line docstrings, vertical single-argument signatures,
 closing parenthesis at argument indentation, per-field dataclass contracts,
