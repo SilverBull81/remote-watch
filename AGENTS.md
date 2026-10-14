@@ -1,19 +1,22 @@
 ﻿# Repository Instructions
 
-Version 1.6.9
+Version 1.7.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-205239
+Дата и время последнего изменения: 261014-205642
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml. The owner selected MIT; LICENSE and SPDX package metadata apply.
-The owner authorized the first production release 1.0.0 and annotated tag v1.0.0.
-Publish the verified wheel/sdist/checksums through GitHub Release; no PyPI
-publication or bundled EXE is requested. Releases and source tags ship ICO only;
+The first production release 1.0.0 is published under annotated tag v1.0.0:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
+Release commit is 80eca708337202aae871322a4cb60919e9d90d4e. Public downloads of
+wheel, sdist and SHA256SUMS.txt match the verified local hashes; the automatic
+GitHub source archive also contains ICO and no PNG/private files. No PyPI
+publication or bundled EXE was performed. Releases and source tags ship ICO only;
 the editable PNG remains ignored locally. Final 1.0.0 clean local core/extras and all eight CI jobs passed.
 Functional milestone 0.4 is complete: owner field acceptance plus all eight CI jobs passed.
 CI run 38609427482 tested code commit 5ebf78c9378eaa8e8a6589b2e63fc31910357001,
