@@ -1,10 +1,10 @@
 ﻿# Сводки SQLite, кэш владельца и безопасная диагностика без изменения команд.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-192924
 #
 # Тесты:
 # -> test_command_snapshot(): Подсчёт сохранённых фаз без записи в журнал
@@ -571,8 +571,7 @@ def test_observer_cannot_timeout_commit(
         """
 
         source = SourceJournal(tmp_path / "source.sqlite")
-        worker = StoreWorker(source, 0.1)
-        await worker.open()
+        worker = StoreWorker(source, 5.0)
         entered, release = threading.Event(), threading.Event()
         original = source.journal_stats
 
@@ -589,12 +588,17 @@ def test_observer_cannot_timeout_commit(
             """
 
             entered.set()
-            release.wait(2)
+            release.wait(30)
             return original()
         #----------------------------------------------------------------------------------------------------------
 
-        worker._journal_next = 0
         try:
+            # Создание SQLite с реальным fsync не является проверяемой задержкой.
+            # Для него оставляем отдельный бюджет; наблюдатель затем держим дольше
+            # операционного deadline, пока тест явно не разрешит завершение.
+            await worker.open()
+            worker.timeout = 1.0
+            worker._journal_next = 0
             with patch.object(source, "journal_stats", side_effect=slow_observation):
                 assert await worker.call(lambda: source.bind("committed-owner")) is None
                 assert entered.is_set() and worker._gate.locked()
@@ -608,7 +612,7 @@ def test_observer_cannot_timeout_commit(
                 assert (await next_call)[0] == -1
         finally:
             release.set()
-            await worker.close(1)
+            await worker.close(5)
     #--------------------------------------------------------------------------------------------------------------
 
     asyncio.run(scenario())
