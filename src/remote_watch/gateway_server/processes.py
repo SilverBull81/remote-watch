@@ -1,10 +1,10 @@
 ﻿# Владение дочерними процессами и закрытый каталог локального управления.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261014-124120
 #
 # Класс:
 # -> ProcessGroup: Владение собственными процессами через механизм ОС.
@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -148,16 +149,25 @@ def parent_guard(parent: int) -> None:
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограничение доступа к токену локального управления.
 #------------------------------------------------------------------------------------------------------------------
-def private_directory(path: Path) -> None:
+def private_directory(
+    path: Path,
+    operator_sid: str | None = None,
+) -> None:
 
     """Protect control credentials with user/System ACL or POSIX owner-only permissions.
 
     :param path: Dedicated local control directory, never component data or Caddy storage.
     :type path: Path
+
+    :param operator_sid: Explicit service operator SID with read-only control/log access.
+    :type operator_sid: str | None
     """
 
     # path — не принимаем ссылку как каталог управления; существующие журналы
     # компонентов не затрагиваются. Новые файлы наследуют закрытый Windows DACL.
+    # operator_sid — не общий Users/Authenticated Users; доступ только одному оператору.
+    if operator_sid is not None and not re.fullmatch(r"S-1-5-21-(?:[0-9]{1,10}-){3}[0-9]{1,10}", operator_sid):
+        raise ValueError("operator_sid")
     if path.is_symlink():
         raise RuntimeError("control_permissions")
     path.mkdir(parents=True, exist_ok=True)
@@ -195,6 +205,8 @@ def private_directory(path: Path) -> None:
         if not advapi.ConvertSidToStringSidW(sid, ctypes.byref(sid_text)):
             raise RuntimeError("control_permissions")
         sddl = f"D:P(A;OICI;FA;;;{sid_text.value})(A;OICI;FA;;;SY)"
+        if operator_sid is not None and operator_sid != sid_text.value:
+            sddl += f"(A;OICI;FR;;;{operator_sid})"
         if not advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 sddl, 1, ctypes.byref(descriptor), None):
             raise RuntimeError("control_permissions")

@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние manager и общая команда остановки.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-200317
+# Дата и время последнего изменения: 261014-124120
 #
 # Класс:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows.
@@ -53,6 +53,9 @@ class GatewayTray:
         self,
         stop: Callable[[], None],
         icon_path: Path | None = None,
+        *,
+        exit_callback: Callable[[], None] | None = None,
+        title_prefix: str = "Remote Watch: ",
     ) -> None:
 
         """Retain only a thread-safe stop callback.
@@ -62,11 +65,20 @@ class GatewayTray:
 
         :param icon_path: Custom local ICO or PNG file, or None for the packaged icon.
         :type icon_path: Path | None
+
+        :param exit_callback: Optional controller-only exit, never a service stop.
+        :type exit_callback: Callable[[], None] | None
+
+        :param title_prefix: Fixed tooltip prefix distinguishing SCM state from manager readiness.
+        :type title_prefix: str
         """
 
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
         # icon_path — файл читается только при явном запуске GUI.
+        # exit_callback/title_prefix — служебный controller живёт отдельно от manager.
         self._stop = stop
+        self._exit_callback = exit_callback
+        self._title_prefix = title_prefix
         self._icon_path = icon_path
         self._icon = None
         self._thread = None
@@ -100,9 +112,12 @@ class GatewayTray:
             pystray.MenuItem("Notifications and application commands.", None, enabled=False),
             pystray.MenuItem(f"(C) SilverBull, {date.today().year}", None, enabled=False),
         )
-        self._icon = pystray.Icon("remote-watch-gateway", bitmap, "Remote Watch: starting",
-                                  menu=pystray.Menu(pystray.MenuItem("About", about),
-                                                    pystray.MenuItem("Stop gateway server", self._request_stop)))
+        items = [pystray.MenuItem("About", about),
+                 pystray.MenuItem("Stop gateway server", self._request_stop)]
+        if self._exit_callback is not None:
+            items.append(pystray.MenuItem("Exit tray", lambda icon, item: self._exit_callback()))
+        self._icon = pystray.Icon("remote-watch-gateway", bitmap, self._title_prefix + "starting",
+                                  menu=pystray.Menu(*items))
         self._thread = threading.Thread(target=self._run, name="gateway-tray", daemon=True)
         self._thread.start()
         if not self._ready.wait(5) or not self._thread.is_alive():
@@ -127,7 +142,7 @@ class GatewayTray:
         # state — никакие идентификаторы чатов или токены в UI не передаются.
         if state != self._state and self._icon is not None:
             try:
-                self._icon.title = "Remote Watch: " + state
+                self._icon.title = self._title_prefix + state
                 self._state = state
             except Exception:
                 self._failed = True

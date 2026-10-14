@@ -1,10 +1,10 @@
 ﻿# Восстановление командной сессии без повторного исполнения и потери результатов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-231723
+# Дата и время последнего изменения: 261014-125903
 #
 # Функции:
 # -> restart(): Новый hub над тем же журналом.
@@ -40,7 +40,7 @@ from secrets import token_hex
 from unittest.mock import patch
 
 import pytest
-from test_command_hub import APP_TOKEN, SOURCE_TOKEN, Rig
+from test_command_hub import APP_TOKEN, SOURCE_TOKEN, DirectTransport, Rig
 
 from remote_watch.commands.client import CommandClient
 from remote_watch.commands.hub import CommandHub
@@ -134,13 +134,47 @@ async def wait_for(
 #------------------------------------------------------------------------------------------------------------------
 def fast_client(rig: Rig) -> None:
 
-    """Shorten observation timers without extending any execution or registration deadline.
+    """Shorten observation timers and model remote shutdown without changing command deadlines.
 
     :param rig: Client whose first heartbeat task has not yet resumed.
     :type rig: Rig
     """
 
     # rig — только частота наблюдения; настоящие сроки разрешений остаются прежними.
+    transport = rig.client._transport
+    if type(transport) is DirectTransport:
+        exchange = transport.exchange
+
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : HTTP-смысл закрытия hub для уже выполняющихся fake RPC
+        #----------------------------------------------------------------------------------------------------------
+        async def remote_exchange(
+            operation: str,
+            message: CommandMessage,
+        ) -> CommandMessage | CommandOffer | None:
+
+            """Match the real gateway's 503 for an in-flight request finishing during shutdown.
+
+            :param operation: Original synthetic remote operation.
+            :type operation: str
+            :param message: Original authenticated protocol object.
+            :type message: CommandMessage
+            :return: Unchanged response, with only local hub closed mapped to HTTP 503.
+            :rtype: CommandMessage | CommandOffer | None
+            """
+
+            # operation/message — переключение transport.exchange в restart()
+            # не перехватывает уже вошедший вызов старого hub. Реальный HTTP server
+            # вернул бы 503, а не локальный closed без статуса (остановку клиента).
+            try:
+                return await exchange(operation, message)
+            except CommandError as error:
+                if error.code == "closed" and error.http_status is None:
+                    raise CommandError("closed", http_status=503) from None
+                raise
+        #----------------------------------------------------------------------------------------------------------
+
+        transport.exchange = remote_exchange
     rig.client._session = replace(rig.client.session, remaining_ttl=0.03)
     rig.client._reconnect_delay = 0.01
     rig.client._reconnect_max_delay = 0.02
@@ -513,7 +547,7 @@ def test_dispatcher_reconnect(tmp_path: Path) -> None:
     """
 
     # tmp_path — выполняем настоящий dispatcher, а не только ручные вызовы acquire/complete.
-    from test_command_dispatcher import configured
+    from test_command_dispatcher import configured, until
 
     from remote_watch import CommandRegistry
 
@@ -547,11 +581,14 @@ def test_dispatcher_reconnect(tmp_path: Path) -> None:
         fast_client(rig)
         try:
             await rig.submit(rig.request(1))
-            await wait_for(lambda: dispatcher.stats.completed == 1 and dispatcher.stats.ready)
+            # Callback count растёт до доставки квитанции и последнего commit.
+            # Наблюдение должно пережить 3-секундный budget одной storage operation
+            # и её штатное восстановление; сроки исполнения/lease не меняются.
+            await until(lambda: dispatcher.stats.completed == 1 and dispatcher.stats.ready)
             await restart(rig, tmp_path)
             await wait_for(lambda: rig.client.health.reconnects == 1)
             await rig.submit(rig.request(2))
-            await wait_for(lambda: dispatcher.stats.completed == 2 and dispatcher.stats.ready)
+            await until(lambda: dispatcher.stats.completed == 2 and dispatcher.stats.ready)
             assert calls == ["resume", "resume"]
             assert not dispatcher.stats.closed
             assert rig.client.health.poll.current_error is None

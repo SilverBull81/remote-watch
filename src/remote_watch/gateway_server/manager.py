@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-124120
 #
 # Класс:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи.
@@ -130,16 +130,23 @@ class GatewayManager:
     def __init__(
         self,
         config: DeploymentConfig,
+        *,
+        operator_sid: str | None = None,
     ) -> None:
 
         """Retain validated settings without opening deployment resources.
 
         :param config: Immutable deployment settings.
         :type config: DeploymentConfig
+
+        :param operator_sid: Explicit service operator allowed to read local control state.
+        :type operator_sid: str | None
         """
 
         # config — исходные пути сохраняются, журналы и CA никуда не переносятся.
+        # operator_sid — только служебный host; токен управления не становится публичным.
         self.config = config
+        self._operator_sid = operator_sid
         self.stop_event = asyncio.Event()
         self.state = "starting"
         self.reason = None
@@ -197,11 +204,26 @@ class GatewayManager:
         :rtype: int
         """
 
-        private_directory(self.config.control_dir)
-        self._lock.open()
+        # До открытия существующей lock запрещаем ссылки: раннее получение lock
+        # не должно обойти прежний запрет private_directory и записать чужой файл.
+        for path in (self.config.control_dir, self.config.control_dir / "manager.lock"):
+            if path.is_symlink() or path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 0x400:
+                raise RuntimeError("control_permissions")
+        if self.config.control_dir.exists():
+            # При разных аккаунтах service/operator второй --start не должен
+            # менять ACL живого владельца до отказа по manager.lock.
+            self._lock.open()
+            try:
+                private_directory(self.config.control_dir, self._operator_sid)
+            except BaseException:
+                self._lock.close()
+                raise
+        else:
+            private_directory(self.config.control_dir, self._operator_sid)
+            self._lock.open()
         result = 1
         try:
-            private_directory(self.config.log_dir)
+            private_directory(self.config.log_dir, self._operator_sid)
             handler = StatusLog(self.config.log_dir / "gateway_server.jsonl",
                                 maxBytes=self.config.application.log_max_bytes,
                                 backupCount=self.config.application.log_backups, encoding="utf-8")

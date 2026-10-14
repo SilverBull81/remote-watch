@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-124120
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки новой или существующей установки.
@@ -285,6 +285,32 @@ def prepare_files(options: DeployOptions) -> dict[str, bytes]:
         if options.components not in ("both", name):
             doctor.pop(name)
     result["clients/gateway_doctor.client.example.json"] = _json(doctor)
+    # Служба регистрируется отдельной явной командой. Обычный deploy создаёт
+    # только launchers/инструкцию, не меняет SCM, registry и ACL рабочего сервера.
+    for action in ("install", "remove", "start", "stop", "status", "sync-tray"):
+        name = "service-status" if action == "status" else action if action == "sync-tray" else action + "-service"
+        for suffix in ("ps1", "cmd"):
+            quote = ("'" + python.replace("'", "''") + "'" if suffix == "ps1" else
+                     '"' + python.replace("%", "%%") + '"')
+            text = _resource("service." + suffix).replace("@@PYTHON@@", quote).replace("@@ACTION@@", "--" + action)
+            text = text.replace("\r\n", "\n").replace("\n", "\r\n")
+            result[name + "." + suffix] = text.encode("utf-8-sig" if suffix == "ps1" else "utf-8")
+    tray_text = _resource("tray.ps1").replace("@@PYTHON@@",
+        "'" + str(options.python.with_name("pythonw.exe")).replace("'", "''") + "'")
+    result["tray.ps1"] = tray_text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
+    # systemd не использует shell quoting: %, обратные слеши и кавычки кодируются
+    # по синтаксису unit. User/Group оператор указывает до явной установки на Linux.
+    unit = _resource("systemd.service")
+    for key, value in (("DIRECTORY", str(root)), ("PYTHON", python),
+                       ("CONFIG", str(root / "gateway_server.local.json"))):
+        quoted = '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
+        if key != "DIRECTORY":
+            quoted = quoted.replace("$", "$$")
+        unit = unit.replace("@@" + key + "@@", quoted)
+    result["service/remote-watch-gateway.service"] = unit.replace("\r\n", "\n").encode("utf-8")
+    for name in ("install-systemd.sh", "remove-systemd.sh"):
+        result["service/" + name] = _resource(name).replace("\r\n", "\n").encode("utf-8")
+    result["SERVICE.md"] = _resource("SERVICE.md").replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
     guide = _resource("START_HERE.md").replace("@@VERSION@@", package_version)
     result["START_HERE.md"] = guide.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
     manifest = {"schema_version": 1, "package_version": package_version,

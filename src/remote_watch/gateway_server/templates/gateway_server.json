@@ -2,7 +2,7 @@
   "schema_version": 1,
   "endpoint": "https://lv.example.test:8443",
   "control_dir": "control",
-  "log_dir": "logs",
+  "log_dir": "logs/gateway_server",
   "notifications": {
     "config": "notification_gateway.example.json",
     "host": "127.0.0.1",

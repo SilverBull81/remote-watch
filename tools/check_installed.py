@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.7
+# Version 1.1.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-235443
+# Дата и время последнего изменения: 261014-124120
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки.
@@ -86,6 +86,9 @@ def main() -> int:
     assert importlib.metadata.version("remote-watch") == args.version
     assert "aiohttp" not in sys.modules
     assert "pystray" not in sys.modules and "PIL" not in sys.modules
+    from remote_watch.gateway_server.service import ServiceSpec
+
+    assert ServiceSpec is not None and "win32service" not in sys.modules
     assert tuple(threading.enumerate()) == threads
     assert tuple(logging.getLogger().handlers) == handlers
     assert importlib.util.find_spec("cryptography") is None
@@ -111,6 +114,7 @@ def main() -> int:
     assert all(item is not None for item in (ApplicationConfig, GatewayManager, GatewayTray))
     if sys.platform == "win32":
         assert (importlib.util.find_spec("pystray") is not None) == (args.mode == "extras")
+        assert (importlib.util.find_spec("win32service") is not None) == (args.mode == "extras")
     assert all(item is not None for item in (
         CommandSourceRunner, TelegramCommandProvider, NtfyCommandProvider, CommandGateway))
     for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):
@@ -123,6 +127,7 @@ def main() -> int:
         "diagnostics.smoke", "diagnostics.field_smoke", "diagnostics.ntfy_diagnostic",
         "diagnostics.time_probe", "diagnostics.command_smoke", "gateway.commands", "gateway_server",
         "gateway_server.deploy", "diagnostics.gateway_doctor", "diagnostics.command_resolution",
+        "gateway_server.service",
     ):
         result = subprocess.run(
             [sys.executable, "-I", "-m", "remote_watch." + module, "--help"],
@@ -149,7 +154,7 @@ def main() -> int:
 
     # Deploy должен работать из wheel без docs/checkout, сети и optional providers.
     with tempfile.TemporaryDirectory(prefix="remote-watch-deploy-") as temporary:
-        target = Path(temporary) / "installation"
+        target = Path(temporary) / "installation & %UNEXPANDED% $literal"
         arguments = [sys.executable, "-I", "-m", "remote_watch.gateway_server.deploy",
                      "--directory", str(target), "--endpoint", "https://example.test:8443"]
         preview = subprocess.run(arguments + ["--dry-run"], cwd=temporary, capture_output=True, timeout=15)
@@ -171,6 +176,16 @@ def main() -> int:
         doctor_path.write_text(json.dumps(doctor_value), encoding="utf-8")
         assert all(row["status"] != "failed" for row in client_checks(doctor_path, False, 1))
         assert (target / "doctor.ps1").is_file() and (target / "doctor.sh").is_file()
+        assert (target / "SERVICE.md").is_file() and (target / "install-service.cmd").is_file()
+        if sys.platform == "win32":
+            # Запускаем CMD launcher из папки со спецсимволами. Явный фиктивный
+            # SID позволяет dry-run работать и без optional pywin32. SCM/HKCU/ACL
+            # и production процессы не затрагиваются.
+            service_preview = subprocess.run(["cmd.exe", "/d", "/c", "install-service.cmd", "--dry-run",
+                "--operator-sid", "S-1-5-21-101-202-303-1001"], cwd=target,
+                capture_output=True, timeout=15)
+            assert service_preview.returncode == 0, service_preview.stdout + service_preview.stderr
+            assert json.loads(service_preview.stdout)["writes"] is False
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка необязательных зависимостей и очистки

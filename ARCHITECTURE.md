@@ -1,12 +1,19 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.4.5
+Version 1.4.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-113001
+Дата и время последнего изменения: 261014-131658
 
 ## Статус и границы
+
+0.4.5.dev1 добавляет Windows service CLI с виртуальным account и отдельным
+пользовательским SCM controller. application.ui управляет наличием трея;
+служба всегда headless. Deploy включает install/remove, инструкции и systemd
+unit/scripts. Журналы/CA и wire сохраняются. Установка в production и проверка
+reboot/RDP не выполняются автоматически: [GATEWAY_SERVICE.md](docs/GATEWAY_SERVICE.md),
+[ADR 0019](docs/adr/0019-gateway-os-service.md).
 
 В 0.4.4.dev5 закрыт остаток R5 наблюдения журналов: неизменяемые числовые сводки
 hub/client/source кэшируются действующим storage worker. Наблюдение не создаёт
@@ -16,7 +23,7 @@ hub/client/source кэшируются действующим storage worker. Н
 режим без recovery/миграции/locks. Схемы journal и командного wire сохранены.
 Операционные age/capacity/UNKNOWN warnings не запускают restart или повтор callback.
 Контракт: [COMMAND_JOURNALS.md](docs/COMMAND_JOURNALS.md), ADR 0018.
-Следующий сервисный слой должен сохранить отдельный пользовательский трей.
+Сервисный слой сохраняет отдельный пользовательский трей, включаемый конфигом.
 
 В 0.4.4.dev4 `NotificationRuntime.health()` даёт неизменяемый снимок локального
 runtime_state и последних попыток доставки по назначениям. Наблюдения
@@ -28,7 +35,7 @@ unobserved/healthy/degraded отделены от накопительных Run
 Контракт и интеграция приложения: [RUNTIME.md](docs/RUNTIME.md).
 
 14.10 владелец принял полевые reconnect, deploy и работу gateway_server.
-Служба ОС с пользовательским треем и её эксплуатационная приёмка остаются задачами 0.4:
+Эксплуатационная приёмка новой службы ОС остаётся задачей 0.4:
 [REVIEW_0_4.md](docs/REVIEW_0_4.md).
 
 В 0.4.4.dev1 реализован `diagnostics.gateway_doctor`: offline-проверка по умолчанию,

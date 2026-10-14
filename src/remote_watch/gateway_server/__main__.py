@@ -1,10 +1,10 @@
 ﻿# Запуск gateway server, проверка настроек, локальное состояние и остановка.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-184704
+# Дата и время последнего изменения: 261014-124120
 #
 # Классы:
 # -> DeploymentParser: Разбор CLI без раскрытия неизвестных значений.
@@ -25,6 +25,7 @@ import asyncio
 import json
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 
@@ -78,12 +79,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = DeploymentParser(description="Gateway server: управление процессами и локальный статус.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
     parser.add_argument("--config", required=True, type=Path, help="Общий JSON-файл deployment.")
+    parser.add_argument("--headless", action="store_true", help="Запустить --start без UI, например из systemd.")
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--check-config", action="store_true", help="Проверить настройки без запуска.")
     actions.add_argument("--start", action="store_true", help="Работать до Ctrl+C либо --stop.")
     actions.add_argument("--status", action="store_true", help="Прочитать локальный статус manager.")
     actions.add_argument("--stop", action="store_true", help="Запросить общую остановку manager.")
     args = parser.parse_args(argv)
+    if args.headless and not args.start:
+        parser.error("headless")
 
     try:
         if args.status or args.stop:
@@ -94,6 +98,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                   flush=True)
             return 0
         config = load_deployment_config(args.config)
+        if args.headless:
+            config = replace(config, application=replace(config.application, ui="headless"))
         if not args.check_config:
             from .manager import GatewayManager
 

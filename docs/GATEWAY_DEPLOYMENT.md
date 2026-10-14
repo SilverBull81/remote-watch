@@ -1,10 +1,10 @@
 ﻿# Общая конфигурация gateway server
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-230511
+Дата и время последнего изменения: 261014-131658
 
 ## Что уже работает
 
@@ -16,8 +16,8 @@ CLI компонентов сохранены; одновременно запу
 Doctor реализован в 0.4.4.dev1: [GATEWAY_DOCTOR.md](GATEWAY_DOCTOR.md).
 Deploy включает `doctor.ps1`/`doctor.sh`, отдельный client JSON и read-only маршрут
 notifications в новом Caddyfile. Существующие файлы сохраняются; нужные изменения
-переносятся из образцов вручную. Установка службы ОС — следующий шаг;
-сам manager не устанавливает автозапуск.
+переносятся из образцов вручную. С 0.4.5.dev1 есть отдельная установка службы:
+[GATEWAY_SERVICE.md](GATEWAY_SERVICE.md). Сам manager не регистрирует её автоматически.
 
 Проверить существующие настройки можно одной строкой:
 
@@ -32,7 +32,7 @@ C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server --co
   "schema_version": 1,
   "endpoint": "https://YOUR_LV_VM_IP:8443",
   "control_dir": "control",
-  "log_dir": "logs",
+  "log_dir": "logs/gateway_server",
   "notifications": {"config": "notification_gateway.local.json", "port": 8765},
   "commands": {"config": "command_gateway.local.json", "port": 8766},
   "caddy": {"mode": "external"}
@@ -79,6 +79,11 @@ PowerShell. Общий конфиг можно держать отдельно �
 Не переносите командный конфиг в другую папку без проверки его реального state_dir.
 Пути буквальные: переменные среды и `~` автоматически не раскрываются.
 Control, logs и managed Caddy data не могут совпадать или вкладываться друг в друга.
+
+log_dir должен быть выделенным каталогом manager. Для нового deploy это
+logs/gateway_server: внешний Caddy продолжает писать в общую logs. При установке
+службы прежнее log_dir=logs нужно явно изменить; installer не меняет JSON сам и
+не выдаёт своему account рекурсивные права на общую папку логов Caddy.
 
 Credentials приложений остаются в прежних конфигурациях. Необязательный раздел
 `application.alerts` содержит отдельные назначения владельца и может содержать
@@ -240,8 +245,9 @@ C:\Work\RemoteWatch\.venv\Scripts\python.exe -m remote_watch.gateway_server --co
 
 Tray — необязательный Windows UI с текущим состоянием в подсказке и пунктами
 `About` и `Stop gateway server`. About показывает версию и описание в подменю;
-Stop вызывает ту же общую остановку. Для службы ОС
-нужен `ui=headless`; интерактивный трей и системная служба — разные сеансы Windows.
+Stop вызывает ту же общую остановку. Служба всегда headless; application.ui=tray
+включает отдельный controller пользовательского сеанса: About, Stop gateway server
+и Exit tray. Закрытие controller не останавливает службу.
 После проверки запуска в консоли можно использовать `pythonw.exe` с теми же
 аргументами `--start`; диагностика останется в файле и `--status`.
 Необязательный extra `tray` содержит pystray/Pillow; Linux manager не требует их.

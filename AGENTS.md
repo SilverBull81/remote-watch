@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.9
+Version 1.6.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-113035
+Дата и время последнего изменения: 261014-131658
 
 ## Project Intent
 
@@ -13,7 +13,36 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.4.dev5.
+The package version is 0.4.5.dev1.
+Stage 0.4.5 adds explicit Windows service CLI (optional service/pywin32 extra),
+passwordless per-service virtual account, exact binary/config/operator ownership,
+bounded SCM crash recovery and separate user-session tray. application.ui controls
+tray/headless; the service itself is always headless. Install/remove launchers and
+SERVICE.md are mandatory deploy resources; deploy never installs/starts services.
+Read docs/GATEWAY_SERVICE.md and ADR 0019 before changing OS integration or ACL.
+Operator query/start/stop cannot change ImagePath/account; control/log access stays
+private to service/System plus explicit operator read access. Installation refuses
+active manager ownership, existing service and linked recursive ACL targets.
+Partial ACL grants may remain on failed install/removal; never reset/delete journals.
+Service installation requires a dedicated log_dir (new default logs/gateway_server).
+The existing LV deployment uses shared logs with external Caddy: service_shared_logs
+refuses that root or foreign log entries before registration/ACL. Operator changes
+only the operational log_dir explicitly; SQLite/CA/old logs stay at original paths.
+Production processes/configs/SCM/Caddy are unchanged. Current process is not elevated:
+real service installation, Session 0 account/DLL/ACL, RDP/reboot/crash and systemd
+acceptance must be recorded separately from fake and native console tests.
+Dev1 final Windows CPython 3.12.2 wheels: core final suite 1151 passed (74 skips,
+2 live deselections), extras 1583 passed (2 live deselections), no pytest warnings.
+Reports: build/validation-0451-release-core/report.json plus suite-final.json,
+and build/validation-0451-final-extras/report.json. Ruff/style: 159 files, 0 issues;
+12 installed CLIs and actual CMD service dry-run passed. 93 Python modules and
+packaged resources match final source bytes. Service/deploy targets: 48 passed.
+Reconnect fixture races (3-second observation vs commit, and local closed vs remote
+503 for an in-flight fake RPC) are fixed only in tests; production client deadlines
+and closed handling are unchanged. 21 reconnect tests and 40 consecutive dispatcher
+reconnects passed. Read VALIDATION.md for intermediate failures and exact coverage.
+No service installation, production ACL/config/process change, new CI/Linux/Python
+3.10/live-provider or real service/reboot acceptance occurred.
 Dev5 closes journal observability R5: read docs/COMMAND_JOURNALS.md and ADR 0018.
 StoreWorker caches numeric hub/client/source aggregates after ordinary operations,
 at most once per 5 seconds, on the same executor lane with bounded read-only SQL.
@@ -27,8 +56,8 @@ Source limits absent from file stay null. UNKNOWN/running/ACK/cursors remain int
 capacity/unknown/stale are warnings, not restart reasons. Manager ages cached samples
 after heartbeat loss; stale/failed observations never become fresh by being read.
 The owner changed order: finish journals before 0.4.5. A tray is REQUIRED for the
-future service solution; design a separate user-session controller for the headless
-Windows service, not a second gateway owner. Service installation remains future work.
+service solution; its separate user-session controller is implemented in 0.4.5.
+The owner then made its presence optional through application.ui; support remains required.
 Dev5 final Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1125
 (73 skips, 2 live deselections), extras 1556 (2 live deselections), no warnings.
 Ruff/style: 154 Python files; all 11 installed CLIs passed. Reports:

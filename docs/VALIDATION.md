@@ -1,10 +1,83 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.6.2
+Version 1.6.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-113035
+Дата и время последнего изменения: 261014-131658
+
+## Слой службы gateway — 0.4.5.dev1
+
+Реализованы explicit install/remove/start/stop/status, dry-run, отдельный
+пользовательский controller по application.ui и обязательные deploy-ресурсы.
+Инструкция: [GATEWAY_SERVICE.md](GATEWAY_SERVICE.md), контракт:
+[ADR 0019](adr/0019-gateway-os-service.md).
+
+Финальный Windows CPython 3.12.2 core wheel-from-sdist:
+`build/validation-0451-release-core/report.json`. После исправления тестовой
+HTTP-модели тот же неизменённый wheel повторно проверен полным набором:
+**1151 passed, 74 skipped, 2 live deselected за 61,99 с**, без предупреждений;
+`suite-final.json`, `pytest-final.log`, `tests-final.xml` в том же каталоге.
+Финальный чистый extras wheel-from-sdist: **1583 passed, 2 live deselected
+за 134,95 с**, без предупреждений; `build/validation-0451-final-extras/report.json`.
+Ruff/style: **159 Python-файлов, 0 замечаний**. Все **93 Python-модуля и ресурсы**
+финальных wheels побайтно совпадают с исходниками.
+Целевые service/deploy/manager/journal проверки: **76 passed за 19,80 с**.
+После добавления защиты общей папки логов: **48 passed за 12,41 с**.
+
+Проверены exact binary/account binding, запрет управления чужой службой,
+действующий manager lock до изменения ACL, освобождение lock при ошибке защиты
+каталога, отсутствие перезаписи существующего service, stopped-only removal,
+частичный install rollback, безопасная стадия/числовая ошибка и конечные SCM actions.
+Host остаётся headless при ui=tray; START_PENDING не заменяется ложным RUNNING.
+SCM Stop и PRESHUTDOWN идут в общий manager stop, ошибки наружу очищаются.
+Временный startup отказ отделён от configuration/authorization/ownership и
+сознательного stop; исход manager уже завершён до допуска повторного запуска.
+Жёсткий stop тестируется с заменой os._exit: STOPPED/0 исключает restart после
+просьбы оператора, даже при недоступности Event Log. Реальные процессы не убивались.
+
+Проверены Run-запись выбранного оператора, отказ перезаписи чужого значения,
+отдельный controller без manager/SQLite, отключение UI и сохранение stop при
+ошибке конфига. Fake GUI не является визуальной приёмкой нового controller.
+Native pywin32 DLL действительно загрузилась и dispatcher отказал обычному
+console-вызову с winerror=1063; это не регистрация службы. Текущий SID прочитан
+через native API и проверен без вывода его значения. При read-only проверке
+обнаружено, что PySC_HANDLE не поддерживает with: используются явные Close/finally.
+Промежуточный fake install-тест исправлен: LookupAccountName должен возвращать
+tuple, а не ещё один Mock; финальные проверки прошли после исправления фикстуры.
+
+Промежуточный `validation-0451-release-extras` получил **1 failed, 1582 passed**:
+test_dispatcher_reconnect не дождался ready до реального рестарта. Дополнительное
+наблюдение воспроизвело completed=1, ACK в клиентской БД и поток внутри commit()
+последнего pending-чтения, без текущих ошибок этапов. Тестовый срок 3 секунды совпал
+со сроком одной storage operation. Для завершения нескольких последовательных
+операций выбран существующий тестовый until (10 секунд), без изменения runtime.
+Повторы также выявили гонку fake RPC при закрытии старого hub: уже вошедший poll
+возвращал локальный closed без HTTP status, что останавливало dispatcher. Реальный
+HTTP gateway возвращает closed/503. Только DirectTransport reconnect-фикстуры
+приведены к этой модели, включая уже выполняющиеся запросы; production transport
+и обработка локального close не менялись. После исправления: **21 passed за 4,01 с**
+и **40 последовательных dispatcher reconnect за 26,97 с** (максимум 1,06 с),
+затем оба полных набора, указанных выше. Исторический похожий timeout dev5 сам
+по себе не доказывает ту же причину в поле.
+
+У текущего LV deployment read-only подтверждено log_dir=общая logs, где Caddy
+тоже пишет runtime log. Новый default — выделенная logs/gateway_server; install
+отказывает при общем каталоге/посторонних файлах до регистрации и ACL. Синтетические
+проверки сохраняют внешний log byte-for-byte. Рабочий JSON автоматически не исправлялся.
+Native Windows SDDL parser принял service DACL (3 ACE) и operator file ACL (2 ACE);
+применение этих ACL между реальными аккаунтами не утверждается.
+
+Проверки установленного wheel включают lazy imports, все **12 CLI**, offline deploy
+и настоящий install-service.cmd --dry-run с фиктивным явным SID из каталога с
+пробелами, &, %, $. Dry-run не вызывает SCM/registry/ACL. Systemd unit/scripts
+поставляются, но systemd-анализатор и реальный Linux service здесь не запускались.
+
+Текущий процесс **не elevated**: реальная установка/удаление SCM, logon виртуального
+аккаунта, DLL/ACL в Session 0, operator access, визуальный tray, RDP/logoff/reboot
+и crash acceptance остаются полевой проверкой. Рабочие службы, конфиги, журналы,
+SpamBot и Caddy не менялись. CI, Python 3.10 и live-provider проверки не запускались.
+0.4 не объявлен полностью закрытым; точный остаток: [REVIEW_0_4.md](REVIEW_0_4.md).
 
 ## Сводки командных журналов — 0.4.4.dev5
 
