@@ -1,10 +1,10 @@
 ﻿# Сохранение режима команд между решениями источника, SQLite и доставкой ответа.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-195820
 #
 # Тесты:
 # -> test_command_mode_recovery(): Восстановление решения и ответ по режиму исходной сессии
@@ -86,7 +86,10 @@ def test_command_mode_recovery(
 
         rig = Rig(tmp_path)
         rig.registration = replace(rig.registration, command_display_mode=mode)
-        rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now)
+        # Здесь проверяется сохранение режима ответа, а не скорость fsync
+        # общей CI-машины. Бюджет остаётся конечным; deadline-тесты независимы.
+        rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now,
+                                   storage_timeout=10)
         await rig.start()
         provider = FakeProvider()
         provider.events.append(event(text="/rw loader resume_load"))

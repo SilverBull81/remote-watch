@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-195820
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -44,6 +44,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -134,6 +135,7 @@ TelegramCommandProvider.poll=poll
 raise SystemExit(main())
 """, encoding="utf-8")
     original = ProcessGroup.spawn
+    reservations = []
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Запуск процесса с закрытым стартовым каналом
@@ -162,12 +164,16 @@ raise SystemExit(main())
 
         # group/arguments/capture — реальные hub, SQLite, listener и heartbeat не подменяются.
 
+        # Control listener уже открыт; освобождаем оба зарезервированных порта
+        # непосредственно перед запуском первого дочернего процесса.
+        for reservation in reservations:
+            reservation.close()
+        reservations.clear()
+
         return original(group, [arguments[0], str(script), arguments[-1]], capture)
     #--------------------------------------------------------------------------------------------------------------
 
     monkeypatch.setattr(ProcessGroup, "spawn", spawn)
-    config = replace(setup_deployment, notifications=setup_deployment.notifications if both else None,
-                     commands=ComponentConfig(config_path, setup_deployment.notifications.port + 1))
 
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка жизненного цикла на отдельном event loop
@@ -178,27 +184,38 @@ raise SystemExit(main())
         Restart the command hub while preserving its journals and the neighboring process.
         """
 
-        manager = GatewayManager(config)
-        task = asyncio.create_task(manager.run())
-        try:
-            await wait_state(manager, "ready")
-            neighbor = manager.children["notifications"].process if both else None
-            child = manager.children["commands"]
-            old = child.process
-            journals = set(base.rglob("*.sqlite"))
-            assert len(journals) >= 2
-            old.kill()
-            end = monotonic() + 12
-            while child.process is old or manager.state != "ready":
-                assert monotonic() < end, manager.status()
-                await asyncio.sleep(.05)
-            assert manager.status()["command_sessions"] == "re_registration_required"
-            assert set(base.rglob("*.sqlite")) == journals
-            if both:
-                assert manager.children["notifications"].process is neighbor and neighbor.poll() is None
-        finally:
-            manager.stop_event.set()
-            await asyncio.wait_for(task, 6)
+        # Номер соседнего порта не гарантирует его доступность. Держим два
+        # независимых порта занятыми, пока manager открывает собственный control.
+        with socket.socket() as notifications_socket, socket.socket() as commands_socket:
+            for reservation in (notifications_socket, commands_socket):
+                reservation.bind(("127.0.0.1", 0))
+                reservations.append(reservation)
+            notifications = replace(setup_deployment.notifications,
+                                    port=notifications_socket.getsockname()[1]) if both else None
+            config = replace(setup_deployment, notifications=notifications,
+                             commands=ComponentConfig(config_path, commands_socket.getsockname()[1]))
+
+            manager = GatewayManager(config)
+            task = asyncio.create_task(manager.run())
+            try:
+                await wait_state(manager, "ready")
+                neighbor = manager.children["notifications"].process if both else None
+                child = manager.children["commands"]
+                old = child.process
+                journals = set(base.rglob("*.sqlite"))
+                assert len(journals) >= 2
+                old.kill()
+                end = monotonic() + 12
+                while child.process is old or manager.state != "ready":
+                    assert monotonic() < end, manager.status()
+                    await asyncio.sleep(.05)
+                assert manager.status()["command_sessions"] == "re_registration_required"
+                assert set(base.rglob("*.sqlite")) == journals
+                if both:
+                    assert manager.children["notifications"].process is neighbor and neighbor.poll() is None
+            finally:
+                manager.stop_event.set()
+                await asyncio.wait_for(task, 6)
     #--------------------------------------------------------------------------------------------------------------
 
     asyncio.run(scenario())
