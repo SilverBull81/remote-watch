@@ -1,17 +1,21 @@
 ﻿# Repository Instructions
 
-Version 1.7.2
+Version 1.7.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-001857
+Дата и время последнего изменения: 261015-004416
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Patch 1.0.1 promotes the tested cooperative tray update to a stable release.
+Stable patch 1.0.1 is published under immutable annotated tag v1.0.1:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.1
+Release commit: be8099c0189e80c947d88fb561690f3978e6a62a. Public wheel, sdist and
+SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
+Clean Windows core/extras passed; no new CI/Linux run was requested for this patch.
 The owner confirmed the fix works in the real GUI; this is conversation evidence,
 not a new independently inspected field report. Legacy 1.0.0 needs one manual
 controller-only transition. See docs/SERVICES.md and docs/development/VALIDATION.md.
@@ -19,7 +23,7 @@ The owner selected stable patch/minor versions after checks, without dev by defa
 reserve rc for substantial or uncertain work. Release policy: docs/development/README.md.
 Use immutable annotated vMAJOR.MINOR.PATCH tags. Full CI is for agreed major work,
 not every push. Publish on GitHub; no PyPI or EXE is requested. Production installation
-is operator-owned and is unchanged by preparing this release. MIT applies.
+is operator-owned and was unchanged by this release. MIT applies.
 Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.0.1.
 The first production release 1.0.0 is published under annotated tag v1.0.0:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
