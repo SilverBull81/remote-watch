@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.7
+Version 1.5.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-100251
+Дата и время последнего изменения: 261014-103404
 
 ## Project Intent
 
@@ -25,6 +25,11 @@ with ready=true and no pending results. The owner identifies the latter as a man
 gateway restart. Do not infer resolution apply, new notification-health acceptance,
 OS service/reboot/crash acceptance or private ntfy commands from these observations.
 Remaining 0.4 scope and explicit deferred work: docs/REVIEW_0_4.md.
+The owner subsequently accepted gateway_doctor on server and client. The inspected
+C:/Work/runs/doctor-client-01.json has mode=client, online=true, passed=true and 16 checks ok,
+including both channel routes/TLS/permissions/readiness, trusted time and session presence.
+Server acceptance is conversation evidence, without a separately inspected server report.
+Do not keep the original doctor field test pending; service-mode verification is separate.
 Windows service is the next implementation step; command journal capacity/pending/UNKNOWN
 summary remains open. SpamBot source and production processes are unchanged here.
 Dev4 final Windows CPython 3.12.2 wheels passed core 1106 (73 skips, 2 live deselections)
