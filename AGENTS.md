@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.6.5
+Version 1.6.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-184253
+Дата и время последнего изменения: 261014-200855
 
 ## Intent and current status
 
@@ -12,7 +12,9 @@ Remote Watch integrates standard Python logging with bounded asynchronous notifi
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml. The first public production release
 and license have not been selected. Do not publish packages or add a license without
-the owner's decision. Functional milestone 0.4 awaits the final agreed CI result.
+the owner's decision. Functional milestone 0.4 is complete: owner field acceptance plus all eight CI jobs passed.
+CI run 38602660574 tested code commit 1c05538638156f04a0760b4bc714fe445de2358a,
+package 0.4.5.dev6. Subsequent result-documentation edits do not change runtime code.
 
 The owner accepted field notifications/commands/reconnect, deploy/doctor, Windows service,
 tray, install/remove/reinstall, reboot, crash tests and delivery of gateway owner alerts.
@@ -53,7 +55,7 @@ No HTTP admin endpoint or manual local ACK. Existing SQLite schema 1 migrates to
 runtimes reject 2. Wire schemas/hashes must not change accidentally.
 
 Trusted time uses explicit provider UTC/accuracy assumptions and monotonic budgets, no silent
-fallback to OS UTC. TLS certificate and hostname verification are mandatory. Preserve safe
+fallback to OS UTC. TLS certificate and hostname verification are mandatory; do not mutate an SSLContext after handoff. Preserve safe
 allowlisted diagnostics, never raw exception messages/tracebacks/provider payloads or secrets.
 Command client and notification gateway credentials and ACL are independent.
 
