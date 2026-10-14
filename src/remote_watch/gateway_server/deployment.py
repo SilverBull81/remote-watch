@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261014-212332
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки установки
@@ -382,8 +382,9 @@ def prepare_files(
 
     # Служба регистрируется отдельной явной командой. Обычный deploy создаёт
     # только launchers/инструкцию, не меняет SCM, registry и ACL рабочего сервера.
-    for action in ("install", "remove", "start", "stop", "status", "sync-tray"):
-        name = "service-status" if action == "status" else action if action == "sync-tray" else action + "-service"
+    for action in ("install", "remove", "start", "stop", "status", "sync-tray", "restart-tray"):
+        name = ("service-status" if action == "status" else action
+                if action in ("sync-tray", "restart-tray") else action + "-service")
         for suffix in ("ps1", "cmd"):
             quote = ("'" + python.replace("'", "''") + "'" if suffix == "ps1" else
                      '"' + python.replace("%", "%%") + '"')

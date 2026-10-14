@@ -1,10 +1,10 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261014-212332
 #
 # Классы:
 # -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
@@ -303,14 +303,14 @@ def main(
     # argv — аргументы argparse не печатаются при ошибке: оператор мог вставить
     # туда токен. Ни install, ни remove не являются действием по умолчанию.
 
-    parser = DeploymentParser(description="Windows service: install/remove/start/stop/status/tray.")
+    parser = DeploymentParser(description="Windows service: install/remove/start/stop/status/tray/restart-tray.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--name", default="RemoteWatchGateway")
     parser.add_argument("--operator-sid")
     parser.add_argument("--dry-run", action="store_true")
     group = parser.add_mutually_exclusive_group(required=True)
-    for action in ("install", "remove", "start", "stop", "status", "run", "tray", "sync-tray"):
+    for action in ("install", "remove", "start", "stop", "status", "run", "tray", "sync-tray", "restart-tray"):
         group.add_argument("--" + action, dest="action", action="store_const", const=action)
 
     args = parser.parse_args(argv)
@@ -356,20 +356,35 @@ def main(
             backend.start()
         elif args.action == "stop":
             backend.stop()
+        elif args.action == "restart-tray":
+            # Только проверка точной SCM-привязки: сама служба не перезапускается,
+            # записи автозапуска и конфиги компонентов не меняются.
+            backend.status()
         else:
             print(json.dumps(backend.status()), flush=True)
             return 0
-        if args.action in ("start", "sync-tray"):
+        if args.action in ("start", "sync-tray", "restart-tray"):
             # Основная операция службы уже выполнена. Ошибка необязательной иконки не должна
             # объявлять этот запуск неудачным или останавливать работающий сервер.
             try:
                 from .service_tray import launch_tray
 
-                tray = launch_tray(spec)
+                tray = launch_tray(spec, restart=True) if args.action == "restart-tray" else launch_tray(spec)
             except Exception:
                 tray = "unavailable"
-            print(json.dumps({"action": args.action, "accepted": True, "tray": tray}), flush=True)
-            return 0
+            accepted = args.action != "restart-tray" or tray in (
+                "launch_requested", "restart_requested", "already_running", "headless")
+            output = {"action": args.action, "accepted": accepted, "tray": tray}
+            hints = {
+                "restart_required": "Контроллер не подтвердил протокол обновления. Для 1.0.0 и старше "
+                                    "однократно завершите только процесс --tray и повторите команду.",
+                "restart_timeout": "Контроллер не освободил свою блокировку за отведённое время. "
+                                   "Служба и приложения не остановлены; принудительное завершение не выполнялось.",
+            }
+            if tray in hints:
+                output["hint"] = hints[tray]
+            print(json.dumps(output, ensure_ascii=False), flush=True)
+            return 0 if accepted else 1
         print(json.dumps({"action": args.action, "accepted": True}), flush=True)
         return 0
     except Exception as error:

@@ -1,10 +1,10 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-212332
 #
 # Функции:
 # -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
@@ -199,7 +199,8 @@ def test_plan(
     assert command[1:5] == ["-I", "-B", "-m", "remote_watch.gateway_server.service"]
     assert str(service_plan.spec.config) in command
     assert "synthetic" not in repr(service_plan)
-    for name in ("install-service.cmd", "remove-service.cmd", "sync-tray.ps1", "tray.ps1", "SERVICE.md",
+    for name in ("install-service.cmd", "remove-service.cmd", "sync-tray.ps1", "restart-tray.cmd",
+                 "restart-tray.ps1", "tray.ps1", "SERVICE.md",
                  "service/install-systemd.sh", "service/remote-watch-gateway.service"):
         assert (root / name).is_file()
 

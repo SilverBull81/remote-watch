@@ -1,16 +1,25 @@
 ﻿# Repository Instructions
 
-Version 1.7.0
+Version 1.7.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-205642
+Дата и время последнего изменения: 261014-212820
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
-The current package version is in pyproject.toml. The owner selected MIT; LICENSE and SPDX package metadata apply.
+The current package version is in pyproject.toml.
+Development 1.0.1.dev1 adds cooperative version-aware tray replacement through
+start/sync-tray and explicit restart-tray. User-private generation-scoped records
+retain the original service/config/session lock; no PID killing or SCM stop/start
+is used for replacement. Already pending user Stop takes priority. The old
+controller closes its GUI and releases ownership before launching a fresh copy.
+Legacy 1.0.0 requires one manual controller-only transition. See docs/SERVICES.md.
+Current development validation is recorded in docs/development/VALIDATION.md;
+actual GUI upgrade acceptance remains pending. Production was not modified.
+Stable release evidence below applies to the immutable v1.0.0 tag, not current main. The owner selected MIT; LICENSE and SPDX package metadata apply.
 The first production release 1.0.0 is published under annotated tag v1.0.0:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
 Release commit is 80eca708337202aae871322a4cb60919e9d90d4e. Public downloads of

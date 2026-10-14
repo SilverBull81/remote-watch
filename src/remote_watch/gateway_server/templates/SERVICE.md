@@ -1,10 +1,10 @@
 ﻿# Служба gateway server
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-184451
+Дата и время последнего изменения: 261014-212332
 
 ## Windows
 
@@ -55,6 +55,30 @@ application.ui=headless/tray управляет иконкой. Служба в�
 при running возвращается. Меню: About и Stop gateway server; Exit tray нет.
 Выход пользователя/RDP disconnect не останавливает службу. Tooltip — SCM state,
 не проверка всей сети. При ui=headless controller скрывает иконку и ждёт смены режима.
+
+### Обновление контроллера
+
+После обновления пакета выполните sync-tray.cmd: начиная с 1.0.1.dev1 он заменяет
+контроллер другой версии, оставляя уже актуальный экземпляр. Для явной замены той
+же версии используйте restart-tray.cmd/.ps1 или прямую команду из venv:
+
+```console
+python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --restart-tray
+```
+
+Это только операция UI, без SCM stop/start, изменения автозапуска, gateway и журналов.
+Контроллер добровольно закрывает GUI и освобождает свой lock, затем запускает замену.
+Новый процесс не создаёт второго manager. restart_requested/launch_requested —
+запросы, не доказательство готовности GUI; already_running — версия уже совпала.
+Ожидание CLI ограничено восемью секундами: restart_timeout не приводит к убийству
+процесса; уже принятый запрос может завершиться позже. Проверьте About или повторите sync-tray.
+
+Для контроллера из 1.0.0 и старше автоматический переход невозможен: старый код
+не поддерживает запрос. При restart_required один раз завершите только свой
+pythonw-процесс remote_watch.gateway_server.service с --tray и путём этого конфига,
+затем повторите sync-tray. Не завершайте service host/manager, Caddy или все python.
+Простой RDP disconnect контроллер не обновляет. Работающая служба сохраняется.
+При application.ui=headless команда не включает иконку вопреки настройке.
 
 ## Crash-проверка: только отдельный тестовый deployment
 
