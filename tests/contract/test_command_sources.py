@@ -1,10 +1,10 @@
 ﻿# Проверки разбора команд, постоянной позиции и восстановления источника.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями
@@ -155,6 +155,7 @@ class FakeProvider:
         if self.lose_ack:
             self.lose_ack = False
             raise CommandError("unavailable")
+
         self.acks.append(cursor)
         self.events[:] = [event for event in self.events if event.event_id != cursor]
     #--------------------------------------------------------------------------------------------------------------
@@ -360,6 +361,7 @@ def test_source_journal_capacity_and_lock(
         assert journal.state()[:2] == (31, "31")
     finally:
         journal.close()
+
     lock = ProcessLock(tmp_path / "owner.lock")
     lock.open()
     lock.close()
@@ -412,6 +414,7 @@ def test_source_admission(
             incoming = replace(incoming, text="/rw loader")
         elif kind == "long":
             incoming = replace(incoming, text="/rw loader resume_load x=" + "я" * 5000)
+
         provider.events.append(incoming)
         journal = SourceJournal(tmp_path / "source.sqlite")
         runner = CommandSourceRunner(rig.hub, rig.hub.config.sources[0],
@@ -525,6 +528,7 @@ def test_short_commands(
         access = replace(access, scopes=frozenset({"read"}) if case.startswith("restricted") else scopes)
         if case == "telegram_wire":
             access = replace(access, actor_id="42", conversation_id="-123")
+
         rules = ((access, replace(access, identity=second))
                  if case in {"multi_offline", "explicit", "second_live"} else (access,))
         rig.hub.config = replace(config,
@@ -537,13 +541,16 @@ def test_short_commands(
             rig.registration = replace(rig.registration, capabilities=tuple(
                 CommandCapability(name=f"a{number:02d}" + "x" * 61, required_scope="read")
                 for number in range(64)))
+
         if case == "help_collision":
             rig.registration = replace(rig.registration, capabilities=(
                 *rig.registration.capabilities, CommandCapability(name="help", required_scope="read")))
+
         rig.client = CommandClient(rig.registration, rig.transport, rig.local, clock=lambda: rig.now)
         await rig.start()
         if case == "second_live":
             await rig.hub.register(APP_TOKEN, replace(rig.registration, identity=second, session_id="f" * 32))
+
         provider = FakeProvider()
         text = case if case in {"Help", "hElP", "/help", "/status", "/resume_load"} else "/status"
         if case in {"restricted", "long_help", "help_collision", "ntfy_help"}:
@@ -558,6 +565,7 @@ def test_short_commands(
             text = "/rw"
         elif case == "foreign_bot":
             text = "/status@another_bot"
+
         incoming = event(text=text)
         if case == "telegram_wire":
             telegram = TelegramCommandProvider(TelegramCommandConfig(token_env="SYNTHETIC_TEST"))
@@ -565,16 +573,21 @@ def test_short_commands(
             incoming = telegram._event({"update_id": 1, "message": {"date": 1000,
                 "from": {"id": 42, "is_bot": False}, "chat": {"id": -123, "type": "group"},
                 "text": "/status@TEST_BOT"}})
+
         if case == "foreign_actor":
             incoming = replace(incoming, actor_id="stranger")
+
         if case == "foreign_chat":
             incoming = replace(incoming, conversation_id="another-chat")
+
         if case == "offline":
             rig.now += config.session_ttl + 1
+
         provider.events.append(incoming)
         aliases = {"loader": rig.identity}
         if len(rules) == 2:
             aliases["second"] = second
+
         journal = SourceJournal(tmp_path / "short.sqlite")
         runner = CommandSourceRunner(rig.hub, rig.hub.config.sources[0], SourceTargets(aliases=aliases),
                                      provider, journal, short_commands=case not in {"ntfy", "ntfy_help"})
@@ -639,6 +652,7 @@ def test_short_commands(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

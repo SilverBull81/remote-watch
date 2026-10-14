@@ -1,10 +1,10 @@
 ﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NotificationGatewayRequest: Версионированный запрос одной попытки через gateway
@@ -134,6 +134,7 @@ def _object(
         if key in result:
             raise ValueError("duplicate JSON key")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -163,12 +164,15 @@ def _decode(
 
     if not isinstance(data, bytes) or len(data) > limit:
         raise ValueError("gateway body exceeds its byte limit")
+
     try:
         value = json.loads(data.decode("utf-8"), object_pairs_hook=_object)
     except (ValueError, UnicodeError, RecursionError):
         raise ValueError("invalid gateway JSON") from None
+
     if not isinstance(value, dict):
         raise ValueError("gateway body must be an object")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -195,6 +199,7 @@ def _keys(
 
     if set(payload) != expected:
         raise ValueError("gateway envelope has missing or unknown fields")
+
     if type(payload["schema_version"]) is not int or payload["schema_version"] not in (1, 2, 3):
         raise ValueError("unsupported gateway schema version")
 #------------------------------------------------------------------------------------------------------------------
@@ -257,6 +262,7 @@ class NotificationGatewayRequest:
             payload["display"] = (None if self.delivery.display_mode is None else {
                 "mode": self.delivery.display_mode,
                 "fields": None if self.delivery.display_fields is None else list(self.delivery.display_fields)})
+
         return payload
     #--------------------------------------------------------------------------------------------------------------
 
@@ -286,6 +292,7 @@ class NotificationGatewayRequest:
                     "remaining_ttl", "timeout"}
         if payload.get("schema_version") == 3:
             expected.add("display")
+
         _keys(payload, expected)
         try:
             display = payload.get("display")
@@ -319,8 +326,10 @@ class NotificationGatewayRequest:
 
         if not isinstance(self.delivery, Delivery):
             raise TypeError("delivery must be Delivery")
+
         if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
             raise ValueError("unsupported gateway schema version")
+
         if self.schema_version != 3 and self.delivery.display_mode is not None:
             raise ValueError("client display requires gateway schema 3")
 
@@ -333,6 +342,7 @@ class NotificationGatewayRequest:
         require_number(self.timeout, "timeout")
         if self.timeout > self.remaining_ttl:
             raise ValueError("gateway timeout exceeds remaining TTL")
+
         encoded = encode_json(self.to_dict()).encode("utf-8")
         if len(encoded) > MAX_REQUEST_BYTES:
             raise ValueError("gateway request exceeds its byte limit")
@@ -376,16 +386,20 @@ def encode_response(
 
     if not isinstance(delivery, Delivery) or not isinstance(result, DeliveryResult):
         raise TypeError("delivery and result must use validated models")
+
     if type(schema_version) is not int or schema_version not in (1, 2, 3):
         raise ValueError("unsupported gateway schema version")
+
     payload = {"schema_version": schema_version, "delivery_id": delivery.delivery_id, "attempt": delivery.attempt,
                "result": {"status": result.status.value, "reason_code": result.reason_code,
                           "provider_message_id": result.provider_message_id, "retry_after": result.retry_after}}
     if schema_version in (2, 3):
         payload["result"].update({name: getattr(result, name) for name in DIAGNOSTIC_FIELDS})
+
     data = encode_json(payload).encode("utf-8")
     if len(data) > MAX_RESPONSE_BYTES:
         raise ValueError("gateway response exceeds its byte limit")
+
     return data
 #------------------------------------------------------------------------------------------------------------------
 
@@ -421,19 +435,25 @@ def decode_response(
 
     if not isinstance(payload, dict):
         raise ValueError("gateway response must be an object")
+
     _keys(payload, {"schema_version", "delivery_id", "attempt", "result"})
     if type(schema_version) is not int or payload["schema_version"] != schema_version:
         raise ValueError("gateway response version mismatch")
+
     if payload["delivery_id"] != delivery.delivery_id or type(payload["attempt"]) is not int:
         raise ValueError("gateway response correlation mismatch")
+
     if payload["attempt"] != delivery.attempt:
         raise ValueError("gateway response attempt mismatch")
+
     result = payload["result"]
     expected = {"status", "reason_code", "provider_message_id", "retry_after"}
     if schema_version in (2, 3):
         expected.update(DIAGNOSTIC_FIELDS)
+
     if not isinstance(result, dict) or set(result) != expected:
         raise ValueError("invalid gateway result fields")
+
     try:
         return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus(result["status"]),
                               reason_code=result["reason_code"], provider_message_id=result["provider_message_id"],
@@ -444,6 +464,7 @@ def decode_response(
         raise ValueError("invalid gateway result") from None
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

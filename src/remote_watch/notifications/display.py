@@ -1,10 +1,10 @@
 ﻿# Общая проверка режима отображения для клиента, протокола и провайдера.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> validate_display(): Проверка режима и выбранных групп полей отображения
@@ -45,21 +45,28 @@ def validate_display(
     """
 
     # mode/fields — фиксированные имена, без пользовательского форматирующего кода.
+
     if mode not in ("full", "compact", "text"):
         raise ValueError("invalid display mode")
+
     if fields is None:
         return None
+
     if not isinstance(fields, (tuple, list)) or len(fields) > 5:
         raise ValueError("invalid display fields")
+
     fields = tuple(fields)
     if (any(type(field) is not str or field not in {"identity", "level", "logger", "time", "ids"}
             for field in fields) or len(set(fields)) != len(fields)):
         raise ValueError("invalid display fields")
+
     if mode == "text" or mode == "compact" and "identity" not in fields:
         raise ValueError("display fields conflict with mode")
+
     return fields
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

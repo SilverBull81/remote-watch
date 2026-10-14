@@ -1,10 +1,10 @@
 ﻿# Проверка формальных правил оформления Python-файлов проекта без изменения исходников.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> main(): Проверка всех поддерживаемых Python-файлов репозитория
@@ -62,6 +62,7 @@ def main() -> int:
 
     for issue in issues:
         print(issue)
+
     print(f"Style: {len(files)} files, {len(issues)} issues")
     return int(bool(issues))
 #------------------------------------------------------------------------------------------------------------------
@@ -89,6 +90,7 @@ def _check_file(
     data = path.read_bytes()
     if not data.startswith(b"\xef\xbb\xbf"):
         issues.append((1, "utf8_bom"))
+
     if b"\n" in data.replace(b"\r\n", b"") or b"\r" in data.replace(b"\r\n", b""):
         issues.append((1, "crlf"))
 
@@ -102,9 +104,19 @@ def _check_file(
     header = source.split("#***", 1)[0]
     if not re.search(r"# Version [1-9]\d*\.\d\.\d\b", header):
         issues.append((1, "file_version"))
+
     if not re.search(r"Дата и время последнего изменения: \d{6}-\d{6}\b", header):
         issues.append((1, "timestamp"))
+
     has_guard = any(isinstance(node, ast.If) and "__name__" in ast.unparse(node.test) for node in tree.body)
+    for node in tree.body:
+        if isinstance(node, ast.If) and "__name__" in ast.unparse(node.test):
+            start = node.lineno - 1
+            block = lines[max(0, start - 3):start]
+            if (len(block) != 3 or not re.fullmatch(r"#-{8,}", block[0])
+                    or not re.fullmatch(r"#-{8,}", block[2])):
+                issues.append((node.lineno, "main_guard_opening_divider"))
+
     if path.name == "__init__.py" and has_guard:
         issues.append((len(lines), "package_main_guard"))
     elif path.name != "__init__.py" and not has_guard:
@@ -140,6 +152,7 @@ def _check_file(
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             endings.setdefault(node.end_lineno, []).append(node.col_offset)
+
     for end, indents in endings.items():
         index = end
         for indent in sorted(indents, reverse=True):
@@ -148,6 +161,7 @@ def _check_file(
             if index >= len(lines) or not re.fullmatch(" " * indent + r"#-{8,}", lines[index]):
                 issues.append((index + 1, "closing_divider_order"))
             index += 1
+
     return issues
 #------------------------------------------------------------------------------------------------------------------
 
@@ -181,21 +195,26 @@ def _check_function(
     explicit = [arg for arg in args if arg.arg not in ("self", "cls")]
     if node.returns is None or any(arg.annotation is None for arg in explicit):
         issues.append((node.lineno, "type_annotations"))
+
     if args and (args[0].lineno == node.lineno or len({arg.lineno for arg in args}) != len(args)):
         issues.append((node.lineno, "signature_columns"))
 
     doc = ast.get_docstring(node)
     if not doc:
         return issues + [(node.lineno, "docstring")]
+
     doc_lines = doc.splitlines()
     for index, line in enumerate(doc_lines[1:], 1):
         if line.startswith((":param ", ":return:")) and doc_lines[index - 1].startswith(":type "):
             issues.append((node.lineno, "docstring_parameter_spacing"))
+
     first = node.body[0]
     if lines[first.lineno - 1].strip() != '"""':
         issues.append((first.lineno, "docstring_opening_line"))
+
     if lines[first.lineno - 2].strip():
         issues.append((node.lineno, "blank_before_docstring"))
+
     for arg in explicit:
         if f":param {arg.arg}:" not in doc or f":type {arg.arg}:" not in doc:
             issues.append((node.lineno, "parameter_documentation:" + arg.arg))
@@ -203,10 +222,13 @@ def _check_function(
     none_return = isinstance(node.returns, ast.Constant) and node.returns.value is None
     if node.returns is not None and not none_return and (":return:" not in doc or ":rtype:" not in doc):
         issues.append((node.lineno, "return_documentation"))
+
     if ":return: " + doc.splitlines()[0] in doc:
         issues.append((node.lineno, "repeated_return_description"))
+
     if "The value described by this operation." in doc or "Untrusted input to validate according" in doc:
         issues.append((node.lineno, "vague_return_description"))
+
     for index in range(node.lineno - 1, first.lineno - 1):
         if lines[index].lstrip().startswith(") -> "):
             indent = len(lines[index]) - len(lines[index].lstrip())
@@ -215,10 +237,18 @@ def _check_function(
 
     if explicit and len(node.body) > 1:
         comments = "\n".join(lines[first.end_lineno:node.body[1].lineno - 1])
+        index = first.end_lineno
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+        while index < len(lines) and lines[index].lstrip().startswith("#"):
+            index += 1
+        if index < len(lines) and lines[index].strip():
+            issues.append((index + 1, "russian_argument_spacing"))
         for arg in explicit:
             if not any(re.search(r"\b" + re.escape(arg.arg) + r"\b", comment)
                        and re.search("[А-Яа-яЁё]", comment) for comment in comments.splitlines()):
                 issues.append((node.lineno, "russian_argument_comments:" + arg.arg))
+
     return issues
 #------------------------------------------------------------------------------------------------------------------
 
@@ -255,6 +285,7 @@ def _check_class(
                 3 if name.startswith("_") else 1
             )
             groups.append(group)
+
     if groups != sorted(groups):
         issues.append((node.lineno, "method_group_order"))
 
@@ -262,6 +293,7 @@ def _check_class(
         issues.append((node.lineno, "class_docstring"))
     elif lines[node.body[0].lineno - 1].strip() != '"""':
         issues.append((node.body[0].lineno, "docstring_opening_line"))
+
     if ast.get_docstring(node) and node.body[0].lineno != node.lineno + 1:
         issues.append((node.lineno, "class_docstring_spacing"))
 
@@ -276,6 +308,7 @@ def _check_class(
                     name = field.target.id
                     if f":param {name}:" not in doc or f":type {name}:" not in doc:
                         issues.append((field.lineno, "dataclass_field_documentation:" + name))
+
     return issues
 #------------------------------------------------------------------------------------------------------------------
 
@@ -330,6 +363,7 @@ def _check_sections(
     issues += [(1, "empty_section:" + name) for name in sorted(sections - present)]
     if "# Объявления:" in header:
         issues.append((1, "unstructured_inventory"))
+
     for line in header.splitlines():
         if "->" in line and not re.search(r"-> .*: .*[А-Яа-яЁё]", line):
             issues.append((1, "inventory_description"))
@@ -394,6 +428,7 @@ def _check_sections(
             before -= 1
         if blanks != 2:
             issues.append((index + 1, "section_spacing"))
+
     return issues
 #------------------------------------------------------------------------------------------------------------------
 
@@ -426,18 +461,23 @@ def _check_opening(
     block = lines[max(0, start - 3):start]
     if len(block) != 3 or not re.fullmatch(divider, block[0]) or not re.fullmatch(divider, block[2]):
         return [(start + 1, "opening_divider")]
+
     if not re.search("[А-Яа-яЁё]", block[1]):
         return [(start, "russian_block_description")]
+
     before = start - 4
     blanks = 0
     while before >= 0 and not lines[before].strip():
         blanks += 1
         before -= 1
+
     if blanks != 1:
         return [(start, "opening_block_spacing")]
+
     return []
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Запуск CLI
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

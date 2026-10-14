@@ -1,10 +1,10 @@
 ﻿# Полевой сценарий с подставными каналами, ускоренным временем и безопасным отчётом.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> RecordingChannel: Подставной канал для полевой проверки
@@ -204,6 +204,7 @@ class FastClock:
 
         if self.interrupt:
             raise KeyboardInterrupt
+
         self.value += delay
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -256,6 +257,7 @@ def test_field_run(
         assert "[удалено]" in notifications[2].exception
         assert notifications[3].truncated_fields == ("message",)
         assert all("LOCAL_ONLY" not in n.message for n in notifications)
+
     assert "LOCAL_ONLY" in output.with_suffix(".log").read_text(encoding="utf-8")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -344,6 +346,7 @@ def test_journal_bound() -> None:
     journal = field_smoke._Journal()
     for index in range(1025):
         journal.record({"index": index})
+
     output = io.StringIO()
     journal.flush(output)
     assert len(output.getvalue().splitlines()) == 1024 and journal.dropped == 1
@@ -448,9 +451,11 @@ def test_report_is_exclusive(
     with pytest.raises(FileExistsError):
         field_smoke._run(field_smoke.FieldConfig(identity=identity, duration=1, interval=1),
                           (Destination(destination_id="phone", channel_factory=lambda: channel),), output)
+
     assert output.read_text() == "previous report" and not channel.closed
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

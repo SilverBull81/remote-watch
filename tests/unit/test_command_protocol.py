@@ -1,10 +1,10 @@
 ﻿# Проверки моделей, сериализации и результатов команд без сети.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> request(): Детерминированный запрос с вымышленными аргументами
@@ -212,6 +212,7 @@ def test_command_wire_rejects(
         body["kind"] = []
     elif case == "bool_payload":
         body["payload"] = True
+
     raw = json.dumps(body).encode()
     if case == "duplicate":
         raw = raw.replace(b'"schema_version": 1', b'"schema_version": 1,"schema_version": 1')
@@ -226,6 +227,7 @@ def test_command_wire_rejects(
         raw = b"\xff"
     elif case == "too_large":
         raw = b" " * (MAX_COMMAND_BYTES + 1)
+
     with pytest.raises(ValueError, match="^invalid command message$"):
         decode_command(raw)
 #------------------------------------------------------------------------------------------------------------------
@@ -254,6 +256,7 @@ def test_command_interval_bounds(
 
     with pytest.raises((ValueError, TypeError)):
         CommandSession(identity=identity, session_id="1" * 32, hub_epoch="2" * 32, remaining_ttl=value)
+
     with pytest.raises((ValueError, TypeError)):
         CommandCapability(name="status", required_scope="load:read", timeout=value)
 #------------------------------------------------------------------------------------------------------------------
@@ -289,8 +292,10 @@ def test_command_snapshots_and_metadata(
     assert event.arguments["value"] == "before"
     with pytest.raises(TypeError):
         event.arguments["value"] = "changed"
+
     with pytest.raises(FrozenInstanceError):
         event.name = "resume_load"
+
     assert "synthetic_private_value" not in repr(request(identity))
 #------------------------------------------------------------------------------------------------------------------
 
@@ -476,6 +481,7 @@ def test_semantic_rejection(
                                                                 timeout=301),)))
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Отображение уведомлений без изменения исходных данных и протокола доставки.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_display_modes(): Прежний full, различимый compact и только текст с исключением
@@ -64,6 +64,7 @@ def test_display_modes(
     """
 
     # notification — неизменяемый источник с event/session/Identity, общими для всех режимов.
+
     event = replace(notification, exception="Подробности исключения")
     delivery = Delivery(notification=event, destination_id="phone", delivery_id="d1")
     request = NotificationGatewayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=5)
@@ -82,6 +83,7 @@ def test_display_modes(
         changed_identity = replace(event.identity, **{field: "other"})
         changed = replace(delivery, notification=replace(event, identity=changed_identity))
         assert render(changed, "compact") != compact
+
     assert request.to_dict() == original and event.event_id == "event-1" and event.session_id == "session-1"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -121,6 +123,7 @@ def test_display_validation(
     """
 
     # provider/mode/fields — только синтетические настройки; valid — ожидаемый результат проверки.
+
     fields = list(fields) if isinstance(fields, list) else fields
     factory = TelegramConfig if provider == "telegram" else NtfyConfig
     arguments = {"token_env": "SYNTHETIC_TG", "chat_id": 123} if provider == "telegram" else {"topic": "synthetic"}
@@ -163,6 +166,7 @@ def test_notification_gateway_display_wire(
 
 
     # schema/mode — новая настройка не добавляет поля в схемы старых клиентов.
+
     delivery = Delivery(notification=notification, destination_id="local", delivery_id="one",
                         display_mode=mode, display_fields=("identity", "time") if mode == "compact" else None)
     request = NotificationGatewayRequest(
@@ -211,6 +215,7 @@ def test_notification_gateway_display_invalid(
 
 
     # display — произвольное поле запроса не превращается в provider-настройку.
+
     delivery = Delivery(notification=notification, destination_id="phone", delivery_id="one")
     payload = NotificationGatewayRequest(delivery=delivery, alias="phone", remaining_ttl=10, timeout=5,
                            schema_version=3).to_dict()
@@ -237,6 +242,7 @@ def test_notification_gateway_display_configuration(
 
 
     # Настройки принадлежат назначению, не общей Notification и не logging extra.
+
     base = {"endpoint": "https://gateway.invalid", "alias": "phone", "token": "x" * 32}
     assert NotificationGatewayClientConfig(**base).schema_version == 1
     assert NotificationGatewayClientConfig(**base, display_mode="text").schema_version == 3
@@ -258,6 +264,7 @@ def test_notification_gateway_display_configuration(
     for changes in ({"display_fields": []}, {"display_mode": "compact", "display_fields": ["ids"]}):
         with pytest.raises(ValueError):
             replace(delivery, **changes)
+
     for schema in (1, 2):
         with pytest.raises(ValueError):
             NotificationGatewayRequest(
@@ -272,11 +279,13 @@ def test_notification_gateway_display_configuration(
     raw = json.dumps(payload).encode()
     with pytest.raises(ValueError):
         NotificationGatewayRequest.from_bytes(b'{"display":null,' + raw[1:])
+
     del payload["display"]
     with pytest.raises(ValueError):
         NotificationGatewayRequest.from_bytes(json.dumps(payload).encode())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

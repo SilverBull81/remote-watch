@@ -1,10 +1,10 @@
 ﻿# Безопасная классификация отказов TLS без адресов и текста сетевых исключений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> tls_reason(): Фиксированная причина по числовому коду OpenSSL
@@ -45,6 +45,7 @@ def tls_reason(
     """
 
     # verify_code — код проверки всей цепочки, а не номер просроченного сертификата.
+
     reasons = {9: "certificate_not_yet_valid", 10: "certificate_expired",
                18: "self_signed_certificate", 19: "self_signed_chain",
                20: "issuer_not_found", 21: "issuer_not_found",
@@ -70,15 +71,19 @@ def tls_diagnostics(
     """
 
     # error — только известный ssl-тип. Текст, reason и verify_message не копируются.
+
     if isinstance(error, ssl.SSLCertVerificationError):
         number = getattr(error, "verify_code", None)
         return {"error_kind": "tls_certificate",
                 "verify_code": number if type(number) is int and 0 <= number <= 999999 else None}
+
     if isinstance(error, ssl.SSLError):
         return {"error_kind": "tls_handshake", "verify_code": None}
+
     return {}
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

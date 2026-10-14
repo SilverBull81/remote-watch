@@ -1,10 +1,10 @@
 ﻿# Необязательный HTTPS-источник времени с проверкой TLS и ограничением ожидания.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> HttpsDateTimeSource: Получение времени от явно доверенного HTTPS-сервера
@@ -91,14 +91,17 @@ class HttpsDateTimeSource:
         if (parts.scheme != "https" or not parts.hostname or parts.username is not None
                 or parts.password is not None or parts.fragment or parts.query or any(c.isspace() for c in url)):
             raise ValueError("invalid time source URL")
+
         require_number(accuracy, "source accuracy", allow_zero=True)
         require_number(timeout, "source timeout")
         if accuracy > 5 or timeout > 30 or not callable(clock):
             raise ValueError("invalid time source limits")
+
         if ssl_context is not None and (not isinstance(ssl_context, ssl.SSLContext)
                                         or ssl_context.verify_mode != ssl.CERT_REQUIRED
                                         or not ssl_context.check_hostname):
             raise ValueError("time source requires verified TLS")
+
         self._url = parts
         self._accuracy = accuracy
         self._timeout = timeout
@@ -123,6 +126,7 @@ class HttpsDateTimeSource:
 
         if self._busy:
             raise TimeUnavailable("trusted time unavailable")
+
         self._busy = True
         try:
             return await asyncio.wait_for(self._fetch(), timeout=self._timeout)
@@ -155,6 +159,7 @@ class HttpsDateTimeSource:
         context = self._ssl or ssl.create_default_context()
         if context.verify_mode != ssl.CERT_REQUIRED or not context.check_hostname:
             raise TimeUnavailable("trusted time unavailable")
+
         async with aiohttp.ClientSession(
             trust_env=False, cookie_jar=aiohttp.DummyCookieJar(), auto_decompress=False,
             timeout=aiohttp.ClientTimeout(total=self._timeout, ceil_threshold=float("inf")),
@@ -182,6 +187,7 @@ class HttpsDateTimeSource:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

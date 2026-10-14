@@ -1,10 +1,10 @@
 ﻿# Проверки свежести команд при независимых часах и ошибках источника времени.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_vm_clocks_do_not_authorize_commands(): Независимость допуска команды от UTC машин
@@ -103,6 +103,7 @@ def test_untrusted_time_fails_closed(
     clock = TrustedClock(policy, clock=lambda: now[0])
     if case != "missing":
         clock.install(TimeSample(lower_utc=1000, upper_utc=1001, observed_at=100))
+
     if case == "old_sample":
         now[0] = 1100
     elif case == "rollback":
@@ -113,6 +114,7 @@ def test_untrusted_time_fails_closed(
         with pytest.raises(TimeUnavailable):
             clock.install(TimeSample(lower_utc=1000, upper_utc=1004 if case == "wide_sample" else 1001,
                                      observed_at=101 if case == "future_sample" else 100))
+
     assert clock.check(1000, "a" * 32).reason is FreshnessReason.TIME_UNAVAILABLE
     now[0] = 100
     assert clock.check(1000, "a" * 32).reason is FreshnessReason.TIME_UNAVAILABLE
@@ -157,6 +159,7 @@ def test_refresh_failure_invalidates_old_anchor() -> None:
     clock.install(TimeSample(lower_utc=1000, upper_utc=1001, observed_at=100))
     with pytest.raises(TimeUnavailable) as caught:
         asyncio.run(clock.refresh(Source()))
+
     assert "private" not in str(caught.value)
     assert clock.check(1000, "a" * 32).deadline is None
 #------------------------------------------------------------------------------------------------------------------
@@ -191,6 +194,7 @@ def test_time_policy_limits(
         replace(FreshnessPolicy(), **{field: value})
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Ограниченные операции SCM, права виртуального аккаунта и автозапуск пользовательского UI.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ServiceInstallError: Безопасная стадия частично завершённой установки
@@ -92,6 +92,7 @@ class ServiceInstallError(ValueError):
         """
 
         # stage/winerror — исходный путь, команда и текст исключения не сохраняются.
+
         self.stage = (stage if stage in ("account", "acl", "security", "recovery", "tray", "autostart")
                       else "unknown")
         self.winerror = winerror if type(winerror) is int and 0 <= winerror < 2**31 else None
@@ -127,6 +128,7 @@ class ServiceControlError(ValueError):
         """
 
         # code/winerror — исходные исключения могут содержать приватный путь.
+
         allowed = {"service_manager_running", "service_control_access", "service_control_io"}
         self.code = code if code in allowed else "service_control_io"
         self.stage = "ownership"
@@ -159,6 +161,7 @@ def managed(
     """
 
     # handle — PySC_HANDLE.Close отличается от Python file.close/context protocol.
+
     try:
         yield handle
     finally:
@@ -181,9 +184,11 @@ def checked_tree(
 
     # path — followlinks=False недостаточно для всех Windows junction: проверяем
     # сам reparse attribute каждого потомка до вызова icacls с /T.
+
     _path(path)
     if not path.exists():
         return
+
     for directory, names, files in os.walk(path, followlinks=False):
         for name in (*names, *files):
             info = (Path(directory) / name).lstat()
@@ -211,6 +216,7 @@ def installation_owner(
 
     # path — оператору намеренно оставлено только чтение control. Для блокировки
     # существующего файла запись не нужна; его содержимое и DACL не изменяются.
+
     handle = None
     try:
         try:
@@ -284,6 +290,7 @@ class WindowsService:
         """
 
         # spec — разрешение управлять одним развёрнутым сервером не распространяется на Caddy.
+
         import win32security
         import win32service
 
@@ -309,6 +316,7 @@ class WindowsService:
 
         with self._open(4) as handle:
             value = self.api.QueryServiceStatusEx(handle)
+
         states = {1: "stopped", 2: "starting", 3: "stopping", 4: "running", 5: "continuing",
                   6: "pausing", 7: "paused"}
         return {"state": states.get(value["CurrentState"], "unknown"),
@@ -363,8 +371,10 @@ class WindowsService:
 
         # plan — recursive ACL проверяется целиком до первой записи. Не открываем
         # SQLite; manager.lock исключает установку при уже работающем сервере.
+
         for directory in (plan.environment, *plan.write_dirs):
             checked_tree(directory)
+
         with installation_owner(plan.deployment.control_dir / "manager.lock"):
             with managed(self.api.OpenSCManager(None, None, 3)) as manager:
                 try:
@@ -452,6 +462,7 @@ class WindowsService:
         """
 
         # enabled — прежде чем менять автозапуск, доказываем exact binding службы.
+
         with self._open(4):
             self._sync_entry(enabled)
     #--------------------------------------------------------------------------------------------------------------
@@ -476,6 +487,7 @@ class WindowsService:
 
         # enabled — используется загруженный hive выбранного пользователя. Вход
         # под другим admin account не должен тихо прописать трей не тому человеку.
+
         import winreg
 
         location = self.spec.operator_sid + r"\Software\Microsoft\Windows\CurrentVersion\Run"
@@ -487,6 +499,7 @@ class WindowsService:
             if not enabled:
                 return False
             raise
+
         with winreg.CreateKeyEx(winreg.HKEY_USERS, location, 0,
                                 winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE) as key:
             try:
@@ -521,8 +534,10 @@ class WindowsService:
         """
 
         # rights — QUERY_CONFIG добавляется для exact проверки, CHANGE_CONFIG нет.
+
         with managed(self.api.OpenSCManager(None, None, 1)) as manager:
             handle = self.api.OpenService(manager, self.spec.name, rights | 1)
+
         try:
             config = self.api.QueryServiceConfig(handle)
             if config[0] != 16 or config[3] != self.binary or config[7].casefold() != (
@@ -567,6 +582,7 @@ class WindowsService:
         # path/sid/rights/tree — после удаления службы прежний SID может уже иметь
         # все права. Повторный icacls /T тогда не нужен и может получить отказ на
         # файле, созданном службой: оператор читает его, но не меняет его DACL.
+
         mask = {"RX": 0x1200A9, "(OI)(CI)RX": 0x1200A9, "(OI)(CI)F": 0x1F01FF}.get(rights)
         if mask is None:
             return False
@@ -590,9 +606,11 @@ class WindowsService:
 
             # target — неизвестные типы ACE и любой deny запрещают быстрый путь.
             # Для каталога проверяем также наследование будущими детьми.
+
             acl = self.security.GetFileSecurity(str(target), 4).GetSecurityDescriptorDacl()
             if acl is None:
                 return False
+
             matched = False
             for index in range(acl.GetAceCount()):
                 (kind, flags), access, principal = acl.GetAce(index)
@@ -602,6 +620,7 @@ class WindowsService:
                 if (self.security.ConvertSidToStringSid(principal) == sid and access & mask == mask
                         and not flags & 8 and inherited):
                     matched = True
+
             return matched
         #----------------------------------------------------------------------------------------------------------
 
@@ -649,14 +668,17 @@ class WindowsService:
 
         # path/sid/rights/tree — не shell-текст. Ошибки icacls могут содержать пути,
         # поэтому вывод не пересылается ни в CLI, ни в уведомления владельцу.
+
         if self._has_grant(path, sid, rights, tree):
             return
+
         import win32api
 
         command = [str(Path(win32api.GetSystemDirectory()) / "icacls.exe"), str(path),
                    "/grant", "*" + sid + ":" + rights, "/Q", "/L"]
         if tree:
             command.append("/T")
+
         result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 timeout=120, creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode:
@@ -664,6 +686,7 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

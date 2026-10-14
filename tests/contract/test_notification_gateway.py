@@ -1,10 +1,10 @@
 ﻿# Контракт gateway-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> fresh_delivery(): Попытка со свежим сроком UTC
@@ -177,11 +177,14 @@ def test_invalid_wire(
         payload["timeout"] = 11
     elif mode == "notification":
         payload["notification"]["identity"]["unexpected"] = "value"
+
     data = json.dumps(payload).encode()
     if mode == "duplicate":
         data = b'{"schema_version":1,' + data[1:]
+
     if mode == "oversize":
         data = b" " * (MAX_REQUEST_BYTES + 1)
+
     with pytest.raises(ValueError):
         NotificationGatewayRequest.from_bytes(data)
 #------------------------------------------------------------------------------------------------------------------
@@ -221,6 +224,7 @@ def test_invalid_response(
     elif mode == "receipt":
         payload["result"]["provider_message_id"] = "receipt"
         payload["result"]["status"] = "unknown"
+
     with pytest.raises(ValueError):
         decode_response(payload, delivery)
 #------------------------------------------------------------------------------------------------------------------
@@ -260,10 +264,12 @@ def test_notification_gateway_configuration() -> None:
     assert isinstance(destination.channel_factory(), NotificationGatewayChannel)
     with pytest.raises(ValueError, match="exceed"):
         config.destination("phone", retry=RetryPolicy(attempt_timeout=5))
+
     for endpoint in ("http://gateway.invalid", "https://user:password@gateway.invalid",
                      "https://gateway.invalid/?key=x"):
         with pytest.raises(ValueError):
             replace(config, endpoint=endpoint)
+
     with pytest.raises(ValueError):
         replace(config, alias="https://provider.invalid/chat")
 #------------------------------------------------------------------------------------------------------------------
@@ -343,16 +349,22 @@ def test_notification_gateway_http(
             body = encode_response(decoded.delivery, result)
             if mode == "auth":
                 return web.Response(status=403)
+
             if mode == "rate":
                 return web.Response(status=429, headers={"Retry-After": "5"})
+
             if mode == "disconnect":
                 request.transport.close()
+
             if mode == "mismatch":
                 body = body.replace(b"delivery-1", b"delivery-2")
+
             if mode == "duplicate":
                 body = b'{"schema_version":1,' + body[1:]
+
             if mode == "oversize":
                 body += b" " * 4096
+
             return web.Response(body=body, content_type="application/json")
         #----------------------------------------------------------------------------------------------------------
 
@@ -506,6 +518,7 @@ def test_runtime_budget_and_mixed_modes(
             sent.append(delivery)
             if delivery.destination_id == "gateway" and delivery.attempt == 1:
                 return DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE, source=ResultSource.GATEWAY)
+
             return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED)
         #----------------------------------------------------------------------------------------------------------
 
@@ -533,6 +546,7 @@ def test_runtime_budget_and_mixed_modes(
     logger.addHandler(runtime.handler)
     with runtime:
         logger.error("one event")
+
     notification_gateway = [d for d in sent if d.destination_id == "gateway"]
     assert len(notification_gateway) == 2
     assert notification_gateway[0].delivery_id == notification_gateway[1].delivery_id
@@ -550,6 +564,7 @@ def test_gateway_names() -> None:
     """
 
     # Проверяем именно установленную поверхность API: старый режим требует явной миграции.
+
     adapter = importlib.import_module("remote_watch.adapters.notification_gateway")
     protocol = importlib.import_module("remote_watch.notifications.gateway_protocol")
     assert adapter.NotificationGatewayClientConfig is NotificationGatewayClientConfig
@@ -559,6 +574,7 @@ def test_gateway_names() -> None:
     for module in ("remote_watch.adapters.relay", "remote_watch.relay_protocol"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(module)
+
     for enum in (DeliveryMode, ResultSource):
         assert enum("gateway") is enum.GATEWAY
         assert not hasattr(enum, "RELAY")
@@ -566,6 +582,7 @@ def test_gateway_names() -> None:
             enum("relay")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

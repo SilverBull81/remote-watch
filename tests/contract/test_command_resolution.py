@@ -1,10 +1,10 @@
 ﻿# Административная сверка двух итогов без повтора команды и потери истории.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> conflict(): Два остановленных владельца с COMPLETED и UNKNOWN одной команды
@@ -79,6 +79,7 @@ async def conflict(
     """
 
     # path — только синтетические данные; потеря ответа моделируется до hub.commit.
+
     rig = Rig(path)
     await rig.start()
     try:
@@ -94,6 +95,7 @@ async def conflict(
         assert rig.store.get(result.ref).record.result.outcome.value == "unknown"
     finally:
         await rig.close()
+
     export_evidence(path / "client.sqlite", 1, path / "evidence.json")
     return rig, result
 #------------------------------------------------------------------------------------------------------------------
@@ -139,6 +141,7 @@ def test_resolution_receipt(
             with sqlite3.connect(hub) as db:
                 db.execute("DROP TABLE resolutions")
                 db.execute("PRAGMA user_version=1")
+
         before = hub.read_bytes()
         preview = reconcile(hub, evidence)
         assert hub.read_bytes() == before
@@ -213,6 +216,7 @@ def test_resolution_guards(
 
 
     # mode — изменения payload ограничены тестовым файлом и не выводятся в CLI.
+
     asyncio.run(conflict(tmp_path))
     hub, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     preview = reconcile(hub, evidence)
@@ -227,11 +231,13 @@ def test_resolution_guards(
         with sqlite3.connect(hub) as db:
             db.execute("UPDATE metadata SET role='client'" if mode == "role"
                        else "UPDATE commands SET revision=revision+1")
+
     evidence.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     before = hub.read_bytes()
     with pytest.raises((ResolutionError, ValueError)):
         reconcile(hub, evidence, expected="wrong" if mode == "fingerprint" else preview["fingerprint"],
                   owners_stopped=mode != "confirmation")
+
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
@@ -250,15 +256,18 @@ def test_resolution_atomicity(
     """
 
     # tmp_path — триггер срабатывает после записи resolutions, но до смены generation.
+
     asyncio.run(conflict(tmp_path))
     hub, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     with sqlite3.connect(hub) as db:
         db.execute("CREATE TRIGGER refuse_resolution BEFORE UPDATE ON commands "
                    "BEGIN SELECT RAISE(ABORT,'private SQL failure'); END")
+
     preview = reconcile(hub, evidence)
     before = hub.read_bytes()
     with pytest.raises(sqlite3.Error):
         reconcile(hub, evidence, expected=preview["fingerprint"], owners_stopped=True)
+
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
@@ -284,6 +293,7 @@ def test_resolution_cli(
 
 
     # capsys — ни текст результата, ни поле пользователя не должны попасть в отчёт.
+
     asyncio.run(conflict(tmp_path))
     client, hub, evidence = tmp_path / "client.sqlite", tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     assert main(["list", "--journal", str(client)]) == 0
@@ -314,11 +324,13 @@ def test_resolution_health(
     """
 
     # reason — конфликт результата замечается до следующего цикла heartbeat.
+
     health = HealthState()
     if reason == "outcome_conflict":
         health.failure("result", CommandError(reason), object())
     else:
         health.recovery("blocked" if reason != "unavailable" else "reconnecting", reason)
+
     expected = reason != "unavailable"
     assert health.snapshot(1, 0).operator_action_required == expected
     health.close()
@@ -347,6 +359,7 @@ def test_resolution_limits(
     """
 
     # tmp_path/mode — границы проверяются до необратимой фиксации решения.
+
     asyncio.run(conflict(tmp_path))
     hub, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     if mode == "capacity":
@@ -354,15 +367,18 @@ def test_resolution_limits(
             settings = json.loads(db.execute("SELECT settings FROM metadata").fetchone()[0])
             settings["payload_bytes"] = db.execute("SELECT SUM(reserved) FROM commands").fetchone()[0]
             db.execute("UPDATE metadata SET settings=?", (json.dumps(settings),))
+
     preview = reconcile(hub, evidence)
     if mode == "oversized":
         evidence.write_bytes(b"x" * 200000)
     elif mode == "stale_generation":
         with sqlite3.connect(hub) as db:
             db.execute("UPDATE metadata SET generation=?", (token_hex(16),))
+
     before = hub.read_bytes()
     with pytest.raises(ResolutionError):
         reconcile(hub, evidence, expected=preview["fingerprint"], owners_stopped=True)
+
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
@@ -381,6 +397,7 @@ def test_resolution_migration(
     """
 
     # tmp_path — миграция не должна потерять UNKNOWN, owner или позиции источников.
+
     rig, result = asyncio.run(conflict(tmp_path))
     hub, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     with sqlite3.connect(hub) as db:
@@ -388,6 +405,7 @@ def test_resolution_migration(
         db.execute("PRAGMA user_version=1")
         original = db.execute("SELECT request,result,claim_id FROM commands").fetchone()
         streams = db.execute("SELECT * FROM streams").fetchall()
+
     store = SQLiteCommandStore(hub, owner_id="hub", generation=token_hex(16),
                                role=StoreRole.HUB, clock=lambda: rig.now)
     store.open()
@@ -397,12 +415,14 @@ def test_resolution_migration(
         assert store.get(result.ref).execution_active
     finally:
         store.close()
+
     preview = reconcile(hub, evidence)
     reconcile(hub, evidence, expected=preview["fingerprint"], owners_stopped=True)
     with sqlite3.connect(hub) as db:
         assert db.execute("SELECT request,result,claim_id FROM commands").fetchone() == original
         assert db.execute("SELECT * FROM streams").fetchall() == streams
         assert db.execute("SELECT owner FROM metadata").fetchone()[0] == "hub"
+
     store = SQLiteCommandStore(hub, owner_id="hub", generation=token_hex(16),
                                role=StoreRole.HUB, clock=lambda: rig.now)
     store.open()
@@ -415,11 +435,13 @@ def test_resolution_migration(
         assert store.resolved_result(result.ref) is None
     finally:
         store.close()
+
     with sqlite3.connect(hub) as db:
         assert db.execute("SELECT COUNT(*) FROM resolutions").fetchone()[0] == 0
         assert db.execute("SELECT * FROM streams").fetchall() == streams
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

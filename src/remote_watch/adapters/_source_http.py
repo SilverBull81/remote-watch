@@ -1,10 +1,10 @@
 ﻿# Ограниченный HTTP-обмен для приёма команд и отправки ответов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> SourceHttp: Два ограниченных сетевых слота одного получателя
@@ -86,6 +86,7 @@ class SourceHttp:
             not allow_loopback_http or not ipaddress.ip_address(parts.hostname).is_loopback
         ):
             raise ValueError("provider TLS required")
+
         self.endpoint = endpoint.rstrip("/")
         self._client: Any = None
         self._active = 0
@@ -107,6 +108,7 @@ class SourceHttp:
 
         if self._client is not None:
             raise CommandError("closed")
+
         connector = aiohttp.TCPConnector(limit=2, limit_per_host=2, force_close=True)
 
         try:
@@ -175,9 +177,11 @@ class SourceHttp:
 
         if self._active >= 2 or monotonic() < self._blocked_until:
             raise CommandError("busy")
+
         self._active += 1
         headers = {} if token is None else {"Authorization": "Bearer " + token}
         opened_stream = False
+
         # Подавляем только внутренние сетевые записи. Контекст callback приложения
         # этим не меняется: он выполняется отдельно в dispatcher.
         context_token = delivery_context.set(True)
@@ -347,6 +351,7 @@ def _pairs(
         if key in result:
             raise ValueError("duplicate provider key")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -369,6 +374,7 @@ def _constant(
     raise ValueError("invalid provider constant")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

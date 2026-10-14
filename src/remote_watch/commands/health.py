@@ -1,10 +1,10 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> StageHealth: Ошибка одного этапа и счётчики восстановления
@@ -245,6 +245,7 @@ class HealthState:
         """
 
         # now/floor — только показания часов; чтение статистики не продлевает сессию.
+
         with self._lock:
             valid = (math.isfinite(now) and floor <= now < self._expires
                      and not self._closed and not self._fenced)
@@ -280,6 +281,7 @@ class HealthState:
         """
 
         # expires — проверенный срок; ранее потерянная сессия не возрождается.
+
         with self._lock:
             self._expires = expires
             if self._connection == "starting":
@@ -314,6 +316,7 @@ class HealthState:
 
 
         # state/reason — только фиксированные значения; токены и ответы сервера сюда не попадают.
+
         with self._lock:
             if self._closed:
                 return
@@ -368,6 +371,7 @@ class HealthState:
         """
 
         # value — False устанавливается по журналу, а не по успеху callback/HTTP запроса.
+
         with self._lock:
             self._pending = value
     #--------------------------------------------------------------------------------------------------------------
@@ -397,8 +401,10 @@ class HealthState:
 
         # stage/error/attempt — этап, безопасный код и метка одного прохода вызова.
         # Повтор того же объекта ошибки в следующем запросе считается новым отказом.
+
         if getattr(error, "_health_observation", None) == (self, attempt):
             return
+
         error._health_observation = (self, attempt)
         with self._lock:
             previous = self._stages[stage]
@@ -429,6 +435,7 @@ class HealthState:
         """
 
         # stage — только успешно завершившийся этап; история последнего отказа сохраняется.
+
         with self._lock:
             previous = self._stages[stage]
             if stage == "result" and self._pending:
@@ -514,8 +521,10 @@ def observe(
             """
 
             # self/args/kwargs — исходный вызов; произвольные значения не входят в статистику.
+
             previous = _attempt.get()
             task = asyncio.current_task()
+
             # Фоновый heartbeat наследует context, но не должен удерживать родительскую
             # задачу вместе с её результатом/traceback после завершения запуска.
             attempt = (previous[1] if previous is not None and previous[0] is not None
@@ -544,6 +553,7 @@ def observe(
     return decorate
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

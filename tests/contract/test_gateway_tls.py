@@ -1,10 +1,10 @@
 ﻿# Настоящий TLS на loopback с временным центром сертификации и проверкой CLI.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> Provider: Счётчик попыток после проверки TLS и прав
@@ -256,7 +256,9 @@ def test_gateway_tls_cli(
     client_context = ssl.create_default_context()
     if mode != "untrusted":
         client_context.load_verify_locations(cafile=str(ca_path))
+
     assert client_context.check_hostname and client_context.verify_mode == ssl.CERT_REQUIRED
+
     # Реальный TLS использует публичный контекст NotificationGatewayClientConfig без подмены connector.
     outcomes: list[DeliveryResult] = []
 
@@ -368,15 +370,18 @@ def test_gateway_tls_bad_files(
     elif mode == "mismatched_key":
         key_path.write_bytes(ec.generate_private_key(ec.SECP256R1()).private_bytes(serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+
     arguments = ["synthetic_tls_settings:build_config", "--cert", str(cert_path)]
     if mode != "missing_key":
         arguments += ["--key", str(key_path)]
+
     serve = AsyncMock()
     monkeypatch.setattr("remote_watch.gateway.notification_server._serve", serve)
     assert main(arguments) == 1
     serve.assert_not_awaited()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

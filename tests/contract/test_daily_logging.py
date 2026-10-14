@@ -1,10 +1,10 @@
 ﻿# Проверки ежедневных журналов, смены даты, владения файлами и интеграции с watcher.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> record_at(): Запись logging с явно заданным временем создания
@@ -72,6 +72,7 @@ def record_at(
     """
 
     # timestamp/text — контролируемые значения без подмены глобальных часов.
+
     record = logging.LogRecord("daily.test", logging.INFO, __file__, 1, text, (), None)
     record.created = timestamp
     return record
@@ -111,6 +112,7 @@ def test_calendar_paths(
 
 
     # Относительный путь закрепляется при создании конфига; смена cwd его не меняет.
+
     monkeypatch.chdir(tmp_path)
     config = DailyFileConfig(directory="log", prefix="spambot", timezone=timezone(timedelta(hours=3)))
     monkeypatch.chdir(tmp_path.parent)
@@ -155,8 +157,10 @@ def test_invalid_settings(
 
 
     # values — неверные типы, шаблоны и компоненты пути.
+
     with pytest.raises((TypeError, ValueError)):
         DailyFileConfig(**{"directory": tmp_path, **values})
+
     assert list(tmp_path.iterdir()) == []
 #------------------------------------------------------------------------------------------------------------------
 
@@ -183,6 +187,7 @@ def test_daily_switch_and_close(
 
 
     # boundary — переход суток/месяца/года; после новой даты приходит запоздавшая запись.
+
     zone = timezone(timedelta(hours=3))
     before = datetime(*boundary, 23, 59, 59, tzinfo=zone)
     after = before + timedelta(seconds=2)
@@ -210,6 +215,7 @@ def test_daily_switch_and_close(
         with_again.handle(record_at(after.timestamp(), "Повторный запуск"))
     finally:
         with_again.close()
+
     assert "Сегодня" in config.path_for(after.timestamp()).read_text(encoding="utf-8")
     assert "Повторный запуск" in config.path_for(after.timestamp()).read_text(encoding="utf-8")
 #------------------------------------------------------------------------------------------------------------------
@@ -232,6 +238,7 @@ def test_switch_failure(
 
 
     # Блокируем папку будущего года обычным файлом: воспроизводимо и без chmod.
+
     config = DailyFileConfig(directory=tmp_path, timezone=timezone.utc, format="%(message)s")
     handler = DailyFileHandler(config)
     failures = Mock()
@@ -272,6 +279,7 @@ def test_concurrent_records(
 
 
     # Потоки намеренно чередуют даты: нужен общий lock на смену файла и запись.
+
     config = DailyFileConfig(directory=tmp_path, timezone=timezone.utc, format="%(message)s")
     handler = DailyFileHandler(config)
     days = [datetime(2028, 1, day, tzinfo=timezone.utc).timestamp() for day in (1, 2)]
@@ -281,6 +289,7 @@ def test_concurrent_records(
             list(pool.map(handler.handle, records))
     finally:
         handler.close()
+
     for offset, stamp in enumerate(days):
         lines = config.path_for(stamp).read_text(encoding="utf-8").splitlines()
         assert len(lines) == 50 and set(lines) == {f"entry-{i}" for i in range(offset, 100, 2)}
@@ -306,6 +315,7 @@ def test_watcher_daily_lifecycle(
     """
 
     # mode/tmp_path — проверяем реальную интеграцию без каналов, сети и credentials.
+
     logger = logging.Logger("application", logging.INFO)
     foreign = logging.NullHandler()
     logger.addHandler(foreign)
@@ -360,11 +370,13 @@ def test_watcher_daily_lifecycle(
         with watcher:
             watcher.start()
             path = write()
+
     assert logger.handlers == [foreign] and not foreign._closed
     assert path.read_text(encoding="utf-8").strip() == "written"
     path.rename(path.with_suffix(".closed"))
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

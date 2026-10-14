@@ -1,10 +1,10 @@
 ﻿# Проверки пересечений фонового обслуживания, HTTP-опроса и обновления времени.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_worker_waiting(): Очередь, отмена, timeout и остановка без скрытого исполнения
@@ -119,6 +119,7 @@ def test_worker_waiting(
 
         if mode == "active_timeout":
             worker.timeout = 0.05
+
         active = asyncio.create_task(worker.call(blocked))
         waiting = closing = None
         try:
@@ -191,6 +192,7 @@ def test_poll_sweep_overlap(
     """
 
     # tmp_path/expired — локальный HTTP и срок сессии на управляемых часах.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -212,6 +214,7 @@ def test_poll_sweep_overlap(
                       allow_loopback_http=True) for _ in range(3)]
         for transport in transports:
             await transport.open()
+
         entered, release = threading.Event(), threading.Event()
         original = rig.store.pending
         armed = [True]
@@ -234,10 +237,12 @@ def test_poll_sweep_overlap(
             """
 
             # limit — прежний предел; вмешиваемся только в момент завершения.
+
             if armed[0]:
                 armed[0] = False
                 entered.set()
                 assert release.wait(10)
+
             return original(limit=limit)
         #----------------------------------------------------------------------------------------------------------
 
@@ -348,8 +353,10 @@ def test_refresh_readiness(
             await release.wait()
             if mode == "failure":
                 raise OSError("private-time-detail")
+
             if mode == "invalid":
                 return None
+
             return TimeSample(lower_utc=1000, upper_utc=1010 if mode == "wide" else 1000.1,
                               observed_at=rig.now)
         #----------------------------------------------------------------------------------------------------------
@@ -414,6 +421,7 @@ def test_busy_details(
     """
 
     # reason — значение без доверия; в исключение/health попадает только whitelist.
+
     data = json.dumps({"code": "busy", "busy_reason": reason}).encode()
     error = decode_error(data, 429)
     expected = reason if isinstance(reason, str) and reason != "PRIVATE" else None
@@ -421,6 +429,7 @@ def test_busy_details(
     assert "PRIVATE" not in str(error)
     for status in (400, 409, 503):
         assert decode_error(data, status).busy_reason is None
+
     assert CommandError("unavailable", busy_reason=reason).busy_reason is None
     state = HealthState()
     state.failure("poll", error, object())
@@ -513,6 +522,7 @@ def test_queued_claims(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

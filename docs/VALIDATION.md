@@ -1,10 +1,33 @@
 ﻿# Проверки и критерии приёмки
 
-Version 1.6.5
+Version 1.6.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-161558
+Дата и время последнего изменения: 261014-165214
+
+## Оформление и приёмка службы — 0.4.5.dev4
+
+Полные баннеры финальных main guards и пустые строки после русских пояснений
+аргументов восстановлены во всём Python-коде. Разделены законченные шаги тел функций.
+Сравнение AST всех 154 изменённых Python-файлов с HEAD подтвердило отсутствие
+изменения исполняемого кода кроме tools/check_style.py и его отрицательных тестов.
+Ruff и стиль: 161 файл, без замечаний. Отрицательные тесты стиля: 17 passed.
+
+Чистые Windows CPython 3.12.2 wheel-from-sdist проверки:
+
+- Core: 1191 passed, 75 skipped, 2 deselected in 68.04s (0:01:08).
+- Extras: 1624 passed, 2 deselected in 135.23s (0:02:15).
+- Отчёты: build/validation-0454-core и build/validation-0454-extras.
+
+Проверены установленные CLI и deploy-ресурсы, включая обновлённую SERVICE.md.
+Владелец принял исправленные tray/install/remove/reinstall и подключение
+notification_health в SpamBot. Полевое восстановление notifications по его
+решению вынесено за пределы 0.4; отсутствие этой проверки не выдаётся за успех.
+Read-only status LV: alerts=enabled, оба компонента ready, alert_delivery.attempts=0.
+Это подтверждает отсутствие попыток в текущем запуске, не доставку в Telegram.
+Новых реальных crash/reboot, CI/Linux/Python 3.10 или live-provider тестов не было.
+Production службы, конфиги, права, credentials и SQLite не менялись.
 
 ## Исправления по полевым тестам службы — 0.4.5.dev3
 

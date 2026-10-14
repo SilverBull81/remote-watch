@@ -1,10 +1,10 @@
 ﻿# Постоянная позиция источника и защита от повторов после сбоев.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ProcessLock: Исключительная блокировка владельца на уровне ОС
@@ -104,6 +104,7 @@ class ProcessLock:
 
         if self._handle is not None:
             raise StoreConflict("process lock already open")
+
         self.path.parent.mkdir(parents=True, exist_ok=True)
         handle = self.path.open("a+b")
 
@@ -176,6 +177,7 @@ class SourceJournal:
 
         if type(seen_limit) is not int or not 32 <= seen_limit <= 10000:
             raise ValueError("invalid source journal capacity")
+
         self.path = Path(path)
         self._limit = seen_limit
         self._db: sqlite3.Connection | None = None
@@ -197,6 +199,7 @@ class SourceJournal:
 
         if self._closed or self._db is not None:
             raise StoreConflict("source journal closed")
+
         self._lock = ProcessLock(self.path.with_suffix(self.path.suffix + ".lock"))
 
         try:
@@ -243,6 +246,7 @@ class SourceJournal:
 
         if self._db is None or self._closed:
             raise StoreConflict("source journal closed")
+
         return read_stats(self._db, source_limit=self._limit)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -275,6 +279,7 @@ class SourceJournal:
                 raise StoreConflict("invalid provider lock")
             self._provider_lock = ProcessLock(self.path.parent / ("provider-" + reader_key + ".lock"))
             self._provider_lock.open()
+
         with self._db:
             old = self._db.execute("SELECT fingerprint FROM state WHERE id=1").fetchone()[0]
             if old is not None and old != fingerprint:
@@ -405,6 +410,7 @@ class SourceJournal:
 
         if not self.contains(event_id):
             raise StoreConflict("unknown source duplicate")
+
         with self._db:
             self._db.execute("UPDATE state SET cursor=? WHERE id=1", (event_id,))
     #--------------------------------------------------------------------------------------------------------------
@@ -516,6 +522,7 @@ def _encode_pending(
 
     if len(payload.encode("utf-8")) > 131072:
         raise StoreFull("source payload capacity")
+
     return payload
 #------------------------------------------------------------------------------------------------------------------
 
@@ -540,15 +547,18 @@ def _decode_pending(
 
     if len(payload.encode("utf-8")) > 131072:
         raise StoreConflict("source payload capacity")
+
     value = json.loads(payload)
     request = None if value["request"] is None else decode_command(value["request"].encode("utf-8"))
 
     if request is not None and type(request) is not CommandRequest:
         raise StoreConflict("source request type")
+
     return SourcePending(position=value["position"], event=SourceEvent(**value["event"]),
                          request=request, notice=value["notice"])
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

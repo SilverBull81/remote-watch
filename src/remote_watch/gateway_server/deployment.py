@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки установки
@@ -153,8 +153,10 @@ def _path(
     """
 
     # value — проверяем каждый существующий родитель, включая dangling symlink.
+
     if any(ord(char) < 32 for char in str(value)):
         raise DeployError("directory_invalid")
+
     path = Path(os.path.abspath(value))
     for item in (*reversed(path.parents), path):
         try:
@@ -163,6 +165,7 @@ def _path(
             continue
         if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
             raise DeployError("linked_path")
+
     return path
 #------------------------------------------------------------------------------------------------------------------
 
@@ -184,6 +187,7 @@ def _resource(
     """
 
     # name — только константа библиотеки, не путь из пользовательского конфига.
+
     return files("remote_watch.gateway_server").joinpath("templates", name).read_text(encoding="utf-8-sig")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -205,6 +209,7 @@ def _json(
     """
 
     # value — только подготовленная структура, без автоматического чтения чужих файлов.
+
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").replace("\n", "\r\n").encode("utf-8")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -228,11 +233,14 @@ def _reference(
     # value — конфиги и CA не копируются; их содержимое deploy не требуется.
     # Python внутри Linux venv обычно является symlink. Это ссылка для чтения/запуска,
     # а не место записи; сохраняем путь venv, иначе потеряем его site-packages.
+
     path = Path(os.path.abspath(value))
     if any(ord(char) < 32 for char in str(path)):
         raise DeployError("reference_missing")
+
     if not path.is_file():
         raise DeployError("reference_missing")
+
     return str(path)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -254,20 +262,26 @@ def prepare_files(
     """
 
     # options — сначала проверяем все аргументы; до конца этой функции записи нет.
+
     _origin(options.endpoint)
     root = _path(options.directory)
     if root == Path(root.anchor) or (root.exists() and not root.is_dir()):
         raise DeployError("directory_invalid")
+
     python = _reference(options.python)
     if options.components not in ("both", "notifications", "commands") or options.ui not in ("headless", "tray"):
         raise DeployError("options_invalid")
+
     if options.caddy_mode not in ("external", "managed"):
         raise DeployError("options_invalid")
+
     for port in (options.notification_port, options.command_port):
         if type(port) is not int or not 1 <= port <= 65535:
             raise DeployError("port_invalid")
+
     if options.components == "both" and options.notification_port == options.command_port:
         raise DeployError("port_conflict")
+
     external_port = urlsplit(options.endpoint).port or 443
     active_ports = [port for name, port in (("notifications", options.notification_port),
                                           ("commands", options.command_port))
@@ -275,6 +289,7 @@ def prepare_files(
     if (external_port in active_ports
             or (options.caddy_mode == "managed" and 2019 in [external_port, *active_ports])):
         raise DeployError("port_conflict")
+
     package_version = version("remote-watch")
     if not re.fullmatch(r"[0-9][A-Za-z0-9.+-]{0,63}", package_version):
         raise DeployError("version_invalid")
@@ -293,6 +308,7 @@ def prepare_files(
     deployment = json.loads(_resource("gateway_server.json"))
     deployment.update(endpoint=options.endpoint.rstrip("/"), caddy=caddy)
     deployment["application"]["ui"] = options.ui
+
     # Сервер получает собственную копию логотипа рядом с конфигом. Путь остаётся
     # относительным, чтобы комплект можно было перенести вместе с папкой logo.
     result = {"logo/remote_watch.ico": default_icon().read_bytes()}
@@ -321,18 +337,21 @@ def prepare_files(
         result["clients/" + client_name.replace(".json", ".example.json")] = _json(client)
 
     result["gateway_server.local.json"] = _json(deployment)
+
     # Примеры клиентов при миграции не извлекают секреты/Identity из рабочих конфигов.
     # Для существующих приложений сохраняются их настройки; примеры служат только памяткой.
     storage = str(_path(options.caddy_data) if options.caddy_data else root / "caddy-data").replace("\\", "/")
     log_path = str(root / "logs/caddy-runtime.log").replace("\\", "/")
     if any(char in storage + log_path for char in "{}\r\n\x00"):
         raise DeployError("caddy_path_invalid")
+
     replacements = {"@@ENDPOINT@@": options.endpoint.rstrip("/"), "@@ROUTES@@": "\n".join(routes),
                     "@@STORAGE@@": json.dumps(storage, ensure_ascii=False),
                     "@@LOG@@": json.dumps(log_path, ensure_ascii=False)}
     caddy_text = _resource("Caddyfile.template")
     for key, value in replacements.items():
         caddy_text = caddy_text.replace(key, value)
+
     caddy_name = ("Caddyfile" if options.caddy_mode == "managed" and not options.caddy_config
                   else "Caddyfile.example")
     result[caddy_name] = caddy_text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
@@ -346,17 +365,21 @@ def prepare_files(
             if suffix == "ps1":
                 text = text.replace("\n", "\r\n")
             result[action + "." + suffix] = text.encode(encoding)
+
     # Doctor по умолчанию offline; аргументы --online/--report оператор задаёт явно.
     for suffix, quote in (("ps1", "'" + python.replace("'", "''") + "'"), ("sh", shlex.quote(python))):
         text = _resource("doctor." + suffix).replace("@@PYTHON@@", quote).replace("\r\n", "\n")
         result["doctor." + suffix] = (text.replace("\n", "\r\n").encode("utf-8-sig")
                                        if suffix == "ps1" else text.encode("utf-8"))
+
     doctor = json.loads(_resource("gateway_doctor.client.json"))
     doctor["endpoint"] = options.endpoint.rstrip("/")
     for name in ("notifications", "commands"):
         if options.components not in ("both", name):
             doctor.pop(name)
+
     result["clients/gateway_doctor.client.example.json"] = _json(doctor)
+
     # Служба регистрируется отдельной явной командой. Обычный deploy создаёт
     # только launchers/инструкцию, не меняет SCM, registry и ACL рабочего сервера.
     for action in ("install", "remove", "start", "stop", "status", "sync-tray"):
@@ -367,9 +390,11 @@ def prepare_files(
             text = _resource("service." + suffix).replace("@@PYTHON@@", quote).replace("@@ACTION@@", "--" + action)
             text = text.replace("\r\n", "\n").replace("\n", "\r\n")
             result[name + "." + suffix] = text.encode("utf-8-sig" if suffix == "ps1" else "utf-8")
+
     tray_text = _resource("tray.ps1").replace("@@PYTHON@@",
         "'" + str(options.python.with_name("pythonw.exe")).replace("'", "''") + "'")
     result["tray.ps1"] = tray_text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
+
     # systemd не использует shell quoting: %, обратные слеши и кавычки кодируются
     # по синтаксису unit. User/Group оператор указывает до явной установки на Linux.
     unit = _resource("systemd.service")
@@ -379,9 +404,11 @@ def prepare_files(
         if key != "DIRECTORY":
             quoted = quoted.replace("$", "$$")
         unit = unit.replace("@@" + key + "@@", quoted)
+
     result["service/remote-watch-gateway.service"] = unit.replace("\r\n", "\n").encode("utf-8")
     for name in ("install-systemd.sh", "remove-systemd.sh"):
         result["service/" + name] = _resource(name).replace("\r\n", "\n").encode("utf-8")
+
     result["SERVICE.md"] = _resource("SERVICE.md").replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
     guide = _resource("START_HERE.md").replace("@@VERSION@@", package_version)
     result["START_HERE.md"] = guide.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8-sig")
@@ -413,13 +440,17 @@ def _compare(
     """
 
     # path/expected — даже сильно изменённый конфиг не показываем как текстовый diff.
+
     _path(path)
     if not path.exists():
         return "create"
+
     if not path.is_file():
         raise DeployError("destination_invalid")
+
     with path.open("rb") as stream:
         current = stream.read(len(expected) + 1)
+
     return "identical" if current == expected else "preserved"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -442,6 +473,7 @@ def _write_new(
     """
 
     # path/data — O_EXCL не позволяет затереть файл, появившийся после preview.
+
     _path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
@@ -481,11 +513,13 @@ def deploy(
     # options — рабочие конфиги только упоминаются по абсолютной ссылке.
     # dry_run — не создаём папки, не проверяем сеть, не открываем журналы и службы, не читаем токены из окружения.
     # update_templates — оператор вручную переносит нужные отличия в рабочие настройки.
+
     content = prepare_files(options)
     root = _path(options.directory)
     base = root / "templates" / version("remote-watch") if update_templates else root
     reports = []
     pending = []
+
     # Проверяем весь план перед первой записью: каталог вместо файла не оставит полкомплекта.
     for name, data in content.items():
         state = _compare(base / name, data)
@@ -494,12 +528,15 @@ def deploy(
         reports.append(((base / name).relative_to(root).as_posix(), state))
         if state == "create":
             pending.append((base / name, data))
+
     if not dry_run:
         for path, data in pending:
             _write_new(path, data)
+
     return reports
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

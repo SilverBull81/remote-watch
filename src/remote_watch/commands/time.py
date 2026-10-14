@@ -1,10 +1,10 @@
 ﻿# Проверка возраста команд по достоверному времени без зависимости от часов VM.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> TimeUnavailable: Отказ при отсутствии достоверного времени
@@ -105,6 +105,7 @@ class TimeSample:
 
         for value in (self.lower_utc, self.upper_utc, self.observed_at):
             require_number(value, "time sample", allow_zero=True)
+
         if self.lower_utc > self.upper_utc:
             raise ValueError("invalid time sample")
     #--------------------------------------------------------------------------------------------------------------
@@ -179,6 +180,7 @@ class FreshnessPolicy:
 
         for value in (self.max_age, self.sample_ttl, self.max_uncertainty):
             require_number(value, "freshness policy")
+
         require_number(self.drift_ppm, "drift_ppm", allow_zero=True)
         require_number(self.future_tolerance, "future_tolerance", allow_zero=True)
         if (self.max_age > MAX_COMMAND_SECONDS or self.sample_ttl > 3600
@@ -231,8 +233,10 @@ class FreshnessDecision:
 
         if self.deadline is not None and type(self.deadline) is not CommandDeadline:
             raise TypeError("invalid freshness deadline")
+
         if self.reason is not None and type(self.reason) is not FreshnessReason:
             raise TypeError("invalid freshness reason")
+
         if (self.deadline is None) == (self.reason is None):
             raise ValueError("invalid freshness decision")
     #--------------------------------------------------------------------------------------------------------------
@@ -271,6 +275,7 @@ class TrustedClock:
 
         if type(policy) is not FreshnessPolicy or not callable(clock):
             raise TypeError("invalid trusted clock configuration")
+
         self.policy = policy
         self._clock = clock
         self._sample: TimeSample | None = None
@@ -299,6 +304,7 @@ class TrustedClock:
         self.unavailable_reason = "invalid_sample"
         if type(sample) is not TimeSample:
             raise TypeError("invalid time sample type")
+
         now = self._clock()
         require_number(now, "monotonic time", allow_zero=True)
 
@@ -312,6 +318,7 @@ class TrustedClock:
             self.unavailable_reason = ("clock_rollback" if elapsed < 0 else "sample_expired"
                                        if elapsed >= self.policy.sample_ttl else "uncertainty")
             raise TimeUnavailable("trusted time unavailable")
+
         self._sample = sample
         self.unavailable_reason = None
     #--------------------------------------------------------------------------------------------------------------
@@ -335,6 +342,7 @@ class TrustedClock:
 
         # Пока запрос идёт, bounds продолжает проверять TTL/дрейф прежнего
         # показания. Сам старт штатного refresh не означает утрату доверия.
+
         try:
             sample = await source.sample()
         except asyncio.CancelledError:
@@ -373,6 +381,7 @@ class TrustedClock:
         if self._last is not None and now < self._last:
             self._sample = None
             self.unavailable_reason = "clock_rollback"
+
         self._last = now
         if self._sample is None or sample is None:
             raise TimeUnavailable("trusted time unavailable")
@@ -385,6 +394,7 @@ class TrustedClock:
             self.unavailable_reason = ("clock_rollback" if elapsed < 0 else "sample_expired"
                                        if elapsed >= self.policy.sample_ttl else "uncertainty")
             raise TimeUnavailable("trusted time unavailable")
+
         return TimeSample(lower_utc=lower, upper_utc=upper, observed_at=now)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -423,14 +433,17 @@ class TrustedClock:
         # Округление message.date вниз до секунды только сокращает допустимый срок.
         if message_date > sample.lower_utc + self.policy.future_tolerance:
             return FreshnessDecision(deadline=None, reason=FreshnessReason.FUTURE)
+
         remaining = self.policy.max_age - max(0.0, sample.upper_utc - message_date)
         if remaining <= 0:
             return FreshnessDecision(deadline=None, reason=FreshnessReason.TOO_OLD)
+
         deadline = CommandDeadline.from_response(remaining, sample.observed_at, sample.observed_at, hub_epoch)
         return FreshnessDecision(deadline=deadline, reason=None)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

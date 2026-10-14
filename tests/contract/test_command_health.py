@@ -1,10 +1,10 @@
 ﻿# Проверки готовности командного gateway и безопасной диагностики отказов.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> make_gateway(): Подготовка gateway с подставными временем и провайдером
@@ -100,6 +100,7 @@ def make_gateway(
     """
 
     # path — отдельный каталог подставных настроек и журналов.
+
     config = load_command_gateway(write_config(path / "gateway.json", settings()))
     gateway = CommandGateway(config, time_source=FakeTime())
     gateway.sources[0].provider = FakeProvider()
@@ -132,6 +133,7 @@ def test_maintenance_failure(
 
     # tmp_path — отдельный каталог теста.
     # mode — способ неожиданного завершения задачи.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -212,6 +214,7 @@ def test_time_readiness(
 
     # tmp_path — отдельный каталог теста.
     # mode — причина утраты доверенного времени.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -229,6 +232,7 @@ def test_time_readiness(
         failed = AsyncMock(side_effect=RuntimeError("private-time-payload"))
         if mode == "startup":
             source.sample = failed
+
         try:
             assert gateway.stats()["reason"] == "not_started"
             await gateway.start(port=0, allow_loopback_http=True)
@@ -256,6 +260,7 @@ def test_time_readiness(
             assert gateway.hub.epoch == epoch
         finally:
             await gateway.close()
+
         assert gateway.stats()["reason"] == "closed"
         assert not gateway.stats()["fatal"]
     #--------------------------------------------------------------------------------------------------------------
@@ -284,6 +289,7 @@ def test_storage_readiness(
 
     # tmp_path — отдельный каталог теста.
     # code — подставной код занятости или отказа журнала.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -313,6 +319,7 @@ def test_storage_readiness(
             if failed and asyncio.current_task() is gateway.hub._refresh:
                 observed.set()
                 raise CommandError(code)
+
             await original()
         #----------------------------------------------------------------------------------------------------------
 
@@ -359,6 +366,7 @@ def test_source_cancellation(
     # tmp_path — отдельный каталог теста.
     # index — номер отменяемого цикла источника.
     # mode — отмена, ранний выход или исключение в задаче.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -389,6 +397,7 @@ def test_source_cancellation(
 
         if mode != "cancel":
             setattr(gateway.sources[0], "_receive" if index == 0 else "_respond", worker)
+
         try:
             await gateway.start(port=0, allow_loopback_http=True)
             task = gateway.sources[0]._tasks[index]
@@ -429,6 +438,7 @@ def test_gateway_cli_health(
 
     # tmp_path — отдельный каталог теста.
     # capsys — перехваченные сообщения CLI без настоящих секретов.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -513,6 +523,7 @@ def test_config_reasons(
     # mode — вносимая ошибка подставных настроек.
     # code — ожидаемая фиксированная причина.
     # field — ожидаемый путь схемы без пользовательских имён.
+
     raw = settings()
     first, second = raw["principals"]
     source = raw["sources"][0]
@@ -536,9 +547,11 @@ def test_config_reasons(
         source["access"][0]["targets"] = ["private-target-value"]
     else:
         source["access"][0]["actor_id"] = "private-actor-value"
+
     path = write_config(tmp_path / "gateway.json", raw)
     with pytest.raises(CommandConfigError) as caught:
         check_command_gateway(path)
+
     assert (caught.value.code, caught.value.field) == (code, field)
     assert main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out
@@ -590,6 +603,7 @@ def test_client_config_reasons(
     # mode — ошибка клиентского файла настроек.
     # code — ожидаемая причина ошибки.
     # field — безопасное имя поля, не его значение.
+
     raw = {"schema_version": 1, "identity": settings()["targets"]["one"],
            "token": "a" * 40, "owner_id": "one", "state_file": "client.sqlite",
            "endpoint": "https://example.invalid:8443"}
@@ -601,13 +615,17 @@ def test_client_config_reasons(
             (tmp_path / "private-ca.pem").write_text("not a certificate", encoding="utf-8")
     elif mode == "endpoint":
         raw["endpoint"] = "https://private-secret@example.invalid/private"
+
     path = tmp_path / "client.json"
     if mode != "missing":
         write_config(path, raw)
+
     if mode == "json":
         path.write_text('{"private-secret":', encoding="utf-8")
+
     with pytest.raises(CommandConfigError) as caught:
         load_command_client(path, CommandRegistry.from_callbacks({"status": lambda: "ok"}))
+
     assert (caught.value.code, caught.value.field) == (code, field)
     assert smoke_main(["--config", str(path)]) == 2
     output = capsys.readouterr().out
@@ -650,22 +668,26 @@ def test_resolved_duplicate_tokens(
 
     # tmp_path — отдельный каталог теста.
     # monkeypatch — временные переменные с вымышленными секретами.
+
     raw = settings()
     for index, principal in enumerate(raw["principals"]):
         del principal["token"]
         name = "RW_TEST_PRIVATE_TOKEN_" + str(index)
         principal["token_env"] = name
         monkeypatch.setenv(name, "z" * 40)
+
     path = write_config(tmp_path / "gateway.json", raw)
     check_command_gateway(path)
     with pytest.raises(CommandConfigError) as caught:
         load_command_gateway(path)
+
     assert caught.value.code == "duplicate_principal_token"
     assert caught.value.field == "principals[1].token_env"
     assert "z" * 40 not in str(caught.value)
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

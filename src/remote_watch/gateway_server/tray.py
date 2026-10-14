@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние сервера и общая команда остановки.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows
@@ -81,6 +81,7 @@ class GatewayTray:
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
         # icon_path — файл читается только при явном запуске GUI.
         # title_prefix — служебный контроллер работает отдельно от управляющего процесса.
+
         self._stop = stop
         self._title_prefix = title_prefix
         self._icon_path = icon_path
@@ -109,9 +110,11 @@ class GatewayTray:
 
         # visible — служебный контроллер запускает скрытый цикл и показывает иконку
         # лишь после чтения SCM, чтобы при stopped не было краткой вспышки в трее.
+
         self._visible = visible
         if os.name != "nt":
             raise RuntimeError("tray_requires_windows")
+
         import pystray
         from PIL import Image
 
@@ -155,6 +158,7 @@ class GatewayTray:
         """
 
         # visible — изменение не запускает manager и не отправляет команду службе.
+
         if visible != self._visible and self._icon is not None:
             try:
                 self._icon.visible = visible
@@ -179,6 +183,7 @@ class GatewayTray:
         """
 
         # state — никакие идентификаторы чатов или токены в UI не передаются.
+
         if state != self._state and self._icon is not None:
             try:
                 self._icon.title = self._title_prefix + state
@@ -221,6 +226,7 @@ class GatewayTray:
             stopper = threading.Thread(target=self._stop_icon, name="gateway-tray-stop", daemon=True)
             stopper.start()
             stopper.join(2)
+
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(1)
     #--------------------------------------------------------------------------------------------------------------
@@ -245,6 +251,7 @@ class GatewayTray:
         """
 
         # icon/item — содержимое меню фиксировано; общий stop безопасен из другого потока.
+
         self._stop()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -264,6 +271,7 @@ class GatewayTray:
         """
 
         # icon — подтверждение запуска GUI, не готовности gateway listeners.
+
         icon.visible = self._visible
         self._ready.set()
     #--------------------------------------------------------------------------------------------------------------
@@ -323,23 +331,28 @@ def default_icon() -> Path:
 
     # В checkout логотип хранится только в корне logo. В wheel setuptools переносит
     # этот же файл в каталог данных Python-окружения, не создавая копии внутри src.
+
     checkout = Path(__file__).resolve().parents[3]
     source = checkout / "logo" / "remote_watch.ico"
     if (checkout / "pyproject.toml").is_file() and source.is_file():
         return source
+
     # pip --target помещает data-files прямо под target, иногда без записи в RECORD.
     target = Path(__file__).resolve().parents[2] / "share" / "remote-watch" / "logo" / "remote_watch.ico"
     if target.is_file():
         return target
+
     # Для обычной установки и --user RECORD указывает фактическое размещение data-files.
     # sys.prefix здесь недостаточен: пользовательская установка может лежать вне venv.
     package = distribution("remote-watch")
     for entry in package.files or ():
         if entry.as_posix().endswith("share/remote-watch/logo/remote_watch.ico"):
             return Path(package.locate_file(entry)).resolve()
+
     raise FileNotFoundError("default_gateway_icon_missing")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Сохранение режима команд между решениями источника, SQLite и доставкой ответа.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_command_mode_recovery(): Восстановление решения и ответ по режиму исходной сессии
@@ -147,6 +147,7 @@ def test_command_mode_recovery(
 
 
                 # Пока провайдер ждёт, responder не начинает следующую операцию журнала.
+
                 assert conversation_id == "chat" and text == expected
                 entered.set()
                 await release.wait()
@@ -206,6 +207,7 @@ def test_command_mode_configuration(
 
 
     # Служебные ошибки остаются русскими в CLI; содержимое неверного поля не выводится.
+
     raw = settings()
     client_raw = {"schema_version": 1, "identity": raw["targets"]["one"],
                   "endpoint": "https://gateway.invalid", "state_file": "client.sqlite", "owner_id": "client",
@@ -271,6 +273,7 @@ def test_old_display_config_key_is_rejected(
     assert not (tmp_path / "client.sqlite").exists()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

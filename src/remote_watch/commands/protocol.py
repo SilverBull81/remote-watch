@@ -1,10 +1,10 @@
 ﻿# Модели и строгий wire-контракт команд без сети и исполнения callbacks.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandOutcome: Результат обработчика без предположений о состоянии приложения
@@ -291,6 +291,7 @@ class CommandCapability:
 
         if not isinstance(self.name, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.name) is None:
             raise ValueError("invalid command name")
+
         require_text(self.required_scope, "required_scope", 128)
         _seconds(self.timeout)
         for name in ("read_only", "idempotent", "accepts_arguments"):
@@ -338,16 +339,21 @@ class CommandRegistration:
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
+
         _nonce(self.session_id)
         if self.command_display_mode is not None and self.command_display_mode not in ("full", "compact", "text"):
             raise ValueError("invalid command display mode")
+
         if not isinstance(self.capabilities, (tuple, list)) or not 1 <= len(self.capabilities) <= MAX_CAPABILITIES:
             raise ValueError("invalid capability count")
+
         if any(type(item) is not CommandCapability for item in self.capabilities):
             raise TypeError("invalid capability type")
+
         copied = tuple(self.capabilities)
         if len({item.name for item in copied}) != len(copied):
             raise ValueError("duplicate command capability")
+
         object.__setattr__(self, "capabilities", copied)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -391,6 +397,7 @@ class CommandSession:
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
+
         _nonce(self.session_id)
         _nonce(self.hub_epoch)
         _seconds(self.remaining_ttl)
@@ -460,6 +467,7 @@ class CommandRef:
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
+
         for value in (self.session_id, self.hub_epoch, self.command_id):
             _nonce(value)
     #--------------------------------------------------------------------------------------------------------------
@@ -539,8 +547,10 @@ class CommandRequest:
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
+
         if self.command_display_mode is not None and self.command_display_mode not in ("full", "compact", "text"):
             raise ValueError("invalid command display mode")
+
         _identifier(self.source_id)
         require_text(self.source_event_id, "source_event_id", 128)
         if not isinstance(self.name, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.name) is None:
@@ -588,6 +598,7 @@ class CommandClaim:
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
+
         _nonce(self.claim_id)
         _digest(self.request_digest)
     #--------------------------------------------------------------------------------------------------------------
@@ -656,6 +667,7 @@ class CommandGrant:
 
         if type(self.request) is not CommandRequest:
             raise TypeError("request must be CommandRequest")
+
         _nonce(self.claim_id)
         _seconds(self.remaining_ttl)
         _seconds(self.execution_timeout)
@@ -707,12 +719,16 @@ class CommandResult:
 
         if type(self.ref) is not CommandRef or type(self.outcome) is not CommandOutcome:
             raise TypeError("invalid command result type")
+
         if self.claim_id is not None:
             _nonce(self.claim_id)
+
         if self.outcome in (CommandOutcome.COMPLETED, CommandOutcome.UNKNOWN) and self.claim_id is None:
             raise ValueError("executed outcome requires a claim")
+
         if self.text is not None:
             require_text(self.text, "command result text", MAX_COMMAND_TEXT_BYTES, True)
+
         if self.reason is not None and type(self.reason) is not CommandReason:
             raise TypeError("invalid command reason")
 
@@ -725,6 +741,7 @@ class CommandResult:
         }
         if self.reason not in allowed[self.outcome]:
             raise ValueError("reason does not match command outcome")
+
         if self.outcome is not CommandOutcome.COMPLETED and self.text is not None:
             raise ValueError("failed command result cannot expose arbitrary text")
     #--------------------------------------------------------------------------------------------------------------
@@ -789,8 +806,10 @@ class CommandReceipt:
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
+
         if self.claim_id is not None:
             _nonce(self.claim_id)
+
         _digest(self.result_digest)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -841,6 +860,7 @@ def describe_commands(
 
     if type(registry) is not CommandRegistry or not 1 <= len(registry) <= MAX_CAPABILITIES:
         raise ValueError("invalid command registry size")
+
     return tuple(CommandCapability(name=spec.name, required_scope=spec.required_scope,
         timeout=spec.timeout, read_only=spec.read_only, idempotent=spec.idempotent,
         accepts_arguments=spec.validate_arguments is not None) for spec in (registry[name] for name in registry))
@@ -878,11 +898,13 @@ def callback_result(
 
     # Пользовательский __str__ не вызывается: он может менять состояние или выдавать секреты.
     # Неверный/слишком большой ответ после callback не означает, что действие не произошло.
+
     if value is None or type(value) is str:
         try:
             return CommandResult(ref=ref, claim_id=claim_id, outcome=CommandOutcome.COMPLETED, text=value)
         except (ValueError, UnicodeError):
             pass
+
     return CommandResult(ref=ref, claim_id=claim_id, outcome=CommandOutcome.UNKNOWN,
                          reason=CommandReason.INVALID_RESULT)
 #------------------------------------------------------------------------------------------------------------------
@@ -911,12 +933,16 @@ def _plain(
         # канонические байты и digest уже записанных запросов и квитанций.
         return {item.name: _plain(getattr(value, item.name)) for item in fields(value)
                 if item.name != "command_display_mode" or getattr(value, item.name) is not None}
+
     if isinstance(value, Enum):
         return value.value
+
     if isinstance(value, Mapping):
         return dict(value)
+
     if isinstance(value, tuple):
         return [_plain(item) for item in value]
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -941,6 +967,7 @@ def _schema_version(
 
 
     # В grant вложен тот же request; result/receipt остаются в прежней схеме.
+
     target = message.request if type(message) is CommandGrant else message
     return 2 if (type(target) in (CommandRegistration, CommandRequest)
                  and target.command_display_mode is not None) else 1
@@ -1001,6 +1028,7 @@ def _pairs(
         if key in result:
             raise ValueError("duplicate command JSON key")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -1056,26 +1084,33 @@ def _model(
 
     # Схема 1 не принимает новое поле даже с null. В схеме 2 режим обязателен
     # в registration/request; у вложенного grant он принадлежит только request.
+
     expected = {item.name for item in fields(model)}
     if schema_version == 1:
         expected.discard("command_display_mode")
+
     if type(value) is not dict or set(value) != expected:
         raise ValueError("invalid command payload fields")
+
     if schema_version == 2 and model in (CommandRegistration, CommandRequest):
         if type(value["command_display_mode"]) is not str:
             raise ValueError("invalid command display mode")
+
     payload = dict(value)
     for name, nested in _NESTED.get(model, {}).items():
         payload[name] = _model(nested, payload[name], schema_version)
+
     if model is CommandRegistration:
         items = payload["capabilities"]
         if type(items) is not list or not 1 <= len(items) <= MAX_CAPABILITIES:
             raise ValueError("invalid capability count")
         payload["capabilities"] = tuple(_model(CommandCapability, item) for item in items)
+
     if model is CommandResult:
         payload["outcome"] = CommandOutcome(payload["outcome"])
         if payload["reason"] is not None:
             payload["reason"] = CommandReason(payload["reason"])
+
     return model(**payload)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -1138,6 +1173,7 @@ def message_digest(
     return hashlib.sha256(encode_command(message)).hexdigest()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

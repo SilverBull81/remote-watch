@@ -1,10 +1,10 @@
 ﻿# Проверки ограничений перезапуска без процессов, сети и реального ожидания.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_backoff_and_latched_limit(): Задержки, верхняя граница и окончательное исчерпание
@@ -145,8 +145,10 @@ def test_invalid_observation() -> None:
     for now, jitter in ((9, 0.5), (11, -1), (11, 1.01), (float("nan"), 0.5), (11, True)):
         with pytest.raises((ValueError, TypeError)):
             budget.record_failure(now, FailureKind.CRASH, jitter)
+
     with pytest.raises(ValueError):
         budget.record_failure(11, "crash")
+
     assert budget.record_failure(11, FailureKind.HANG).delay == 4
 #------------------------------------------------------------------------------------------------------------------
 
@@ -162,9 +164,11 @@ def test_long_running_budget() -> None:
     budget = RestartBudget(RestartPolicy(max_restarts=2, window=10, initial_delay=1, max_delay=2))
     for index in range(10000):
         assert budget.record_failure(index * 10, FailureKind.CRASH).delay == 1
+
     assert len(budget._attempts) == 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FakeChannel: Тестовый канал для ручной проверки
@@ -155,6 +155,7 @@ class FakeChannel:
         self.deliveries.append(delivery)
         if self.cancel:
             raise asyncio.CancelledError
+
         return DeliveryResult(status=self.status)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -284,6 +285,7 @@ def test_smoke_command(
     settings = {"token": "123:synthetic_secret", address: target}
     if provider == "gateway":
         settings.update(token="synthetic_service_token_01234567890123456789", endpoint="https://gateway.invalid")
+
     path.write_text(json.dumps({provider: settings,
         "unused": {"token": ""}}), encoding="utf-8-sig")
     original = path.read_bytes()
@@ -429,6 +431,7 @@ def test_cleanup_on_failure(
         channel.open_error = mode == "open_error"
         if mode in ("unknown", "permanent_failure"):
             channel.status = DeliveryStatus(mode)
+
         created.append(channel)
         return channel
     #--------------------------------------------------------------------------------------------------------------
@@ -455,6 +458,7 @@ def test_cleanup_on_failure(
         else:
             result = await smoke._send("telegram", settings)
             assert result.status.value == mode
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
     assert len(created) == 1 and created[0].closed
@@ -560,12 +564,14 @@ def test_removed_provider(
     """
 
     # monkeypatch — неверный режим не должен случайно запустить другой канал.
+
     loader = Mock(side_effect=AssertionError("credentials accessed"))
     monkeypatch.setattr(smoke, "_load_settings", loader)
     assert smoke.main(["relay"]) == 2
     loader.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

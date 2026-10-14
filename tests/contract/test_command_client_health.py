@@ -1,10 +1,10 @@
 ﻿# Проверки восстановления этапов команд без стирания истории и потери результата.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> wait_until(): Конечное ожидание наблюдаемого состояния без фиксированной задержки
@@ -71,6 +71,7 @@ async def wait_until(
     """
 
     # predicate — наблюдаемое состояние; timeout ограничивает зависание при регрессии.
+
     deadline = asyncio.get_running_loop().time() + 3
     while not predicate():
         assert asyncio.get_running_loop().time() < deadline
@@ -116,6 +117,7 @@ def test_health_stages(
         del startup
         await asyncio.sleep(0)
         gc.collect()
+
         # Context фонового heartbeat не удерживает завершённую родительскую задачу.
         assert startup_ref() is None
         original = rig.transport.exchange
@@ -164,6 +166,7 @@ def test_health_stages(
                 await rig.client.acquire()
         finally:
             await rig.close()
+
         assert rig.client.health.closed and not rig.client.health.ready
         assert rig.client.health.heartbeat.current_error == "stale_session"
     #--------------------------------------------------------------------------------------------------------------
@@ -273,6 +276,7 @@ def test_dispatcher_readiness(
         finally:
             await dispatcher.close()
             await rig.hub.close()
+
         assert dispatcher.stats.closed and not dispatcher.stats.ready
     #--------------------------------------------------------------------------------------------------------------
 
@@ -331,6 +335,7 @@ def test_storage_timeout_health(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

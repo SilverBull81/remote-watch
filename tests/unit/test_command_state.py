@@ -1,10 +1,10 @@
 ﻿# Проверки повторов, рестартов, сроков и свежести команд без сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> scenario(): Данные сценария с фиксированными сроками
@@ -138,6 +138,7 @@ def test_single_start_and_result_replay(
         transition = advance_command(current, CommandAction.START, **options)
         current = transition.record
         calls += int(transition.start_callback)
+
     assert calls == 1 and current.phase is CommandPhase.STARTED
     result = callback_result(initial.request.ref, options["claim"].claim_id, None)
     current = advance_command(current, CommandAction.FINISH, result=result, **options).record
@@ -185,6 +186,7 @@ def test_fencing_before_execution(
         options["grant"] = replace(options["grant"], claim_id="9" * 32)
     else:
         options["grant"] = replace(options["grant"], request=replace(record.request, name="suspend_load"))
+
     with pytest.raises(ValueError, match="mismatch|another claim"):
         advance_command(record, CommandAction.START, **options)
 #------------------------------------------------------------------------------------------------------------------
@@ -220,8 +222,10 @@ def test_expiry_and_restart(
     record, options = scenario(identity)
     if phase is not CommandPhase.READY:
         record = advance_command(record, CommandAction.CLAIM, **options).record
+
     if phase is CommandPhase.STARTED:
         record = advance_command(record, CommandAction.START, **options).record
+
     if case == "restart":
         terminal = recover_command(record)
     else:
@@ -231,9 +235,11 @@ def test_expiry_and_restart(
         transition = advance_command(record, CommandAction.START, **options)
         assert not transition.start_callback
         terminal = transition.record
+
     expected = CommandPhase.UNKNOWN if phase is CommandPhase.STARTED else CommandPhase.EXPIRED
     assert terminal.phase is expected
     assert recover_command(terminal) == terminal
+
     # Даже свежий локальный срок не возвращает терминальную запись к исполнению.
     _, fresh = scenario(identity)
     assert not advance_command(terminal, CommandAction.START, **fresh).start_callback
@@ -385,6 +391,7 @@ def test_confirmation_freshness(
     # case — выбранный сценарий проверки.
 
     record, _ = scenario(identity)
+
     # Намерение могло прийти через сутки. Hub начинает новое окно подтверждения
     # сейчас, но старое сообщение само по себе не даёт разрешения на действие.
     challenge = CommandChallenge(request=record.request, nonce="a" * 32,
@@ -404,10 +411,12 @@ def test_confirmation_freshness(
         options["nonce"] = ""
     elif case == "replay":
         challenge = confirm_command(challenge, **options).challenge
+
     decision = confirm_command(challenge, **options)
     assert decision.accepted is (case == "valid")
     if decision.accepted:
         assert decision.challenge.consumed
+
     assert "a" * 32 not in repr(challenge)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -467,6 +476,7 @@ def test_rejection_and_late_result(
         advance_command(unknown, CommandAction.FINISH, result=result, **options)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

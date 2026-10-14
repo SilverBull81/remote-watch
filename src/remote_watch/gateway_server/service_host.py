@@ -1,10 +1,10 @@
 ﻿# Работа службы без GUI: передача состояния в Windows и штатная остановка сервера.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> TransientServiceFailure: Временный отказ запуска после освобождения ресурсов сервера
@@ -94,10 +94,12 @@ async def supervise(
 
     # spec/stopped/report — наличие tray в конфиге относится к сеансу пользователя.
     # Session 0 не импортирует GUI и не зависит от видимости иконки/наличия RDP.
+
     config = load_deployment_config(spec.config)
     config = replace(config, application=replace(config.application, ui="headless"))
     if stopped.is_set():
         return 0
+
     manager = GatewayManager(config, operator_sid=spec.operator_sid)
     task = asyncio.create_task(manager.run())
     state = "starting"
@@ -156,6 +158,7 @@ def run_service(
     """
 
     # spec — токены и пароли не передаются обработчикам Windows и не записываются в Event Log.
+
     import servicemanager
     import win32serviceutil
 
@@ -188,6 +191,7 @@ def run_service(
             """
 
             # args — базовый класс регистрирует handler; ресурсы открываются в SvcRun.
+
             self.stopped = threading.Event()
             self.finished = threading.Event()
             self.lock = threading.RLock()
@@ -269,6 +273,7 @@ def run_service(
             """
 
             # control/event_type/data — только известный код события меняет порядок работы службы.
+
             if control == 15:
                 self.SvcStop()
         #----------------------------------------------------------------------------------------------------------
@@ -331,6 +336,7 @@ def run_service(
             finally:
                 self.finished.set()
                 guard.join(1)
+
             self._report("stopping")
         #----------------------------------------------------------------------------------------------------------
 
@@ -350,6 +356,7 @@ def run_service(
             """
 
             # state — после STOP никакой запоздалый heartbeat не возвращает RUNNING.
+
             with self.lock:
                 if self.stopped.is_set():
                     state = "stopping"
@@ -400,6 +407,7 @@ def run_service(
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

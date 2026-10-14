@@ -1,10 +1,10 @@
 ﻿# Приём исходных сообщений Telegram с проверкой отправителя и чата.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> TelegramCommandConfig: Настройки единственного получателя сообщений bot
@@ -141,11 +141,13 @@ class TelegramCommandProvider:
         if (type(me) is not dict or me.get("is_bot") is not True or type(me.get("id")) is not int
                 or type(me.get("username")) is not str or not re.fullmatch(r"[A-Za-z0-9_]{5,32}", me["username"])):
             raise CommandError("invalid")
+
         self._username = me["username"]
         webhook = await self._call("getWebhookInfo", {})
 
         if type(webhook) is not dict or webhook.get("url") != "":
             raise CommandError("conflict")
+
         return f"telegram:{self.config.endpoint}:{me['id']}"
     #--------------------------------------------------------------------------------------------------------------
 
@@ -171,10 +173,12 @@ class TelegramCommandProvider:
 
         # Отдельный ACK уже подтвердил прежний ID. Чтение без offset выдерживает
         # случайный новый update_id после недели без сообщений, включая меньший ID.
+
         result = await self._call("getUpdates", {"timeout": 10, "limit": 1, "allowed_updates": ["message"]})
 
         if type(result) is not list or len(result) > 1:
             raise CommandError("invalid")
+
         return tuple(self._event(value) for value in result)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -197,14 +201,17 @@ class TelegramCommandProvider:
 
         if not cursor.isdecimal() or len(cursor) > 20:
             raise CommandError("invalid")
+
         head = await self._call("getUpdates", {"timeout": 0, "limit": 1, "allowed_updates": ["message"]})
 
         if type(head) is not list or len(head) > 1:
             raise CommandError("invalid")
+
         # После недели простоя старый offset нельзя повторять вслепую: новый ID
         # может оказаться меньше. Подтверждаем только реально стоящее первым событие.
         if not head or self._event(head[0]).event_id != cursor:
             return
+
         await self._call("getUpdates", {"offset": int(cursor) + 1, "timeout": 0, "limit": 1,
                                         "allowed_updates": ["message"]})
     #--------------------------------------------------------------------------------------------------------------
@@ -233,6 +240,7 @@ class TelegramCommandProvider:
 
         if re.fullmatch(r"-?[0-9]{1,20}", conversation_id) is None:
             raise CommandError("invalid")
+
         result = await self._call("sendMessage", {"chat_id": conversation_id, "text": text,
                                                    "link_preview_options": {"is_disabled": True}})
 
@@ -297,6 +305,7 @@ class TelegramCommandProvider:
 
         if "result" not in value:
             raise CommandError("invalid")
+
         return value["result"]
     #--------------------------------------------------------------------------------------------------------------
 
@@ -322,6 +331,7 @@ class TelegramCommandProvider:
 
         if type(value) is not dict or type(value.get("update_id")) is not int or value["update_id"] < 0:
             raise CommandError("invalid")
+
         event_id = str(value["update_id"])
         message = value.get("message")
         actor = chat = text = None
@@ -349,11 +359,13 @@ class TelegramCommandProvider:
                     text = "/" + prefix[1] + candidate[prefix.end():]
                 elif candidate.strip().casefold() == "help":
                     actor, chat, text = str(sender["id"]), str(conversation["id"]), "Help"
+
         return SourceEvent(event_id=event_id, message_date=date, actor_id=actor, conversation_id=chat, text=text)
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

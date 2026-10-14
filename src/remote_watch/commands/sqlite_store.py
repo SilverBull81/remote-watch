@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite
@@ -148,10 +148,12 @@ class SQLiteCommandStore:
 
         if not isinstance(path, (str, Path)) or str(path) in ("", ":memory:"):
             raise ValueError("a persistent database path is required")
+
         require_text(owner_id, "store owner", 128)
         _nonce(generation)
         if type(role) is not StoreRole or type(limits) is not StoreLimits or not callable(clock):
             raise TypeError("invalid storage configuration")
+
         self._path = Path(path)
         self._owner = owner_id
         self._generation = generation
@@ -178,6 +180,7 @@ class SQLiteCommandStore:
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
+
         connection = None
         try:
             if self._connection is not None:
@@ -281,6 +284,7 @@ class SQLiteCommandStore:
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
+
         try:
             if self._connection is not None:
                 self._connection.close()
@@ -306,6 +310,7 @@ class SQLiteCommandStore:
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
+
         try:
             db = self._connection
             if db is None or self._failed:
@@ -331,6 +336,7 @@ class SQLiteCommandStore:
         """
 
         # session_id — меняется только адрес новых команд, существующие записи сохраняются.
+
         _nonce(session_id)
         with self._transaction() as (db, _):
             if self._role is not StoreRole.CLIENT:
@@ -415,8 +421,10 @@ class SQLiteCommandStore:
         self._position(position)
         if type(expected_cursor) is not int or not -1 <= expected_cursor <= 2**63 - 1:
             raise ValueError("invalid expected cursor")
+
         if request is not None and type(request) is not CommandRequest:
             raise TypeError("invalid command request")
+
         if request is None and (type(rejection) is not AuditCode or
                                rejection not in (AuditCode.IGNORED, AuditCode.DENIED, AuditCode.STALE)):
             raise ValueError("invalid source decision")
@@ -530,6 +538,7 @@ class SQLiteCommandStore:
         """
 
         # ref — сверка всех полей обязательна и для административной квитанции.
+
         with self._transaction() as (db, _):
             row = self._row(db, ref, required=False)
             if row is None:
@@ -638,12 +647,14 @@ class SQLiteCommandStore:
                 self._audit(db, AuditCode.TRANSITION, proposal.record)
                 stored = self._stored(self._row(db, ref))
             answer = CommittedTransition(command=stored, start_callback=proposal.start_callback)
+
         # Выход из контекста включает commit. При ошибке commit этот return не достижим.
         if answer.start_callback:
             after_commit = self._now()
             if min(deadline.remaining(after_commit, ref.hub_epoch),
                    session_deadline.remaining(after_commit, ref.hub_epoch)) <= 0:
                 return CommittedTransition(command=answer.command, start_callback=False)
+
         return answer
     #--------------------------------------------------------------------------------------------------------------
 
@@ -666,6 +677,7 @@ class SQLiteCommandStore:
 
         if type(result) is not CommandResult:
             raise TypeError("invalid command result")
+
         with self._transaction() as (db, now):
             row = self._row(db, result.ref)
             stored = self._stored(row)
@@ -830,6 +842,7 @@ class SQLiteCommandStore:
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
+
         db = self._connection
         try:
             if db is None or self._failed:
@@ -883,6 +896,7 @@ class SQLiteCommandStore:
         if self._last is not None and now < self._last:
             self._failed = True
             raise StoreError("store clock rollback")
+
         self._last = now
         return now
     #--------------------------------------------------------------------------------------------------------------
@@ -942,11 +956,14 @@ class SQLiteCommandStore:
 
         if type(ref) is not CommandRef:
             raise TypeError("invalid command reference")
+
         row = db.execute("SELECT * FROM commands WHERE command_id=?", (ref.command_id,)).fetchone()
         if row is not None and self._stored(row).record.request.ref != ref:
             raise StoreConflict("command reference conflict")
+
         if row is None and required:
             raise StoreConflict("command not found")
+
         return row
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1026,6 +1043,7 @@ class SQLiteCommandStore:
         if record.result is not None and (record.phase is CommandPhase.COMPLETED
                 or record.result.reason.value in ("callback_error", "invalid_result")):
             running = False
+
         db.execute("UPDATE commands SET phase=?, claim_id=?, result=?, running=?, "
                    "revision=revision+1, retain_until=? "
                    "WHERE sequence=?", (record.phase.value, record.claim_id, body,
@@ -1136,6 +1154,7 @@ class SQLiteCommandStore:
 
         # executescript делает неявный commit; здесь все DDL должны остаться
         # внутри того же BEGIN, что и создание владельца/поколения журнала.
+
         statements = (
             "CREATE TABLE metadata (id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT NOT NULL, role TEXT NOT NULL, "
             "generation TEXT NOT NULL, settings TEXT NOT NULL, last_now REAL NOT NULL)",
@@ -1156,6 +1175,7 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

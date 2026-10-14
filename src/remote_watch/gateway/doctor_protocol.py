@@ -1,10 +1,10 @@
 ﻿# Ограниченная проверка прав и готовности без регистрации и исполнения команд.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ProbeEndpoint: Отдельный read-only обработчик с ограничением нагрузки
@@ -59,21 +59,26 @@ def decode_probe(
     """
 
     # data — отдельная схема, без session_id, command_id, callback и provider actor.
+
     if len(data) > 16384:
         raise ValueError("probe_size")
+
     value = json.loads(data.decode("utf-8"), object_pairs_hook=_pairs)
     if (type(value) is not dict or set(value) != {"schema_version", "identity", "permissions"}
             or type(value["schema_version"]) is not int or value["schema_version"] != 1):
         raise ValueError("probe_schema")
+
     identity = value["identity"]
     if type(identity) is not dict or set(identity) != {"service", "environment", "region", "host", "instance_id"}:
         raise ValueError("probe_identity")
+
     permissions = value["permissions"]
     if (type(permissions) is not list or not 1 <= len(permissions) <= 64
             or any(type(item) is not str or not 1 <= len(item) <= 128 or not item.strip()
                    or any(ord(char) < 32 for char in item) for item in permissions)
             or len(set(permissions)) != len(permissions)):
         raise ValueError("probe_permissions")
+
     return Identity(**identity), tuple(permissions)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -95,9 +100,11 @@ def _pairs(
     """
 
     # items — одинаковые ключи запрещены на любом уровне объекта.
+
     value = dict(items)
     if len(value) != len(items):
         raise ValueError("probe_duplicate")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -123,8 +130,10 @@ def probe_response(
     """
 
     # component/state — выводим только фиксированные признаки; значения запроса не отражаем.
+
     if component not in ("commands", "notifications"):
         raise ValueError("probe_component")
+
     reasons = {"closed", "not_started", "time_unavailable", "maintenance_failed", "busy",
                "storage_busy", "storage_unavailable", "unavailable"}
     reason = state.get("reason")
@@ -173,6 +182,7 @@ class ProbeEndpoint:
         """
 
         # component/authenticate/observe — зависимости не открывают серверы и не читают окружение.
+
         self._component = component
         self._authenticate = authenticate
         self._observe = observe
@@ -198,6 +208,7 @@ class ProbeEndpoint:
         """
 
         # request — doctor имеет отдельную квоту; потоки доставки и команд не занимают её.
+
         from aiohttp import web
 
         counted = False
@@ -238,6 +249,7 @@ class ProbeEndpoint:
         finally:
             if counted:
                 self._active -= 1
+
         response = web.json_response(payload, status=status,
                                      headers={"Cache-Control": "no-store", "X-Remote-Watch-Probe": "1",
                                               "X-Remote-Watch-Component": self._component})
@@ -246,6 +258,7 @@ class ProbeEndpoint:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

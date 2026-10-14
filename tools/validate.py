@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -58,6 +58,7 @@ def main() -> int:
     output = args.output.resolve()
     if (root / "build").resolve() not in output.parents:
         parser.error("Каталог проверки должен находиться внутри build.")
+
     output.mkdir(parents=True, exist_ok=False)
     match = re.search(r'^version = "([^"]+)"', (root / "pyproject.toml").read_text(encoding="utf-8"), re.M)
     assert match is not None
@@ -65,6 +66,7 @@ def main() -> int:
     report = {"python": platform.python_version(), "system": platform.system(), "version": version,
               "mode": args.mode, "passed": False, "steps": []}
     environment = os.environ.copy()
+
     # Ни live opt-in, ни PYTHONPATH родителя не должны менять смысл проверки.
     for name in tuple(environment):
         if name.startswith("REMOTE_WATCH_") or name in ("PYTHONPATH", "PYTHONHOME"):
@@ -101,6 +103,7 @@ def main() -> int:
             report["steps"].append({"stage": stage, "returncode": None, "timeout": True,
                                     "seconds": round(time.monotonic() - started, 3)})
             raise
+
         report["steps"].append({"stage": stage, "returncode": result.returncode,
                                 "seconds": round(time.monotonic() - started, 3)})
         print(f"{stage}: {'OK' if result.returncode == 0 else 'FAIL'}", flush=True)
@@ -151,9 +154,11 @@ def main() -> int:
         report["passed"] = True
     finally:
         (output / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явный запуск проверки
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

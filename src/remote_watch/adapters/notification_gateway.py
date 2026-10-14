@@ -1,10 +1,10 @@
 ﻿# Одна попытка доставки через HTTPS-шлюз без передачи клиенту токенов мессенджера.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NotificationGatewayClientConfig: Настройки адреса gateway и разрешённого назначения
@@ -176,6 +176,7 @@ class NotificationGatewayClientConfig:
         if self.ssl_context is not None and (not isinstance(self.ssl_context, ssl.SSLContext)
                 or self.ssl_context.verify_mode != ssl.CERT_REQUIRED or not self.ssl_context.check_hostname):
             raise ValueError("gateway TLS context must verify certificates and hostnames")
+
         require_number(self.server_timeout, "server_timeout")
         require_number(self.network_margin, "network_margin")
         if self.display_mode is None:
@@ -188,8 +189,10 @@ class NotificationGatewayClientConfig:
         # Режим требует схемы 3; явно указанную старую схему не подменяем молча.
         if self.schema_version is None:
             object.__setattr__(self, "schema_version", 3 if self.display_mode is not None else 1)
+
         if type(self.schema_version) is not int or self.schema_version not in (1, 2, 3):
             raise ValueError("unsupported gateway schema version")
+
         if self.display_mode is not None and self.schema_version != 3:
             raise ValueError("client display requires gateway schema 3")
     #--------------------------------------------------------------------------------------------------------------
@@ -213,6 +216,7 @@ class NotificationGatewayClientConfig:
 
         if not isinstance(policy, RetryPolicy):
             raise TypeError("retry must be RetryPolicy")
+
         if self.server_timeout + self.network_margin > policy.attempt_timeout:
             raise ValueError("gateway server timeout and network margin exceed attempt_timeout")
     #--------------------------------------------------------------------------------------------------------------
@@ -251,6 +255,7 @@ class NotificationGatewayChannel:
 
         if not isinstance(config, NotificationGatewayClientConfig):
             raise TypeError("config must be NotificationGatewayClientConfig")
+
         self._policy = retry if retry is not None else RetryPolicy()
         config._check_policy(self._policy)
         self._config = config
@@ -275,6 +280,7 @@ class NotificationGatewayChannel:
         if self._token is not None:
             await self._http.open()
             return
+
         token = resolve_token(self._config.token, self._config.token_env, "gateway")
 
         await self._http.open()
@@ -303,6 +309,7 @@ class NotificationGatewayChannel:
 
         if self._token is None:
             raise RuntimeError("channel is not open")
+
         if not isinstance(delivery, Delivery):
             raise TypeError("delivery must be Delivery")
 
@@ -315,6 +322,7 @@ class NotificationGatewayChannel:
         if timeout <= 0:
             return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus.PERMANENT_FAILURE,
                                   reason_code="gateway_budget_exhausted")
+
         try:
             # Копия относится только к этому получателю: другие каналы того же
             # события и общая immutable Notification не получают чужой режим.
@@ -328,10 +336,12 @@ class NotificationGatewayChannel:
             # Неверный для wire размер не является неизвестным исходом: сеть ещё не начата.
             return DeliveryResult(source=ResultSource.GATEWAY, status=DeliveryStatus.PERMANENT_FAILURE,
                                   reason_code="gateway_payload_limits")
+
         response = await self._http.post(self._config.endpoint.rstrip("/") + "/v1/notifications",
                                          request.to_dict(), self._token)
         if isinstance(response, DeliveryResult):
             return replace(response, source=ResultSource.GATEWAY)
+
         status, headers, body = response
         if not 200 <= status <= 299:
             result = http_failure(status, retry_after(headers["retry-after"]))
@@ -339,6 +349,7 @@ class NotificationGatewayChannel:
             if status in (401, 403):
                 result = replace(result, reason_code="gateway_auth_denied")
             return replace(result, source=ResultSource.GATEWAY)
+
         try:
             return decode_response(body, delivery, schema_version=self._config.schema_version)
         except (ValueError, TypeError, OverflowError):
@@ -364,6 +375,7 @@ class NotificationGatewayChannel:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

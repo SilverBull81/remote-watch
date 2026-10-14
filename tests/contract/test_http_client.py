@@ -1,10 +1,10 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер
@@ -192,7 +192,9 @@ def test_local_http(
             await server.wait_closed()
             if workers:
                 await asyncio.wait_for(asyncio.gather(*workers), 2)
+
         assert client.closed
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
     assert "synthetic" not in caplog.text
@@ -273,10 +275,12 @@ def test_ntfy_wire_limits(
                 return web.json_response({"code": 41301}, status=413)
 
             payload = json.loads(raw)
+
             # Оба полевых отчёта dev5: 4095 байт приняты, ровно 4096 дали 50001.
             # Сервер воспроизводит наблюдённый отказ, чтобы поймать возврат к старой границе.
             if len(payload["message"].encode("utf-8")) >= 4096:
                 return web.json_response({"code": 50001}, status=500)
+
             return web.json_response({"event": "message", "topic": payload["topic"], "id": "synthetic"})
         #----------------------------------------------------------------------------------------------------------
 
@@ -286,6 +290,7 @@ def test_ntfy_wire_limits(
         await runner.setup()
         server = await asyncio.get_running_loop().create_server(runner.server, "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
+
         # Полные метаданные дополнительно проверяют, что бюджет не сводится к длине message.
         tags = tuple(str(i) + "т" * 127 for i in range(16)) if large_metadata else ("проверка",)
         config = NtfyConfig(topic="test", token_env=None, endpoint=f"http://127.0.0.1:{port}",
@@ -335,6 +340,7 @@ def test_ntfy_wire_limits(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

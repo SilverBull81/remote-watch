@@ -1,10 +1,10 @@
 ﻿# Конечная проверка команд с телефона на безопасном тестовом состоянии.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> SmokeApplication: Безопасное приложение для проверки команд с телефона
@@ -174,6 +174,7 @@ class SmokeApplication:
             self._count += 1
             self._history.append(name + ":" + state)
             self._history[:] = self._history[-64:]
+
         # Ответ описывает флаг тестового приложения, а не окончание реальной загрузки.
         return "Test loading is suspended." if self.paused.is_set() else "Test loading is enabled."
     #--------------------------------------------------------------------------------------------------------------
@@ -216,6 +217,7 @@ def run_smoke(
 
     if not 5 <= duration <= 3600:
         raise ValueError("smoke duration outside limits")
+
     application = SmokeApplication()
     registry = CommandRegistry.from_callbacks({"status": application.status, "check_load": application.status,
         "resume_load": application.resume_load, "suspend_load": application.suspend_load})
@@ -237,6 +239,7 @@ def run_smoke(
         print(payload, end="", flush=True)
         if report is not None:
             report.write_text(payload, encoding="utf-8")
+
     return 0 if result["sequence_verified"] else 1
 #------------------------------------------------------------------------------------------------------------------
 
@@ -277,6 +280,7 @@ def main(
         return 2
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Явный запуск CLI
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

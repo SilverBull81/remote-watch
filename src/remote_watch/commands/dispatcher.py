@@ -1,10 +1,10 @@
 ﻿# Выполнение пользовательских команд с явным владением потоками и неизвестными исходами.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DispatcherStats: Счётчики и состояние исполнителя без приватных данных
@@ -213,6 +213,7 @@ class CommandDispatcher:
             require_number(value, "dispatcher interval")
             if value > 30:
                 raise ValueError("invalid dispatcher interval")
+
         self.registry = registry
         self.client = client
         self._poll_interval = poll_interval
@@ -266,6 +267,7 @@ class CommandDispatcher:
 
         if command_context.get() or self._loop is not None or self._stopping.is_set():
             raise CommandError("closed")
+
         self._loop = asyncio.get_running_loop()
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="remote-watch-callback")
 
@@ -297,6 +299,7 @@ class CommandDispatcher:
 
         if self._loop is not None and asyncio.get_running_loop() is not self._loop:
             raise RuntimeError("command dispatcher belongs to another event loop")
+
         first = not self._stopping.is_set()
         self._stopping.set()
 
@@ -309,6 +312,7 @@ class CommandDispatcher:
 
         if self._pool is not None:
             self._pool.shutdown(wait=False, cancel_futures=True)
+
         return not self.stats.running and (self._runner is None or self._runner.done())
     #--------------------------------------------------------------------------------------------------------------
 
@@ -429,6 +433,7 @@ class CommandDispatcher:
         if not valid:
             self._rejected += 1
             return CommandReason.INVALID_ARGUMENTS
+
         return None
     #--------------------------------------------------------------------------------------------------------------
 
@@ -450,6 +455,7 @@ class CommandDispatcher:
         # ticket — тот же объект разрешения, который вернул этот клиент.
 
         spec = self.registry[ticket.grant.request.name]
+
         # STARTED уже записан в журнале. Теперь потребляем единственное разрешение;
         # дополнительная проверка внутри worker исключает просрочку при передаче в поток.
         allowed = self.client.begin(ticket)
@@ -458,12 +464,14 @@ class CommandDispatcher:
             self._unknown += 1
             await self._settle(ticket, _unknown(ticket, CommandReason.TIMEOUT), True)
             return
+
         self._async_job = is_async(spec.callback)
 
         if self._async_job:
             self._job = asyncio.create_task(self._invoke_async(spec, ticket))
         else:
             self._job = self._loop.run_in_executor(self._pool, copy_context().run, self._invoke_sync, spec, ticket)
+
         self._job.add_done_callback(_consume)
         done, _ = await asyncio.wait({self._job}, timeout=self.client.remaining(ticket))
         timed_out = not done or self.client.remaining(ticket) <= 0
@@ -482,6 +490,7 @@ class CommandDispatcher:
             self._completed += 1
         else:
             self._unknown += 1
+
         finished = self._job.done()
         await self._settle(ticket, result, finished)
 
@@ -713,6 +722,7 @@ def _consume(
         future.exception()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

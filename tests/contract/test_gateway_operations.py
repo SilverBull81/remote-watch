@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки
@@ -209,6 +209,7 @@ def test_cli_summary(
     path = tmp_path / "private_path.stop"
     if mode == "stale":
         path.touch()
+
     closed = []
 
     #--------------------------------------------------------------------------------------------------------------
@@ -258,8 +259,10 @@ def test_cli_summary(
 
             if mode == "startup":
                 raise cli.NotificationGatewayStartupError("providers")
+
             if mode == "cancel":
                 raise asyncio.CancelledError
+
             path.touch()
         #----------------------------------------------------------------------------------------------------------
 
@@ -304,6 +307,7 @@ def test_cli_summary(
             "stale": ValueError}
         with pytest.raises(expected[mode]):
             asyncio.run(cli._serve(None, "127.0.0.1", 0, None, path))
+
     output = capsys.readouterr().out
     assert "private_path" not in output
     rows = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
@@ -355,8 +359,10 @@ def test_config_categories(
     path = tmp_path / "private_config.json"
     if raw is not None:
         path.write_bytes(raw)
+
     with pytest.raises(NotificationGatewayConfigError) as error:
         load_notification_gateway_config(path)
+
     assert (error.value.code, error.value.field) == (code, field)
     assert cli.main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out
@@ -382,6 +388,7 @@ def test_cli_private_arguments(
 
     with pytest.raises(SystemExit) as error:
         cli.main(["--port", "private_value"])
+
     assert error.value.code == 2
     assert "private_value" not in capsys.readouterr().err
 #------------------------------------------------------------------------------------------------------------------
@@ -500,6 +507,7 @@ def test_shared_alias(
             if task is not None:
                 await asyncio.gather(task, return_exceptions=True)
             await gateway.close()
+
         assert gateway.stats()["active"] == 0
     #--------------------------------------------------------------------------------------------------------------
 
@@ -544,6 +552,7 @@ def test_cli_process_stop(
         "        destination_id='phone', channel_factory=Channel,\n"
         "        retry=RetryPolicy(max_attempts=1)),), principals=(NotificationGatewayPrincipal(name='app',\n"
         "        token_env='GW_PROCESS_TEST', identity=identity, aliases=('phone',)),))\n", encoding="utf-8")
+
     # Англоязычная Windows обычно использует cp1252 для файла/pipe: кириллица CLI
     # должна сохраняться и при таком окружении, а не завершать работающий gateway.
     environment = dict(os.environ, GW_PROCESS_TEST="synthetic_process_" + "x" * 32,
@@ -567,6 +576,7 @@ def test_cli_process_stop(
             if process.poll() is None:
                 process.kill()
                 process.wait(timeout=5)
+
     # Проверяем факт завершения и итог после настоящей очистки CLI-процесса.
     data = output.read_bytes()
     rows = [json.loads(line) for line in data.splitlines() if line.startswith(b"{")]
@@ -750,6 +760,7 @@ def test_mixed_field(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

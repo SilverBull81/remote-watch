@@ -1,10 +1,10 @@
 ﻿# Проверки владения logger, локальными файлами и жизненным циклом RemoteWatcher.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> MemoryChannel: Тестовый канал с управляемым запуском и закрытием
@@ -126,6 +126,7 @@ class MemoryChannel:
         self.opened.set()
         while not self.release.is_set():
             await asyncio.sleep(0.001)
+
         if self.fail:
             raise RuntimeError("synthetic startup error")
     #--------------------------------------------------------------------------------------------------------------
@@ -153,6 +154,7 @@ class MemoryChannel:
         self.deliveries.append(delivery)
         if self.callback is not None:
             self.callback()
+
         return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -170,8 +172,10 @@ class MemoryChannel:
         self.close_entered.set()
         while not self.close_release.is_set():
             await asyncio.sleep(0.001)
+
         if self.block_close:
             await asyncio.Event().wait()
+
         self.closed = True
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -258,6 +262,7 @@ def test_owned_handlers(
         for index in range(12):
             adapter.info("local entry %s", index)
         adapter.error("remote entry")
+
     watcher.stop()
 
     assert len(channel.deliveries) == 1
@@ -300,7 +305,9 @@ def test_failure_rolls_back(
     watcher = RemoteWatcher(configuration(identity, channel), file=RotatingFileConfig(path=tmp_path / "log"))
     with pytest.raises(RuntimeError):
         watcher.start()
+
     assert channel.closed and watcher.logger.handlers == []
+
     # На Windows переименование также проверяет, что дескриптор больше не открыт.
     (tmp_path / "log").rename(tmp_path / "closed")
 
@@ -309,6 +316,7 @@ def test_failure_rolls_back(
                             file=RotatingFileConfig(path=tmp_path / "missing" / "log"))
     with pytest.raises(OSError):
         watcher.start()
+
     assert not channel.opened.is_set() and watcher.logger.handlers == []
     assert watcher.runtime.state is RuntimeState.CLOSED
 #------------------------------------------------------------------------------------------------------------------
@@ -342,6 +350,7 @@ def test_async_context_and_cancelled_start(
         watcher = RemoteWatcher(configuration(identity, channel))
         async with watcher:
             watcher.logger.error("async message")
+
         assert len(channel.deliveries) == 1 and channel.closed
 
         channel = MemoryChannel()
@@ -355,6 +364,7 @@ def test_async_context_and_cancelled_start(
         channel.release.set()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(task, 3)
+
         assert channel.closed and watcher.logger.handlers == []
         assert watcher.runtime.state is RuntimeState.CLOSED
     #--------------------------------------------------------------------------------------------------------------
@@ -404,6 +414,7 @@ def test_hierarchy_and_callback_lifecycle(
     channel.callback = callback
     with watcher:
         child.error("child entry")
+
     assert len(channel.deliveries) == 1 and errors == [True, True]
     assert channel.deliveries[0].notification.logger_name == "app.child"
 #------------------------------------------------------------------------------------------------------------------
@@ -433,6 +444,7 @@ def test_invalid_local_settings(
     values = {"path": tmp_path / "log", **settings}
     with pytest.raises((ValueError, TypeError)):
         RotatingFileConfig(**values)
+
     assert not (tmp_path / "log").exists()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -488,6 +500,7 @@ def test_closed_file_cannot_reopen(
     watcher = RemoteWatcher(WatcherConfig(identity=identity), file=RotatingFileConfig(path=path))
     with watcher:
         handler = watcher.logger.handlers[-1]
+
     record = logging.LogRecord("app", logging.ERROR, "", 0, "late entry", (), None)
     handler.handle(record)
     assert handler.stream is None and path.read_bytes() == b""
@@ -518,6 +531,7 @@ def test_slow_close_does_not_starve_other_channels(
                            runtime=RuntimeConfig(shutdown_timeout=0.5))
     with RemoteWatcher(config) as watcher:
         pass
+
     assert healthy.closed and not slow.closed
     assert watcher.runtime.stats("healthy").close_failed == 0
     assert watcher.runtime.stats("slow").close_failed == 1
@@ -562,6 +576,7 @@ def test_cancelled_stop(
 
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(task, 3)
+
         assert channel.closed and watcher.runtime.state is RuntimeState.CLOSED
         assert not watcher.logger.handlers
     #--------------------------------------------------------------------------------------------------------------
@@ -569,6 +584,7 @@ def test_cancelled_stop(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

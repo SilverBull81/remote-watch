@@ -1,10 +1,10 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DeliveryStatus: Классификация результата одной попытки
@@ -125,6 +125,7 @@ class Delivery:
         """
 
         # Задание ссылается на уже проверенное уведомление; повторы сохраняют тот же delivery_id.
+
         if not isinstance(self.notification, Notification):
             raise TypeError("notification must be Notification")
 
@@ -221,6 +222,7 @@ class DeliveryResult:
         """
 
         # Результат описывает ответ сервиса или шлюза, а не показ уведомления на телефоне.
+
         if not isinstance(self.status, DeliveryStatus):
             raise TypeError("status must be DeliveryStatus")
 
@@ -234,10 +236,12 @@ class DeliveryResult:
                 raise ValueError("invalid TLS category")
             if self.status is not DeliveryStatus.PERMANENT_FAILURE:
                 raise ValueError("TLS category requires permanent_failure")
+
         if self.verify_code is not None:
             require_int(self.verify_code, "verify_code", 0)
             if self.verify_code > 999999 or self.error_kind != "tls_certificate":
                 raise ValueError("invalid TLS verification code")
+
         reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
                   else "handshake_failed" if self.error_kind else None)
         object.__setattr__(self, "tls_reason", reason)
@@ -277,6 +281,7 @@ class DeliveryResult:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверки TimeAPI через локальный TLS: формат UTC, границы ответа и отказ при сбое.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_timeapi_tls(): Проверка времени через локальный HTTPS и обработка недопустимых ответов
@@ -122,6 +122,7 @@ def test_timeapi_tls(
             entered.set()
             if case in ("cancel", "concurrent"):
                 await release.wait()
+
             if case == "timeout":
                 await asyncio.sleep(0.15)
 
@@ -142,15 +143,20 @@ def test_timeapi_tls(
             body = json.dumps(payload)
             if case == "duplicate":
                 body = body[:-1] + ', "timeZone": "UTC"}'
+
             if case == "oversized":
                 body += " " * 16384
+
             headers = {}
             if case == "cached":
                 headers["Age"] = "0"
+
             if case == "redirect":
                 headers["Location"] = "/another-path"
+
             if case == "compressed":
                 headers["Content-Encoding"] = "gzip"
+
             status = 302 if case == "redirect" else 503 if case == "status" else 200
             return web.Response(
                 text=body, headers=headers, status=status,
@@ -280,6 +286,7 @@ def test_timeapi_probe(
 
         if failed:
             raise TimeUnavailable("private response details")
+
         return TimeSample(lower_utc=1000, upper_utc=1002, observed_at=self._clock())
     #--------------------------------------------------------------------------------------------------------------
 
@@ -318,6 +325,7 @@ def test_timeapi_fraction(
     assert resolution == 10 ** -min(len(fraction), 6)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

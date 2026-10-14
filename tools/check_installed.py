@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.1.9
+# Version 1.2.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -103,6 +103,7 @@ def main() -> int:
     assert tuple(logging.getLogger().handlers) == handlers
     assert importlib.util.find_spec("cryptography") is None
     assert (importlib.util.find_spec("aiohttp") is not None) == (args.mode == "extras")
+
     # Установка новой версии не должна возвращать удалённые имена через файлы из старой сборки.
     for removed in (
         "remote_watch.adapters.relay", "remote_watch.relay_protocol",
@@ -111,6 +112,7 @@ def main() -> int:
         "remote_watch.adapters.telegram", "remote_watch.adapters.ntfy",
     ):
         assert importlib.util.find_spec(removed) is None
+
     assert "relay" not in importlib.metadata.metadata("remote-watch").get_all("Provides-Extra", [])
     assert all("extra ==" in item for item in importlib.metadata.requires("remote-watch") or [])
 
@@ -125,6 +127,7 @@ def main() -> int:
     if sys.platform == "win32":
         assert (importlib.util.find_spec("pystray") is not None) == (args.mode == "extras")
         assert (importlib.util.find_spec("win32service") is not None) == (args.mode == "extras")
+
     assert all(item is not None for item in (
         CommandSourceRunner, TelegramCommandProvider, NtfyCommandProvider, CommandGateway))
     for removed in ("smoke", "field_smoke", "ntfy_diagnostic"):
@@ -226,6 +229,7 @@ def main() -> int:
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явный запуск проверки
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

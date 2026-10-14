@@ -1,10 +1,10 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DeliveryMode: Способ отправки выбранному получателю
@@ -122,6 +122,7 @@ class RetryPolicy:
         """
 
         # Число попыток включает первую отправку; все интервалы задаются положительным числом секунд.
+
         require_int(self.max_attempts, "max_attempts")
 
         for name in ("connect_timeout", "attempt_timeout", "backoff_base", "backoff_cap", "ttl"):
@@ -182,6 +183,7 @@ class RuntimeConfig:
         """
 
         # Настройки только описывают ограничения: очереди и рабочие потоки здесь не создаются.
+
         require_int(self.ingress_capacity, "ingress_capacity")
         require_int(self.max_destinations, "max_destinations")
         require_number(self.startup_timeout, "startup_timeout")
@@ -246,6 +248,7 @@ class Destination:
         """
 
         # Сначала проверяем имена и способ отправки; название сервиса не используется для импорта кода.
+
         require_text(self.destination_id, "destination_id")
         require_text(self.provider, "provider")
 
@@ -336,6 +339,7 @@ class Route:
         """
 
         # Копируем списки условий, чтобы последующие изменения настроек вызывающим кодом не меняли правило.
+
         object.__setattr__(self, "destination_ids", text_tuple(self.destination_ids, "destination_ids"))
 
         if not self.destination_ids:
@@ -402,6 +406,7 @@ class WatcherConfig:
         """
 
         # Проверяем вложенные объекты до обращения к их ограничениям и спискам.
+
         if not isinstance(self.identity, Identity):
             raise TypeError("identity must be Identity")
 
@@ -440,6 +445,7 @@ class WatcherConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

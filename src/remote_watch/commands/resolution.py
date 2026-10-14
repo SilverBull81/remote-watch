@@ -1,10 +1,10 @@
 ﻿# Явная сверка завершённой команды с неопределённым итогом на остановленном hub.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ResolutionError: Безопасная категория отказа без содержимого журналов
@@ -96,6 +96,7 @@ def journal(
     """
 
     # path/writable — запись доступна только явному административному действию.
+
     db = sqlite3.connect(path.resolve().as_uri() + ("?mode=rw" if writable else "?mode=ro"),
                          uri=True, timeout=1, isolation_level=None)
     try:
@@ -135,6 +136,7 @@ def pending_summary(
     """
 
     # path — журнал читается напрямую, без open(), recovery и изменения generation.
+
     with journal(path) as db:
         role = db.execute("SELECT role FROM metadata WHERE id=1").fetchone()[0]
         if role not in ("client", "hub"):
@@ -174,6 +176,7 @@ def export_evidence(
 
 
     # sequence/output — выбирается ровно одна запись; файл содержит приватные данные команд.
+
     with journal(path) as db:
         if db.execute("SELECT role FROM metadata WHERE id=1").fetchone()[0] != "client":
             raise ResolutionError("client_journal_required")
@@ -187,6 +190,7 @@ def export_evidence(
             raise ResolutionError("invalid_evidence")
         payload = {"schema": 1, "request": json.loads(encode_command(request)),
                    "result": json.loads(encode_command(result))}
+
     with output.open("x", encoding="utf-8", newline="\n") as handle:
         json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
 #------------------------------------------------------------------------------------------------------------------
@@ -228,8 +232,10 @@ def reconcile(
 
     # owners_stopped — явное подтверждение оператора; сетевая проверка не доказывает остановку исполнения.
     # Окончание процесса приложения проверяется человеком до снятия execution_active.
+
     if expected is not None and not owners_stopped:
         raise ResolutionError("owners_stopped_confirmation_required")
+
     request, result = _evidence(evidence)
     with journal(path, writable=expected is not None) as db:
         meta = db.execute("SELECT * FROM metadata WHERE id=1").fetchone()
@@ -275,21 +281,27 @@ def _evidence(
     """
 
     # path — даже локальный файл ограничен до разбора JSON.
+
     with path.open("rb") as handle:
         raw = handle.read(2 * MAX_COMMAND_BYTES + 1025)
+
     if len(raw) > 2 * MAX_COMMAND_BYTES + 1024:
         raise ResolutionError("invalid_evidence")
+
     obj = json.loads(raw)
     if type(obj) is not dict or set(obj) != {"schema", "request", "result"} or type(obj["schema"]) is not int:
         raise ResolutionError("invalid_evidence")
+
     if obj["schema"] != 1:
         raise ResolutionError("invalid_evidence")
+
     request = decode_command(json.dumps(obj["request"], ensure_ascii=False, separators=(",", ":")).encode())
     result = decode_command(json.dumps(obj["result"], ensure_ascii=False, separators=(",", ":")).encode())
     if (type(request) is not CommandRequest or type(result) is not CommandResult
             or result.outcome is not CommandOutcome.COMPLETED or result.ref != request.ref
             or result.claim_id is None):
         raise ResolutionError("invalid_evidence")
+
     return request, result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -316,8 +328,10 @@ def _match(
     """
 
     # row/request/result — совпадение одной команды или имени приложения недостаточно.
+
     if row is None or decode_command(row["request"]) != request or row["claim_id"] != result.claim_id:
         raise ResolutionError("command_mismatch")
+
     original = decode_command(row["result"]) if row["result"] is not None else None
     if (row["phase"] != "unknown" or type(original) is not CommandResult
             or original.outcome is not CommandOutcome.UNKNOWN or original.ref != result.ref
@@ -356,6 +370,7 @@ def _fingerprint(
 
 
     # last_now не входит в отпечаток; ревизия и generation защищают от устаревшей сверки.
+
     values = [meta["owner"], meta["generation"], meta["settings"], row["revision"],
               row["acknowledged"], row["running"], json.loads(row["request"]),
               json.loads(row["result"]), json.loads(encode_command(result))]
@@ -400,20 +415,24 @@ def _apply(
 
 
     # Дополнительный результат учитывается в логическом и физическом лимите БД.
+
     accepted = encode_command(result)
     settings = json.loads(meta["settings"])
     reserved = db.execute("SELECT COALESCE(SUM(reserved),0) FROM commands").fetchone()[0]
     if reserved + len(accepted) > settings["payload_bytes"]:
         raise ResolutionError("store_capacity")
+
     pages = settings["database_bytes"] // db.execute("PRAGMA page_size").fetchone()[0]
     if db.execute(f"PRAGMA max_page_count={pages}").fetchone()[0] > pages:
         raise ResolutionError("store_capacity")
+
     db.execute("CREATE TABLE IF NOT EXISTS resolutions (command_id TEXT PRIMARY KEY "
                "REFERENCES commands(command_id) ON DELETE CASCADE, accepted BLOB NOT NULL, "
                "fingerprint TEXT NOT NULL, decided_at TEXT NOT NULL)")
     db.execute("PRAGMA user_version=2")
     db.execute("INSERT INTO resolutions VALUES (?, ?, ?, ?)",
                (row["command_id"], accepted, fingerprint, datetime.now(timezone.utc).isoformat()))
+
     # UNKNOWN, его текст и ACK источника остаются прежними. Владелец отдельно
     # подтверждает окончание исполнения и принимает клиентский итог для квитанции.
     db.execute("UPDATE commands SET running=0, revision=revision+1, reserved=reserved+? WHERE command_id=?",
@@ -422,11 +441,13 @@ def _apply(
                (row["command_id"],))
     db.execute("DELETE FROM audit WHERE sequence NOT IN (SELECT sequence FROM audit "
                "ORDER BY sequence DESC LIMIT ?)", (settings["audit"],))
+
     # Новое служебное поколение ограждает старые открытые handle. Это дополнительная
     # защита, а не доказательство остановки callback: его подтверждает оператор.
     db.execute("UPDATE metadata SET generation=? WHERE id=1", (uuid4().hex,))
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

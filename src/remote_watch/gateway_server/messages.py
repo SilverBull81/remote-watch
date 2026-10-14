@@ -1,10 +1,10 @@
 ﻿# Ограниченные сообщения состояния между управляющим и дочерними процессами.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> status_message(): Проверка состояния без переноса произвольных подробностей.
@@ -64,21 +64,27 @@ def status_message(
     """
 
     # value — heartbeat несёт только безопасные агрегаты, не полный stats провайдера.
+
     keys = {"state", "reason", "time_reason", "failure", "counters"}
     if (type(value) is not dict or set(value) - {"journals"} != keys or type(value["state"]) is not str
             or value["state"] not in STATES):
         raise ValueError("invalid status")
+
     for key in ("reason", "time_reason"):
         if value[key] is not None and (type(value[key]) is not str or value[key] not in REASONS):
             raise ValueError("invalid status reason")
+
     if value["failure"] not in (None, "crash", "hang", "configuration", "authorization", "ownership", "storage"):
         raise ValueError("invalid failure")
+
     counters = value["counters"]
     if type(counters) is not dict or len(counters) > 8:
         raise ValueError("invalid counters")
+
     if any(key not in {"active", "destinations_busy", "pending", "unknown", "received", "submitted", "failures"}
            or type(number) is not int or not 0 <= number <= 2**63 - 1 for key, number in counters.items()):
         raise ValueError("invalid counter")
+
     result = dict(value, counters=dict(counters))
     if "journals" in value:
         journals = value["journals"]
@@ -87,6 +93,7 @@ def status_message(
             raise ValueError("invalid journals")
         result["journals"] = {"hub": validate_status(journals["hub"]),
                               "sources": [validate_status(item) for item in journals["sources"]]}
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -112,13 +119,16 @@ async def read_limited(
     """
 
     # stream/limit — лимит действует и при chunked transfer, без Content-Length.
+
     try:
         await stream.readexactly(limit + 1)
     except asyncio.IncompleteReadError as error:
         return error.partial
+
     raise ValueError("response too large")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Короткая проверка разных размеров ntfy с безопасным отчётом о каждой попытке.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> _delivery(): Подготовка уведомления с точным размером текста
@@ -97,6 +97,7 @@ def _delivery(
     remaining = size - len(render(delivery).encode("utf-8"))
     if remaining < 0:
         raise ValueError("diagnostic label exceeds the sample size")
+
     pattern = "Plain text " if alphabet == "ascii" else "Текст 📡 "
     count, tail = divmod(remaining, len(pattern.encode("utf-8")))
     return replace(delivery, notification=replace(event, message=event.message + pattern * count + "." * tail))
@@ -140,6 +141,7 @@ async def _run(
     token = settings.get("token")
     if not isinstance(token, str) or not token:
         raise ValueError("missing diagnostic credential")
+
     config = NtfyConfig(topic=settings.get("topic", settings.get("chat")), token_env=token_env,
                         endpoint=settings.get("endpoint", "https://ntfy.sh"),
                         allow_http=settings.get("allow_http", False))
@@ -190,6 +192,7 @@ async def _run(
                 stream.write(json.dumps({"kind": "summary", "attempted": attempted, "accepted": accepted,
                     "completed": completed, "provider_acceptance_complete": completed and accepted == attempted,
                     "phone_display_verified": False}) + "\n")
+
     return 0 if completed and accepted == attempted else 1
 #------------------------------------------------------------------------------------------------------------------
 
@@ -229,6 +232,7 @@ def main(
         return 2
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явный запуск диагностики ntfy
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Состояние доставки, восстановление и независимость назначений без сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> wait_for(): Ограниченное ожидание результата фоновой отправки
@@ -71,6 +71,7 @@ def wait_for(
     """
 
     # predicate — ожидание ограничено; ошибка не оставляет тест в бесконечном цикле.
+
     deadline = time.monotonic() + 3
     while not predicate():
         if time.monotonic() >= deadline:
@@ -104,6 +105,7 @@ def test_health_recovery(
     """
 
     # identity/mode — настоящий worker, подставные адаптеры без HTTP и секретов.
+
     failed, working = RecordingChannel(), RecordingChannel()
     variants = {"exception": RuntimeError("private-token-payload"), "cancel": asyncio.CancelledError(),
                 "invalid": object(), "timeout": asyncio.TimeoutError()}
@@ -152,6 +154,7 @@ def test_health_recovery(
             recovered.delivery_state = "forged"
     finally:
         runtime.stop()
+
     assert runtime.health().runtime_state == "closed"
     assert runtime.health("0").destinations[0].recoveries == 1
 #------------------------------------------------------------------------------------------------------------------
@@ -171,6 +174,7 @@ def test_retry_health(
     """
 
     # identity — один event, два вызова send; успешный повтор не стирает историю.
+
     channel = RecordingChannel()
     channel.send = AsyncMock(side_effect=[DeliveryResult(status=DeliveryStatus.TRANSIENT_FAILURE),
                                          DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED)])
@@ -206,13 +210,16 @@ def test_health_unobserved(
     """
 
     # identity — чтение снимка не должно даже открыть транспорт.
+
     channel = RecordingChannel()
     runtime = make_runtime(identity, (channel,))
     for _ in range(5):
         assert runtime.health().delivery_state == "unobserved"
+
     assert channel.calls == []
     with pytest.raises(KeyError):
         runtime.health("missing")
+
     runtime.start()
     assert runtime.health().runtime_state == "running" and runtime.health().delivery_state == "unobserved"
     runtime.stop()
@@ -225,6 +232,7 @@ def test_health_unobserved(
     failed = make_runtime(identity, (broken,))
     with pytest.raises(RuntimeError):
         failed.start()
+
     assert failed.health().runtime_state == "failed"
     assert failed.health().delivery_state == "unobserved"
 #------------------------------------------------------------------------------------------------------------------
@@ -244,6 +252,7 @@ def test_loss_is_not_connection_health(
     """
 
     # identity — тестовый адаптер удерживает слот; вторая доставка отклоняется локально.
+
     channel = RecordingChannel()
     channel.block = True
     runtime = make_runtime(identity, (channel,), capacity=1)
@@ -291,6 +300,7 @@ def test_observation_times() -> None:
     assert next_failure.consecutive_failures == 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

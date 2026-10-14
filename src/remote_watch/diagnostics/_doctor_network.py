@@ -1,10 +1,10 @@
 ﻿# Конечная проверка DNS, TCP, TLS и read-only маршрута gateway.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> network_checks(): Наблюдение ограниченной проверки без зависания на системном DNS
@@ -80,6 +80,7 @@ def network_checks(
     # endpoint/context/component/token/body/timeout — только один явно заданный адрес, не сканирование.
     # Системный DNS нельзя надёжно прервать. Один daemon-поток позволяет завершить CLI
     # по сроку; после запоздалого DNS он увидит cancel и не начнёт TCP/HTTP.
+
     events: queue.Queue = queue.Queue()
     cancel = threading.Event()
     worker = threading.Thread(target=_probe, args=(endpoint, context, component, token, body, timeout,
@@ -159,6 +160,7 @@ def _probe(
 
     # endpoint/context/component/token/body — не появляются в событиях или исключениях CLI.
     # timeout/events/cancel — этапы наблюдаются отдельно; поздний поток не запускает следующий этап.
+
     connection = None
     stream = None
     stage = "dns"
@@ -262,6 +264,7 @@ def _http(
     """
 
     # connection/component/token/body — ошибочные HTML/JSON, заголовки и Location не выводятся.
+
     connection.request("POST", "/v1/" + component + "/probe", body=body,
                        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
                                 "Accept-Encoding": "identity", "Connection": "close"})
@@ -269,27 +272,34 @@ def _http(
     status = response.status
     if status in (404, 405):
         return [{"check": "route", "status": "failed", "code": "route_missing", "http_status": status}]
+
     if 300 <= status < 400:
         return [{"check": "route", "status": "failed", "code": "redirect_rejected", "http_status": status}]
+
     if (response.getheader("X-Remote-Watch-Probe") != "1"
             or response.getheader("X-Remote-Watch-Component") != component):
         code = "upstream_unavailable" if status in (502, 503, 504) else "route_unverified"
         return [{"check": "route", "status": "failed", "code": code, "http_status": status}]
+
     rows = [{"check": "route", "status": "ok", "code": "route_ok", "http_status": status}]
     if status != 200:
         code = {401: "credential_denied", 403: "permission_denied", 429: "probe_busy"}.get(status, "probe_failed")
         return rows + [{"check": "authorization", "status": "failed", "code": code, "http_status": status}]
+
     if (response.getheader("Content-Type", "").split(";")[0].strip() != "application/json"
             or response.getheader("Content-Encoding") is not None):
         raise ValueError("probe_response")
+
     data = response.read(4097)
     if len(data) > 4096:
         raise ValueError("probe_response_size")
+
     value = json.loads(data.decode("utf-8"), object_pairs_hook=_pairs)
     if (type(value) is not dict or type(value.get("schema_version")) is not int
             or type(value.get("ready")) is not bool or value.get("authorized") is not True
             or value != probe_response(component, value)):
         raise ValueError("probe_response_schema")
+
     rows.append({"check": "authorization", "status": "ok", "code": "permissions_ok"})
     rows.append({"check": "readiness", "status": "ok" if value["ready"] else "failed",
                  "code": "ready" if value["ready"] else value["reason"]})
@@ -298,9 +308,11 @@ def _http(
                      "code": "time_ready" if value["time_ready"] else "time_unavailable"})
         rows.append({"check": "application_session", "status": "ok" if value["session_present"] else "warning",
                      "code": "session_present" if value["session_present"] else "application_not_registered"})
+
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Строгая упаковка ответа long poll поверх командного протокола.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> encode_response(): Кодирование сообщения либо предложения команды
@@ -73,6 +73,7 @@ def encode_response(
 
     if type(message) is not CommandOffer:
         return encode_command(message)
+
     return json.dumps({"offer": json.loads(encode_command(message.request)),
                        "sequence": message.sequence, "remaining_ttl": message.remaining_ttl},
                       separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
@@ -136,6 +137,7 @@ def decode_error(
 
     # data — тело без доверия к произвольным полям; status — уже полученный HTTP-статус.
     # Пустое/чужое тело сохраняет прежнюю классификацию, включая ответы reverse proxy.
+
     code = {401: "denied", 403: "denied", 409: "conflict", 429: "busy"}.get(status, "unavailable")
 
     busy_reason = None
@@ -184,9 +186,11 @@ def _unique(
         if key in result:
             raise ValueError("duplicate field")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

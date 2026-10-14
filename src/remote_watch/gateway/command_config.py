@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек
@@ -185,6 +185,7 @@ class CommandConfigError(ValueError):
             if (type(line) is int and type(column) is int
                     and 1 <= line <= 1048577 and 1 <= column <= 1048577):
                 self.hint += f" Строка {line}, столбец {column}."
+
         super().__init__(f"invalid command configuration: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -228,6 +229,7 @@ class ProviderBinding:
 
         if type(self.settings) not in (TelegramCommandConfig, NtfyCommandConfig):
             raise TypeError("invalid provider settings")
+
         if self.command_display_mode not in ("full", "compact", "text"):
             raise ValueError("invalid command display mode")
     #--------------------------------------------------------------------------------------------------------------
@@ -282,10 +284,12 @@ class CommandGatewayConfig:
 
         if {item.source_id for item in self.providers} != {source.source_id for source in self.hub.sources}:
             raise ValueError("missing command provider")
+
         identities = {identity for principal in self.hub.principals for identity in principal.identities}
 
         if identities != set(self.targets.aliases.values()):
             raise ValueError("command target mismatch")
+
         object.__setattr__(self, "state_dir", Path(self.state_dir))
         object.__setattr__(self, "providers", tuple(self.providers))
     #--------------------------------------------------------------------------------------------------------------
@@ -432,6 +436,7 @@ def read_command_json(
             body = stream.read(1048577)
     except OSError:
         raise CommandConfigError("config", "config_read") from None
+
     try:
         if len(body) > 1048576:
             raise CommandConfigError("config", "config_size")
@@ -648,6 +653,7 @@ def _credential(
 
     if resolve_environment or token is not None:
         return resolve_token(token, token_env, "gateway")
+
     # Суррогат используется только внутри check_command_gateway и никогда не возвращается
     # вызывающему коду. Настоящий loader всегда разрешает переменные окружения.
     return token_hex(32)
@@ -679,6 +685,7 @@ def _path(
 
     if type(value) is not str or not value.strip() or "\0" in value:
         raise ValueError("invalid configuration path")
+
     return (location.parent / value).resolve()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -741,6 +748,7 @@ def _keys(
     missing = sorted(required - value.keys())
     if missing:
         raise CommandConfigError(field_name + "." + missing[0], "config_missing")
+
     if value.keys() - required - optional:
         raise CommandConfigError(field_name, "config_unknown")
 #------------------------------------------------------------------------------------------------------------------
@@ -776,6 +784,7 @@ def _items(
 
     if type(value) is not list or not 1 <= len(value) <= maximum:
         raise CommandConfigError(field_name, "config_list")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -804,6 +813,7 @@ def _pairs(
         if key in result:
             raise CommandConfigError("config", "config_json", json_reason="duplicate")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -826,6 +836,7 @@ def _constant(
     raise CommandConfigError("config", "config_json", json_reason="constant")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

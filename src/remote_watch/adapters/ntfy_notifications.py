@@ -1,10 +1,10 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NtfyConfig: Настройки получателя ntfy
@@ -266,6 +266,7 @@ class NtfyChannel:
 
         if not self._opened:
             raise RuntimeError("channel is not open")
+
         if not isinstance(delivery, Delivery):
             raise TypeError("delivery must be Delivery")
 
@@ -277,6 +278,7 @@ class NtfyChannel:
         response = await self._http.post(self._config.endpoint.rstrip('/') + '/', payload, self._token)
         if isinstance(response, DeliveryResult):
             return replace(response, **sizes)
+
         status, headers, body = response
         if not 200 <= status <= 299:
             # Копируем лишь ограниченный числовой code. error/link и прочие поля
@@ -291,6 +293,7 @@ class NtfyChannel:
             if isinstance(message_id, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", message_id):
                 return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id=message_id,
                                       http_status=status, **sizes)
+
         return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response",
                               http_status=status, **sizes)
     #--------------------------------------------------------------------------------------------------------------
@@ -371,6 +374,7 @@ def _publish_payload(
     # JSON publish отдельно ограничен 8192 байтами при стандартной настройке ntfy.
     # ensure_ascii=False устраняет разрастание кириллицы, но кавычки и управляющие символы
     # всё равно экранируются; большой набор меток тоже занимает часть доступного объёма.
+
     text = truncate(message, 4095)
     payload: dict[str, object] = {
         "topic": config.topic, "message": text, "title": config.title,
@@ -400,6 +404,7 @@ def _publish_payload(
     return payload
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

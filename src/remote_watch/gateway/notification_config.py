@@ -1,10 +1,10 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NotificationGatewayPrincipal: Разрешённая принадлежность и назначения одного приложения
@@ -97,13 +97,16 @@ class NotificationGatewayPrincipal:
         aliases = text_tuple(self.aliases, "aliases")
         if not aliases:
             raise ValueError("at least one alias is required")
+
         for alias in aliases:
             validate_alias(alias)
+
         object.__setattr__(self, "aliases", aliases)
 
         require_int(self.capacity, "capacity")
         if self.capacity > 256:
             raise ValueError("principal capacity exceeds 256")
+
         require_number(self.min_interval, "min_interval", allow_zero=True)
         if self.min_interval > 3600:
             raise ValueError("min_interval exceeds one hour")
@@ -172,6 +175,7 @@ class NotificationGatewayServerConfig:
         """
 
         # Ограничиваем коллекции до копирования и проверки ссылок. Произвольные итераторы не принимаем.
+
         for name, item_type, maximum in (("destinations", Destination, 64),
                 ("principals", NotificationGatewayPrincipal, 256)):
             items = getattr(self, name)
@@ -190,28 +194,35 @@ class NotificationGatewayServerConfig:
             if destination.destination_id in aliases:
                 raise ValueError("duplicate gateway alias")
             aliases.add(destination.destination_id)
+
         if len({item.name for item in self.principals}) != len(self.principals):
             raise ValueError("duplicate principal name")
+
         if any(not set(item.aliases) <= aliases for item in self.principals):
             raise ValueError("principal refers to an unknown alias")
 
         require_int(self.capacity, "capacity")
         if self.capacity > 256:
             raise ValueError("gateway capacity exceeds 256")
+
         for name in ("body_timeout", "attempt_timeout", "startup_timeout", "shutdown_timeout"):
             require_number(getattr(self, name), name)
+
         require_number(self.future_tolerance, "future_tolerance", allow_zero=True)
         require_number(self.clock_skew_tolerance, "clock_skew_tolerance", allow_zero=True)
         if self.clock_skew_tolerance > 3600:
             raise ValueError("clock_skew_tolerance exceeds one hour")
+
         require_number(self.destination_interval, "destination_interval", allow_zero=True)
         if self.destination_interval > 3600:
             raise ValueError("destination_interval exceeds one hour")
+
         if self.future_tolerance > 30:
             raise ValueError("future_tolerance exceeds thirty seconds")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

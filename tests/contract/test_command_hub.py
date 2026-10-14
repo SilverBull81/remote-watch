@@ -1,10 +1,10 @@
 ﻿# Проверки маршрутизации, прав, сроков и отказов двух постоянных журналов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DirectTransport: Подставной транспорт с потерей уже записанного ответа
@@ -204,6 +204,7 @@ class DirectTransport:
         if operation == self.lose:
             self.lose = None
             raise CommandError("unavailable")
+
         return response
     #--------------------------------------------------------------------------------------------------------------
 
@@ -794,6 +795,7 @@ def test_command_worker_cancellation(
         """
 
         rig = Rig(tmp_path)
+
         # Проверяем явную отмену caller, а не скорость создания базы или timeout.
         # Подготовке нужен обычный конечный срок, достаточный для диска Windows CI.
         worker = StoreWorker(rig.store, 10.0)
@@ -936,6 +938,7 @@ def test_command_fail_closed_boundaries(
 
         if boundary == "no_time":
             rig.hub._trusted = TrustedClock(clock=lambda: rig.now)
+
         await rig.start()
 
         try:
@@ -977,6 +980,7 @@ def test_command_fail_closed_boundaries(
 
                     if operation == "claim":
                         rig.now += 11
+
                     return response
                 #--------------------------------------------------------------------------------------------------
 
@@ -1065,6 +1069,7 @@ def test_command_background_heartbeat(
             response = await original(operation, message)
             if operation == "heartbeat":
                 received.set()
+
             return response
         #----------------------------------------------------------------------------------------------------------
 
@@ -1076,12 +1081,14 @@ def test_command_background_heartbeat(
             assert rig.client._lease.expires_at == rig.now + 10
         finally:
             await rig.close()
+
         assert rig.client._heartbeat.done()
     #--------------------------------------------------------------------------------------------------------------
 
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

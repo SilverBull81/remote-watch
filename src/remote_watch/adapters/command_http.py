@@ -1,10 +1,10 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> HttpsCommandTransport: Защищённые запросы без неявных повторов
@@ -100,6 +100,7 @@ class HttpsCommandTransport:
 
         if timeout > 30:
             raise ValueError("invalid command HTTP timeout")
+
         parsed = urlsplit(endpoint)
 
         if parsed.username or parsed.password or parsed.query or parsed.fragment or not parsed.hostname:
@@ -115,11 +116,13 @@ class HttpsCommandTransport:
                 loopback = False
             if parsed.scheme != "http" or not allow_loopback_http or not loopback:
                 raise ValueError("HTTPS required")
+
         context = ssl_context or ssl.create_default_context()
 
         if (not isinstance(context, ssl.SSLContext) or not context.check_hostname
                 or context.verify_mode != ssl.CERT_REQUIRED):
             raise ValueError("TLS verification required")
+
         self._endpoint = endpoint.rstrip("/")
         self._token = token
         self._ssl = context
@@ -143,6 +146,7 @@ class HttpsCommandTransport:
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
+
         import aiohttp
         self._loop = asyncio.get_running_loop()
         self._client = aiohttp.ClientSession(
@@ -189,7 +193,9 @@ class HttpsCommandTransport:
 
         if not self._ssl.check_hostname or self._ssl.verify_mode != ssl.CERT_REQUIRED:
             raise CommandError("unavailable")
+
         self._active += 1
+
         # Ошибки HTTP-библиотеки не должны стать удалёнными уведомлениями приложения.
         # За пределами одного обмена сохраняется прежний контекст пользовательского кода.
         context_token = delivery_context.set(True)
@@ -270,6 +276,7 @@ class HttpsCommandTransport:
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

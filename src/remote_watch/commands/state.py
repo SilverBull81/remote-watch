@@ -1,10 +1,10 @@
 ﻿# Переходы состояний команд и относительные сроки без постоянного хранилища.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandPhase: Состояния исполнения в постоянном журнале
@@ -160,6 +160,7 @@ class CommandDeadline:
         require_number(remaining_ttl, "remaining_ttl")
         if remaining_ttl > MAX_COMMAND_SECONDS:
             raise ValueError("command lifetime exceeds limit")
+
         # Hub сообщает остаток при формировании ответа. Вычитание всего времени
         # запроса консервативно: ожидание на сервере может быть учтено дважды,
         # но задержка ответа никогда не превращается в дополнительный срок.
@@ -196,6 +197,7 @@ class CommandDeadline:
         require_number(now, "now", allow_zero=True)
         if hub_epoch != self.hub_epoch or now < self.received_at:
             return 0.0
+
         return max(0.0, self.expires_at - now)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -213,6 +215,7 @@ class CommandDeadline:
         _nonce(self.hub_epoch)
         for value in (self.sent_at, self.received_at, self.expires_at):
             require_number(value, "monotonic time", allow_zero=True)
+
         if self.received_at < self.sent_at or not 0 < self.expires_at - self.sent_at <= MAX_COMMAND_SECONDS:
             raise ValueError("invalid command deadline")
     #--------------------------------------------------------------------------------------------------------------
@@ -257,10 +260,13 @@ class CommandRecord:
 
         if type(self.request) is not CommandRequest or type(self.phase) is not CommandPhase:
             raise TypeError("invalid command record type")
+
         if self.claim_id is not None:
             _nonce(self.claim_id)
+
         if self.phase is CommandPhase.READY and self.claim_id is not None:
             raise ValueError("ready command cannot have a claim")
+
         if self.phase in (CommandPhase.CLAIMED, CommandPhase.STARTED) and self.claim_id is None:
             raise ValueError("active command requires a claim")
 
@@ -269,6 +275,7 @@ class CommandRecord:
         terminal = self.phase.value in {item.value for item in CommandOutcome}
         if terminal != (self.result is not None):
             raise ValueError("command phase and result disagree")
+
         if self.result is not None:
             if type(self.result) is not CommandResult:
                 raise TypeError("invalid command result type")
@@ -309,6 +316,7 @@ class CommandTransition:
 
         if type(self.record) is not CommandRecord or type(self.start_callback) is not bool:
             raise TypeError("invalid command transition type")
+
         if self.start_callback and self.record.phase is not CommandPhase.STARTED:
             raise ValueError("callback start requires a started record")
     #--------------------------------------------------------------------------------------------------------------
@@ -373,10 +381,13 @@ def recover_command(
 
     if type(record) is not CommandRecord:
         raise TypeError("record must be CommandRecord")
+
     if record.result is not None:
         return record
+
     if record.phase is CommandPhase.STARTED:
         return _finish(record, CommandOutcome.UNKNOWN, CommandReason.RESTART)
+
     return _finish(record, CommandOutcome.EXPIRED, CommandReason.RESTART)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -441,17 +452,23 @@ def advance_command(
 
     if type(record) is not CommandRecord or type(action) is not CommandAction:
         raise TypeError("invalid command transition input")
+
     if type(command_deadline) is not CommandDeadline or type(session_deadline) is not CommandDeadline:
         raise TypeError("invalid command deadline type")
+
     if not record.request.ref.matches(session):
         raise ValueError("command session mismatch")
+
     if (type(claim) is not CommandClaim or claim.ref != record.request.ref
             or claim.request_digest != message_digest(record.request)):
         raise ValueError("command claim mismatch")
+
     if record.claim_id is not None and record.claim_id != claim.claim_id:
         raise ValueError("command already belongs to another claim")
+
     if grant is not None and (type(grant) is not CommandGrant or not grant.matches(claim)):
         raise ValueError("command grant mismatch")
+
     if result is not None and (type(result) is not CommandResult or result.ref != record.request.ref
                                or result.claim_id != claim.claim_id):
         raise ValueError("command result mismatch")
@@ -513,6 +530,7 @@ def advance_command(
     raise ValueError("invalid command transition")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Последовательные операции постоянного журнала с ограниченным ожиданием.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> StoreLifecycle: Контракт ресурсов рабочего потока хранения
@@ -151,9 +151,11 @@ class StoreWorker(Generic[S]):
         # timeout — конечный предел ожидания, секунды.
 
         # max_waiters — очередь только в event loop, не в ThreadPoolExecutor.
+
         require_int(max_waiters, "storage waiters", 0)
         if max_waiters > 256:
             raise ValueError("invalid storage waiter limit")
+
         self._max_waiters = max_waiters
         self._waiters = 0
         self._gate = asyncio.Lock()
@@ -205,6 +207,7 @@ class StoreWorker(Generic[S]):
 
         if self._pool is not None or self._closing:
             raise CommandError("closed")
+
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="remote-watch-command-store")
 
         try:
@@ -271,6 +274,7 @@ class StoreWorker(Generic[S]):
         except BaseException:
             self._gate.release()
             raise
+
         self._pending = future
         future.add_done_callback(self._completed)
 
@@ -315,11 +319,13 @@ class StoreWorker(Generic[S]):
 
         if self._closing:
             return
+
         self._closing = True
         pool = self._pool
 
         if pool is None:
             return
+
         # Единственная разрешённая отложенная операция — закрытие после текущей записи.
         # Timeout не освобождает занятый рабочий поток и не отменяет уже выполняющийся commit.
         closed = asyncio.get_running_loop().run_in_executor(pool, self.store.close)
@@ -362,6 +368,7 @@ class StoreWorker(Generic[S]):
 
         # operation/completed/completed_at — диагностический сбой после commit не должен превратить
         # успешную запись в ошибку и спровоцировать повтор бизнес-действия.
+
         try:
             result = operation()
         except BaseException as error:
@@ -415,9 +422,11 @@ class StoreWorker(Generic[S]):
         """
 
         # future — запись могла закончиться уже после timeout или отмены caller.
+
         _consume(future)
         with self._journal_lock:
             self._observing = False
+
         self._gate.release()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -448,6 +457,7 @@ def _consume(
         future.exception()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Локальная утилита разбора и явного согласования конфликтующих результатов команд.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> main(): Выбор безопасного просмотра либо явного применения решения
@@ -48,6 +48,7 @@ def main(
     """
 
     # argv — пути не выводятся; argparse выбирает только фиксированные действия.
+
     parser = argparse.ArgumentParser(description="Offline command outcome resolution; see COMMAND_RESOLUTION.md.")
     actions = parser.add_subparsers(dest="action", required=True)
     listing = actions.add_parser("list", help="Read-only bounded pending summary, no payloads.")
@@ -84,10 +85,12 @@ def main(
         # Нельзя печатать SQLite/JSON/OS-текст: он может содержать путь или данные команды.
         print(json.dumps({"status": "failed", "code": "journal_or_evidence_invalid"}))
         return 2
+
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск локальной административной утилиты
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Одноразовое подтверждение изменяющего намерения без доверия к UTC машин.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandChallenge: Одноразовое подтверждение точного намерения
@@ -89,9 +89,11 @@ class CommandChallenge:
 
         if type(self.request) is not CommandRequest or type(self.deadline) is not CommandDeadline:
             raise TypeError("invalid confirmation type")
+
         _nonce(self.nonce)
         if type(self.consumed) is not bool:
             raise TypeError("consumed must be bool")
+
         if (self.deadline.hub_epoch != self.request.ref.hub_epoch
                 or self.deadline.expires_at - self.deadline.sent_at > MAX_CONFIRMATION_SECONDS):
             raise ValueError("invalid confirmation deadline")
@@ -129,6 +131,7 @@ class ConfirmationDecision:
 
         if type(self.challenge) is not CommandChallenge or type(self.accepted) is not bool:
             raise TypeError("invalid confirmation decision")
+
         if self.accepted and not self.challenge.consumed:
             raise ValueError("accepted confirmation must be consumed")
     #--------------------------------------------------------------------------------------------------------------
@@ -210,9 +213,11 @@ def confirm_command(
                and message_digest(request) == message_digest(challenge.request))
     if not matches:
         return ConfirmationDecision(challenge=challenge, accepted=False)
+
     return ConfirmationDecision(challenge=replace(challenge, consumed=True), accepted=True)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

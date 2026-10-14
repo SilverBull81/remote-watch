@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети
@@ -171,6 +171,7 @@ def test_command_config(
             "topic": "commands", "reply_topic": "replies", "actor_id": "owner",
                       "private_topic_confirmed": True, "token": "tk_" + "x" * 29})
         source["access"][0].update(actor_id="owner", conversation_id="commands")
+
     path = write_config(tmp_path / "command_gateway.local.json", value)
 
     if kind == "duplicate":
@@ -178,6 +179,7 @@ def test_command_config(
 
     if kind == "missing":
         path = tmp_path / "missing.json"
+
     success = kind in ("literal", "env_check", "private_ntfy")
     assert main(["--config", str(path), "--check-config"]) == (0 if success else 1)
     output = capsys.readouterr().out
@@ -266,6 +268,7 @@ def test_gateway_two_applications(
         """
 
         raw = settings()
+
         # Проверяем доставку, а не скорость диска CI: длинный poll будится новой командой.
         raw["hub"]["poll_timeout"] = 5.0
         config = load_command_gateway(write_config(tmp_path / "gateway.local.json", raw))
@@ -329,6 +332,7 @@ def test_gateway_two_applications(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

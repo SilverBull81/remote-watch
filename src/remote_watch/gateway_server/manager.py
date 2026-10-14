@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -95,6 +95,7 @@ class StatusLog(RotatingFileHandler):
         """
 
         # record — при ошибке диска не пытаемся записать ещё одну строку через тот же handler.
+
         self.failed = True
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -189,6 +190,7 @@ class GatewayManager:
 
         # config — исходные пути сохраняются, журналы и CA никуда не переносятся.
         # operator_sid — только служебный host; токен управления не становится публичным.
+
         self.config = config
         self._operator_sid = operator_sid
         self.stop_event = asyncio.Event()
@@ -211,6 +213,7 @@ class GatewayManager:
         names = [name for name in ("notifications", "commands") if getattr(config, name) is not None]
         if config.caddy.mode == "managed":
             names.insert(0, "caddy")
+
         self.children = {name: ChildState(name, RestartBudget(config.restart)) for name in names}
     #--------------------------------------------------------------------------------------------------------------
 
@@ -256,9 +259,11 @@ class GatewayManager:
 
         # До открытия существующей lock запрещаем ссылки: раннее получение lock
         # не должно обойти прежний запрет private_directory и записать чужой файл.
+
         for path in (self.config.control_dir, self.config.control_dir / "manager.lock"):
             if path.is_symlink() or path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 0x400:
                 raise RuntimeError("control_permissions")
+
         if self.config.control_dir.exists():
             # При разных аккаунтах service/operator второй --start не должен
             # менять ACL живого владельца до отказа по manager.lock.
@@ -271,6 +276,7 @@ class GatewayManager:
         else:
             private_directory(self.config.control_dir, self._operator_sid)
             self._lock.open()
+
         result = 1
         try:
             private_directory(self.config.log_dir, self._operator_sid)
@@ -342,6 +348,7 @@ class GatewayManager:
                     if child.process is not None and child.process.poll() is None:
                         child.process.kill()
                 self._lock.close()
+
         return 1 if self.reason == "shutdown_timeout" else result
     #--------------------------------------------------------------------------------------------------------------
 
@@ -365,6 +372,7 @@ class GatewayManager:
 
         # child — после последнего heartbeat возраст продолжает расти на часах
         # manager. Ни смерть процесса, ни отсутствие новых сообщений его не обнуляют.
+
         value = status_message(child.message)
         if "journals" in value:
             elapsed = max(0, int(monotonic() - child.contact)) if child.contacted else 0
@@ -374,6 +382,7 @@ class GatewayManager:
                     item["age_seconds"] = min(2**31 - 1, item["age_seconds"] + elapsed)
                 if value["state"] in ("failed", "stopped", "stopping", "starting", "restarting"):
                     item["state"] = "unavailable"
+
         return dict(value, restarts=child.restarts)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -440,16 +449,20 @@ class GatewayManager:
 
         # request/token — только numeric loopback; Origin/redirect не создают browser API.
         # limit — управляющий запрос остаётся 4 KiB, heartbeat допускает 16 KiB.
+
         from aiohttp import web
 
         supplied = request.headers.get("Authorization", "")
         if (request.remote != "127.0.0.1" or "Origin" in request.headers or not token
                 or not hmac.compare_digest(supplied.encode(), ("Bearer " + token).encode())):
             raise web.HTTPForbidden(text="denied")
+
         if self._active >= 8:
             raise web.HTTPServiceUnavailable(text="busy")
+
         if request.content_length is not None and request.content_length > limit:
             raise web.HTTPRequestEntityTooLarge(max_size=limit, actual_size=request.content_length)
+
         self._active += 1
         try:
             data = await asyncio.wait_for(request.read(), 2)
@@ -484,16 +497,19 @@ class GatewayManager:
         """
 
         # request — нет произвольных методов, командной строки или путей файлов.
+
         from aiohttp import web
 
         value = await self._read(request, self._token)
         if set(value) != {"action", "generation"} or value["generation"] != self.generation:
             raise web.HTTPConflict(text="generation")
+
         if value["action"] == "stop":
             self.state = "stopping"
             self.stop_event.set()
         elif value["action"] != "status":
             raise web.HTTPBadRequest(text="invalid")
+
         return web.json_response(self.status())
     #--------------------------------------------------------------------------------------------------------------
 
@@ -516,20 +532,24 @@ class GatewayManager:
         """
 
         # request — старый token после перезапуска не может оживить новый компонент.
+
         from aiohttp import web
 
         child = self.children.get(request.match_info["name"])
         if child is None or child.process is None or child.process.poll() is not None:
             raise web.HTTPForbidden(text="denied")
+
         value = await self._read(request, child.token, 16384)
         try:
             value = status_message(value)
         except (ValueError, TypeError):
             raise web.HTTPBadRequest(text="invalid") from None
+
         child.contact = monotonic()
         child.contacted = True
         if not child.stopping:
             child.message = value
+
         return web.json_response({"stop": child.stopping or self.stop_event.is_set()})
     #--------------------------------------------------------------------------------------------------------------
 
@@ -549,8 +569,10 @@ class GatewayManager:
         """
 
         # child — процесс прошлого запуска обязательно завершён до вызова.
+
         if child.process is not None and child.process.poll() is None:
             raise RuntimeError("ownership")
+
         child.token = secrets.token_urlsafe(32)
         child.stopping = False
         child.retry_at = None
@@ -568,6 +590,7 @@ class GatewayManager:
         else:
             component = getattr(self.config, child.name)
             settings.update(config=str(component.config), host=component.host, port=component.port)
+
         child.group = ProcessGroup()
         try:
             child.process = child.group.spawn([sys.executable, "-m", "remote_watch.gateway_server.child",
@@ -600,6 +623,7 @@ class GatewayManager:
         """
 
         # started — первый запуск откатывается целиком; позже соседние процессы живут независимо.
+
         for child in self.children.values():
             now = monotonic()
             if child.retry_at is not None:
@@ -660,6 +684,7 @@ class GatewayManager:
         """
 
         snapshot = self.status()
+
         # Счётчики меняются часто; логируем переходы, а полный снимок доступен через status.
         transition = json.dumps({"state": self.state, "reason": self.reason, "alerts": snapshot["alerts"],
                                  "ui": snapshot["ui"], "logging": snapshot["logging"],
@@ -669,14 +694,17 @@ class GatewayManager:
             self._log.info(json.dumps({"observed_at": datetime.now(timezone.utc).isoformat(),
                                        **json.loads(transition)}))
             self._last_log = transition
+
         if self._log_handler and self._log_handler.failed:
             self._alerts.observe("manager", "degraded", "logging_failed", monotonic())
         elif self._tray is not None and not self._tray.ready and self.state not in ("stopping", "stopped"):
             self._alerts.observe("manager", "degraded", "tray_unavailable", monotonic())
         else:
             self._alerts.observe("manager", self.state, self.reason, monotonic())
+
         for name, child in self.children.items():
             self._alerts.observe(name, child.message["state"], child.message["reason"], monotonic())
+
         if self._tray is not None:
             self._tray.update(self.state)
     #--------------------------------------------------------------------------------------------------------------
@@ -696,37 +724,45 @@ class GatewayManager:
         self.stop_event.set()
         for child in self.children.values():
             child.stopping = True
+
         self._report()
         end = monotonic() + self.config.lifecycle.shutdown_timeout
         while any(c.process is not None and c.process.poll() is None for c in self.children.values()):
             if monotonic() >= end:
                 break
             await asyncio.sleep(.05)
+
         for child in self.children.values():
             if child.group is not None:
                 child.group.close()
             if child.process is not None and child.process.poll() is None:
                 child.process.kill()
+
         end = monotonic() + self.config.lifecycle.kill_timeout
         while any(c.process is not None and c.process.poll() is None for c in self.children.values()):
             if monotonic() >= end:
                 self.reason = "shutdown_timeout"
                 break
             await asyncio.sleep(.05)
+
         for child in self.children.values():
             child.token = ""
             child.message.update(state="stopped" if child.process is None or child.process.poll() is not None
                                  else "failed", reason=None, failure=None)
+
         self.state = "stopped"
         self._report()
         if self._tray is not None:
             await asyncio.to_thread(self._tray.close)
+
         await self._alerts.close()
         if self._runner is not None:
             await self._runner.cleanup()
+
         (self.config.control_dir / "runtime.json").unlink(missing_ok=True)
         for handler in self._log.handlers:
             handler.close()
+
         self._lock.close()
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -758,10 +794,12 @@ async def control_request(
     """
 
     # config/action — никаких сигналов по PID из файла, только проверенный текущий owner.
+
     import aiohttp
 
     if action not in ("status", "stop"):
         raise ValueError("invalid action")
+
     try:
         directory = config.control_dir if isinstance(config, DeploymentConfig) else config
         with (directory / "runtime.json").open("rb") as stream:
@@ -790,6 +828,7 @@ async def control_request(
         raise RuntimeError("control_unavailable") from None
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

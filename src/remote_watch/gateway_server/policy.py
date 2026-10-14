@@ -1,10 +1,10 @@
 ﻿# Правила ограниченного перезапуска компонентов общего сервера.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FailureKind: Причина остановки компонента
@@ -197,6 +197,7 @@ class RestartBudget:
         require_number(jitter, "jitter", allow_zero=True)
         if jitter > 1 or not isinstance(failure, FailureKind):
             raise ValueError("invalid restart observation")
+
         if self._last_time is not None and now < self._last_time:
             raise ValueError("monotonic time moved backwards")
 
@@ -212,6 +213,7 @@ class RestartBudget:
 
         while self._attempts and now - self._attempts[0] >= self._policy.window:
             self._attempts.popleft()
+
         if len(self._attempts) >= self._policy.max_restarts:
             self._blocked = "restart_limit"
             return RestartDecision(None, self._blocked)
@@ -258,6 +260,7 @@ def _bounded_seconds(
         raise ValueError("duration exceeds limit")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

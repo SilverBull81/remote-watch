@@ -1,10 +1,10 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками notification gateway.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд
@@ -94,6 +94,7 @@ class CommandHubServer:
 
         if not max_polls < max_requests <= 256:
             raise ValueError("invalid command server capacity")
+
         self.hub = hub
         self.port: int | None = None
         self._max_requests = max_requests
@@ -139,6 +140,7 @@ class CommandHubServer:
 
         if self._runner is not None or self._closed:
             raise CommandError("closed")
+
         require_int(port, "command server port", minimum=0)
 
         if port > 65535:
@@ -147,11 +149,13 @@ class CommandHubServer:
         if ssl_context is None:
             if not allow_loopback_http or not ipaddress.ip_address(host).is_loopback:
                 raise ValueError("TLS required outside loopback")
+
         from aiohttp import web
         app = web.Application(client_max_size=MAX_HTTP_BYTES)
 
         for operation in sorted(OPERATIONS):
             app.router.add_post("/v1/commands/" + operation, self._handle, expect_handler=self._expect)
+
         # Отдельный протокол doctor не попадает в dispatch операций регистрации/исполнения.
         probe = ProbeEndpoint("commands", self._probe_auth, self._probe_status)
         app.router.add_post("/v1/commands/probe", probe.handle, expect_handler=self._expect)
@@ -182,6 +186,7 @@ class CommandHubServer:
 
         if self._closed:
             return
+
         self._closed = True
         await self.hub.close()
 
@@ -208,13 +213,16 @@ class CommandHubServer:
         """
 
         # request — не используем register/authenticate hub: диагностика не двигает его часы и lifecycle.
+
         headers = request.headers.getall("Authorization", [])
         if len(headers) != 1 or re.fullmatch(r"Bearer [A-Za-z0-9_-]{32,512}", headers[0]) is None:
             return None
+
         found = None
         for principal in self.hub.config.principals:
             if _matches(headers[0][7:], principal.token):
                 found = principal
+
         return found
     #--------------------------------------------------------------------------------------------------------------
 
@@ -237,6 +245,7 @@ class CommandHubServer:
         """
 
         # identity — чужие Identity endpoint отвергает до этого вызова.
+
         return dict(self.hub.health(), session_present=self.hub.client_present(identity))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -332,12 +341,14 @@ class CommandHubServer:
             if counted:
                 self._active -= 1
                 self._polls -= int(polling)
+
         response.force_close()
         return response
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FieldConfig: Продолжительность и отправитель полевой проверки
@@ -123,6 +123,7 @@ class FieldConfig:
 
         if not isinstance(self.identity, Identity):
             raise TypeError("identity must be Identity")
+
         require_number(self.duration, "duration")
         require_number(self.interval, "interval")
 
@@ -199,6 +200,7 @@ class _Journal:
         with self._lock:
             records = tuple(self._records)
             self._records.clear()
+
         for record in records:
             _write(stream, record)
     #--------------------------------------------------------------------------------------------------------------
@@ -432,6 +434,7 @@ def _sample(
     else:
         kind = "long_text"
         logger.error("%s case=long_text %s", label, "Длинный текст 📡 " * 1200, extra=extra)
+
     return kind
 #------------------------------------------------------------------------------------------------------------------
 
@@ -477,6 +480,7 @@ def _run(
 
     if not destinations or len(destinations) > 2:
         raise ValueError("field smoke requires one or two destinations")
+
     if output.suffix != ".jsonl" or output.with_suffix(".log").exists():
         raise ValueError("use a new .jsonl output path")
 
@@ -602,6 +606,7 @@ def _destination(
         config = NtfyConfig(token_env=token_env, topic=settings.get("topic", settings.get("chat")),
                            endpoint=settings.get("endpoint", "https://ntfy.sh"),
                            allow_http=settings.get("allow_http", False))
+
     return config.destination(provider, retry=policy, outstanding_capacity=16)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -661,6 +666,7 @@ def main(
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явный запуск полевой проверки
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

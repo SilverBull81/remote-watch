@@ -1,10 +1,10 @@
 ﻿# Проверка защиты единых правил оформления от повторных расхождений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_style_regressions(): Нарушения согласованных правил обнаруживаются без исполнения файла
@@ -46,6 +46,8 @@ import pytest
     ("parameter_spacing", "docstring_parameter_spacing"),
     ("closing_order", "closing_divider_order"),
     ("internal_heading", "internal_function_heading"),
+    ("guard_banner", "main_guard_opening_divider"),
+    ("argument_gap", "russian_argument_spacing"),
 ])
 def test_style_regressions(
     tmp_path: Path,
@@ -75,6 +77,7 @@ def test_style_regressions(
     source = root / "src/remote_watch/gateway_server/service.py"
     if change == "internal_heading":
         source = root / "tools/check_style.py"
+
     assert not check(source)
     text = source.read_text(encoding="utf-8-sig")
 
@@ -112,6 +115,11 @@ def test_style_regressions(
         text = text.replace(marker, "#" + "-" * 114 + "\n    #" + "-" * 110, 1)
     elif change == "internal_heading":
         text = text.replace("# СЛУЖЕБНАЯ ФУНКЦИЯ :", "# ФУНКЦИЯ :", 1)
+    elif change == "guard_banner":
+        marker = "\n#" + "-" * 114 + "\n# ТОЧКА ВХОДА"
+        text = text.replace(marker, "\n# ТОЧКА ВХОДА", 1)
+    elif change == "argument_gap":
+        text = text.replace("\n\n    parser = DeploymentParser", "\n    parser = DeploymentParser", 1)
 
     assert text != source.read_text(encoding="utf-8-sig"), change
     candidate = tmp_path / "candidate.py"
@@ -146,6 +154,7 @@ def test_package_guard(
     assert "package_main_guard" in {rule for _, rule in check(candidate)}
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

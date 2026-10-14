@@ -1,10 +1,10 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю
@@ -189,18 +189,22 @@ class CommandClient:
 
         if type(registration) is not CommandRegistration or not callable(clock):
             raise TypeError("invalid command client")
+
         require_text(stream_id, "command stream", 128)
 
         for value in (storage_timeout, shutdown_timeout):
             require_number(value, "client timeout")
             if value > 30:
                 raise ValueError("invalid client timeout")
+
         self.registration = registration
+
         # Задержки ограничивают нагрузку при длительном разрыве; очередь попыток не создаётся.
         require_number(reconnect_delay, "reconnect delay")
         require_number(reconnect_max_delay, "reconnect maximum")
         if not 0.01 <= reconnect_delay <= reconnect_max_delay <= 300:
             raise ValueError("invalid reconnect delay")
+
         self._reconnect_delay = reconnect_delay
         self._reconnect_max_delay = reconnect_max_delay
         self._recovering = False
@@ -243,6 +247,7 @@ class CommandClient:
 
         if self._session is None:
             raise CommandError("closed")
+
         return self._session
     #--------------------------------------------------------------------------------------------------------------
 
@@ -296,6 +301,7 @@ class CommandClient:
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
+
         self._loop = asyncio.get_running_loop()
 
         try:
@@ -336,6 +342,7 @@ class CommandClient:
 
         if self._acquiring or self._active is not None:
             raise CommandError("busy", busy_reason="client_operation_active")
+
         self._acquiring = True
 
         try:
@@ -377,6 +384,7 @@ class CommandClient:
 
                 if stored is None or stored.record.result is not None:
                     return None
+
                 claim = CommandClaim(ref=offer.request.ref, claim_id=stored.record.claim_id or token_hex(16),
                                      request_digest=message_digest(offer.request))
                 changed = store.transition(
@@ -428,11 +436,13 @@ class CommandClient:
 
                 if stored is None:
                     raise CommandError("invalid")
+
                 changed = store.transition(claim.ref, stored.revision, CommandAction.START, self._session,
                                            claim, lease, grant=grant, grant_deadline=bound)
 
                 if not changed.start_callback:
                     return None
+
                 return CommandTicket(grant=grant, deadline=changed.command.deadline)
             #------------------------------------------------------------------------------------------------------
 
@@ -469,6 +479,7 @@ class CommandClient:
 
         if ticket is not self._active or self._begun:
             raise CommandError("conflict")
+
         self._begun = True
         return self.remaining(ticket) > 0
     #--------------------------------------------------------------------------------------------------------------
@@ -505,6 +516,7 @@ class CommandClient:
 
         if ticket is not self._active or not self._begun:
             raise CommandError("conflict")
+
         grant = ticket.grant
 
         if (type(result) is not CommandResult or result.ref != grant.request.ref
@@ -525,6 +537,7 @@ class CommandClient:
 
             if stored is None:
                 raise CommandError("invalid")
+
             claim = CommandClaim(ref=result.ref, claim_id=grant.claim_id,
                                  request_digest=message_digest(grant.request))
             store.transition(result.ref, stored.revision, CommandAction.FINISH, self._session,
@@ -534,11 +547,13 @@ class CommandClient:
 
         self._health.pending(True)
         await self._storage(finish)
+
         # С этого момента повторять можно только доставку результата. Локальная
         # фиксация выполнена даже при потере следующего HTTP-ответа.
         if execution_finished:
             await self._storage(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
             self._active = None
+
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -575,6 +590,7 @@ class CommandClient:
                     await self._storage(lambda: self._worker.store.acknowledge(result))
                     continue
                 await self._send_result(result)
+
         await self._storage(self._worker.store.prune)
         await self._refresh_results()
     #--------------------------------------------------------------------------------------------------------------
@@ -601,12 +617,15 @@ class CommandClient:
 
         if self._closed or self._session is None or self._lease is None or self._failed_clock:
             return 0.0
+
         if not self.health.session_valid:
             return 0.0
+
         now = self._clock()
         require_number(now, "execution clock", allow_zero=True)
         if now < self._last:
             return 0.0
+
         return min(ticket.deadline.remaining(now, self._session.hub_epoch),
                    self._lease.remaining(now, self._session.hub_epoch))
     #--------------------------------------------------------------------------------------------------------------
@@ -692,6 +711,7 @@ class CommandClient:
                         record = changed.command.record
                 if record.result is not None and record.result.outcome is CommandOutcome.EXPIRED:
                     store.acknowledge(record.result)
+
             store.prune()
         #----------------------------------------------------------------------------------------------------------
 
@@ -720,9 +740,11 @@ class CommandClient:
         self._check()
         if ticket is not self._active:
             raise CommandError("conflict")
+
         stored = await self._storage(lambda: self._worker.store.get(ticket.grant.request.ref))
         if stored is None or stored.record.result is None:
             raise CommandError("conflict")
+
         result = stored.record.result
         await self._storage(lambda: self._worker.store.release_execution(result.ref, result.claim_id))
         self._active = None
@@ -742,6 +764,7 @@ class CommandClient:
 
         if self._closed:
             return
+
         self._closed = True
         self._health.close()
 
@@ -792,6 +815,7 @@ class CommandClient:
         """
 
         # operation — операция журнала; очередь и владение после timeout остаются в StoreWorker.
+
         return await self._worker.call(operation)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -807,6 +831,7 @@ class CommandClient:
         """
 
         rows = await self._storage(lambda: self._worker.store.pending(limit=1000))
+
         # Полная порция может скрывать продолжение. В этом случае готовность консервативна.
         # Старый результат тоже может блокировать reconnect. Его нельзя скрывать
         # только потому, что новый запуск уже зарегистрировал другую session_id.
@@ -845,6 +870,7 @@ class CommandClient:
 
         if self._closed or self._loop is None or asyncio.get_running_loop() is not self._loop:
             raise CommandError("closed")
+
         self._now()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -868,6 +894,7 @@ class CommandClient:
         if now < self._last or self._failed_clock:
             self._failed_clock = True
             raise CommandError("unavailable")
+
         self._last = now
         return now
     #--------------------------------------------------------------------------------------------------------------
@@ -890,6 +917,7 @@ class CommandClient:
 
         if self._recovering or not self.health.session_valid:
             raise CommandError("stale_session")
+
         return self._lease
     #--------------------------------------------------------------------------------------------------------------
 
@@ -921,10 +949,12 @@ class CommandClient:
 
         if self._session is not None and response.hub_epoch != self._session.hub_epoch:
             raise CommandError("stale_session")
+
         lease = CommandDeadline.from_response(response.remaining_ttl, sent, self._now(), response.hub_epoch)
 
         if lease.remaining(self._now(), response.hub_epoch) <= 0:
             raise CommandError("stale_session")
+
         self._session = response
         self._lease = lease
         self._server_lease_until = self._now() + response.remaining_ttl
@@ -954,9 +984,11 @@ class CommandClient:
 
         if type(response) is not CommandReceipt or not response.matches(result):
             raise CommandError("invalid")
+
         stored = await self._storage(lambda: self._worker.store.get(result.ref))
         if result.outcome is CommandOutcome.UNKNOWN and not stored.execution_active:
             await self._release_remote(result)
+
         await self._storage(lambda: self._worker.store.acknowledge(result))
         await self._reconcile_ticket()
         await self._storage(self._worker.store.prune)
@@ -988,6 +1020,7 @@ class CommandClient:
 
         if reason not in (CommandReason.DENIED, CommandReason.INVALID_ARGUMENTS):
             raise CommandError("invalid")
+
         result = CommandResult(ref=claim.ref, claim_id=claim.claim_id,
                                outcome=CommandOutcome.REJECTED, reason=reason)
 
@@ -1007,6 +1040,7 @@ class CommandClient:
             stored = store.get(claim.ref)
             if stored is None:
                 raise CommandError("invalid")
+
             changed = store.transition(claim.ref, stored.revision, CommandAction.REJECT,
                                        self._session, claim, self._lease, result=result)
             return changed.command.record.result
@@ -1044,6 +1078,7 @@ class CommandClient:
         stored = await self._storage(lambda: self._worker.store.get(result.ref))
         if stored is None:
             raise CommandError("invalid")
+
         claim = CommandClaim(ref=result.ref, claim_id=result.claim_id,
                              request_digest=message_digest(stored.record.request))
         response = await self._transport.exchange("release", claim)
@@ -1064,6 +1099,7 @@ class CommandClient:
 
         if self._active is None:
             return
+
         ticket = self._active
         stored = await self._storage(lambda: self._worker.store.get(ticket.grant.request.ref))
 
@@ -1090,6 +1126,7 @@ class CommandClient:
 
         self._check()
         self._health.recovery("reconnecting", attempt=True)
+
         # acquire может ожидать grant/валидатор. Пока он не завершился, менять
         # сессию нельзя: его продолжение всё ещё использует исходные разрешения.
         if self._acquiring:
@@ -1102,6 +1139,7 @@ class CommandClient:
             if stored is None or stored.execution_active or stored.record.result is None:
                 self._health.recovery("reconnecting", "execution_pending")
                 return False
+
             # Ожидание записи могло оборваться уже после commit. Сохранённое
             # окончание исполнения позволяет доставить итог и сверить _active.
         rows = await self.pending()
@@ -1109,6 +1147,7 @@ class CommandClient:
                and row.record.result.outcome is CommandOutcome.UNKNOWN) for row in rows):
             self._health.recovery("blocked", "unknown_execution")
             return False
+
         # Потерянный ACK допускает повтор точного результата. Противоречие с
         # UNKNOWN hub оставляет обе записи для разбора, а не запускает callback снова.
         await self.flush_results()
@@ -1118,16 +1157,19 @@ class CommandClient:
 
         if self._candidate is None:
             self._candidate = replace(self.registration, session_id=token_hex(16))
+
         sent = self._now()
         response = await self._transport.exchange("register", self._candidate)
         if (type(response) is not CommandSession or response.identity != self._candidate.identity
                 or response.session_id != self._candidate.session_id):
             raise CommandError("invalid")
+
         # При потерянном ответе повторяется тот же nonce. Новый ID не создаётся
         # на каждой сетевой попытке и не вытесняет чужую живую Identity.
         lease = CommandDeadline.from_response(response.remaining_ttl, sent, self._now(), response.hub_epoch)
         if lease.remaining(self._now(), response.hub_epoch) <= 0:
             raise CommandError("stale_session")
+
         await self._storage(lambda: self._worker.store.bind_session(self._candidate.session_id))
         self.registration = self._candidate
         self._session = response
@@ -1212,6 +1254,7 @@ class CommandClient:
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

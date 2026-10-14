@@ -1,10 +1,10 @@
 ﻿# Ограниченные сводки командных журналов без чтения запросов и восстановления владельца.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> JournalStats: Числа занятости и состояний одного журнала
@@ -169,8 +169,10 @@ def read_stats(
 
     # db/source_limit — запросы используют только числа, длины и постоянные имена таблиц.
     # Наблюдение не должно держать storage lane дольше 50 мс SQL-работы и не ждёт writer.
+
     if db.in_transaction:
         raise ValueError("journal transaction active")
+
     previous_wait = db.execute("PRAGMA busy_timeout").fetchone()[0]
     deadline = monotonic() + 0.05
     db.execute("PRAGMA busy_timeout=0")
@@ -219,11 +221,14 @@ def inspect_journal(
 
     # path — режим immutable запрещает SQLite создавать вспомогательные файлы и восстанавливать транзакции.
     # При незавершённой транзакции нельзя выдавать основной файл за полное состояние.
+
     resolved = path.resolve()
     if str(resolved).startswith(("\\\\", "//")):
         raise ValueError("local journal required")
+
     if any(Path(str(resolved) + suffix).exists() for suffix in ("-journal", "-wal", "-shm")):
         raise ValueError("journal sidecar present")
+
     db = sqlite3.connect(resolved.as_uri() + "?mode=ro&immutable=1", uri=True, timeout=0)
     try:
         db.execute("PRAGMA query_only=ON")
@@ -260,19 +265,23 @@ def _commands(
 
 
     # metadata.settings — только проверенные числовые пределы; сведения о владельце и поколении не извлекаются.
+
     meta = db.execute("SELECT role, settings FROM metadata WHERE id=1").fetchone()
     if meta is None or meta[0] not in ("hub", "client") or len(meta[1]) > 4096:
         raise ValueError("invalid metadata")
+
     limits = json.loads(meta[1])
     for key in ("records", "streams", "audit", "payload_bytes", "database_bytes"):
         if type(limits.get(key)) is not int or not 1 <= limits[key] <= 2**31:
             raise ValueError("invalid limits")
+
     row = db.execute("SELECT COUNT(*), COALESCE(SUM(acknowledged=0 OR running=1),0), "
         "COALESCE(SUM(phase='unknown'),0), COALESCE(SUM(running),0), COALESCE(SUM(reserved),0), "
         "COALESCE(SUM(length(request)+COALESCE(length(result),0)),0) FROM "
         "(SELECT acknowledged,running,phase,reserved,request,result FROM commands LIMIT 100001)").fetchone()
     if row[0] > 100000:
         raise ValueError("journal row bound")
+
     streams = db.execute("SELECT COUNT(*) FROM (SELECT 1 FROM streams LIMIT 1025)").fetchone()[0]
     audit = db.execute("SELECT COUNT(*) FROM (SELECT 1 FROM audit LIMIT 100001)").fetchone()[0]
     resolutions, extra = ((0, 0) if version == 1 else db.execute(
@@ -280,6 +289,7 @@ def _commands(
         "(SELECT accepted FROM resolutions LIMIT 100001)").fetchone())
     if streams > 1024 or audit > 100000 or resolutions > row[0]:
         raise ValueError("journal aggregate bound")
+
     resolved_unknown = (0 if version == 1 else db.execute(
         "SELECT COUNT(*) FROM (SELECT 1 FROM commands c JOIN resolutions r "
         "ON c.command_id=r.command_id WHERE c.phase='unknown' LIMIT 100001)").fetchone()[0])
@@ -321,14 +331,17 @@ def _source(
 
 
     # seen содержит replay-ID; наружу выходит только число и общий объём строк.
+
     seen, payload = db.execute("SELECT COUNT(*),COALESCE(SUM(length(CAST(event AS BLOB))),0) "
                               "FROM (SELECT event FROM seen LIMIT 10001)").fetchone()
     if seen > 10000:
         raise ValueError("source row bound")
+
     state = db.execute("SELECT pending IS NOT NULL, COALESCE(length(CAST(pending AS BLOB)),0) "
                        "+length(CAST(cursor AS BLOB)) FROM state WHERE id=1").fetchone()
     if state is None or type(state[1]) is not int:
         raise ValueError("source state missing")
+
     page_size = db.execute("PRAGMA page_size").fetchone()[0]
     size = page_size * db.execute("PRAGMA page_count").fetchone()[0]
     free = page_size * db.execute("PRAGMA freelist_count").fetchone()[0]
@@ -358,17 +371,22 @@ def validate_status(
     """
 
     # value — никакие произвольные имена, ошибки или дополнительные поля не переносятся.
+
     if type(value) is not dict or set(value) != {"state", "age_seconds", "snapshot"}:
         raise ValueError("invalid journal status")
+
     if type(value["state"]) is not str or value["state"] not in (
             "available", "unavailable", "unsupported", "not_observed", "closed"):
         raise ValueError("invalid journal state")
+
     age = value["age_seconds"]
     if age is not None and (type(age) is not int or not 0 <= age <= 2**31 - 1):
         raise ValueError("invalid journal age")
+
     snapshot = None if value["snapshot"] is None else validate_stats(value["snapshot"])
     if (snapshot is None) != (age is None) or value["state"] == "available" and snapshot is None:
         raise ValueError("invalid journal observation")
+
     return {"state": value["state"], "age_seconds": age, "snapshot": snapshot}
 #------------------------------------------------------------------------------------------------------------------
 
@@ -390,13 +408,17 @@ def validate_stats(
     """
 
     # value — метки роли/ёмкости фиксированы; остальные значения числовые или None.
+
     if type(value) is not dict or set(value) != set(JournalStats.__dataclass_fields__):
         raise ValueError("invalid journal snapshot")
+
     if type(value["kind"]) is not str or value["kind"] not in ("hub", "client", "source"):
         raise ValueError("invalid journal kind")
+
     if type(value["capacity"]) is not str or value["capacity"] not in (
             "ok", "near_limit", "at_limit", "unknown"):
         raise ValueError("invalid journal capacity")
+
     optional = {"records_limit", "unknown", "unresolved_unknown", "execution_active", "streams_limit",
                 "audit_limit", "payload_reserved_bytes", "payload_limit_bytes", "database_limit_bytes"}
     for key, number in value.items():
@@ -404,11 +426,14 @@ def validate_stats(
             continue
         if type(number) is not int or not 0 <= number <= 2**63 - 1:
             raise ValueError("invalid journal counter")
+
     if value["schema_version"] not in (1, 2) or value["pending"] > value["records"] + 1:
         raise ValueError("invalid journal counts")
+
     return dict(value)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> deployment(): Создание только подставных конфигов в отдельной папке
@@ -133,6 +133,7 @@ def test_modes_are_read_only(
     if mode != "both":
         disabled = "commands" if mode == "notifications" else "notifications"
         (path.parent / value.pop(disabled)["config"]).unlink()
+
     path.write_text(json.dumps(value), encoding="utf-8")
     before = {item.relative_to(path.parent): item.read_bytes()
               for item in path.parent.rglob("*") if item.is_file()}
@@ -153,6 +154,7 @@ def test_modes_are_read_only(
             assert component.config == (path.parent / value[name]["config"]).resolve()
         else:
             assert component is None
+
     after = {item.relative_to(path.parent): item.read_bytes() for item in path.parent.rglob("*") if item.is_file()}
     assert before == after
     assert not config.control_dir.exists()
@@ -214,6 +216,7 @@ def test_invalid_deployment(
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(DeploymentConfigError) as caught:
         load_deployment_config(path)
+
     assert "secret-value" not in str(caught.value)
     assert "secret-unknown" not in str(caught.value)
     assert str(path) not in str(caught.value)
@@ -244,10 +247,12 @@ def test_icon_path(
 
     # deployment/monkeypatch — запуск из другой папки не меняет смысл ссылки.
     # mode — проверяем встроенную иконку, оба вида пути и раннюю безопасную ошибку.
+
     path, value = deployment
     icon = path.parent / "свой логотип.ico"
     if mode != "missing":
         icon.write_bytes(b"not decoded during config validation")
+
     value["application"] = {"icon_path": None if mode == "default" else
                             str(icon) if mode == "absolute" else icon.name}
     path.write_text(json.dumps(value), encoding="utf-8")
@@ -302,8 +307,10 @@ def test_json_failures(
     path = tmp_path / "secret-path.json"
     if content is not None:
         path.write_bytes(content)
+
     with pytest.raises(DeploymentConfigError) as caught:
         load_deployment_config(path)
+
     assert caught.value.code == code
     assert "secret-path" not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
@@ -342,6 +349,7 @@ def test_managed_caddy(
     (path.parent / "caddy.exe").unlink()
     with pytest.raises(DeploymentConfigError) as caught:
         load_deployment_config(path)
+
     assert (caught.value.code, caught.value.field) == ("path_unavailable", "caddy")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -372,6 +380,7 @@ def test_component_failure(
     (path.parent / value[component]["config"]).write_text('{"secret-value":123}', encoding="utf-8")
     with pytest.raises(DeploymentConfigError) as caught:
         load_deployment_config(path)
+
     assert (caught.value.code, caught.value.field) == ("component_config", component)
     assert "secret-value" not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
@@ -442,6 +451,7 @@ def test_component_diagnostics(
 
     with pytest.raises(DeploymentConfigError) as caught:
         load_deployment_config(path)
+
     error = caught.value
     assert (error.code, error.field) == ("component_config", component)
     assert (error.component_code, error.component_field) == (code, field_name)
@@ -523,12 +533,16 @@ def test_typed_models(
     assert str(path.parent) not in repr(config)
     with pytest.raises(ValueError):
         replace(config, notifications=None, commands=None)
+
     with pytest.raises(ValueError):
         ComponentConfig(config=Path("relative"), port=8765)
+
     with pytest.raises(ValueError):
         CaddyConfig(mode="managed")
+
     with pytest.raises(ValueError):
         LifecycleConfig(heartbeat_interval=float("nan"))
+
     with pytest.raises(ValueError):
         replace(config, caddy=CaddyConfig(mode="managed", executable=path, config=path,
                                           data_dir=config.log_dir / "ca"))
@@ -537,6 +551,7 @@ def test_typed_models(
     assert (error.code, error.field) == ("config_value", "config")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

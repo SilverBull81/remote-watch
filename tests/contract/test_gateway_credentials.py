@@ -1,10 +1,10 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> document(): Конфигурация с вымышленными токенами
@@ -170,14 +170,17 @@ def test_inline_check(
         patch.setattr("remote_watch._credentials.os", SimpleNamespace(environ=SimpleNamespace(get=forbidden)))
         config = load_notification_gateway_config(path)
         assert main(["--config", str(path), "--check-config"]) == 0
+
     assert dict(os.environ) == before
 
     # repr включает вложенные фабрики каналов: token скрывается и внутри partial.
     text = repr(config) + capsys.readouterr().out
     for destination in config.destinations:
         text += repr(destination.channel_factory())
+
     for item in raw["destinations"]:
         assert item["settings"]["token"] not in text
+
     assert raw["principals"][0]["token"] not in text
 #------------------------------------------------------------------------------------------------------------------
 
@@ -236,6 +239,7 @@ def test_credential_errors(
     else:
         settings["token"] = {"null": None, "empty": "", "type": 123, "newline": "PRIVATE\nTOKEN",
                              "oversize": "x" * 513}[case]
+
     path = tmp_path / "private.local.json"
     path.write_text(json.dumps(raw), encoding="utf-8")
 
@@ -243,8 +247,10 @@ def test_credential_errors(
     if target == "ntfy" and case == "null_env":
         assert load_notification_gateway_config(path).destinations[1].channel_factory()._config.token is None
         return
+
     with pytest.raises(NotificationGatewayConfigError) as captured:
         load_notification_gateway_config(path)
+
     assert captured.value.field == f"{prefix}.{field}"
     assert main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out + repr(captured.value)
@@ -358,6 +364,7 @@ def test_inline_delivery(
                 assert body["topic"] == "synthetic-topic"
                 seen.append("ntfy")
                 return web.json_response({"id": "synthetic-ntfy", "event": "message", "topic": body["topic"]})
+
             assert request.path == "/bot" + provider_tokens[0] + "/sendMessage"
             assert body["chat_id"] == 123456789
             seen.append("telegram")
@@ -498,8 +505,10 @@ def test_typed_sources(
     else:
         config = NotificationGatewayPrincipal(name="app", identity=notification.identity,
             aliases=("phone",), token="x" * 32)
+
     with pytest.raises(ValueError):
         replace(config, token_env="RW_SYNTHETIC")
+
     assert config.token not in repr(config)
 
     if kind == "gateway":
@@ -524,6 +533,7 @@ def test_inline_example() -> None:
     assert "REPLACE_WITH" not in repr(config)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

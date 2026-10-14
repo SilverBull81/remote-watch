@@ -1,10 +1,10 @@
 ﻿# Учётные данные и правила доступа к командам приложений.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandPrincipal: Права приложения с отдельным секретом команд
@@ -71,6 +71,7 @@ def _strings(
 
     for value in values:
         require_text(value, "scope", 128)
+
     return frozenset(values)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -127,6 +128,7 @@ class CommandPrincipal:
 
         if len(set(self.identities)) != len(self.identities):
             raise ValueError("duplicate command identity")
+
         object.__setattr__(self, "identities", tuple(self.identities))
         object.__setattr__(self, "scopes", _strings(self.scopes))
     #--------------------------------------------------------------------------------------------------------------
@@ -175,6 +177,7 @@ class CommandAccess:
 
         if type(self.identity) is not Identity:
             raise TypeError("invalid command identity")
+
         object.__setattr__(self, "scopes", _strings(self.scopes))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -217,6 +220,7 @@ class CommandSource:
 
         if not self.source_id.isascii() or not all(c.isalnum() or c in "_-" for c in self.source_id):
             raise ValueError("invalid command source")
+
         _token(self.token)
 
         if not isinstance(self.access, (tuple, list)) or not 1 <= len(self.access) <= 256:
@@ -224,6 +228,7 @@ class CommandSource:
 
         if any(type(rule) is not CommandAccess for rule in self.access):
             raise TypeError("invalid command access rule")
+
         object.__setattr__(self, "access", tuple(self.access))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -297,6 +302,7 @@ class CommandHubConfig:
             if any(type(value) is not kind for value in values):
                 raise TypeError("invalid command owner")
             object.__setattr__(self, name, tuple(values))
+
         tokens = [owner.token for owner in (*self.principals, *self.sources)]
         names = [p.name for p in self.principals]
         sources = [s.source_id for s in self.sources]
@@ -356,6 +362,7 @@ def _token(
         raise ValueError("invalid command token")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

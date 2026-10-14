@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены
@@ -177,6 +177,7 @@ class Channel:
         self.opened = True
         if self.mode == "open_error":
             raise RuntimeError("synthetic private provider details")
+
         if self.mode == "open_wait":
             self.entered.set()
             await self.release.wait()
@@ -416,6 +417,7 @@ def test_gateway_requests(
         elif case == "expect":
             headers.append(("Expect", "100-continue"))
             expected = 417
+
         raw = json.dumps(payload).encode()
         if case == "duplicate_json":
             raw = b'{"schema_version":1,' + raw[1:]
@@ -423,6 +425,7 @@ def test_gateway_requests(
         elif case == "too_large":
             raw = b"x" * 65537
             expected = 413
+
         try:
             async with aiohttp.ClientSession() as client:
                 async with client.post(f"http://127.0.0.1:{gateway.port}" + path,
@@ -436,7 +439,9 @@ def test_gateway_requests(
             assert gateway.stats()["active"] == 0
         finally:
             await gateway.close()
+
         assert channel.closed and not gateway._tokens
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
     assert TOKEN not in caplog.text
@@ -494,6 +499,7 @@ def test_gateway_attempt_outcomes(
         finally:
             await client.close()
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -533,6 +539,7 @@ def test_gateway_overload(
         config = settings(notification, channel, capacity=1 if limit == "global" else 32)
         if limit == "principal":
             config = replace(config, principals=(replace(config.principals[0], capacity=1),))
+
         gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
@@ -552,6 +559,7 @@ def test_gateway_overload(
         finally:
             channel.release.set()
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -598,6 +606,7 @@ def test_gateway_body_deadline(
             writer.close()
             await writer.wait_closed()
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -665,9 +674,11 @@ def test_gateway_lifecycle(
                 if pending:
                     await asyncio.gather(pending, return_exceptions=True)
             assert other.closed
+
         await gateway.close()
         await asyncio.sleep(0)
         assert channel.closed and not gateway._tokens and gateway._state == "closed"
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -734,6 +745,7 @@ def test_gateway_mixed_runtime(
             if request.path == "/":
                 received.append("ntfy")
                 return web.json_response({"event": "message", "topic": payload["topic"], "id": "synthetic"})
+
             received.append("telegram")
             assert payload["chat_id"] == 123
             return web.json_response({"ok": True, "result": {"message_id": 123}})
@@ -771,6 +783,7 @@ def test_gateway_mixed_runtime(
         finally:
             await gateway.close()
             await runner.cleanup()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -817,6 +830,7 @@ def test_gateway_start_guards(
             monkeypatch.delenv("RW_GW_TEST")
         elif case == "duplicate":
             config = replace(config, principals=(*config.principals, replace(config.principals[0], name="other")))
+
         gateway = NotificationGateway(config)
         if case == "cancel_close":
             await gateway.start(port=0)
@@ -833,6 +847,7 @@ def test_gateway_start_guards(
                 await gateway.start(host="0.0.0.0" if case == "tls" else "127.0.0.1", port=0)
             assert not channel.opened
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -886,6 +901,7 @@ def test_gateway_lost_reply(
             assert channel.calls[0].delivery_id == channel.calls[1].delivery_id
         finally:
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -927,6 +943,7 @@ def test_gateway_rate_and_chunked(
             config = replace(config, principals=(replace(config.principals[0], min_interval=10),))
         elif case == "destination":
             config = replace(config, destination_interval=10)
+
         gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
         await gateway.start(port=0)
         try:
@@ -1171,6 +1188,7 @@ def test_gateway_clock_tolerance(
                 assert gateway.stats()[counter] == 1
         finally:
             await gateway.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -1218,16 +1236,19 @@ def test_gateway_elapsed_budget(
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel, clock_skew_tolerance=3600),
             utc_now=lambda: notification.created_at)
+
         # Wire требует timeout <= remaining_ttl. Для второй ветки проверяем
         # защиту непосредственно на границе dispatch с уже истёкшим общим TTL.
         request = replace(envelope(notification), timeout=min(timeout, remaining_ttl), remaining_ttl=remaining_ttl)
         response = await gateway._dispatch(request, asyncio.get_running_loop().time() - elapsed)
         assert decode_response(json.loads(response.body), request.delivery).reason_code == "gateway_expired"
         assert not channel.calls and gateway.stats()["expired"] == 1
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

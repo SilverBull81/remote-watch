@@ -1,10 +1,10 @@
 ﻿# Проверки Telegram и закрытых топиков ntfy через локальный HTTP.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> update(): Подставное исходное сообщение Telegram
@@ -163,6 +163,7 @@ def test_provider_http(
                                               "parameters": {"retry_after": 30}}, status=429)
                 assert "parse_mode" not in payload
                 value = {"message_id": 5}
+
             return web.json_response({"ok": True, "result": value})
         #----------------------------------------------------------------------------------------------------------
 
@@ -265,6 +266,7 @@ def test_telegram_authenticated_fields(
             value["edited_message"] = value.pop("message")
     elif kind == "help_mixed":
         value["message"]["text"] = "hElP"
+
     event = provider._event(value)
     assert (event.actor_id is not None) == (kind in (
         "normal", "own_bot", "long", "help_mixed", "short_status", "short_own"))
@@ -300,10 +302,12 @@ def test_ntfy_private_config(
         values.pop("token")
     else:
         values.update(endpoint="http://example.com", allow_loopback_http=True)
+
     with pytest.raises((ValueError, TypeError)):
         NtfyCommandConfig(**values)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

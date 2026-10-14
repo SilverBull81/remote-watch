@@ -1,10 +1,10 @@
 ﻿# Владение дочерними процессами и закрытый каталог локального управления.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ProcessGroup: Владение собственными процессами через механизм ОС
@@ -115,6 +115,7 @@ class ProcessGroup:
 
         # arguments — только bootstrap библиотеки; ресурсы открываются после
         # помещения в Job и передачи стартового сообщения через закрытый pipe.
+
         process = subprocess.Popen(arguments, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, close_fds=True,
@@ -125,6 +126,7 @@ class ProcessGroup:
                 process.wait(timeout=5)
                 process.stdin.close()
                 raise RuntimeError("ownership_unavailable")
+
         return process
     #--------------------------------------------------------------------------------------------------------------
 
@@ -165,6 +167,7 @@ def parent_guard(
     """
 
     # parent — проверяется после prctl, чтобы закрыть гонку смерти родителя.
+
     if sys.platform == "linux":
         libc = ctypes.CDLL(None, use_errno=True)
         if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0 or os.getppid() != parent:
@@ -194,10 +197,13 @@ def private_directory(
     # path — не принимаем ссылку как каталог управления; существующие журналы
     # компонентов не затрагиваются. Новые файлы наследуют закрытый Windows DACL.
     # operator_sid — не общий Users/Authenticated Users; доступ только одному оператору.
+
     if operator_sid is not None and not re.fullmatch(r"S-1-5-21-(?:[0-9]{1,10}-){3}[0-9]{1,10}", operator_sid):
         raise ValueError("operator_sid")
+
     if path.is_symlink():
         raise RuntimeError("control_permissions")
+
     path.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         path.chmod(0o700)
@@ -253,6 +259,7 @@ def private_directory(
             kernel.LocalFree(descriptor)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

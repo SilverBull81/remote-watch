@@ -1,10 +1,10 @@
 ﻿# Служба Remote Watch Gateway
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-154531
+Дата и время последнего изменения: 261014-164418
 
 ## Windows: установка без изменения Caddy и журналов
 
@@ -135,3 +135,73 @@ remote-watch-gateway.service. Unit принудительно headless, без W
 Для удаления сначала systemctl stop, затем sh service/remove-systemd.sh.
 Сравнивается exact unit; изменённый/работающий/чужой unit не удаляется.
 SQLite/CA/конфиги остаются. Реальная Linux-проверка не следует из Windows-тестов.
+
+## Как проверить аварийное завершение
+
+Это отдельная проверка, не Stop в трее: Stop выполняет штатную остановку.
+Рабочий сервер и SpamBot для неё завершать не нужно. Ниже команды для отдельной
+службы **RemoteWatchGatewayTest**, не RemoteWatchGateway. Если тестовый deployment
+ещё не подготовлен, оставьте проверку открытой.
+
+1. Разверните отдельную папку, например C:\Work\RemoteWatchTest, с собственным venv,
+   JSON, control/logs/SQLite. В связанных JSON задайте новые пути журналов и свободные
+   loopback-порты, например 9765/9766. Не копируйте пути production SQLite/control.
+   Для команд нужен отдельный тестовый бот/закрытый топик: два reader одного бота
+   конкурируют независимо от портов. Не используйте production principals/клиентов.
+   Caddy оставьте external; для проверки процессов HTTPS ingress не нужен.
+   При проверке каналов понадобится отдельно настроенный тестовый HTTPS-маршрут.
+2. В общем JSON задайте ui=headless, для короткого опыта restart.max_restarts=1,
+   window=300, initial_delay=2, max_delay=2. Оповещения владельцу включите явно,
+   если хотите проверить их доставку. Выполните --check-config.
+3. Из административного PowerShell в тестовой папке установите и запустите службу
+   с отдельным именем. Все дальнейшие service-команды также требуют этого имени:
+
+   ```powershell
+   $testPython = 'C:\Work\RemoteWatchTest\.venv\Scripts\python.exe'
+   $testConfig = 'C:\Work\RemoteWatchTest\gateway_server.local.json'
+   & $testPython -m remote_watch.gateway_server.service --config $testConfig --name RemoteWatchGatewayTest --install
+   & $testPython -m remote_watch.gateway_server.service --config $testConfig --name RemoteWatchGatewayTest --start
+   & $testPython -m remote_watch.gateway_server --config $testConfig --status
+   ```
+
+4. Для **crash компонента** найдите свежие процессы только этой службы:
+
+   ```powershell
+   $testService = Get-CimInstance Win32_Service -Filter "Name='RemoteWatchGatewayTest'"
+   if ($testService.State -ne 'Running' -or $testService.ProcessId -eq 0) { throw 'Test service is not running' }
+   $testChildren = @(Get-CimInstance Win32_Process | Where-Object {
+       $_.ParentProcessId -eq $testService.ProcessId -and
+       $_.CommandLine -match 'remote_watch\.gateway_server\.child'
+   })
+   $testChildren | Select-Object ProcessId, ParentProcessId, ExecutablePath
+   ```
+
+   Проверьте, что ExecutablePath относится к тестовому venv. Оба gateway используют
+   одинаковый child-модуль; по этой строке нельзя отличить commands от notifications.
+   Для простого опыта можно выбрать любой тестовый child. Запишите его ProcessId
+   и немедленно завершите **только его**: `Stop-Process -Id <тестовый ProcessId> -Force`.
+   Не используйте старый PID и команды завершения всех python.exe.
+   В status должны появиться restarting/restarts=1, затем ready; PID child сменится.
+   Проверьте служебное сообщение о сбое и восстановлении, если включены получатели.
+5. Для **исчерпания бюджета** в пределах 300 секунд повторите поиск свежих child,
+   выберите новый PID того же компонента по изменениям status и завершите его снова.
+   Если по списку нельзя однозначно выбрать компонент, сначала используйте deployment
+   с одним включённым компонентом. Проверьте failed/restart_limit и отсутствие
+   бесконечных перезапусков. После опыта штатно остановите тестовую службу.
+6. Для **crash manager/service host** сначала заново штатно запустите тестовую службу,
+   дождитесь ready, заново получите `$testService` командой из шага 4. Завершите
+   только её актуальный `$testService.ProcessId` через Stop-Process -Force.
+   SCM должен запустить новый host примерно через 60 секунд после первого отказа;
+   второй отказ имеет задержку 300 секунд, третий автоматический запуск не назначен.
+   Это отдельный бюджет SCM, не restart.max_restarts компонентов. Действующие настройки
+   видны в `sc.exe qfailure RemoteWatchGatewayTest`. Смерть host сама не пошлёт сообщение.
+7. Проверьте status/doctor, отсутствие старых дочерних процессов, новые PID, сохранение
+   тестовых JSON/SQLite и отсутствие самопроизвольного повторного callback. Если callback
+   был прерван после STARTED, допустим UNKNOWN с ручным разбором, а не повтор исполнения.
+   Простой опыт без команд не подтверждает сохранение UNKNOWN/поведение callback.
+   Удалите только тестовую службу обычным --remove с тем же --name.
+
+Процессы ищутся заново перед каждым аварийным завершением. Если путь/PID/назначение
+неоднозначны, не выполняйте Stop-Process. Файлы journal/CA не удаляются и не правятся.
+Результат запишите отдельно: какой компонент, что случилось, время восстановления,
+restarts, локальная причина и счётчики alert_delivery. Это не тест ночного сбоя SpamBot.

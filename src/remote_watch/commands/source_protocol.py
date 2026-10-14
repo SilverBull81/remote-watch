@@ -1,10 +1,10 @@
 ﻿# События источников, явные адреса приложений и текстовые ответы на команды.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> SourceEvent: Проверенные данные одного события провайдера
@@ -206,6 +206,7 @@ class SourceTargets:
 
         if len(set(self.aliases.values())) != len(self.aliases):
             raise ValueError("ambiguous target aliases")
+
         object.__setattr__(self, "aliases", MappingProxyType(dict(self.aliases)))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -359,14 +360,18 @@ def parse_source_command(
 
     if len(words) == 1 and words[0].casefold() in {"help", "/help"}:
         return None, None, {}
+
     if words and words[0].casefold() in {"help", "/help"}:
         raise ValueError("help does not accept arguments")
+
     short = bool(short_commands and words and words[0].startswith("/") and words[0] != "/rw")
     if short:
         # Не удаляем @bot: чужой адресат должен быть отклонён обычной проверкой имени.
         words = ["/rw", "implicit", words[0][1:], *words[1:]]
+
     if not words or words[0] != "/rw" or len(words) > 35:
         raise ValueError("invalid command syntax")
+
     alias = words[1] if len(words) > 1 else None
     name = words[2] if len(words) > 2 else None
 
@@ -375,6 +380,7 @@ def parse_source_command(
 
     if name is not None and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) is None:
         raise ValueError("invalid command name")
+
     arguments: dict[str, str] = {}
 
     for word in words[3:]:
@@ -382,6 +388,7 @@ def parse_source_command(
         if not sep or key in arguments or not key:
             raise ValueError("invalid named argument")
         arguments[key] = value
+
     return None if short else alias, name, arguments
 #------------------------------------------------------------------------------------------------------------------
 
@@ -419,6 +426,7 @@ def source_result_text(
     mode = request.command_display_mode or mode
     if mode not in ("full", "compact", "text"):
         raise ValueError("invalid command display mode")
+
     reason = "" if result.reason is None else "/" + result.reason.value
     header = (f"{identity.service}/{identity.environment}/{identity.region}/"
               f"{identity.host}/{identity.instance_id}\n"
@@ -436,6 +444,7 @@ def source_result_text(
         failure = {"unknown": "Command outcome is unknown", "rejected": "Command rejected",
                    "expired": "Command expired"}.get(result.outcome.value)
         header = "" if failure is None else f"{failure} ({result.reason.value})."
+
     # Один ответ вместо нескольких частей: усечение видно, корреляция остаётся в начале.
     value = header + ("\n" if header and body else "") + body
     return bound_source_text(value)
@@ -464,6 +473,7 @@ def bound_source_text(
     return text if len(raw) <= 3800 else raw[:3760].decode("utf-8", errors="ignore") + "\n[response truncated]"
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

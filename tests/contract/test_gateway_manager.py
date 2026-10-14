@@ -1,10 +1,10 @@
 ﻿# Проверки владения процессами, heartbeat, локального управления и оповещений manager.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> setup_deployment(): Настройки только с синтетическими адресами и credentials.
@@ -100,6 +100,7 @@ def setup_deployment(
     """
 
     # tmp_path/monkeypatch — подпроцесс импортирует тот же пакет, что проверяет pytest.
+
     monkeypatch.setenv("PYTHONPATH", str(Path(remote_watch.__file__).resolve().parent.parent))
     config = tmp_path / "notifications.json"
     config.write_text(json.dumps({"schema_version": 1,
@@ -111,6 +112,7 @@ def setup_deployment(
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
+
     return DeploymentConfig(endpoint="https://example.invalid:8443", control_dir=tmp_path / "control",
                             log_dir=tmp_path / "logs", notifications=ComponentConfig(config, port),
                             lifecycle=LifecycleConfig(startup_timeout=8, heartbeat_interval=.1,
@@ -141,6 +143,7 @@ async def wait_state(
     """
 
     # manager/state/timeout — наблюдение состояния вместо предположения о скорости CI.
+
     end = monotonic() + timeout
     while manager.state != state:
         assert monotonic() < end, manager.status()
@@ -167,6 +170,7 @@ def test_real_notification_lifecycle(
     """
 
     # setup_deployment — провайдер не получает сообщений даже при падении процесса.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -226,6 +230,7 @@ def test_control_authentication(
     """
 
     # setup_deployment — токены только синтетические, в диагностике теста не выводятся.
+
     aiohttp = pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -289,6 +294,7 @@ def test_hang_and_limit(
     """
 
     # setup_deployment/monkeypatch — bootstrap заменяется только в Python теста, не через JSON продукта.
+
     pytest.importorskip("aiohttp")
     script = setup_deployment.control_dir.parent / "fake.py"
     script.write_text("""import asyncio,json,sys,time,urllib.request
@@ -329,6 +335,7 @@ time.sleep(60)
         """
 
         # group/arguments/capture — сохраняем настоящий OS owner и pipe-барьер.
+
         return original(group, [arguments[0], str(script), arguments[-1]], capture)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -378,6 +385,7 @@ def test_startup_rollback(
     """
 
     # setup_deployment — второй компонент заведомо не читает credentials и не обращается к сети.
+
     pytest.importorskip("aiohttp")
     bad = setup_deployment.control_dir.parent / "bad.json"
     bad.write_text("{}", encoding="utf-8")
@@ -403,6 +411,7 @@ def test_os_owner_death(
     """
 
     # setup_deployment — проверка не ищет и не завершает никакие чужие процессы по PID.
+
     pytest.importorskip("aiohttp")
     path = setup_deployment.control_dir.parent / "deployment.json"
     path.write_text(json.dumps({"schema_version": 1, "endpoint": setup_deployment.endpoint,
@@ -433,6 +442,7 @@ def test_os_owner_death(
                 except RuntimeError:
                     pass
                 await asyncio.sleep(.05)
+
             process.kill()
             await asyncio.to_thread(process.wait, timeout=5)
             end = monotonic() + 5
@@ -443,6 +453,7 @@ def test_os_owner_death(
                         break
                 assert monotonic() < end
                 await asyncio.sleep(.05)
+
             with pytest.raises(RuntimeError, match="control_unavailable"):
                 await control_request(setup_deployment, "stop")
         #----------------------------------------------------------------------------------------------------------
@@ -494,6 +505,7 @@ def test_application_and_alerts() -> None:
             """
 
             # record — сообщения не содержат пользовательских идентификаторов.
+
             records.append(record.getMessage())
         #----------------------------------------------------------------------------------------------------------
     #--------------------------------------------------------------------------------------------------------------
@@ -531,6 +543,7 @@ def test_caddy_storage(
     """
 
     # tmp_path/change — только JSON, binary и CA никогда не открываются.
+
     config = {"storage": {"module": "file_system", "root": str(tmp_path)}}
     assert check_caddy(config, tmp_path) == "http://127.0.0.1:2019"
     if change == "missing":
@@ -540,6 +553,7 @@ def test_caddy_storage(
     else:
         config["admin"] = {"disabled": True} if change == "disabled" else {"listen": {
             "wildcard": "0.0.0.0:2019", "hostname": "localhost:2019", "bad_port": "127.0.0.1:0"}[change]}
+
     with pytest.raises(ValueError):
         check_caddy(config, tmp_path)
 #------------------------------------------------------------------------------------------------------------------
@@ -565,12 +579,14 @@ def test_status_privacy(
     """
 
     # key/value — провокационная строка не должна попасть в успешный статус.
+
     data = {"state": "ready", "reason": None, "time_reason": None, "failure": None, "counters": {}}
     data[key] = value
     with pytest.raises(ValueError):
         status_message(data)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

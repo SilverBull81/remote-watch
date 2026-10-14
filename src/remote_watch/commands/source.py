@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных
@@ -172,15 +172,19 @@ class CommandSourceRunner:
 
         if any(rule.identity not in targets.aliases.values() for rule in policy.access):
             raise ValueError("source target alias missing")
+
         require_number(retry_interval, "source retry interval")
 
         if retry_interval > 60:
             raise ValueError("source retry interval")
+
         if type(short_commands) is not bool:
             raise ValueError("invalid short command mode")
+
         self._short_commands = short_commands
         if command_display_mode not in ("full", "compact", "text"):
             raise ValueError("invalid command display mode")
+
         self._display_mode = command_display_mode
         self.hub = hub
         self.policy = policy
@@ -216,6 +220,7 @@ class CommandSourceRunner:
         for task in self._tasks:
             if task.done():
                 self._finished(task)
+
         return SourceStats(accepted=self._accepted, ignored=self._ignored, replies=self._replies,
                            closed=self._stopping, last_error=self._error,
                            ready=bool(self._tasks) and not self._stopping
@@ -261,6 +266,7 @@ class CommandSourceRunner:
 
         if self._loop is not None or self._stopping:
             raise CommandError("closed")
+
         self._loop = asyncio.get_running_loop()
 
         try:
@@ -293,6 +299,7 @@ class CommandSourceRunner:
 
         if self._loop is None or self._stopping or self._tasks:
             raise CommandError("closed")
+
         self._tasks = (asyncio.create_task(self._receive()), asyncio.create_task(self._respond()))
 
         for task in self._tasks:
@@ -345,6 +352,7 @@ class CommandSourceRunner:
             # Не читаем следующее событие и не выбираем сессию повторно.
             await self._commit(pending)
             return
+
         events = await self.provider.poll(cursor)
 
         if type(events) is not tuple or len(events) > 32:
@@ -441,6 +449,7 @@ class CommandSourceRunner:
                 notice = "Invalid command. Usage: /rw app_name command [arg_name=value]. Help: /rw or /help"
             except CommandError as error:
                 notice = "Application unavailable." if error.code == "stale_session" else "Command not allowed."
+
         return SourcePending(position=position, event=event, request=request,
                              notice=notice if notice is None or short_help else bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
@@ -473,7 +482,9 @@ class CommandSourceRunner:
 
         if admitted.cursor != pending.position:
             raise CommandError("conflict")
+
         await self._worker.call(lambda: self._worker.store.commit(pending))
+
         # Подтверждение провайдеру идёт последним. Если его ответ потеряется,
         # повторное чтение найдёт уже сохранённый ID в журнале источника.
         await self.provider.acknowledge(pending.event.event_id)
@@ -482,6 +493,7 @@ class CommandSourceRunner:
             self._accepted += 1
         else:
             self._ignored += 1
+
         notice = pending.notice
 
         if pending.request is not None and admitted.command is None:
@@ -596,6 +608,7 @@ class CommandSourceRunner:
 
         if not task.cancelled():
             task.exception()
+
         # Штатная остановка заранее устанавливает _stopping. Во всех остальных
         # случаях даже отмена или обычный ранний return означают потерю одного loop.
         if not self._stopping:
@@ -605,6 +618,7 @@ class CommandSourceRunner:
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверки конечного ntfy-сценария, безопасного отчёта и очистки при ошибках.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_diagnostic_run(): Серия точных размеров и очистка при отказах
@@ -159,6 +159,7 @@ def test_diagnostic_run(
             calls.append(delivery)
             if mode == "cancel":
                 raise asyncio.CancelledError
+
             status = {"rate": DeliveryStatus.RATE_LIMITED, "failure": DeliveryStatus.TRANSIENT_FAILURE}.get(
                 mode, DeliveryStatus.PROVIDER_ACCEPTED)
             http = {"rate": 429, "failure": 502}.get(mode, 200)
@@ -213,6 +214,7 @@ def test_diagnostic_run(
     else:
         expected = 0 if mode == "success" else 2 if mode.endswith("error") else 1
         assert diagnostic.main(args) == expected
+
     assert states["closed"]
     assert dict(os.environ) == original_environment
     raw = output.read_text(encoding="utf-8")
@@ -222,6 +224,7 @@ def test_diagnostic_run(
     assert len(calls) == expected_count
     for delivery, (_, size) in zip(calls, diagnostic.CASES):
         assert len(render(delivery).encode("utf-8")) == size
+
     assert all(delay == 10 for delay in delays)
     assert "private_token" not in raw + capsys.readouterr().out
     assert "private_topic" not in raw
@@ -289,10 +292,12 @@ def test_diagnostic_exclusive(
     environment = dict(os.environ)
     with pytest.raises(FileExistsError):
         asyncio.run(diagnostic._run({"topic": "synthetic", "token": "synthetic"}, output, 10))
+
     assert output.read_text() == "original"
     assert dict(os.environ) == environment
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

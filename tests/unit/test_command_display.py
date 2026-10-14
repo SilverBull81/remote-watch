@@ -1,10 +1,10 @@
 ﻿# Режимы ответов команд, английские служебные тексты и совместимость хешей.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_legacy_digests(): Неизменность хешей старых сообщений и сохранённых квитанций
@@ -66,6 +66,7 @@ def test_legacy_digests(
 
 
     # Константы получены из HEAD dev8 до изменения codec, а не новым сериализатором.
+
     event = request(identity)
     registration = CommandRegistration(identity=identity, session_id=event.ref.session_id,
         capabilities=(CommandCapability(name=event.name, required_scope="load:write"),))
@@ -80,6 +81,7 @@ def test_legacy_digests(
     for model, digest in zip((registration, event, grant, result), expected):
         assert message_digest(model) == digest
         assert message_digest(decode_command(encode_command(model))) == digest
+
     assert message_digest(replace(event, command_display_mode="text")) != expected[1]
 #------------------------------------------------------------------------------------------------------------------
 
@@ -107,6 +109,7 @@ def test_command_display_wire_rejects(
 
 
     # Новая схема не принимает null и не может быть переименована в старую.
+
     body = json.loads(encode_command(replace(request(identity), command_display_mode="text")))
     if case in {"null", "unknown", "boolean"}:
         body["payload"]["command_display_mode"] = {"null": None, "unknown": "PRIVATE", "boolean": True}[case]
@@ -116,10 +119,12 @@ def test_command_display_wire_rejects(
         body["payload"]["display_mode"] = "text"
     elif case == "downgrade":
         body["schema_version"] = 1
+
     raw = json.dumps(body).encode()
     if case == "duplicate":
         raw = raw.replace(b'"command_display_mode": "text"',
                           b'"command_display_mode":"text","command_display_mode":"full"')
+
     with pytest.raises(ValueError, match="^invalid command message$"):
         decode_command(raw)
 #------------------------------------------------------------------------------------------------------------------
@@ -154,6 +159,7 @@ def test_command_result_display(
 
 
     # Даже режим text не превращает UNKNOWN/отказ в пустой ответ или успех.
+
     event = replace(request(identity), command_display_mode=mode)
     if outcome in {"body", "empty", "long"}:
         body = {"body": "Приложение ответило", "empty": None, "long": "я😀" * 680}[outcome]
@@ -162,6 +168,7 @@ def test_command_result_display(
         reason = {"unknown": CommandReason.TIMEOUT, "rejected": CommandReason.DENIED,
                   "expired": CommandReason.EXPIRED}[outcome]
         result = CommandResult(ref=event.ref, claim_id="4" * 32, outcome=CommandOutcome(outcome), reason=reason)
+
     digest = message_digest(result)
     text = source_result_text(event, result, mode="text" if mode != "text" else "full")
     assert text and len(text.encode("utf-8")) <= 3800
@@ -170,11 +177,13 @@ def test_command_result_display(
         assert "session=" in text and "command=" in text and event.ref.command_id in text
     else:
         assert event.ref.command_id not in text and "session=" not in text
+
     if mode == "compact":
         assert text.startswith('["quotes","test","test-region","test-host","one"]')
         for field in ("service", "environment", "region", "host", "instance_id"):
             changed = replace(event, ref=replace(event.ref, identity=replace(identity, **{field: "other"})))
             assert source_result_text(changed, result) != text
+
     if outcome == "body":
         assert text.endswith("Приложение ответило")
         if mode == "text":
@@ -186,10 +195,12 @@ def test_command_result_display(
     else:
         assert outcome in text and result.reason.value in text
         assert text.isascii()
+
     default = replace(event, command_display_mode=None)
     assert source_result_text(default, result, mode=mode) == text
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

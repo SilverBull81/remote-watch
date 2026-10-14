@@ -1,10 +1,10 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandRuntime: Владение циклом команд при выбранном режиме запуска
@@ -83,6 +83,7 @@ class CommandRuntime:
 
         if startup_timeout > 30:
             raise ValueError("invalid command startup timeout")
+
         self.dispatcher = dispatcher
         self._startup_timeout = startup_timeout
         self._mode: str | None = None
@@ -118,6 +119,7 @@ class CommandRuntime:
 
         if self._mode is not None or self._stopping.is_set():
             raise CommandError("closed")
+
         self._mode = "sync"
         self._thread = threading.Thread(target=self._serve, name="remote-watch-commands", daemon=True)
         self._thread.start()
@@ -147,6 +149,7 @@ class CommandRuntime:
 
         if self._mode is not None or self._stopping.is_set():
             raise CommandError("closed")
+
         self._mode = "async"
         self._loop = asyncio.get_running_loop()
         await self.dispatcher.start()
@@ -169,6 +172,7 @@ class CommandRuntime:
 
         if self._mode == "async":
             raise RuntimeError("use watcher.astop for application-loop commands")
+
         self._stopping.set()
 
         if self._loop is not None and self._stop is not None and not self._loop.is_closed():
@@ -200,6 +204,7 @@ class CommandRuntime:
 
         if self._loop is not None and asyncio.get_running_loop() is not self._loop:
             raise RuntimeError("command runtime belongs to another event loop")
+
         self._stopping.set()
         await self.dispatcher.close()
     #--------------------------------------------------------------------------------------------------------------
@@ -219,8 +224,10 @@ class CommandRuntime:
         """
 
         # Причина уже очищена в рабочем потоке; конструктор снова проверит поля.
+
         if type(self._error) is CommandError:
             return {"error_kind": self._error.error_kind, "verify_code": self._error.verify_code}
+
         return {}
     #--------------------------------------------------------------------------------------------------------------
 
@@ -322,6 +329,7 @@ def _startup_cause(
     return RuntimeError("command startup failed")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

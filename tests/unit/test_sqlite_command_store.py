@@ -1,10 +1,10 @@
 ﻿# Проверки атомарности, аварийного восстановления и пределов журнала SQLite.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> request(): Подготовка подставной команды
@@ -345,6 +345,7 @@ def test_restart_fences_old_handles_and_work(
     events = [request(i) for i in range(1, 4)]
     for event in events:
         admit(old, event)
+
     old.transition(events[1].ref, 0, CommandAction.CLAIM, **options(events[1]))
     claim = old.transition(events[2].ref, 0, CommandAction.CLAIM, **options(events[2]))
     old.transition(events[2].ref, claim.command.revision, CommandAction.START, **options(events[2]))
@@ -636,6 +637,7 @@ def test_commit_failure_does_not_authorize_callback(
             hit = row is not None and row[0] == "started"
             if hit and moment == "before":
                 raise sqlite3.OperationalError("private-disk-detail")
+
             super().commit()
             if hit and moment == "after":
                 raise sqlite3.OperationalError("private-disk-detail")
@@ -677,9 +679,11 @@ def test_commit_failure_does_not_authorize_callback(
     claimed = store.transition(event.ref, 0, CommandAction.CLAIM, **options(event))
     with pytest.raises(StoreError) as caught:
         store.transition(event.ref, claimed.command.revision, CommandAction.START, **options(event))
+
     assert "private" not in str(caught.value)
     with pytest.raises(StoreError):
         store.cursor("source")
+
     store.close()
     monkeypatch.setattr(sqlite3, "connect", original)
     recovered = opened(path, [1.0], "d" * 32)
@@ -720,6 +724,7 @@ def test_sqlite_lock_timeout_and_disk_bound(
         other.close()
         assert store.cursor("source") == -1
         store.close()
+
     store = opened(path, now, "d" * 32, limits)
     last = 0
     try:
@@ -802,6 +807,7 @@ def _crash_worker(
                    or (phase == "pruned" and row is None and position is not None))
             if hit and moment == "before":
                 os._exit(17)
+
             super().commit()
             if hit and moment == "after":
                 os._exit(17)
@@ -848,6 +854,7 @@ def _crash_worker(
             stream.write(b"1")
             stream.flush()
             os.fsync(stream.fileno())
+
     result = callback_result(event.ref, options(event)["claim"].claim_id, "done")
     store.transition(event.ref, started.command.revision, CommandAction.FINISH, result=result, **options(event))
     store.acknowledge(result)
@@ -901,7 +908,9 @@ def test_process_crash_boundaries(
             prepared.transition(event.ref, 1, CommandAction.START, **options(event))
         finally:
             prepared.close()
+
     environment = os.environ.copy()
+
     # При wheel-проверке импортируется установленный пакет, без подмены исходниками.
     import remote_watch
     environment["PYTHONPATH"] = str(Path(remote_watch.__file__).resolve().parents[1])
@@ -980,6 +989,7 @@ def test_grant_rounding(
     assert deadline.expires_at - origin > duration
     if extended:
         deadline = replace(deadline, expires_at=math.nextafter(deadline.expires_at, math.inf))
+
     data["grant_deadline"] = deadline
 
     # Проверяем и чистую модель, и транзакционную запись: ни одна из границ
@@ -1010,6 +1020,7 @@ def test_grant_rounding(
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Безопасные поля TLS и их восстановление без исходных сетевых исключений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_tls_classification(): Коды проверки и запрет произвольного текста
@@ -56,6 +56,7 @@ def test_tls_classification(
     """
 
     # code/reason — контролируемые значения; PRIVATE имитирует URL или credential.
+
     native = ssl.SSLCertVerificationError("PRIVATE certificate_expired")
     native.verify_code = code
     native.verify_message = "PRIVATE hostname mismatch"
@@ -89,13 +90,16 @@ def test_tls_field_validation(
     """
 
     # value — произвольное значение не должно становиться частью безопасной ошибки.
+
     command = CommandError("unavailable", error_kind="tls_certificate", verify_code=value)
     assert command.verify_code is None and "PRIVATE" not in str(command)
     assert CommandError("unavailable", error_kind=value, verify_code=10).error_kind is None
     with pytest.raises((ValueError, TypeError)):
         DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, error_kind="tls_certificate", verify_code=value)
+
     with pytest.raises(ValueError):
         DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, error_kind="tls_certificate")
+
     with pytest.raises(ValueError):
         DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, verify_code=10)
 #------------------------------------------------------------------------------------------------------------------
@@ -127,6 +131,7 @@ def test_tls_health_recovery() -> None:
     assert recovered.heartbeat.recoveries == recovered.heartbeat.failures == 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

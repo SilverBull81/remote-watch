@@ -1,10 +1,10 @@
 ﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига
@@ -140,6 +140,7 @@ class DeploymentConfigError(ValueError):
                         "config_fields": "Сверьте обязательные и допустимые поля с шаблоном JSON.",
                         "config_schema": "В schema_version требуется целое число 1.",
                     }.get(component_error.code, "Проверьте указанный раздел настроек уведомлений.")
+
         super().__init__(f"Invalid deployment: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -283,6 +284,7 @@ class LifecycleConfig:
 
         if self.heartbeat_interval < 0.1 or self.heartbeat_timeout < 3 * self.heartbeat_interval:
             raise ValueError("heartbeat intervals are inconsistent")
+
         if self.startup_timeout < self.heartbeat_timeout:
             raise ValueError("startup deadline is shorter than heartbeat deadline")
     #--------------------------------------------------------------------------------------------------------------
@@ -348,10 +350,13 @@ class DeploymentConfig:
         _origin(self.endpoint)
         for path in (self.control_dir, self.log_dir):
             _absolute_path(path)
+
         if not isinstance(self.caddy, CaddyConfig) or not isinstance(self.lifecycle, LifecycleConfig):
             raise TypeError("deployment models required")
+
         if not isinstance(self.restart, RestartPolicy):
             raise TypeError("restart model required")
+
         if not isinstance(self.application, ApplicationConfig):
             raise TypeError("application model required")
 
@@ -371,6 +376,7 @@ class DeploymentConfig:
         directories = [self.control_dir, self.log_dir]
         if self.caddy.data_dir is not None:
             directories.append(self.caddy.data_dir)
+
         for index, left in enumerate(directories):
             for right in directories[index + 1:]:
                 if left == right or left in right.parents or right in left.parents:
@@ -401,6 +407,7 @@ def load_control_directory(
     """
 
     # path — status/stop не зависят от исправности отредактированных конфигов компонентов.
+
     try:
         location = Path(path).resolve()
         root = _read_json(location)
@@ -549,6 +556,7 @@ def _unique_object(
         if key in result:
             raise ValueError("duplicate JSON key")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -602,6 +610,7 @@ def _object(
 
     if type(value) is not dict or not required <= value.keys() or value.keys() - required - optional:
         raise ValueError("invalid object fields")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -632,6 +641,7 @@ def _path(
     require_text(value, "path", max_bytes=4096)
     if any(ord(char) < 32 for char in value):
         raise ValueError("control character in path")
+
     return (location.parent / value).resolve()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -653,6 +663,7 @@ def _absolute_path(
 
     if not isinstance(value, Path) or not value.is_absolute():
         raise ValueError("absolute Path required")
+
     if ".." in value.parts:
         raise ValueError("normalized path required")
 #------------------------------------------------------------------------------------------------------------------
@@ -676,12 +687,15 @@ def _origin(
     require_text(value, "endpoint", max_bytes=2048)
     if any(char.isspace() or ord(char) < 32 for char in value) or "\\" in value:
         raise ValueError("invalid origin characters")
+
     parsed = urlsplit(value)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/")
             or parsed.username is not None or parsed.password is not None or "?" in value or "#" in value):
         raise ValueError("HTTPS origin required")
+
     if parsed.port is not None and not 1 <= parsed.port <= 65535:
         raise ValueError("invalid origin port")
+
     if parsed.netloc.endswith(":"):
         raise ValueError("empty origin port")
 
@@ -730,6 +744,7 @@ def _check_components(
             raise DeploymentConfigError("component_config", name, component_error=error) from None
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

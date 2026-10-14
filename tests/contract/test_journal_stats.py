@@ -1,10 +1,10 @@
 ﻿# Сводки SQLite, кэш владельца и безопасная диагностика без изменения команд.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_command_snapshot(): Подсчёт сохранённых фаз без записи в журнал
@@ -137,6 +137,7 @@ def test_command_snapshot(
                 assert rig.client.journal_status["snapshot"]["kind"] == "client"
         finally:
             await rig.close()
+
         before = (tmp_path / "hub.sqlite").read_bytes()
         offline = inspect_journal(tmp_path / "hub.sqlite")
         assert offline == sample and (tmp_path / "hub.sqlite").read_bytes() == before
@@ -168,6 +169,7 @@ def test_offline_source(
     """
 
     # tmp_path — приватные значения нужны только для проверки отсутствия их в отчёте.
+
     path = tmp_path / "source.sqlite"
     source = SourceJournal(path, seen_limit=32)
     source.open()
@@ -186,6 +188,7 @@ def test_offline_source(
         assert "private" not in repr(stats)
     finally:
         source.close()
+
     files = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
     offline = inspect_journal(path)
     assert offline.records == 26 and offline.records_limit is None
@@ -216,6 +219,7 @@ def test_offline_refusal(
 
 
     # mode — даже имя отсутствующего файла не должно стать новой пустой SQLite.
+
     path = tmp_path / "private-journal.sqlite"
     if mode != "missing":
         if mode == "corrupt":
@@ -225,6 +229,7 @@ def test_offline_refusal(
                 db.execute("CREATE TABLE private_table(secret TEXT)")
             if mode in ("rollback", "wal"):
                 Path(str(path) + ("-journal" if mode == "rollback" else "-wal")).write_bytes(b"private-sidecar")
+
     before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
     rows = journal_checks(path)
     assert rows[0]["status"] == "failed" and rows[0]["code"] == "journal_read_failed"
@@ -312,6 +317,7 @@ def test_worker_cache(
         finally:
             release.set()
             await worker.close(1)
+
         assert worker.journal_status()["state"] == "closed"
     #--------------------------------------------------------------------------------------------------------------
 
@@ -333,12 +339,14 @@ def test_ipc_metrics(
     """
 
     # tmp_path — никаких произвольных source ID в IPC нет, только позиции в списке.
+
     source = SourceJournal(tmp_path / "source.sqlite")
     source.open()
     try:
         value = asdict(source.journal_stats())
     finally:
         source.close()
+
     large = {key: number if type(number) is not int else 2**63 - 1 for key, number in value.items()}
     large.update(schema_version=1, pending=1)
     status = {"state": "available", "age_seconds": 2**31 - 1, "snapshot": large}
@@ -352,8 +360,10 @@ def test_ipc_metrics(
         bad = dict(message, journals={"hub": dict(status, snapshot=forged), "sources": []})
         with pytest.raises(ValueError):
             status_message(bad)
+
     with pytest.raises(ValueError):
         status_message(dict(message, journals={"hub": status, "sources": [status] * 9}))
+
     # Deep copy: дальнейшее изменение входного JSON не меняет принятый кэш.
     large["records"] = 0
     assert safe["journals"]["hub"]["snapshot"]["records"] != 0
@@ -381,6 +391,7 @@ def test_doctor_journal(
 
 
     # capsys — режим journal не читает конфиги/токены и не запускает сетевых проверок.
+
     path = tmp_path / "private-source.sqlite"
     source = SourceJournal(path)
     source.open()
@@ -418,6 +429,7 @@ def test_doctor_server_cache(
     """
 
     # tmp_path — source здесь нужен только для формы снимка; live-проверка БД не читает.
+
     path = tmp_path / "source.sqlite"
     source = SourceJournal(path)
     source.open()
@@ -429,6 +441,7 @@ def test_doctor_server_cache(
     with patch("remote_watch.gateway_server.manager.control_request", new=AsyncMock(return_value=snapshot)):
         with patch("remote_watch.diagnostics.gateway_doctor.inspect_journal", side_effect=AssertionError):
             rows = asyncio.run(_server_online(config, 1))
+
     metrics = [row for row in rows if row.get("journal") is not None]
     assert len(metrics) == 2 and all(row["status"] == "ok" for row in metrics)
     assert metrics[1]["check"] == "commands.journal.source_1"
@@ -449,6 +462,7 @@ def test_manager_snapshot_age(
     """
 
     # tmp_path — экземпляр manager не запускается; проверяется только преобразование кэша.
+
     source = SourceJournal(tmp_path / "source.sqlite")
     source.open()
     stats = asdict(source.journal_stats())
@@ -483,6 +497,7 @@ def test_observer_budget(
     """
 
     # tmp_path — срок истекает детерминированно; реального ожидания и зависшего I/O нет.
+
     source = SourceJournal(tmp_path / "source.sqlite")
     source.open()
     try:
@@ -516,6 +531,7 @@ def test_resolved_unknown(
     """
 
     # tmp_path — используется настоящий путь сверки, без ручного ACK или замены итога.
+
     asyncio.run(conflict(tmp_path))
     path, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
     before = inspect_journal(path)
@@ -598,6 +614,7 @@ def test_observer_cannot_timeout_commit(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

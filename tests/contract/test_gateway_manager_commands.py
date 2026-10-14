@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -109,6 +109,7 @@ def test_command_process(
     """
 
     # setup_deployment/monkeypatch/both — продукт не получает механизма выбора произвольного bootstrap.
+
     pytest.importorskip("aiohttp")
     base = setup_deployment.control_dir.parent
     config_path = base / "commands.json"
@@ -160,6 +161,7 @@ raise SystemExit(main())
         """
 
         # group/arguments/capture — реальные hub, SQLite, listener и heartbeat не подменяются.
+
         return original(group, [arguments[0], str(script), arguments[-1]], capture)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -279,6 +281,7 @@ def test_stop_without_component_config(
     """
 
     # setup_deployment — локальная команда не должна перечитывать секреты компонентов.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -385,6 +388,7 @@ def test_operator_delivery() -> None:
             """
 
             # request — тело содержит только фиксированное служебное сообщение теста.
+
             received.append(await request.read())
             return web.json_response({"ok": True, "result": {"message_id": 1}, "id": "synthetic",
                                       "event": "message", "topic": "synthetic"})
@@ -458,6 +462,7 @@ def test_tray_stop(
     # monkeypatch — тест не показывает пользователю окно и не требует установленного GUI extra.
     # tmp_path/custom — проверяем выбор файла и освобождение его дескриптора.
     # visible — скрытый контроллер тоже готов и не создаёт второй цикл при показе.
+
     ended = threading.Event()
     icon = Mock()
     icon.run.side_effect = lambda setup: (setup(icon), ended.wait(5))
@@ -469,6 +474,7 @@ def test_tray_stop(
     source = tmp_path / "custom.ico" if custom else None
     if source is not None:
         source.write_bytes(b"synthetic icon")
+
     stop = Mock()
     tray = GatewayTray(stop, icon_path=source)
     try:
@@ -494,6 +500,7 @@ def test_tray_stop(
         stop.assert_called_once_with()
     finally:
         tray.close()
+
     assert not tray._thread.is_alive()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -516,6 +523,7 @@ def test_log_failure(
     """
 
     # setup_deployment/capsys — испорчена только тестовая запись, не реальные права или диск.
+
     manager = GatewayManager(setup_deployment)
     handler = StatusLog(setup_deployment.control_dir.parent / "synthetic.jsonl", maxBytes=4096, backupCount=1)
     handler.shouldRollover = Mock(side_effect=OSError("private-error-must-not-appear"))
@@ -529,6 +537,7 @@ def test_log_failure(
         handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

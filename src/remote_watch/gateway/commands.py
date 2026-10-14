@@ -1,10 +1,10 @@
 ﻿# Запуск отдельного командного gateway из JSON без пользовательского Python-кода.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandParser: Разбор CLI без раскрытия ошибочных значений
@@ -275,23 +275,28 @@ def _failure_details(
 
     if isinstance(error, CommandConfigError):
         return error.code, error.field, error.hint
+
     field = stage if stage in ("config", "tls", "startup") else "startup"
 
     if isinstance(error, ImportError):
         return ("dependency_missing", field,
                 "Установите remote-watch[commands] в тот же venv, которым запускаете сервер.")
+
     if isinstance(error, ssl.SSLError):
         return ("tls_invalid", field,
                 "Проверьте формат PEM, соответствие сертификата ключу и параметры TLS. "
                 "За Caddy используйте HTTP на loopback без --cert/--key.")
+
     if isinstance(error, PermissionError):
         return ("permission_denied", field,
                 "Проверьте права учётной записи на конфиг, сертификаты и запись в state_dir; "
                 "при открытии listener проверьте также ограничения ОС на порт.")
+
     if isinstance(error, FileNotFoundError):
         return ("file_missing", field,
                 "Не найден требуемый файл. Для TLS проверьте --cert/--key; "
                 "относительные пути этих аргументов считаются от текущей папки PowerShell.")
+
     if isinstance(error, OSError):
         if error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048:
             return ("address_in_use", field,
@@ -327,6 +332,7 @@ def _failure_details(
     return "operation_failed", field, hint
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Явный запуск CLI
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

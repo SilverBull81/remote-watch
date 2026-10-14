@@ -1,10 +1,10 @@
 ﻿# Проверки комплекта установки, сохранения рабочих данных и безопасного CLI.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_new_installation(): Согласованность новой установки и отсутствие побочных действий
@@ -84,6 +84,7 @@ def test_new_installation(
     """
 
     # tmp_path/monkeypatch/components — реальные файлы разрешены только внутри теста.
+
     root = tmp_path / "Новая установка с пробелами"
     options = DeployOptions(directory=root, endpoint="https://lv.example.test:8443", components=components)
     with monkeypatch.context() as patch:
@@ -93,17 +94,20 @@ def test_new_installation(
         patch.setattr(os, "getenv", Mock(side_effect=AssertionError("environment")))
         assert all(state == "create" for _, state in deploy(options))
         config = load_deployment_config(root / "gateway_server.local.json")
+
     assert config.endpoint == options.endpoint and config.caddy.mode == "external"
     assert config.application.icon_path == root / "logo" / "remote_watch.ico"
     assert config.application.icon_path.read_bytes() == default_icon().read_bytes()
     for component in ("notifications", "commands"):
         assert (getattr(config, component) is not None) == (components in ("both", component))
+
     caddy = (root / "Caddyfile.example").read_text(encoding="utf-8")
     assert "https://lv.example.test:8443" in caddy and "handle_path" not in caddy
     assert ("127.0.0.1:8766" in caddy) == (components in ("both", "commands"))
     assert ("127.0.0.1:8765" in caddy) == (components in ("both", "notifications"))
     for client in (root / "clients").glob("*.json"):
         assert json.loads(client.read_text())["endpoint"] == options.endpoint
+
     assert not (root / "data").exists() and not (root / "caddy-data").exists()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -122,10 +126,12 @@ def test_existing_installation(
     """
 
     # tmp_path — содержимое намеренно не является корректным JSON: deploy его не разбирает.
+
     previous = tmp_path / "old"
     previous.mkdir()
     for name in ("notifications.json", "commands.json", "root.crt", "commands.sqlite", "Caddyfile"):
         (previous / name).write_bytes(b"PRIVATE-original-bytes")
+
     before = {item: item.read_bytes() for item in previous.iterdir()}
     root = tmp_path / "new"
     options = DeployOptions(directory=root, endpoint="https://lv.example.test:8443",
@@ -160,6 +166,7 @@ def test_dry_run_and_updates(
     """
 
     # tmp_path — проверяем даже отсутствие каталога после dry-run.
+
     root = tmp_path / "new"
     options = DeployOptions(directory=root, endpoint="https://lv.example.test:8443")
     deploy(options, dry_run=True)
@@ -202,10 +209,12 @@ def test_validation(
     """
 
     # tmp_path/change — заведомо ошибочные настройки не должны оставлять файлы.
+
     root = tmp_path / "new"
     options = DeployOptions(directory=root, endpoint="https://lv.example.test:8443")
     with pytest.raises((ValueError, OSError)):
         deploy(replace(options, **change))
+
     assert not root.exists()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -224,6 +233,7 @@ def test_output_links(
     """
 
     # tmp_path — Windows без права создания symlink пропускает только этот сценарий.
+
     target = tmp_path / "target"
     target.mkdir()
     link = tmp_path / "linked"
@@ -234,8 +244,10 @@ def test_output_links(
             pytest.skip("symlink privilege unavailable")
         import _winapi
         _winapi.CreateJunction(str(target), str(link))
+
     with pytest.raises(DeployError, match="linked_path"):
         deploy(DeployOptions(directory=link, endpoint="https://lv.example.test"))
+
     assert list(target.iterdir()) == []
 #------------------------------------------------------------------------------------------------------------------
 
@@ -254,10 +266,12 @@ def test_exclusive_write(
     """
 
     # tmp_path — O_EXCL должен сохранять чужое содержимое, а не обновлять его.
+
     path = tmp_path / "config.json"
     path.write_bytes(b"PRIVATE")
     with pytest.raises(FileExistsError):
         _write_new(path, b"replacement")
+
     assert path.read_bytes() == b"PRIVATE"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -276,6 +290,7 @@ def test_managed(
     """
 
     # tmp_path — вместо бинарника обычный файл; попытка запуска была бы ошибкой.
+
     executable = tmp_path / "caddy.exe"
     executable.write_bytes(b"not executable")
     original = tmp_path / "OldCaddyfile"
@@ -309,6 +324,7 @@ def test_cli(
     """
 
     # tmp_path/capsys — секретоподобная строка не должна попадать в ошибку или diff.
+
     root = tmp_path / "new"
     args = ["--directory", str(root), "--endpoint", "https://lv.example.test:8443"]
     assert main(args + ["--dry-run"]) == 0 and not root.exists()
@@ -318,6 +334,7 @@ def test_cli(
     assert main(["--directory", str(root), "--endpoint", "https://u:PRIVATE@lv.example.test"]) == 1
     with pytest.raises(SystemExit):
         main(args + ["--PRIVATE"])
+
     output = capsys.readouterr()
     assert "PRIVATE" not in output.out + output.err
     assert "current_preserved" in output.out and "deployment_failed" in output.out
@@ -338,6 +355,7 @@ def test_launchers(
     """
 
     # tmp_path — check-config работает без сети и не запускает компоненты.
+
     root = tmp_path / "Тест ' deploy"
     deploy(DeployOptions(directory=root, endpoint="https://lv.example.test:8443"))
     if os.name == "nt":
@@ -345,6 +363,7 @@ def test_launchers(
                    "-File", str(root / "check-config.ps1")]
     else:
         command = [shutil.which("sh"), str(root / "check-config.sh")]
+
     # В source-тестах дочернему Python передаётся тот же src; wheel-тесты используют site-packages.
     import remote_watch
     environment = dict(os.environ, PYTHONPATH=str(Path(remote_watch.__file__).parent.parent))
@@ -370,12 +389,15 @@ def test_preflight_conflict(
     """
 
     # tmp_path — конфликт в конце плана не должен оставлять файлы из его начала.
+
     (tmp_path / "START_HERE.md").mkdir()
     with pytest.raises(DeployError, match="destination_invalid"):
         deploy(DeployOptions(directory=tmp_path, endpoint="https://lv.example.test"))
+
     assert [item.name for item in tmp_path.iterdir()] == ["START_HERE.md"]
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

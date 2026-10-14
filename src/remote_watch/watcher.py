@@ -1,10 +1,10 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ConsoleConfig: Настройки необязательного вывода в консоль
@@ -111,6 +111,7 @@ class ConsoleConfig:
         require_int(self.level, "level", 0)
         if not isinstance(self.format, str):
             raise TypeError("format must be a string")
+
         logging.Formatter(self.format)
 
         if self.stream is not None and not all(callable(getattr(self.stream, name, None))
@@ -170,6 +171,7 @@ class RotatingFileConfig:
         require_int(self.backup_count, "backup_count")
         if not isinstance(self.format, str):
             raise TypeError("format must be a string")
+
         logging.Formatter(self.format)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -201,6 +203,7 @@ class _OwnedRotatingFileHandler(RotatingFileHandler):
 
         # close и handle используют один lock. Стандартный FileHandler в режиме append
         # иначе открыл бы файл снова, если logging успел выбрать handler перед его снятием.
+
         if not self._closed:
             super().emit(record)
     #--------------------------------------------------------------------------------------------------------------
@@ -266,8 +269,10 @@ class RemoteWatcher:
 
         if logger is not None and not isinstance(logger, (logging.Logger, logging.LoggerAdapter)):
             raise TypeError("logger must be Logger or LoggerAdapter")
+
         if console is not None and not isinstance(console, ConsoleConfig):
             raise TypeError("console must be ConsoleConfig")
+
         if file is not None and not isinstance(file, (RotatingFileConfig, DailyFileConfig)):
             raise TypeError("file must be RotatingFileConfig or DailyFileConfig")
 
@@ -278,10 +283,12 @@ class RemoteWatcher:
                     or command_client.registration.identity != config.identity):
                 raise ValueError("command client identity differs from watcher")
             self._commands = CommandRuntime(CommandDispatcher(config.commands, command_client))
+
         self.logger = logger if logger is not None else logging.getLogger(config.identity.service)
         target = self.logger
         while isinstance(target, logging.LoggerAdapter):
             target = target.logger
+
         self._target = target
         self._console = console
         self._file = file
@@ -573,6 +580,7 @@ class RemoteWatcher:
         """
 
         # Такой вызов мог бы ждать поток, который сейчас выполняет сам callback.
+
         if delivery_context.get() or command_context.get():
             raise RuntimeError("watcher lifecycle cannot be called from delivery, redactor or command callbacks")
     #--------------------------------------------------------------------------------------------------------------
@@ -599,6 +607,7 @@ class RemoteWatcher:
                 # Ошибка flush одного файла не должна оставить остальные ресурсы без закрытия.
                 if first_error is None:
                     first_error = error
+
         self._handlers.clear()
         if first_error is not None:
             raise first_error
@@ -662,12 +671,14 @@ class RemoteWatcher:
                 continue
             except Exception:
                 break
+
         # Сохраняем CancelledError исходного вызова. Ошибка остановки видна также в runtime.state.
         if not task.cancelled():
             task.exception()
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

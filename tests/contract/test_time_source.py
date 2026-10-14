@@ -1,10 +1,10 @@
 ﻿# Проверки источника времени через настоящий локальный HTTPS без внешней сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_verified_https_time(): Настоящий TLS и недопустимые ответы источника времени
@@ -108,15 +108,20 @@ def test_verified_https_time(
             headers = {"Date": "Wed, 30 Sep 2026 12:00:00 GMT"}
             if case == "cached":
                 headers["Age"] = "0"
+
             if case == "redirect":
                 headers["Location"] = "https://private.invalid/secret"
+
             if case == "bad_date":
                 headers["Date"] = "private-malformed-date"
+
             if case == "timeout":
                 await asyncio.sleep(0.15)
+
             response = web.Response(status=302 if case == "redirect" else 204, headers=headers)
             if case == "duplicate_date":
                 response.headers.add("Date", headers["Date"])
+
             return response
         #----------------------------------------------------------------------------------------------------------
 
@@ -132,6 +137,7 @@ def test_verified_https_time(
         if case == "disabled_verification":
             client_ssl.check_hostname = False
             client_ssl.verify_mode = ssl.CERT_NONE
+
         try:
             if case == "ok":
                 first = await source.sample()
@@ -176,6 +182,7 @@ def test_time_source_configuration(
         HttpsDateTimeSource(url, accuracy=1)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

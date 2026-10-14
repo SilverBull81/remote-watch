@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NotificationGatewayConfigError: Ошибка с фиксированной категорией и разделом схемы
@@ -102,6 +102,7 @@ class NotificationGatewayConfigError(ValueError):
         self.code = code if code in ("config_read", "config_size", "config_json", "config_fields",
                                       "config_schema", "config_value") else "config_value"
         fields = ("config", "schema_version", "destinations", "principals", "gateway")
+
         # В подробном пути допустимы только известные поля и ограниченный индекс списка.
         indexed = re.fullmatch(r"(destinations|principals)\[([0-9]{1,3})\](\.settings)?\.(token|token_env)", field)
         safe_path = indexed is not None and (
@@ -139,6 +140,7 @@ def load_notification_gateway_config(
 
     # Ограничиваем чтение до разбора JSON. Файл может содержать локальные адреса,
     # поэтому ошибки наружу возвращаются без его содержимого и значений полей.
+
     code, field = "config_read", "config"
     try:
         with Path(path).open("rb") as stream:
@@ -223,8 +225,10 @@ def _object(
 
     if not isinstance(value, dict) or not set(value) <= allowed:
         raise ValueError("invalid configuration object")
+
     if required is not None and not required <= set(value):
         raise ValueError("missing required fields")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -254,6 +258,7 @@ def _items(
 
     if not isinstance(value, list) or not 1 <= len(value) <= maximum:
         raise ValueError("invalid configuration array")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -281,6 +286,7 @@ def _unique_object(
         if key in result:
             raise ValueError("duplicate configuration key")
         result[key] = value
+
     return result
 #------------------------------------------------------------------------------------------------------------------
 
@@ -376,6 +382,7 @@ def _destination(
         provider = NtfyConfig(**options)
     else:
         raise ValueError("unsupported gateway provider")
+
     return provider.destination(settings["alias"], retry=retry)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -397,12 +404,15 @@ def _credential_source(
 
     # Проверяем наличие ключей, а не истинность значений: token вместе с token_env=null
     # тоже неоднозначен. Пустая строка и token=null не включают анонимную отправку.
+
     if ("token" in settings) == ("token_env" in settings):
         raise CredentialError("token", "source")
+
     if "token" in settings and settings["token"] is None:
         raise CredentialError("token", "value")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DoctorTarget: Закрытые параметры проверки одного канала
@@ -199,11 +199,13 @@ def load_targets(
     """
 
     # path — doctor не импортирует приложение и не пытается угадать его callbacks/конфиг.
+
     value = read_command_json(path)
     if (set(value) - {"schema_version", "endpoint", "identity", "ca_file", "notifications", "commands"}
             or not {"schema_version", "endpoint", "identity"} <= set(value)
             or type(value["schema_version"]) is not int or value["schema_version"] != 1):
         raise DeploymentConfigError("config_schema", "config")
+
     _origin(value["endpoint"])
     endpoint = value["endpoint"]
     ca_file = value.get("ca_file")
@@ -211,6 +213,7 @@ def load_targets(
         if type(ca_file) is not str or not ca_file.strip() or "\x00" in ca_file:
             raise CommandConfigError("client.ca_file", "ca_read")
         ca_file = (path.resolve().parent / ca_file).resolve()
+
     targets = []
     for name, permission_key in (("notifications", "aliases"), ("commands", "scopes")):
         if name not in value:
@@ -227,13 +230,16 @@ def load_targets(
             raise DeploymentConfigError("config_value", name) from None
         targets.append(DoctorTarget(name, endpoint, identity, permissions, ca_file,
                                     item.get("token"), item.get("token_env")))
+
     if not targets:
         raise DeploymentConfigError("config_value", "config")
+
     if len(targets) == 2 and any(
         getattr(targets[0], key) is not None and getattr(targets[0], key) == getattr(targets[1], key)
         for key in ("token", "token_env")
     ):
         raise CredentialError("token", "source")
+
     return tuple(targets)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -263,6 +269,7 @@ def _row(
     """
 
     # check/status/code — только служебные литералы; никаких имён из JSON.
+
     return {"check": check, "status": status, "code": code}
 #------------------------------------------------------------------------------------------------------------------
 
@@ -284,6 +291,7 @@ def _error_row(
     """
 
     # error — исходный текст, notes, цепочка и пути никогда не сериализуются.
+
     row = _row("configuration", "failed", "config_invalid")
     if type(error) in (DeploymentConfigError, CommandConfigError):
         row.update(config_code=error.code, field=error.field)
@@ -293,6 +301,7 @@ def _error_row(
             row["hint"] = error.hint
     elif type(error) is CredentialError:
         row["code"] = "credential_unavailable"
+
     return row
 #------------------------------------------------------------------------------------------------------------------
 
@@ -314,6 +323,7 @@ def _tls_context(
     """
 
     # ca_file — только чтение; doctor не копирует сертификаты и не отключает проверку имени.
+
     context = ssl.create_default_context()
     if ca_file is not None:
         try:
@@ -322,6 +332,7 @@ def _tls_context(
             raise CommandConfigError("client.ca_file", "ca_invalid") from None
         except OSError:
             raise CommandConfigError("client.ca_file", "ca_read") from None
+
     return context
 #------------------------------------------------------------------------------------------------------------------
 
@@ -351,20 +362,24 @@ def client_checks(
     """
 
     # path/online/timeout — проверка без сети не читает токены из окружения и не создаёт сокеты.
+
     targets = load_targets(path)
     rows = [_row("configuration", "ok", "config_ok")]
     context = _tls_context(targets[0].ca_file)
     rows.append(_row("ca", "ok", "ca_ok"))
     if not online:
         return rows + [_row("network", "skipped", "online_not_requested")]
+
     tokens = {}
     for target in targets:
         try:
             tokens[target.component] = resolve_token(target.token, target.token_env, "gateway")
         except CredentialError:
             rows.append(_row(target.component + ".credential", "failed", "credential_unavailable"))
+
     if len(tokens) == 2 and len(set(tokens.values())) != 2:
         return rows + [_row("credentials", "failed", "credential_shared")]
+
     for target in targets:
         if target.component not in tokens:
             continue
@@ -372,6 +387,7 @@ def client_checks(
                            "permissions": list(target.permissions)}).encode("utf-8")
         rows.extend(network_checks(target.endpoint, context, target.component,
                                    tokens[target.component], body, timeout))
+
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
@@ -397,6 +413,7 @@ async def _server_online(
     """
 
     # config/timeout — runtime.json читается только для существующего status; stop не вызывается.
+
     from remote_watch.gateway_server.manager import control_request
 
     rows = []
@@ -418,6 +435,7 @@ async def _server_online(
             rows.append(_row(name + ".component", "ok" if ready else "failed", code))
     except Exception:
         rows.append(_row("manager", "failed", "control_unavailable"))
+
     for name in ("notifications", "commands"):
         component = getattr(config, name)
         if component is None:
@@ -435,6 +453,7 @@ async def _server_online(
                     await asyncio.wait_for(writer.wait_closed(), timeout)
                 except Exception:
                     pass
+
     components = snapshot.get("components", {})
     command = components.get("commands", {}) if type(components) is dict else {}
     journals = command.get("journals") if type(command) is dict else None
@@ -450,6 +469,7 @@ async def _server_online(
                 rows.extend(_journal_rows(f"commands.journal.source_{index + 1}", value))
         except (ValueError, TypeError):
             rows.append(_row("commands.journals", "failed", "journal_invalid"))
+
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
@@ -475,6 +495,7 @@ def _journal_rows(
     """
 
     # prefix/value — имена source не берутся из конфига, только их порядковые номера.
+
     item = validate_status(value)
     state, age, snapshot = item["state"], item["age_seconds"], item["snapshot"]
     code = ("journal_ok" if state == "available" else "not_observed" if state in (
@@ -482,6 +503,7 @@ def _journal_rows(
     status = "ok" if state == "available" else "skipped" if code == "not_observed" else "warning"
     if age is not None and age > 30:
         code, status = "journal_stale", "warning"
+
     row = _row(prefix, status, code)
     row.update(age_seconds=age, journal=snapshot)
     rows = [row]
@@ -492,6 +514,7 @@ def _journal_rows(
             rows.append(_row(prefix + ".capacity", "skipped", "journal_limits_unknown"))
         if snapshot["unresolved_unknown"]:
             rows.append(_row(prefix + ".unknown", "warning", "journal_unknown"))
+
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
@@ -513,6 +536,7 @@ def journal_checks(
     """
 
     # path — режим SQLite immutable не создаёт вспомогательных файлов; рабочий журнал читается через сервер.
+
     try:
         value = asdict(inspect_journal(path))
         return _journal_rows("journal", {"state": "available", "age_seconds": 0, "snapshot": value})
@@ -546,6 +570,7 @@ def server_checks(
     """
 
     # path/online/timeout — не запускаем сервер или Caddy, не открываем SQLite и файлы блокировок.
+
     config = load_deployment_config(path)
     rows = [_row("configuration", "ok", "config_ok")]
     modules = ["aiohttp"] + (["pystray", "PIL"] if config.application.ui == "tray" else [])
@@ -553,10 +578,13 @@ def server_checks(
         available = importlib.util.find_spec(module) is not None
         rows.append(_row("dependency." + module, "ok" if available else "failed",
                          "dependencies_ok" if available else "dependency_missing"))
+
     if not online:
         return rows + [_row("runtime", "skipped", "online_not_requested")]
+
     if importlib.util.find_spec("aiohttp") is None:
         return rows
+
     rows.extend(asyncio.run(_server_online(config, timeout)))
     return rows
 #------------------------------------------------------------------------------------------------------------------
@@ -580,6 +608,7 @@ def _write_report(
     """
 
     # path/report — нельзя затереть конфиг, CA или прежний отчёт ошибочным --report.
+
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         json.dump(report, stream, ensure_ascii=False, indent=2)
@@ -604,6 +633,7 @@ def main(
     """
 
     # argv — секреты передаются только в приватном JSON/окружении; CLI не принимает токены.
+
     parser = DeploymentParser(description="Gateway doctor: безопасные проверки сервера и клиента.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
     parser.add_argument("--mode", choices=("server", "client", "journal"), default="server")
@@ -619,8 +649,10 @@ def main(
             parser.error("journal")
     elif args.config is None or args.journal is not None:
         parser.error("config")
+
     if not math.isfinite(args.timeout) or not 0.1 <= args.timeout <= 10:
         parser.error("timeout")
+
     try:
         if args.mode == "journal":
             rows = journal_checks(args.journal)
@@ -629,8 +661,10 @@ def main(
             rows = check(args.config, args.online, args.timeout)
     except Exception as error:
         rows = [_error_row(error)]
+
     for row in rows:
         row.setdefault("hint", HINTS.get(row["code"], "Проверьте локальный статус и журнал компонента."))
+
     package_version = version("remote-watch")
     package_version = package_version if re.fullmatch(r"[0-9][A-Za-z0-9.+-]{0,63}", package_version) else "unknown"
     report = {"schema_version": 1, "package_version": package_version, "python": platform.python_version(),
@@ -651,15 +685,18 @@ def main(
                     "records", "records_limit", "pending", "unknown", "unresolved_unknown", "execution_active",
                     "payload_reserved_bytes", "payload_limit_bytes", "database_bytes", "database_limit_bytes"))
                     + f" age_seconds={row['age_seconds']}", flush=True)
+
     if args.report is not None:
         try:
             _write_report(args.report, report)
         except OSError:
             print("Doctor: code=report_write. Укажите новый файл в существующей доступной папке.", file=sys.stderr)
             return 2
+
     return 0 if report["passed"] else 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явная проверка сервера либо клиентского доступа
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

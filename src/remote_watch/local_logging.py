@@ -1,10 +1,10 @@
 ﻿# Локальные журналы по дням с автоматическим выбором папки года и месяца.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> DailyFileConfig: Настройки ежедневного UTF-8 журнала
@@ -108,6 +108,7 @@ class DailyFileConfig:
         """
 
         # timestamp — дата события, а не время обработки отложенной записи.
+
         day = datetime.fromtimestamp(timestamp, tz=self.timezone)
         month = f"{day.month:02d}. {_MONTHS[day.month - 1]}"
         return self.directory / f"{day.year:04d}" / month / f"{self.prefix}_log_{day:%y%m%d}.txt"
@@ -126,6 +127,7 @@ class DailyFileConfig:
 
         if not isinstance(self.directory, (str, Path)) or not str(self.directory).strip():
             raise ValueError("directory must be a nonempty string or Path")
+
         object.__setattr__(self, "directory", Path(self.directory).absolute())
 
         # Prefix всегда часть имени, а не путь: запрещаем разделители и символы,
@@ -133,12 +135,14 @@ class DailyFileConfig:
         require_text(self.prefix, "prefix", 128)
         if any(ord(char) < 32 or char in '<>:"/\\|?*' for char in self.prefix):
             raise ValueError("prefix must be a portable filename component")
+
         if self.timezone is not None and not isinstance(self.timezone, tzinfo):
             raise TypeError("timezone must be tzinfo or None")
 
         require_int(self.level, "level", 0)
         if not isinstance(self.format, str):
             raise TypeError("format must be a string")
+
         logging.Formatter(self.format)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -167,6 +171,7 @@ class _DailyFormatter(logging.Formatter):
         """
 
         # config — формат строки и пояс без изменения глобального logging.Formatter.
+
         super().__init__(config.format)
         self._timezone = config.timezone
     #--------------------------------------------------------------------------------------------------------------
@@ -194,9 +199,11 @@ class _DailyFormatter(logging.Formatter):
         """
 
         # record/datefmt — стандартный протокол Formatter; пояс применяется локально.
+
         value = datetime.fromtimestamp(record.created, tz=self._timezone)
         if datefmt is not None:
             return value.strftime(datefmt)
+
         return f"{value:%Y-%m-%d %H:%M:%S},{value.microsecond // 1000:03d}"
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -225,8 +232,10 @@ class DailyFileHandler(logging.FileHandler):
         """
 
         # config — явные настройки; чужие обработчики logger не ищем и не заменяем.
+
         if not isinstance(config, DailyFileConfig):
             raise TypeError("config must be DailyFileConfig")
+
         self._config = config
         path = config.path_for(datetime.now().timestamp())
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,6 +262,7 @@ class DailyFileHandler(logging.FileHandler):
         # record — дата создания важна при отложенной доставке через QueueListener
         # и при переходе через полночь. Запись из прошлого дописывает прошлый файл.
         # RLock общий с handle/close; защищаем также прямой вызов emit.
+
         self.acquire()
         try:
             if self._closed:
@@ -286,6 +296,7 @@ class DailyFileHandler(logging.FileHandler):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

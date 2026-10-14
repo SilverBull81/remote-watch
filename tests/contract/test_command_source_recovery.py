@@ -1,10 +1,10 @@
 ﻿# Восстановление источника, откат времени и повтор только доставки результата.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_source_restart_keeps_original_session(): Сохранение выбранной сессии после перезапуска источника
@@ -207,6 +207,7 @@ def test_command_http_internal_context(
                 capabilities=(CommandCapability(name="status", required_scope="read"),))
             with pytest.raises(CommandError, match="unavailable"):
                 await transport.exchange("register", registration)
+
         assert delivery_context.get() is False
         assert observed == [True]
     #--------------------------------------------------------------------------------------------------------------
@@ -350,6 +351,7 @@ def test_source_reply_loss_only_retries_result(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

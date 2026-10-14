@@ -1,10 +1,10 @@
 ﻿# Проверки безопасной диагностики ntfy, совместимости gateway и пределов уведомления.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_diagnostic_values(): Отклонение недопустимых значений диагностики
@@ -135,6 +135,7 @@ def test_response_versions(
         payload["result"]["http_status"] = "private_value"
         with pytest.raises(ValueError):
             decode_response(payload, delivery, schema_version=2)
+
     with pytest.raises(ValueError):
         decode_response(payload, delivery, schema_version=3 - schema_version)
 #------------------------------------------------------------------------------------------------------------------
@@ -244,6 +245,7 @@ def test_notification_gateway_rejects_before_post(
             assert result.reason_code == "gateway_payload_limits"
         finally:
             await channel.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -378,11 +380,13 @@ def test_ntfy_diagnostics(
             await channel.close()
             await gateway.close()
             await runner.cleanup()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
     assert "private_value" not in caplog.text
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

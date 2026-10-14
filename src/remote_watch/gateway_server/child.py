@@ -1,10 +1,10 @@
 ﻿# Закрытый bootstrap серверного компонента с heartbeat его рабочего event loop.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> failure_kind(): Классификация известных ошибок без их текста.
@@ -61,15 +61,20 @@ def failure_kind(
     """
 
     # error — текст и traceback не передаются; неоднозначный сбой остаётся crash.
+
     if isinstance(error, StoreConflict):
         return "ownership"
+
     if isinstance(error, StoreError):
         return "storage"
+
     if isinstance(error, CommandError):
         return {"denied": "authorization", "conflict": "ownership", "unavailable": "storage",
                 "capacity": "storage", "invalid": "configuration"}.get(error.code, "crash")
+
     if isinstance(error, (ValueError, TypeError, ImportError, NotificationGatewayStartupError, OSError)):
         return "configuration"
+
     return "crash"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +93,7 @@ async def run_child(
     """
 
     # settings — токен передан через stdin, а не командную строку/общий config.
+
     import aiohttp
 
     name = settings["name"]
@@ -206,6 +212,7 @@ def main() -> int:
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

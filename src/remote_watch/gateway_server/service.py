@@ -1,10 +1,10 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
@@ -94,8 +94,10 @@ class ServiceSpec:
         """
 
         # action — только внутренний фиксированный режим; пароль/токены сюда не попадают.
+
         if action not in ("run", "tray"):
             raise ValueError("service_action")
+
         executable = self.python.with_name("pythonw.exe") if action == "tray" else self.python
         return [str(executable), "-I", "-B", "-m", "remote_watch.gateway_server.service",
                 "--config", str(self.config), "--name", self.name,
@@ -115,15 +117,20 @@ class ServiceSpec:
 
         if not re.fullmatch(r"RemoteWatch[A-Za-z0-9_-]{0,48}", self.name):
             raise ValueError("service_name")
+
         if not re.fullmatch(r"S-1-5-21-(?:[0-9]{1,10}-){3}[0-9]{1,10}", self.operator_sid):
             raise ValueError("operator_sid")
+
         if any(int(part) > 2**32 - 1 for part in self.operator_sid.split("-")[4:]):
             raise ValueError("operator_sid")
+
         for path in (self.config, self.python):
             if not isinstance(path, Path) or not path.is_absolute() or any(ord(c) < 32 for c in str(path)):
                 raise ValueError("service_path")
+
         if self.python.name.lower() != "python.exe":
             raise ValueError("service_python")
+
         # Windows spelling/case одного пути не должны менять exact binding.
         # Нормализуем только два пути; весь ImagePath не сравнивается casefold.
         object.__setattr__(self, "config", Path(os.path.normcase(str(self.config))))
@@ -208,16 +215,20 @@ def make_plan(
 
     # spec — сначала проверяем весь план. Смена аккаунта не должна сопровождаться
     # переносом БД или регистрацией службы, ссылающейся на другой пустой state_dir.
+
     config = load_deployment_config(spec.config)
+
     # В существующей установке на LV папку logs также использует внешний Caddy.
     # Управляющий процесс целиком заменяет права своей папки: её нельзя делить с Caddy,
     # иначе смена service account отрежет внешнего writer при ротации его файла.
     if config.log_dir == spec.config.parent / "logs":
         raise ValueError("service_shared_logs")
+
     if config.log_dir.exists():
         for index, entry in enumerate(config.log_dir.iterdir()):
             if index >= 32 or not re.fullmatch(r"gateway_server\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?", entry.name):
                 raise ValueError("service_shared_logs")
+
     get_drive = None
     if os.name == "nt":
         import ctypes
@@ -225,21 +236,26 @@ def make_plan(
         get_drive = ctypes.WinDLL("kernel32").GetDriveTypeW
         get_drive.argtypes = [ctypes.c_wchar_p]
         get_drive.restype = ctypes.c_uint
+
     environment = spec.python.parent.parent
     if not (environment / "pyvenv.cfg").is_file() or not spec.python.is_file():
         raise ValueError("service_requires_venv")
+
     files = [spec.config, spec.python]
     directories = [config.control_dir, config.log_dir]
     for component in (config.notifications, config.commands):
         if component is not None:
             files.append(component.config)
+
     if config.commands is not None:
         from remote_watch.gateway.command_config import _gateway
 
         directories.append(_gateway(config.commands.config, False).state_dir)
+
     if config.caddy.mode == "managed":
         files.extend((config.caddy.executable, config.caddy.config))
         directories.append(config.caddy.data_dir)
+
     if config.application.ui == "tray":
         files.append(spec.python.with_name("pythonw.exe"))
         if config.application.icon_path is not None:
@@ -252,14 +268,18 @@ def make_plan(
                 or get_drive is not None and get_drive(str(target.anchor)) != 3):
             raise ValueError("service_local_path")
         _path(target)
+
     if any(not p.is_file() for p in files):
         raise ValueError("service_file_missing")
+
     if any(p.exists() and not p.is_dir() for p in directories):
         raise ValueError("service_directory_invalid")
+
     for directory in directories:
         if (directory == spec.config.parent or directory in spec.config.parents
                 or any(directory == p or directory in p.parents for p in (*files, environment))):
             raise ValueError("service_directory_overlap")
+
     return ServicePlan(spec, config, tuple(dict.fromkeys(files)), tuple(dict.fromkeys(directories)), environment)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -282,6 +302,7 @@ def main(
 
     # argv — аргументы argparse не печатаются при ошибке: оператор мог вставить
     # туда токен. Ни install, ни remove не являются действием по умолчанию.
+
     parser = DeploymentParser(description="Windows service: install/remove/start/stop/status/tray.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
     parser.add_argument("--config", type=Path, required=True)
@@ -291,9 +312,11 @@ def main(
     group = parser.add_mutually_exclusive_group(required=True)
     for action in ("install", "remove", "start", "stop", "status", "run", "tray", "sync-tray"):
         group.add_argument("--" + action, dest="action", action="store_const", const=action)
+
     args = parser.parse_args(argv)
     if args.dry_run and args.action not in ("install", "remove", "sync-tray"):
         parser.error("dry_run")
+
     try:
         if os.name != "nt":
             raise ValueError("service_requires_windows")
@@ -337,7 +360,7 @@ def main(
             print(json.dumps(backend.status()), flush=True)
             return 0
         if args.action in ("start", "sync-tray"):
-            # Запуск службы уже принят SCM. Ошибка необязательной иконки не должна
+            # Основная операция службы уже выполнена. Ошибка необязательной иконки не должна
             # объявлять этот запуск неудачным или останавливать работающий сервер.
             try:
                 from .service_tray import launch_tray
@@ -376,6 +399,7 @@ def main(
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явные операции службы
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

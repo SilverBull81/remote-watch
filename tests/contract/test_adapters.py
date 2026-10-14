@@ -1,10 +1,10 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> FakeResponse: Управляемый HTTP-ответ для тестов
@@ -161,6 +161,7 @@ class FakeResponse:
 
         if self.block:
             await asyncio.Event().wait()
+
         data = self.raw if self.raw is not None else json.dumps(self.body).encode()
         for offset in range(0, len(data), size):
             yield data[offset:offset + size]
@@ -182,6 +183,7 @@ class FakeResponse:
 
         if self.error:
             raise self.error
+
         self.entered.set()
         return self
     #--------------------------------------------------------------------------------------------------------------
@@ -361,6 +363,7 @@ def make_channel(
 
     if provider == "telegram":
         return TelegramChannel(TelegramConfig(token_env="RW_TEST_TELEGRAM", chat_id=-123, message_thread_id=9))
+
     return NtfyChannel(NtfyConfig(
         topic="test-topic", token_env="RW_TEST_NTFY", title="Проверка", tags=("warning",),
     ))
@@ -387,6 +390,7 @@ def accepted_body(
 
     if provider == "telegram":
         return {"ok": True, "result": {"message_id": 42}}
+
     return {"event": "message", "id": "Abc123", "topic": "test-topic"}
 #------------------------------------------------------------------------------------------------------------------
 
@@ -442,6 +446,7 @@ def test_success_and_lifecycle(
         assert not sessions
         with pytest.raises(RuntimeError, match="not open"):
             await channel.send(Delivery(notification=notification, destination_id="phone", delivery_id="d1"))
+
         await channel.open()
         await channel.open()
         assert len(sessions) == 1
@@ -464,6 +469,7 @@ def test_success_and_lifecycle(
             assert "event_id=" not in text
         else:
             assert text.startswith("😀аб") and "event_id=" not in text
+
         assert delivery.notification.identity == notification.identity and delivery.delivery_id == "d1"
         assert text.endswith("[truncated]")
         assert "parse_mode" not in payload and "attach" not in payload
@@ -480,12 +486,14 @@ def test_success_and_lifecycle(
             assert request["headers"]["Authorization"] == "Bearer tk_synthetic_test_token"
             assert payload["title"] == "Проверка" and payload["topic"] == "test-topic"
             assert len(text.encode()) <= 4095
+
         assert "synthetic_test_token" not in repr(channel) + repr(channel._config) + repr(result)
         await channel.close()
         await channel.close()
         assert session.closed
         with pytest.raises(RuntimeError, match="closed"):
             await channel.open()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -555,6 +563,7 @@ def test_http_errors(
             assert len(sessions[0].calls) == 1
         finally:
             await channel.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -612,6 +621,7 @@ def test_invalid_success(
             assert result.status is DeliveryStatus.UNKNOWN
         finally:
             await channel.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -686,6 +696,7 @@ def test_interrupted_requests(
             assert len(sessions[0].calls) == 1
         finally:
             await channel.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -734,6 +745,7 @@ def test_telegram_envelope_retry(
             assert all(call[1]["json"]["chat_id"] == -123 for call in sessions[0].calls)
         finally:
             await channel.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -788,6 +800,7 @@ def test_endpoint_validation(
 
     with pytest.raises(ValueError) as caught:
         NtfyConfig(topic="test", token_env=None, endpoint=endpoint)
+
     assert endpoint not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -831,6 +844,7 @@ def test_token_resolution_and_policy(
 
         with pytest.raises(ValueError, match="missing or invalid"):
             await channel.open()
+
         assert not sessions
         monkeypatch.setenv("RW_MISSING_TOKEN", "1:fake")
         await channel.open()
@@ -839,6 +853,7 @@ def test_token_resolution_and_policy(
         await anonymous.open()
         assert anonymous._token is None
         await anonymous.close()
+
     #--------------------------------------------------------------------------------------------------------------
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
@@ -882,6 +897,7 @@ def test_runtime_with_both_adapters(
         runtime.handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

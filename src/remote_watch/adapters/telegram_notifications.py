@@ -1,10 +1,10 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> TelegramConfig: Настройки получателя Telegram
@@ -159,6 +159,7 @@ class TelegramConfig:
         valid_chat = type(self.chat_id) is int and self.chat_id != 0
         if isinstance(self.chat_id, str):
             valid_chat = re.fullmatch(r"(?:-?[1-9][0-9]*|@[A-Za-z0-9_]+)", self.chat_id) is not None
+
         if not valid_chat:
             raise ValueError("chat_id must be a nonzero integer or channel username")
 
@@ -251,6 +252,7 @@ class TelegramChannel:
 
         if self._url is None:
             raise RuntimeError("channel is not open")
+
         if not isinstance(delivery, Delivery):
             raise TypeError("delivery must be Delivery")
 
@@ -265,6 +267,7 @@ class TelegramChannel:
         }
         if self._config.message_thread_id is not None:
             payload["message_thread_id"] = self._config.message_thread_id
+
         response = await self._http.post(self._url, payload)
         if isinstance(response, DeliveryResult):
             return response
@@ -283,11 +286,13 @@ class TelegramChannel:
 
         if not 200 <= status <= 299:
             return http_failure(status, delay)
+
         if isinstance(body, dict) and body.get("ok") is True:
             result = body.get("result")
             message_id = result.get("message_id") if isinstance(result, dict) else None
             if type(message_id) is int and 0 < message_id < 2**63:
                 return DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id=str(message_id))
+
         return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -309,6 +314,7 @@ class TelegramChannel:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

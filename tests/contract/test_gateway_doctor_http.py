@@ -1,10 +1,10 @@
 ﻿# Настоящий локальный HTTPS для doctor: права, свежесть времени и отсутствие побочных действий.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_command_probe(): Авторизация и наблюдение сессии без регистрации или продления
@@ -116,6 +116,7 @@ def test_command_probe(
         """
 
         # Один настоящий hub со своими SQLite и TLS; внешняя сеть не используется.
+
         rig = Rig(tmp_path)
         ca, cert, key = certificates(tmp_path, "trusted")
         server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -205,6 +206,7 @@ def test_notification_probe(
         """
 
         # Это отдельный endpoint: даже успешная проверка не вызывает channel.send().
+
         monkeypatch.setenv("RW_GW_TEST", TOKEN)
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel))
@@ -262,6 +264,7 @@ def test_tls_failures(
         """
 
         # Не устанавливаем CA в ОС; каждый тест получает собственный проверяющий context.
+
         ca, cert, key = certificates(tmp_path, mode)
         server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_context.load_cert_chain(cert, key)
@@ -328,6 +331,7 @@ def test_http_failures(
         """
 
         # Проверяем реальный POST и подсчитываем запросы: перехода по Location быть не должно.
+
         ca, cert, key = certificates(tmp_path, "trusted")
         server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_context.load_cert_chain(cert, key)
@@ -355,13 +359,16 @@ def test_http_failures(
 
 
             # Подставной ответ может содержать секреты: doctor не печатает его содержимое.
+
             seen.append(request.path)
             if mode == "slow":
                 await asyncio.sleep(.7)
+
             headers = {"Location": "/private-redirect"}
             if mode:
                 headers.update({"X-Remote-Watch-Probe": "1",
                                 "X-Remote-Watch-Component": "commands"})
+
             if mode == "drip":
                 response = web.StreamResponse(headers=headers)
                 response.content_type = "application/json"
@@ -373,6 +380,7 @@ def test_http_failures(
                 except (ConnectionError, OSError):
                     pass
                 return response
+
             return web.Response(status=status, headers=headers, content_type="application/json",
                                 text="private" * (1000 if mode == "large" else 1))
         #----------------------------------------------------------------------------------------------------------
@@ -469,6 +477,7 @@ def test_server_status(
         """
 
         # Doctor вызывает только status; неизвестные значения из ответа не попадают в отчёт.
+
         control = AsyncMock(return_value={"state": "degraded", "secret": "private",
             "components": {"commands": {"state": "degraded", "reason": "time_unavailable", "path": "private"},
                            "private-component": {"state": "private"}}})
@@ -535,6 +544,7 @@ def test_network_faults(
 
 
             # Ни один ответ не содержит закрытых данных теста.
+
             writers.append(writer)
             if mode == "plaintext":
                 writer.write(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
@@ -545,6 +555,7 @@ def test_network_faults(
         if mode == "refused":
             listener.close()
             await listener.wait_closed()
+
         try:
             rows = await asyncio.to_thread(network_checks, f"https://127.0.0.1:{port}",
                                            ssl.create_default_context(), "commands", APP_TOKEN, b"{}",
@@ -565,6 +576,7 @@ def test_network_faults(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск проверок через pytest
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

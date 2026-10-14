@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.1.2
+# Version 1.1.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки
@@ -207,6 +207,7 @@ class NotificationGateway:
 
         if not isinstance(config, NotificationGatewayServerConfig) or not callable(utc_now):
             raise TypeError("gateway requires NotificationGatewayServerConfig and a clock")
+
         self._config = config
         self._utc_now = utc_now
         self._state = "new"
@@ -243,6 +244,7 @@ class NotificationGateway:
 
         if self._state != "running" or self._port is None:
             raise RuntimeError("gateway is not running")
+
         return self._port
     #--------------------------------------------------------------------------------------------------------------
 
@@ -300,10 +302,13 @@ class NotificationGateway:
         self._check_loop()
         if self._state != "new":
             raise RuntimeError("gateway can only be started once")
+
         if not isinstance(host, str) or type(port) is not int or not 0 <= port <= 65535:
             raise ValueError("invalid bind address")
+
         if ssl_context is not None and not isinstance(ssl_context, ssl.SSLContext):
             raise TypeError("ssl_context must be SSLContext")
+
         if ssl_context is None:
             try:
                 loopback = ipaddress.ip_address(host).is_loopback
@@ -370,9 +375,11 @@ class NotificationGateway:
         self._check_loop()
         if self._state == "starting" and asyncio.current_task() is not self._start_task:
             raise RuntimeError("cancel and await start before closing a starting gateway")
+
         if self._close_task is None:
             self._state = "closing"
             self._close_task = asyncio.create_task(self._shutdown())
+
         # Отмена ожидающего владельца не отменяет уже начатое освобождение ресурсов.
         await asyncio.shield(self._close_task)
     #--------------------------------------------------------------------------------------------------------------
@@ -499,11 +506,13 @@ class NotificationGateway:
         headers = request.headers.getall("Authorization", [])
         if len(headers) != 1 or re.fullmatch(r"Bearer [A-Za-z0-9_-]{32,512}", headers[0]) is None:
             return None
+
         digest = hashlib.sha256(headers[0][7:].encode("ascii")).digest()
         match = None
         for expected, principal in self._tokens:
             if hmac.compare_digest(digest, expected):
                 match = principal
+
         return match
     #--------------------------------------------------------------------------------------------------------------
 
@@ -526,6 +535,7 @@ class NotificationGateway:
         """
 
         # identity — проверена общим endpoint; наблюдение не меняет счётчики доставки.
+
         return {"ready": self._state == "running", "reason": None if self._state == "running" else "closed"}
     #--------------------------------------------------------------------------------------------------------------
 
@@ -552,25 +562,32 @@ class NotificationGateway:
         self._counts["requests"] += 1
         if self._state != "running":
             return self._reject(503, "gateway_closing")
+
         principal = self._authenticate(request)
         if principal is None:
             self._counts["auth_denied"] += 1
             return self._reject(401, "gateway_auth_denied")
+
         if (len(self._active) >= self._config.capacity or
                 self._principal_active[principal.name] >= principal.capacity):
             self._counts["overloaded"] += 1
             return self._reject(429, "gateway_overloaded")
+
         now = asyncio.get_running_loop().time()
         delay = self._principal_next.get(principal.name, 0) - now
         if delay > 0:
             self._counts["rate_limited"] += 1
             return self._reject(429, "gateway_principal_rate", delay)
+
         self._principal_next[principal.name] = now + principal.min_interval
+
         # Сжатие запрещено до чтения; parser не распаковывает тело автоматически.
         if request.query_string or request.headers.get("Content-Encoding", "identity") != "identity":
             return self._reject(400, "gateway_invalid_request")
+
         if request.content_type != "application/json":
             return self._reject(415, "gateway_content_type")
+
         if request.content_length is not None and request.content_length > MAX_REQUEST_BYTES:
             return self._reject(413, "gateway_request_too_large")
 
@@ -635,6 +652,7 @@ class NotificationGateway:
             if len(data) + len(chunk) > MAX_REQUEST_BYTES:
                 return None
             data.extend(chunk)
+
         return bytes(data)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -669,10 +687,12 @@ class NotificationGateway:
         if alias in self._busy:
             self._counts["overloaded"] += 1
             return self._reject(429, "gateway_destination_busy")
+
         delay = self._destination_next.get(alias, 0) - asyncio.get_running_loop().time()
         if delay > 0:
             self._counts["rate_limited"] += 1
             return self._reject(429, "gateway_destination_rate", delay)
+
         destination = next(item for item in self._config.destinations if item.destination_id == alias)
         now = self._utc_now()
         event = envelope.delivery.notification
@@ -718,6 +738,7 @@ class NotificationGateway:
             finally:
                 self._busy.remove(alias)
             self._counts[result.status.value] += 1
+
         body = encode_response(envelope.delivery, result, schema_version=envelope.schema_version)
         response = web.Response(body=body, content_type="application/json")
         response.force_close()
@@ -920,6 +941,7 @@ def main(
     args = parser.parse_args(argv)
     if (args.factory is None) == (args.config is None):
         parser.error("Укажите либо --config, либо Python-фабрику module:function.")
+
     stage = "configuration"
     try:
         # JSON предназначен для обычного развёртывания без собственного Python-кода.
@@ -971,9 +993,11 @@ def main(
         hint = CREDENTIAL_HINTS.get(error.reason, "") if isinstance(error, NotificationGatewayConfigError) else ""
         print(f"Ошибка gateway: code={code} field={field}. {hint or 'Значения и детали скрыты.'}", flush=True)
         return 1
+
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

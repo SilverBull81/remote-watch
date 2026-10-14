@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока
@@ -198,6 +198,7 @@ class CommandHub:
 
         if not callable(clock):
             raise TypeError("invalid monotonic clock")
+
         self.config = config
         self.epoch = epoch
         self._clock = clock
@@ -228,6 +229,7 @@ class CommandHub:
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
+
         self._loop = asyncio.get_running_loop()
 
         try:
@@ -254,6 +256,7 @@ class CommandHub:
 
         if self._closed:
             return
+
         self._closed = True
 
         for entry in self._issued.values():
@@ -261,6 +264,7 @@ class CommandHub:
 
         if self._refresh is not None:
             self._refresh.cancel()
+
         await self._worker.close(self.config.shutdown_timeout)
 
         if self._refresh is not None:
@@ -301,8 +305,10 @@ class CommandHub:
 
         # Задача могла закончиться перед выполнением её done callback. Учитываем
         # отказ сразу, чтобы следующий запрос не получил новое разрешение в этом окне.
+
         if self._refresh is not None and self._refresh.done():
             self._maintenance_finished(self._refresh)
+
         running = self._refresh is not None and not self._refresh.done() and not self._closed
         time_ready = False
 
@@ -322,6 +328,7 @@ class CommandHub:
             reason = "time_unavailable"
         else:
             reason = self._maintenance_error
+
         return {"ready": reason is None, "reason": reason, "fatal": self._maintenance_failed,
                 "maintenance_running": running, "time_ready": time_ready,
                 "time_reason": None if time_ready else self._trusted.unavailable_reason}
@@ -346,6 +353,7 @@ class CommandHub:
         """
 
         # identity — HTTP doctor вызывает метод только после проверки principal и точных прав.
+
         entry = self._targets.get(identity)
         now = self._clock()
         return (not self._closed and entry is not None and now >= self._last
@@ -377,6 +385,7 @@ class CommandHub:
         for principal in self.config.principals:
             if _matches(token, principal.token):
                 return principal
+
         raise CommandError("denied")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -422,6 +431,7 @@ class CommandHub:
             if known.registration != registration or known.principal != principal.name:
                 raise CommandError("conflict")
             return self._session(known)
+
         existing = self._targets.get(registration.identity)
 
         if existing is not None and existing.deadline.remaining(now, self.epoch) > 0:
@@ -429,6 +439,7 @@ class CommandHub:
 
         if len(self._issued) >= self.config.max_sessions:
             raise CommandError("capacity")
+
         entry = _Session(registration, principal.name, self._deadline(self.config.session_ttl), asyncio.Event())
         self._issued[registration.session_id] = entry
         self._targets[registration.identity] = entry
@@ -509,6 +520,7 @@ class CommandHub:
             if (stored is None or stored.record.result is None or stored.record.claim_id != claim.claim_id
                     or message_digest(stored.record.request) != claim.request_digest):
                 raise CommandError("conflict")
+
             store.release_execution(claim.ref, claim.claim_id)
             return CommandReceipt(ref=claim.ref, claim_id=claim.claim_id,
                                   result_digest=message_digest(stored.record.result))
@@ -603,6 +615,7 @@ class CommandHub:
             sample = self._trusted.bounds()
         except Exception:
             return None
+
         return max(0, int(sample.lower_utc - self._trusted.policy.max_age - 2))
     #--------------------------------------------------------------------------------------------------------------
 
@@ -645,12 +658,14 @@ class CommandHub:
         entry = self._targets.get(identity)
         if entry is None:
             raise CommandError("stale_session")
+
         self._session(entry)
         scopes = frozenset(scope for rule in source.access
                            if rule.identity == identity and rule.actor_id == actor_id
                            and rule.conversation_id == conversation_id for scope in rule.scopes)
         if not scopes:
             raise CommandError("denied")
+
         return tuple(cap.name for cap in entry.registration.capabilities if cap.required_scope in scopes)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -682,10 +697,12 @@ class CommandHub:
 
         # Режим читается до SourcePending и хранится в request. Новый процесс
         # не меняет оформление ответа уже принятой команды предыдущей сессии.
+
         self._source_policy(token)
         entry = self._targets.get(ref.identity)
         if entry is None or not ref.matches(self._session(entry)):
             raise CommandError("stale_session")
+
         return entry.registration.command_display_mode
     #--------------------------------------------------------------------------------------------------------------
 
@@ -734,6 +751,7 @@ class CommandHub:
 
         if type(request) is not CommandRequest or request.source_id != source.source_id:
             raise CommandError("denied")
+
         require_int(position, "source position", minimum=0)
         require_int(message_date, "provider date", minimum=0)
         entry = self._targets.get(request.ref.identity)
@@ -743,6 +761,7 @@ class CommandHub:
             if request.ref.matches(self._session(entry)):
                 capability = next(
                     (cap for cap in entry.registration.capabilities if cap.name == request.name), None)
+
         permitted = capability is not None and any(
             rule.actor_id == request.actor_id and rule.conversation_id == request.conversation_id
             and rule.identity == request.ref.identity and capability.required_scope in rule.scopes
@@ -751,6 +770,7 @@ class CommandHub:
 
         if capability is not None and request.arguments and not capability.accepts_arguments:
             permitted = False
+
         if capability is not None and request.command_display_mode != entry.registration.command_display_mode:
             permitted = False
 
@@ -781,6 +801,7 @@ class CommandHub:
             if accepted is not None and position > store.cursor(source.source_id):
                 if len(store.pending(limit=1000)) >= self.config.max_pending:
                     raise CommandError("capacity")
+
             return store.admit(source.source_id, position, expected_cursor, accepted, deadline, reason)
         #----------------------------------------------------------------------------------------------------------
 
@@ -789,6 +810,7 @@ class CommandHub:
 
         if entry is not None:
             entry.changed.set()
+
         return admitted
     #--------------------------------------------------------------------------------------------------------------
 
@@ -821,6 +843,7 @@ class CommandHub:
 
         if entry.polling:
             raise CommandError("busy", busy_reason="session_poll_active")
+
         entry.polling = True
 
         try:
@@ -905,6 +928,7 @@ class CommandHub:
 
             if stored.record.result is not None:
                 return stored.record.result
+
             capability = next(
                 cap for cap in entry.registration.capabilities if cap.name == stored.record.request.name)
             now = self._clock()
@@ -912,6 +936,7 @@ class CommandHub:
 
             if remaining <= 0:
                 raise CommandError("expired")
+
             duration = min(capability.timeout, remaining)
             grant = CommandGrant(request=stored.record.request, claim_id=claim.claim_id,
                                  remaining_ttl=remaining, execution_timeout=duration)
@@ -921,6 +946,7 @@ class CommandHub:
 
             if not committed.start_callback:
                 raise CommandError("expired")
+
             return grant
         #----------------------------------------------------------------------------------------------------------
 
@@ -956,6 +982,7 @@ class CommandHub:
         # После рестарта разрешено вернуть только квитанцию точного старого итога.
         # Здесь нет перехода состояния: поздний COMPLETED не заменяет UNKNOWN,
         # а право на Identity и исходный claim проверяются заново по сохранённой записи.
+
         if type(result) is CommandResult and result.ref.hub_epoch != self.epoch:
             principal = self.authenticate(token)
             if result.ref.identity not in principal.identities:
@@ -1006,6 +1033,7 @@ class CommandHub:
                                  session, claim, entry.deadline, result=result)
                 if changed.command.record.result != result:
                     raise CommandError("outcome_conflict")
+
             return CommandReceipt(ref=result.ref, claim_id=result.claim_id, result_digest=message_digest(result))
         #----------------------------------------------------------------------------------------------------------
 
@@ -1052,6 +1080,7 @@ class CommandHub:
         """
 
         self._check()
+
         # Снимок регистраций исключает чтение изменяемого словаря из рабочего потока.
         leases = {sid: entry.deadline for sid, entry in self._issued.items()}
 
@@ -1080,6 +1109,7 @@ class CommandHub:
                 claim = CommandClaim(ref=ref, claim_id=record.claim_id or token_hex(16),
                                      request_digest=message_digest(record.request))
                 store.transition(ref, stored.revision, CommandAction.CLAIM, session, claim, lease)
+
             store.prune()
         #----------------------------------------------------------------------------------------------------------
 
@@ -1124,6 +1154,7 @@ class CommandHub:
 
             if stored is None or stored.record.request.source_id != source.source_id:
                 raise CommandError("denied")
+
             self._worker.store.acknowledge(result)
             self._worker.store.prune()
         #----------------------------------------------------------------------------------------------------------
@@ -1161,10 +1192,12 @@ class CommandHub:
 
         if not any(rule.identity == identity for rule in source.access):
             raise CommandError("denied")
+
         entry = self._targets.get(identity)
 
         if entry is None:
             raise CommandError("stale_session")
+
         return self._session(entry)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1181,10 +1214,13 @@ class CommandHub:
 
         if self._closed or self._loop is None or asyncio.get_running_loop() is not self._loop:
             raise CommandError("closed")
+
         if self._refresh is not None and self._refresh.done():
             self._maintenance_finished(self._refresh)
+
         if self._maintenance_failed:
             raise CommandError("unavailable")
+
         self._now()
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1208,6 +1244,7 @@ class CommandHub:
         if now < self._last or self._failed_clock:
             self._failed_clock = True
             raise CommandError("unavailable")
+
         self._last = now
         return now
     #--------------------------------------------------------------------------------------------------------------
@@ -1260,6 +1297,7 @@ class CommandHub:
 
         if remaining <= 0:
             raise CommandError("stale_session")
+
         registration = entry.registration
         return CommandSession(identity=registration.identity, session_id=registration.session_id,
                               hub_epoch=self.epoch, remaining_ttl=remaining)
@@ -1294,11 +1332,13 @@ class CommandHub:
 
         if type(session) is not CommandSession:
             raise CommandError("invalid")
+
         entry = self._issued.get(session.session_id)
 
         if (entry is None or entry.principal != principal.name or session.hub_epoch != self.epoch
                 or session.identity != entry.registration.identity):
             raise CommandError("stale_session")
+
         self._session(entry)
         return entry
     #--------------------------------------------------------------------------------------------------------------
@@ -1337,6 +1377,7 @@ class CommandHub:
 
         if type(ref) is not CommandRef:
             raise CommandError("invalid")
+
         entry = self._issued.get(ref.session_id)
 
         if (entry is None or entry.principal != principal.name or ref.hub_epoch != self.epoch
@@ -1345,6 +1386,7 @@ class CommandHub:
 
         if live:
             self._session(entry)
+
         return entry
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1373,6 +1415,7 @@ class CommandHub:
         for source in self.config.sources:
             if _matches(token, source.token):
                 return source
+
         raise CommandError("denied")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -1424,11 +1467,13 @@ class CommandHub:
                                      session, claim, entry.deadline)
                     continue
                 return CommandOffer(sequence=stored.sequence, request=record.request, remaining_ttl=remaining)
+
             return None
         #----------------------------------------------------------------------------------------------------------
 
 
         offer = await self._worker.call(select)
+
         # В очереди мог истечь lease. Ответ не должен оживлять прежнюю сессию.
         self._session(entry)
         return offer
@@ -1498,8 +1543,10 @@ class CommandHub:
         """
 
         # task — завершённая задача обслуживания; её исключение не попадает в лог asyncio.
+
         if not task.cancelled():
             task.exception()
+
         if not self._closed:
             self._maintenance_failed = True
             for entry in self._issued.values():
@@ -1539,10 +1586,12 @@ def _matches(
 
     if type(candidate) is not str or len(candidate) > 256:
         return False
+
     return hmac.compare_digest(
         hashlib.sha256(candidate.encode()).digest(), hashlib.sha256(expected.encode()).digest())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

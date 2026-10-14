@@ -1,10 +1,10 @@
 ﻿# Проверки doctor без доступа к провайдерам и изменения рабочих сессий.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> configuration(): Отдельный закрытый JSON для проверки клиентского доступа
@@ -71,6 +71,7 @@ def configuration(
     """
 
     # path — никаких рабочих конфигов или настоящих токенов в тесте нет.
+
     result = path / "doctor.json"
     result.write_text(json.dumps({"schema_version": 1, "endpoint": "https://private.invalid:8443",
         "identity": {"service": "private-service", "environment": "test", "region": "ru",
@@ -107,6 +108,7 @@ def test_offline(
 
 
     # Сеть и разрешение секретов запрещены явно: offline не должен до них дойти.
+
     path = configuration(tmp_path)
     forbidden = Mock(side_effect=AssertionError("unexpected I/O"))
     monkeypatch.setattr("remote_watch.diagnostics.gateway_doctor.resolve_token", forbidden)
@@ -149,6 +151,7 @@ def test_invalid_config(
 
 
     # Варианты включают неизвестный секретный ключ и повторяющийся JSON ключ.
+
     path = configuration(tmp_path)
     value = json.loads(path.read_text(encoding="utf-8"))
     if change == "unknown":
@@ -163,9 +166,11 @@ def test_invalid_config(
         value["commands"]["scopes"] = ["control", "control"]
     elif change == "shared":
         value["notifications"] = {"token_env": "PRIVATE_DOCTOR_TOKEN", "aliases": ["phone"]}
+
     data = json.dumps(value)
     if change == "duplicate":
         data = data.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1')
+
     path.write_text(data, encoding="utf-8")
     assert main(["--mode", "client", "--config", str(path), "--json"]) == 1
     output = capsys.readouterr().out
@@ -207,12 +212,14 @@ def test_ca(
 
 
     # Относительный CA ищется от JSON, а не от текущей рабочей папки.
+
     path = configuration(tmp_path)
     value = json.loads(path.read_text(encoding="utf-8"))
     value["ca_file"] = "private-root.crt"
     path.write_text(json.dumps(value), encoding="utf-8")
     if exists:
         (tmp_path / "private-root.crt").write_text("private-content", encoding="utf-8")
+
     assert main(["--mode", "client", "--config", str(path), "--json"]) == 1
     output = capsys.readouterr().out
     assert code in output and "private" not in output.lower()
@@ -241,6 +248,7 @@ def test_reports(
 
 
     # Значения конфигурации не должны попасть ни в консоль, ни в файл отчёта.
+
     path = configuration(tmp_path)
     report = tmp_path / "report.json"
     args = ["--mode", "client", "--config", str(path), "--json", "--report", str(report)]
@@ -278,8 +286,10 @@ def test_arguments(
 
 
     # argparse не должен отражать произвольные значения в сообщении об ошибке.
+
     with pytest.raises(SystemExit) as error:
         main(["--config", "private-path", "--timeout", timeout])
+
     assert error.value.code == 2
     assert "private" not in capsys.readouterr().err
 #------------------------------------------------------------------------------------------------------------------
@@ -302,6 +312,7 @@ def test_dns_deadline(
 
 
     # Управляемый DNS завершается только после того, как doctor уже вернул timeout.
+
     release, finished = threading.Event(), threading.Event()
 
     #--------------------------------------------------------------------------------------------------------------
@@ -330,6 +341,7 @@ def test_dns_deadline(
 
 
         # Аргументы не журналируются; никакого настоящего DNS нет.
+
         release.wait(3)
         finished.set()
         return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 1))]
@@ -342,10 +354,12 @@ def test_dns_deadline(
     assert rows[-1]["code"] == "dns_timeout"
     release.set()
     assert finished.wait(2)
+
     # Поток после DNS проверяет отмену до создания сокета.
     for thread in threading.enumerate():
         if thread.name == "gateway-doctor":
             thread.join(2)
+
     forbidden.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
@@ -373,6 +387,7 @@ def test_deploy_doctor(
 
 
     # Deploy остаётся offline: шаблон содержит ссылки на секреты, а не их значения.
+
     root = tmp_path / "server"
     deploy(DeployOptions(directory=root, endpoint="https://private.invalid:8443", components=components))
     targets = load_targets(root / "clients/gateway_doctor.client.example.json")
@@ -381,6 +396,7 @@ def test_deploy_doctor(
     for item in targets:
         if item.component == "commands":
             assert all(scope.startswith("command:") for scope in item.permissions)
+
     assert "gateway_doctor" in (root / "doctor.ps1").read_text(encoding="utf-8-sig")
     assert "@args" in (root / "doctor.ps1").read_text(encoding="utf-8-sig")
     assert '"$@"' in (root / "doctor.sh").read_text(encoding="utf-8")
@@ -388,6 +404,7 @@ def test_deploy_doctor(
     assert ("/v1/notifications/probe" in caddy) == (components != "commands")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск проверок через pytest
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Повторная установка службы и автоматическая видимость иконки в пользовательском сеансе.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> service_plan(): Проверенный изолированный deployment из общего контракта службы
@@ -84,6 +84,7 @@ def service_plan(
     """
 
     # tmp_path — общая фабрика создаёт только тестовые JSON и фиктивный venv.
+
     return make_service_plan.__wrapped__(tmp_path)
 #------------------------------------------------------------------------------------------------------------------
 
@@ -110,6 +111,7 @@ def controller_environment(
 
     # monkeypatch/tmp_path — блокировка контроллера настоящая, но находится только
     # во временном профиле. Рабочие службы, control и журналы не открываются.
+
     session_api = Mock(side_effect=lambda pid, ptr: setattr(ptr._obj, "value", 1) or 1)
     monkeypatch.setattr(controller, "ctypes", SimpleNamespace(c_uint32=ctypes.c_uint32, byref=ctypes.byref,
         windll=SimpleNamespace(kernel32=SimpleNamespace(ProcessIdToSessionId=session_api))))
@@ -151,6 +153,7 @@ def test_readonly_reinstall(
 
     # service_plan/monkeypatch — воспроизводим права после работы виртуального
     # аккаунта: оператор читает lock, но не может его перезаписать или пересоздать.
+
     path = service_plan.deployment.control_dir / "manager.lock"
     owner = ProcessLock(path)
     owner.open()
@@ -188,8 +191,10 @@ def test_readonly_reinstall(
         """
 
         # target/mode/args/kwargs — запрет записи не должен превращаться в busy.
+
         if target == path and any(flag in mode for flag in "wa+"):
             raise PermissionError(errno.EACCES, "synthetic-private-path")
+
         return original(target, mode, *args, **kwargs)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -214,6 +219,7 @@ def test_readonly_reinstall(
         """
 
         # args — используем тот же механизм ОС, а не фиктивный флаг владения.
+
         with pytest.raises(ServiceControlError, match="service_manager_running"):
             with installation_owner(path):
                 pytest.fail("competing owner admitted")
@@ -257,6 +263,7 @@ def test_owner_access_error(
 
     # service_plan/monkeypatch/failure/code — ошибка не раскрывает путь и не
     # разрешает обходить владение через удаление lock или изменение DACL.
+
     path = service_plan.deployment.control_dir / "manager.lock"
     original = Path.open
 
@@ -286,8 +293,10 @@ def test_owner_access_error(
         """
 
         # target/args/kwargs — остальные проверки исходных файлов остаются настоящими.
+
         if target == path:
             raise OSError(failure, "synthetic-private-path")
+
         return original(target, *args, **kwargs)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -295,6 +304,7 @@ def test_owner_access_error(
     item = backend(service_plan)
     with pytest.raises(ServiceControlError) as caught:
         item.install(service_plan)
+
     assert caught.value.code == code and caught.value.stage == "ownership"
     assert "synthetic-private-path" not in str(caught.value)
     item.api.OpenSCManager.assert_not_called()
@@ -318,6 +328,7 @@ def test_native_readonly_file(
 
     # tmp_path — меняем права только собственного тестового файла, не службы,
     # рабочего control, SQLite или CA. Владелец сохраняет право восстановить DACL.
+
     security = pytest.importorskip("win32security")
     api = pytest.importorskip("win32api")
     path = tmp_path / "manager.lock"
@@ -328,6 +339,7 @@ def test_native_readonly_file(
         sid = security.GetTokenInformation(token, 1)[0]
     finally:
         token.Close()
+
     acl = security.ACL()
     acl.AddAccessAllowedAce(2, 0x120089, sid)
     descriptor = security.SECURITY_DESCRIPTOR()
@@ -341,6 +353,7 @@ def test_native_readonly_file(
             assert path.stat().st_size == 1
     finally:
         security.SetFileSecurity(str(path), 4, original)
+
     assert path.read_bytes() == b"0"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -385,6 +398,7 @@ def test_controller_visibility(
 
     # service_plan/monkeypatch/tmp_path/states/settings/visibility — работа службы
     # не привязана к иконке; контроллер не вызывает start, не создаёт manager/reader.
+
     tray, native = controller_environment(monkeypatch, tmp_path)
     native.status.side_effect = [{"state": state} for state in states]
     monkeypatch.setattr(controller, "tray_settings", Mock(side_effect=[(True, None)] +
@@ -429,13 +443,16 @@ def test_tray_launch(
 
     # service_plan/monkeypatch/tmp_path/selection — не запускаем настоящий pythonw
     # и не передаём GUI в другой сеанс ради обхода ограничений Windows.
+
     controller_environment(monkeypatch, tmp_path)
     monkeypatch.setattr(controller, "tray_settings", Mock(return_value=(selection != "headless", None)))
     if selection == "foreign":
         monkeypatch.setattr(controller, "current_sid", lambda: "different-operator")
+
     if selection == "session_zero":
         controller.ctypes.windll.kernel32.ProcessIdToSessionId.side_effect = (
             lambda pid, ptr: setattr(ptr._obj, "value", 0) or 1)
+
     spawn = Mock()
     monkeypatch.setattr(controller.subprocess, "Popen", spawn)
     result = controller.launch_tray(service_plan.spec)
@@ -473,6 +490,7 @@ def test_owner_cli(
     """
 
     # service_plan/monkeypatch/capsys — чтение CLI не обращается к реальному SCM.
+
     native = Mock()
     native.status.side_effect = ServiceControlError("service_control_access", 5)
     monkeypatch.setattr(service_windows, "WindowsService", Mock(return_value=native))
@@ -516,12 +534,14 @@ def test_start_cli_tray(
 
     # service_plan/monkeypatch/capsys/available/action — отсутствие GUI не влияет на
     # основной сервер и не должно побуждать оператора повторно запускать службу.
+
     native = Mock()
     monkeypatch.setattr(service_windows, "WindowsService", Mock(return_value=native))
     monkeypatch.setattr(service_cli, "make_plan", Mock(return_value=service_plan))
     launch = Mock(return_value="launch_requested")
     if not available:
         launch.side_effect = RuntimeError("synthetic-private-path")
+
     monkeypatch.setattr(controller, "launch_tray", launch)
     assert main(["--config", str(service_plan.spec.config), "--operator-sid", SID, "--" + action]) == 0
     if action == "start":
@@ -529,6 +549,7 @@ def test_start_cli_tray(
     else:
         native.start.assert_not_called()
         native.sync_tray.assert_called_once_with(True)
+
     native.stop.assert_not_called()
     launch.assert_called_once()
     text = capsys.readouterr().out
@@ -562,6 +583,7 @@ def test_existing_grant(
 
     # service_plan/tmp_path/case — оператор может читать служебный файл, но не
     # менять его DACL. Быстрый путь допустим только при уже достаточных правах SID.
+
     root = tmp_path / "private-runtime"
     root.mkdir()
     child = root / "service.log"
@@ -572,6 +594,7 @@ def test_existing_grant(
     entries = [((0, flags), mask, "different" if case == "missing" else sid)]
     if case == "deny":
         entries.append(((1, 0), 0x1F01FF, "another-group"))
+
     acl = SimpleNamespace(GetAceCount=lambda: len(entries), GetAce=lambda index: entries[index])
     missing_acl = SimpleNamespace(GetAceCount=lambda: 0)
     descriptor = SimpleNamespace(GetSecurityDescriptorDacl=lambda: acl)
@@ -584,6 +607,7 @@ def test_existing_grant(
     if case == "allowed":
         # Не запускается даже icacls: тест работает и в core без pywin32.
         WindowsService._grant(item, root, sid, "(OI)(CI)F", True)
+
     assert child.read_bytes() == b"synthetic"
 #------------------------------------------------------------------------------------------------------------------
 

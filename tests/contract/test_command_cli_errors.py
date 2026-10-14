@@ -1,10 +1,10 @@
 ﻿# Понятные ошибки командного CLI без раскрытия секретов и приватных путей.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Тесты:
 # -> test_shape_errors(): Точное поле при ошибке структуры связанного JSON
@@ -130,6 +130,7 @@ def test_shape_errors(
     path = write_config(tmp_path / "private-file.json", value)
     with pytest.raises(CommandConfigError) as caught:
         load_command_gateway(path)
+
     assert (caught.value.code, caught.value.field) == (code, field)
     assert cli.main(["--config", str(path), "--check-config"]) == 1
     output = capsys.readouterr().out
@@ -248,6 +249,7 @@ def test_cli_version_and_tls_pair(
 
     with pytest.raises(SystemExit) as caught:
         cli.main(["--version"])
+
     assert caught.value.code == 0
     assert "remote-watch " in capsys.readouterr().out
 
@@ -274,6 +276,7 @@ def test_real_port_conflict(
     """
 
     # tmp_path — рабочие данные только этого теста; внешний provider не открывается.
+
     pytest.importorskip("aiohttp")
 
     #--------------------------------------------------------------------------------------------------------------
@@ -293,6 +296,7 @@ def test_real_port_conflict(
             with pytest.raises(OSError) as caught:
                 await gateway.start(host="127.0.0.1", port=blocker.getsockname()[1], allow_loopback_http=True)
             assert cli._failure_details(caught.value, "startup")[0] == "address_in_use"
+
         assert gateway.stats()["closed"]
     #--------------------------------------------------------------------------------------------------------------
 
@@ -356,6 +360,7 @@ def test_json_location(
         assert "Строка 2, столбец 1" in output
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Проверки регистрации команд, partial и неизменяемого контекста.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> set_stop(): Пример обработчика приложения
@@ -157,19 +157,23 @@ def test_partial_callbacks_are_not_invoked_by_registration(
     # identity - сведения о приложении.
 
     # Регистрируем тот же сценарий с partial и Event, который использует приложение.
+
     stop_event = Event()
     callbacks = {"suspend_load": partial(set_stop, load_stop_event=stop_event), "resume_load": stop_event.clear}
     config = WatcherConfig(identity=identity, commands=callbacks)
+
     # Очистка исходного словаря не должна удалять зарегистрированные команды или вызывать обработчики.
     callbacks.clear()
 
     assert isinstance(config.commands, CommandRegistry)
     assert list(config.commands) == ["suspend_load", "resume_load"]
     assert not stop_event.is_set()
+
     # Даже для простого словаря регистрация сохраняет требование доступа и строгие настройки команды.
     spec = config.commands["suspend_load"]
     assert spec.required_scope == "command:suspend_load"
     assert not spec.read_only and not spec.idempotent
+
     # Только явный локальный вызов обработчика меняет Event; удалённый приём здесь не участвует.
     spec.callback()
     assert stop_event.is_set()
@@ -307,6 +311,7 @@ def test_context_rejects_unbounded_arguments(
                        identity=identity, session_id="s1", arguments=arguments)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

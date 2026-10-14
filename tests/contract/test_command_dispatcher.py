@@ -1,10 +1,10 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> configured(): Подготовка согласованных прав, реестра и двух журналов
@@ -261,6 +261,7 @@ async def submit(
             if error.code != "busy":
                 raise
             await asyncio.sleep(0.005)
+
     raise AssertionError("hub store remained busy")
 #------------------------------------------------------------------------------------------------------------------
 
@@ -602,6 +603,7 @@ def test_dispatcher_outcome_and_retry(
 
             if case == "cancelled":
                 raise asyncio.CancelledError
+
             return object() if case == "bad_result" else "done"
         #----------------------------------------------------------------------------------------------------------
 
@@ -610,6 +612,7 @@ def test_dispatcher_outcome_and_retry(
 
         if case == "lost_result":
             rig.transport.lose = "result"
+
         await rig.hub.start()
         await dispatcher.start()
 
@@ -703,6 +706,7 @@ def test_dispatcher_timeout_keeps_slot(
                 await async_release.wait()
             except asyncio.CancelledError:
                 await async_release.wait()
+
             return "late completion"
         #----------------------------------------------------------------------------------------------------------
 
@@ -876,6 +880,7 @@ def test_dispatcher_exact_registry_binding(
     registry = CommandRegistry.from_callbacks({"resume_load": lambda: None})
     with pytest.raises(ValueError, match="registration"):
         CommandDispatcher(registry, rig.client)
+
     foreign = replace(rig.identity, instance_id="foreign")
     with pytest.raises(ValueError, match="identity"):
         RemoteWatcher(WatcherConfig(identity=foreign, commands=registry), command_client=rig.client)
@@ -1074,6 +1079,7 @@ def test_watcher_sync_start_rejects_async_callback(
     watcher = RemoteWatcher(WatcherConfig(identity=rig.identity, commands=registry), command_client=rig.client)
     with pytest.raises(ValueError, match="astart"):
         watcher.start()
+
     assert watcher.logger.handlers == []
 #------------------------------------------------------------------------------------------------------------------
 
@@ -1293,6 +1299,7 @@ def test_dispatcher_result_persisted_before_release_failure(
             if not release_failed:
                 release_failed = True
                 raise CommandError("unavailable")
+
             release(ref, claim_id)
         #----------------------------------------------------------------------------------------------------------
 
@@ -1367,6 +1374,7 @@ def test_sync_startup_cause(
 
     registry = CommandRegistry.from_callbacks({"status": lambda: "ready"})
     rig, _ = configured(tmp_path, registry)
+
     # Подставной маркер имитирует секрет сразу в тексте, notes и вложенной причине.
     # Проверяем стандартный traceback целиком, а не только str верхней ошибки.
     categories = {"dependency": ModuleNotFoundError, "import": ImportError,
@@ -1378,20 +1386,25 @@ def test_sync_startup_cause(
                else CommandError("denied", http_status=403))
     if mode == "custom":
         failure = type("PRIVATE_CLASS", (RuntimeError,), {})("PRIVATE")
+
     if mode == "http_tls":
         failure = CommandError("unavailable", error_kind="tls_certificate", verify_code=10)
+
     failure.__cause__ = RuntimeError("PRIVATE_CHAIN")
     if hasattr(failure, "add_note"):
         failure.add_note("PRIVATE_NOTE")
+
     if mode == "mutated":
         failure.code = ["PRIVATE"]
         failure.http_status = "PRIVATE"
         failure.args = ("PRIVATE",)
+
     rig.client.start = AsyncMock(side_effect=failure)
     watcher = RemoteWatcher(WatcherConfig(identity=rig.identity, commands=registry), command_client=rig.client)
 
     with pytest.raises(CommandError, match="unavailable") as caught:
         watcher.start()
+
     cause = caught.value.__cause__
     assert cause is not failure and type(cause) is (RuntimeError if mode == "custom" else type(failure))
     assert cause.__cause__ is None and cause.__context__ is None and cause.__traceback__ is None
@@ -1402,13 +1415,16 @@ def test_sync_startup_cause(
         assert caught.value.verify_code == cause.verify_code == 10
         assert caught.value.tls_reason == cause.tls_reason == "certificate_expired"
         assert "certificate_expired" in str(caught.value)
+
     if mode in {"denied", "mutated"}:
         assert cause.code == ("denied" if mode == "denied" else "unavailable")
         assert cause.http_status == (403 if mode == "denied" else None)
+
     assert watcher.logger.handlers == []
     watcher.stop()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

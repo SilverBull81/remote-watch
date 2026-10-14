@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца
@@ -105,12 +105,15 @@ class ApplicationConfig:
         require_number(self.cooldown, "cooldown")
         if self.log_max_bytes > 100 * 1024 * 1024 or self.log_backups > 20 or not 1 <= self.cooldown <= 86400:
             raise ValueError("invalid application limits")
+
         if type(self.destinations) is not tuple or len(self.destinations) > 8:
             raise ValueError("invalid operator destinations")
+
         if any(not isinstance(item, Destination) or item.provider not in ("telegram", "ntfy")
                or item.mode is not DeliveryMode.DIRECT
                for item in self.destinations):
             raise ValueError("invalid operator destination")
+
         if len({item.destination_id for item in self.destinations}) != len(self.destinations):
             raise ValueError("duplicate operator destination")
     #--------------------------------------------------------------------------------------------------------------
@@ -144,6 +147,7 @@ def application_config(
 
     # value — только фиксированные ключи; тела ошибок провайдера не выводятся.
     # base_dir — путь считается от конфига, а не от текущей папки запуска.
+
     if type(value) is not dict or set(value) - {"ui", "icon_path", "log_max_bytes", "log_backups", "alerts"}:
         raise ValueError("invalid application settings")
 
@@ -162,9 +166,11 @@ def application_config(
     alerts = value.get("alerts", {})
     if type(alerts) is not dict or set(alerts) - {"destinations", "cooldown"}:
         raise ValueError("invalid alert settings")
+
     destinations = alerts.get("destinations", [])
     if type(destinations) is not list or len(destinations) > 8:
         raise ValueError("invalid alert destinations")
+
     # Малые независимые очереди; отправка напрямую, без обращения к себе через шлюз и без чтения команд бота.
     channels = tuple(replace(_destination(item), outstanding_capacity=16) for item in destinations)
     return ApplicationConfig(**settings, cooldown=alerts.get("cooldown", 60), destinations=channels)
@@ -199,6 +205,7 @@ class OperatorAlerts:
         """
 
         # config — отдельные назначения владельца, не все чаты приложений автоматически.
+
         self.config = config
         self.logger = logging.Logger("remote_watch.gateway_operator", logging.INFO)
         self.logger.propagate = False
@@ -223,6 +230,7 @@ class OperatorAlerts:
 
         if not self.config.destinations:
             return
+
         identity = Identity(service="gateway-server", environment="operations", region="local",
                             host="gateway", instance_id="manager")
         route = Route(destination_ids=tuple(item.destination_id for item in self.config.destinations),
@@ -264,10 +272,13 @@ class OperatorAlerts:
         """
 
         # name/state/reason — не содержимое провайдера; now задаёт cooldown без UTC VM.
+
         if name not in {"notifications", "commands", "caddy", "manager"}:
             return
+
         if state not in STATES or (reason is not None and reason not in REASONS):
             return
+
         current = (state, reason)
         if self._seen.get(name) != current:
             self._seen[name] = current
@@ -278,6 +289,7 @@ class OperatorAlerts:
                 self._pending[name] = current
             else:
                 self._pending.pop(name, None)
+
         if name in self._pending and now - self._sent.get(name, -float("inf")) >= self.config.cooldown:
             state, reason = self._pending.pop(name)
             self._sent[name] = now
@@ -320,12 +332,14 @@ class OperatorAlerts:
 
         if self.watcher is None:
             return {}
+
         snapshot = self.watcher.runtime.stats()
         return {name: getattr(snapshot, name) for name in (
             "attempts", "accepted", "failed_attempts", "unknown_attempts", "expired", "destination_overflow")}
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

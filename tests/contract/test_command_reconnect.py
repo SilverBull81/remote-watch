@@ -1,10 +1,10 @@
 ﻿# Восстановление командной сессии без повторного исполнения и потери результатов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> restart(): Новый hub над тем же журналом
@@ -125,6 +125,7 @@ async def restart(
     """
 
     # rig/path — прежние права, позиции источников и файлы; меняется только поколение hub.
+
     config = rig.hub.config
     original_exchange = rig.transport.exchange
 
@@ -150,6 +151,7 @@ async def restart(
         """
 
         # operation/message — в настоящем HTTP закрытый listener не отвечает code=closed.
+
         raise CommandError("unavailable")
     #--------------------------------------------------------------------------------------------------------------
 
@@ -180,6 +182,7 @@ async def wait_for(
     """
 
     # predicate — ждём факт, а не предполагаем завершение по одной фиксированной задержке.
+
     deadline = asyncio.get_running_loop().time() + 3
     while not predicate():
         assert asyncio.get_running_loop().time() < deadline, "reconnect observation timed out"
@@ -201,6 +204,7 @@ def fast_client(
     """
 
     # rig — только частота наблюдения; настоящие сроки разрешений остаются прежними.
+
     transport = rig.client._transport
     if type(transport) is DirectTransport:
         exchange = transport.exchange
@@ -229,6 +233,7 @@ def fast_client(
             # operation/message — переключение transport.exchange в restart()
             # не перехватывает уже вошедший вызов старого hub. Реальный HTTP server
             # вернул бы 503, а не локальный closed без статуса (остановку клиента).
+
             try:
                 return await exchange(operation, message)
             except CommandError as error:
@@ -238,6 +243,7 @@ def fast_client(
         #----------------------------------------------------------------------------------------------------------
 
         transport.exchange = remote_exchange
+
     rig.client._session = replace(rig.client.session, remaining_ttl=0.03)
     rig.client._reconnect_delay = 0.01
     rig.client._reconnect_max_delay = 0.02
@@ -516,11 +522,13 @@ def test_reconnect_errors(
             """
 
             # operation/message — приватные значения не включаются в ошибку.
+
             if operation == "register":
                 attempts.append(message.session_id)
                 if len(attempts) == 1:
                     raise (CommandError("unavailable", error_kind="tls_certificate", verify_code=10)
                            if failure == "tls_certificate" else CommandError(failure))
+
             return await original(operation, message)
         #----------------------------------------------------------------------------------------------------------
 
@@ -646,6 +654,7 @@ def test_dispatcher_reconnect(
     """
 
     # tmp_path — выполняем настоящий dispatcher, а не только ручные вызовы acquire/complete.
+
     from test_command_dispatcher import configured, until
 
     from remote_watch import CommandRegistry
@@ -717,6 +726,7 @@ def test_reconnect_https(
     """
 
     # tmp_path — сертификаты только тестовые, доверие ОС и настоящие gateway не меняются.
+
     pytest.importorskip("aiohttp")
     import ssl
 
@@ -837,6 +847,7 @@ def test_reconnect_storage_failure(
     """
 
     # tmp_path — ошибка относится к storage; успешный HTTP register её не скрывает.
+
     from remote_watch.commands.storage import StoreError
 
     #--------------------------------------------------------------------------------------------------------------
@@ -885,6 +896,7 @@ def test_two_reconnecting_clients(
     """
 
     # tmp_path — один hub, два отдельных журнала и две неизменяемые Identity.
+
     from types import SimpleNamespace
 
     from test_command_hub import DirectTransport
@@ -1082,6 +1094,7 @@ def test_previous_process_result(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

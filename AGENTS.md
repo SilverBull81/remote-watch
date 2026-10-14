@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.6.2
+Version 1.6.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-161558
+Дата и время последнего изменения: 261014-165214
 
 ## Project Intent
 
@@ -13,7 +13,17 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.5.dev3.
+The package version is 0.4.5.dev4.
+Dev4 repairs complete final main-guard banners, Russian argument-comment spacing and
+semantic body spacing, with AST-equivalence checks and negative style regressions.
+Owner confirms tray and service reinstall, and notification_health in SpamBot status.
+Read-only live status showed alerts enabled, both components ready and zero delivery
+attempts in that manager generation; this does not prove live alert delivery.
+Routine start/stop is silent; isolated crash instructions are shipped in SERVICE.md.
+Production configuration/processes/credentials/journals were not modified.
+Dev4 clean Windows CPython 3.12.2 wheel-from-sdist checks: core 1191 passed, 75 skipped, 2 deselected in 68.04s (0:01:08); extras 1624 passed, 2 deselected in 135.23s (0:02:15). Ruff/style: 161 files, no issues; 17 style
+regressions passed. Reports: build/validation-0454-core and -extras.
+No new CI/Linux/live-provider or actual crash/reboot acceptance.
 Dev3 follows owner-reported service field tests: both channels, single manager/readers,
 tray stop, console start and client reconnect worked; remove deleted the service.
 Read-only LV inspection confirmed SCM 1060, service/System full control, operator read,
@@ -26,7 +36,8 @@ hidden pythonw controller; no cross-session GUI or second manager is created.
 The server doctor report doctor-journals.local.json passed all 12 checks: hub pending=0,
 unresolved_unknown=0, execution_active=0, capacity=ok; historical unknown=1/resolutions=1
 do not prove a specific administrative reconciliation. Owner reports SpamBot health integration,
-but failure-to-recovery field acceptance, reboot, crash/budget and fixed reinstall/UI are pending.
+and fixed reinstall/UI are now accepted by the owner. Notification-health field recovery
+is explicitly deferred beyond 0.4; reboot and isolated crash/budget acceptance remain pending.
 Production services/configs/ACL/journals and SpamBot source remain unchanged by this work.
 Dev3 validation on Windows CPython 3.12.2: core 1189 passed, 75 skipped, 2 deselected in 67.14s (0:01:07);
 extras 1622 passed, 2 deselected in 136.89s (0:02:16). Both clean wheel-from-sdist, no pytest warnings.

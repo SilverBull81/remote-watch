@@ -1,10 +1,10 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
@@ -119,6 +119,7 @@ def service_plan(
     """
 
     # tmp_path — даже Python-файлы здесь заглушки; ни один subprocess не запускается.
+
     root = tmp_path / "gateway space & percent% $literal"
     executable = root / ".venv" / "Scripts" / "python.exe"
     executable.parent.mkdir(parents=True)
@@ -147,6 +148,7 @@ def backend(
     """
 
     # plan — fake handles не поддерживают with: настоящий PySC_HANDLE тоже не поддерживает.
+
     result = object.__new__(WindowsService)
     result.spec = plan.spec
     result.binary = subprocess.list2cmdline(plan.spec.arguments("run"))
@@ -186,6 +188,7 @@ def test_plan(
     """
 
     # service_plan — читаем только конфиги; credentials из ENV не разрешаются.
+
     root = service_plan.spec.config.parent
     before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
     assert make_plan(service_plan.spec) == service_plan
@@ -199,6 +202,7 @@ def test_plan(
     for name in ("install-service.cmd", "remove-service.cmd", "sync-tray.ps1", "tray.ps1", "SERVICE.md",
                  "service/install-systemd.sh", "service/remote-watch-gateway.service"):
         assert (root / name).is_file()
+
     assert b"%%" in (root / "install-service.cmd").read_bytes()
     unit = (root / "service/remote-watch-gateway.service").read_text()
     assert "--start --headless" in unit and "StartLimitBurst=3" in unit and "CHANGE_ME" in unit
@@ -206,12 +210,14 @@ def test_plan(
     proposal = prepare_files(DeployOptions(directory=root, endpoint="https://example.test:8443",
                                            python=service_plan.spec.python))
     assert "service/remove-systemd.sh" in proposal
+
     # Общая папка с логами внешнего Caddy не является runtime directory manager.
     value = json.loads(service_plan.spec.config.read_text())
     value["log_dir"] = "logs"
     service_plan.spec.config.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ValueError, match="service_shared_logs"):
         make_plan(service_plan.spec)
+
     value["log_dir"] = "other-shared-log-folder"
     service_plan.spec.config.write_text(json.dumps(value), encoding="utf-8")
     shared = root / value["log_dir"]
@@ -220,6 +226,7 @@ def test_plan(
     external.write_bytes(b"synthetic-external-log")
     with pytest.raises(ValueError, match="service_shared_logs"):
         make_plan(service_plan.spec)
+
     assert external.read_bytes() == b"synthetic-external-log"
 #------------------------------------------------------------------------------------------------------------------
 
@@ -249,6 +256,7 @@ def test_unsafe_spec(
     """
 
     # service_plan/field/value — нельзя подменить разрешения вставкой SDDL.
+
     with pytest.raises(ValueError):
         replace(service_plan.spec, **{field: value})
 #------------------------------------------------------------------------------------------------------------------
@@ -273,12 +281,14 @@ def test_ownership(
     """
 
     # service_plan/foreign — совпавшее имя или PID само по себе недостаточно.
+
     item = backend(service_plan)
     config = list(item.api.QueryServiceConfig.return_value)
     config[{"binary": 3, "account": 7, "type": 0}[foreign]] = "foreign" if foreign != "type" else 32
     item.api.QueryServiceConfig.return_value = tuple(config)
     with pytest.raises(ValueError, match="service_foreign"):
         item.stop()
+
     item.api.ControlService.assert_not_called()
     item.api.OpenService.return_value.Close.assert_called_once()
 #------------------------------------------------------------------------------------------------------------------
@@ -298,6 +308,7 @@ def test_install(
     """
 
     # service_plan — fake API записывает только порядок/аргументы, ничего не регистрирует.
+
     item = backend(service_plan)
     item.api.OpenService.side_effect = OSError(1060, "private")
     item.api.OpenService.side_effect.winerror = 1060
@@ -330,9 +341,11 @@ def test_install_refusal(
     """
 
     # service_plan — отсутствие изменений data проверяется до/после fake установки.
+
     item = backend(service_plan)
     with pytest.raises(ValueError, match="service_exists"):
         item.install(service_plan)
+
     item.api.CreateService.assert_not_called()
     item._grant.assert_not_called()
     missing = OSError(1060, "private")
@@ -341,6 +354,7 @@ def test_install_refusal(
     item._grant.side_effect = PermissionError("private-path-and-token")
     with pytest.raises(ValueError, match="service_install_partial"):
         item.install(service_plan)
+
     item.api.DeleteService.assert_called_once()
     assert not (service_plan.spec.config.parent / "data").exists()
 #------------------------------------------------------------------------------------------------------------------
@@ -360,6 +374,7 @@ def test_live_owner(
     """
 
     # service_plan — блокировка той же ОС/файла, что используется настоящим manager.
+
     owner = ProcessLock(service_plan.deployment.control_dir / "manager.lock")
     owner.open()
     item = backend(service_plan)
@@ -392,6 +407,7 @@ def test_second_manager_acl(
 
     # service_plan/monkeypatch — действующая OS lock отвергает другой запуск до
     # смены прав. Ошибка самой защиты каталога также не должна оставлять lock.
+
     from remote_watch.commands.storage import StoreConflict
     from remote_watch.gateway_server.manager import GatewayManager
 
@@ -406,16 +422,20 @@ def test_second_manager_acl(
         acl.assert_not_called()
     finally:
         owner.close()
+
     with pytest.raises(PermissionError):
         asyncio.run(GatewayManager(service_plan.deployment).run())
+
     owner.open()
     owner.close()
+
     # Предварительное открытие lock не должно обойти отказ по symlink/junction.
     original = Path.is_symlink
     monkeypatch.setattr(Path, "is_symlink", lambda self: self == path.parent or original(self))
     before = path.read_bytes()
     with pytest.raises(RuntimeError, match="control_permissions"):
         asyncio.run(GatewayManager(service_plan.deployment).run())
+
     assert path.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
@@ -434,10 +454,12 @@ def test_remove(
     """
 
     # service_plan — remove не имеет рекурсивного удаления файлов или ACL reset.
+
     item = backend(service_plan)
     item.api.QueryServiceStatus.return_value = (16, 4, 0, 0, 0, 0, 0)
     with pytest.raises(ValueError, match="service_running"):
         item.remove()
+
     item._sync_entry.assert_not_called()
     item.api.QueryServiceStatus.return_value = (16, 1, 0, 0, 0, 0, 0)
     before = service_plan.spec.config.read_bytes()
@@ -471,6 +493,7 @@ def test_dry_run(
     """
 
     # service_plan/monkeypatch/capsys — отчёт не раскрывает пути, SID или JSON.
+
     monkeypatch.setattr(sys, "executable", str(service_plan.spec.python))
     monkeypatch.setattr(WindowsService, "__init__", Mock(side_effect=AssertionError("SCM touched")))
     before = {p: p.read_bytes() for p in service_plan.spec.config.parent.rglob("*") if p.is_file()}
@@ -500,6 +523,7 @@ def test_headless_host(
     """
 
     # service_plan/monkeypatch — callback/SQLite/провайдеры вообще не участвуют.
+
     instance = SimpleNamespace(state="starting", stop_event=asyncio.Event())
     reports = []
     stopped = threading.Event()
@@ -570,6 +594,7 @@ def test_startup_failure(
 
     # service_plan/monkeypatch/reason/stop/retry — никакого callback replay;
     # повтор разрешён только после возврата завершённого manager.run.
+
     stopped = threading.Event()
     instance = SimpleNamespace(state="starting", reason=reason, stop_event=asyncio.Event())
 
@@ -588,6 +613,7 @@ def test_startup_failure(
         instance.state = "stopped"
         if stop:
             stopped.set()
+
         return 1
     #--------------------------------------------------------------------------------------------------------------
 
@@ -620,6 +646,7 @@ def test_host_controls(
 
     # service_plan/monkeypatch — реальный SCM не вызывается, а os._exit заменён
     # SystemExit. Проверка не может остановить pytest или production процессы.
+
     from remote_watch.gateway_server import service_host as host_module
 
     #--------------------------------------------------------------------------------------------------------------
@@ -646,6 +673,7 @@ def test_host_controls(
             """
 
             # args — имя не используется для доступа к ОС.
+
             self.reports = []
         #----------------------------------------------------------------------------------------------------------
 
@@ -669,6 +697,7 @@ def test_host_controls(
             """
 
             # state/kwargs — только числа, без сообщения ошибки или конфигов.
+
             self.reports.append((state, kwargs))
         #----------------------------------------------------------------------------------------------------------
     #--------------------------------------------------------------------------------------------------------------
@@ -685,14 +714,17 @@ def test_host_controls(
     item.SvcStop()
     item.SvcInterrogate()
     assert item.reports[-1][0] == 3 and item.GetAcceptedControls() == 0
+
     # Ошибка runtime не раскрывает исходное исключение через C framework.
     item = factory([service_plan.spec.name])
     monkeypatch.setattr(host_module, "os", SimpleNamespace(chdir=Mock()))
     monkeypatch.setattr(host_module, "supervise", AsyncMock(side_effect=RuntimeError("PRIVATE_PROVIDER_TOKEN")))
     with pytest.raises(RuntimeError, match="^gateway_service_failed$") as caught:
         item.SvcRun()
+
     assert caught.value.__suppress_context__
     assert "PRIVATE_PROVIDER_TOKEN" not in str(native.LogErrorMsg.call_args)
+
     # Даже отказ Event Log не отменяет конечную остановку. STOPPED/0 заранее
     # исключает автоматический restart после сознательного stop оператора.
     item = factory([service_plan.spec.name])
@@ -706,6 +738,7 @@ def test_host_controls(
     monkeypatch.setattr(host_module, "os", SimpleNamespace(_exit=exit_call))
     with pytest.raises(SystemExit):
         item._watch_stop()
+
     exit_call.assert_called_once_with(0)
     assert item.reports[-1] == (1, {"win32ExitCode": 0})
 #------------------------------------------------------------------------------------------------------------------
@@ -725,6 +758,7 @@ def test_tray_config(
     """
 
     # service_plan — испорченный linked JSON не должен лишать оператора UI остановки.
+
     service_plan.deployment.commands.config.write_text("PRIVATE invalid JSON", encoding="utf-8")
     assert tray_settings(service_plan.spec.config) == (True, service_plan.deployment.application.icon_path)
     data = json.loads(service_plan.spec.config.read_text())
@@ -752,6 +786,7 @@ def test_registry(
     """
 
     # service_plan/monkeypatch — содержимое HKCU не читается и не меняется.
+
     registry = MagicMock(HKEY_USERS=1, KEY_READ=1, KEY_QUERY_VALUE=1, KEY_SET_VALUE=2, REG_SZ=1)
     registry.QueryValueEx.side_effect = FileNotFoundError()
     monkeypatch.setitem(sys.modules, "winreg", registry)
@@ -764,6 +799,7 @@ def test_registry(
     registry.SetValueEx.reset_mock()
     with pytest.raises(ValueError, match="service_tray_entry"):
         WindowsService._sync_entry(item, False)
+
     registry.SetValueEx.assert_not_called()
     registry.DeleteValue.assert_not_called()
     registry.QueryValueEx.return_value = (expected, 1)
@@ -797,6 +833,7 @@ def test_controller(
 
     # service_plan/monkeypatch/tmp_path — настоящий lock только отдельной иконки,
     # не lock manager/source и не SQLite. Провайдеры и control token не используются.
+
     from remote_watch.gateway_server import service_tray as controller
 
     session_api = Mock(side_effect=lambda pid, ptr: setattr(ptr._obj, "value", 1) or 1)
@@ -822,6 +859,7 @@ def test_controller(
     assert "exit_callback" not in factory.call_args.kwargs
     tray.start.assert_called_once_with(visible=False)
     tray.set_visible.assert_called_once_with(True)
+
     # Без ui controller не создаёт ни GUI, ни native backend.
     data = json.loads(service_plan.spec.config.read_text())
     data["application"]["ui"] = "headless"
@@ -847,11 +885,13 @@ def test_native_dispatcher(
 
     # service_plan — SCM dispatcher возвращает 1063 в обычном console process;
     # CreateService/регистрация в ОС не вызываются, manager вообще не создаётся.
+
     pytest.importorskip("servicemanager")
     from remote_watch.gateway_server.service_host import run_service
 
     with pytest.raises(Exception) as caught:
         run_service(service_plan.spec)
+
     assert caught.value.winerror == 1063
 #------------------------------------------------------------------------------------------------------------------
 
@@ -874,6 +914,7 @@ def test_reparse(
     """
 
     # service_plan/monkeypatch — attribute подменён только для вложенного файла.
+
     original = Path.lstat
     file = service_plan.spec.python
     fake = Mock(st_mode=0, st_file_attributes=0x400)
@@ -882,6 +923,7 @@ def test_reparse(
         checked_tree(service_plan.environment)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск тестов через pytest
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

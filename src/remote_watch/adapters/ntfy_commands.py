@@ -1,10 +1,10 @@
 ﻿# Команды и ответы через два закрытых топика ntfy.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> NtfyCommandConfig: Настройки закрытых топиков команд и ответов
@@ -106,6 +106,7 @@ class NtfyCommandConfig:
 
         if self.token is None and self.token_env is None:
             raise ValueError("command topic credential required")
+
         require_text(self.actor_id, "topic actor", 128)
         validate_credentials(self.token, self.token_env, "ntfy")
         SourceHttp(self.endpoint, allow_loopback_http=self.allow_loopback_http)
@@ -163,6 +164,7 @@ class NtfyCommandProvider:
         for topic in (self.config.topic, self.config.reply_topic):
             await self._http.call("GET", f"/{topic}/json", params={"poll": "1", "since": "latest"},
                                   privacy_probe=True)
+
         # Это проверка закрытого чтения, не доказательство write ACL. Права записи
         # явно подтверждает оператор; ntfy не передаёт удостоверенного автора сообщения.
         return f"ntfy:{self.config.endpoint}:{self.config.topic}:{self.config.reply_topic}:{self.config.actor_id}"
@@ -205,6 +207,7 @@ class NtfyCommandProvider:
                 text = None
             result.append(SourceEvent(event_id=value["id"], message_date=value["time"],
                 actor_id=self.config.actor_id, conversation_id=self.config.topic, text=text))
+
         return tuple(result)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -252,6 +255,7 @@ class NtfyCommandProvider:
 
         if conversation_id != self.config.topic:
             raise CommandError("denied")
+
         _, result = await self._http.call("POST", "/", token=self._token,
             payload={"topic": self.config.reply_topic, "message": text, "title": "Remote Watch: команда"})
 
@@ -279,6 +283,7 @@ class NtfyCommandProvider:
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

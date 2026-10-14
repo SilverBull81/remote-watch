@@ -1,10 +1,10 @@
 ﻿# Отдельный интерактивный controller службы, не владеющий gateway и журналами команд.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-154136
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> launch_tray(): Запрос запуска контроллера в сеансе выбранного оператора
@@ -61,13 +61,16 @@ def launch_tray(
 
     # spec — служба не получает право создавать GUI чужого пользователя. Только
     # CLI самого оператора может запустить его контроллер в текущем сеансе.
+
     if not tray_settings(spec.config)[0]:
         return "headless"
+
     session = ctypes.c_uint32()
     if (os.name != "nt" or current_sid() != spec.operator_sid
             or not ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session))
             or session.value == 0):
         return "operator_session_required"
+
     subprocess.Popen(spec.arguments("tray"), cwd=spec.config.parent, stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      close_fds=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000))
@@ -93,16 +96,20 @@ def tray_settings(
 
     # path — изменение режима не требует рестарта службы. Контроллер не проверяет
     # notification/command конфиги и не требует работоспособности провайдеров.
+
     root = _read_json(path)
     if type(root) is not dict or type(root.get("application", {})) is not dict:
         raise ValueError("tray_config")
+
     app = root.get("application", {})
     ui = app.get("ui", "headless")
     if ui not in ("tray", "headless"):
         raise ValueError("tray_config")
+
     icon = app.get("icon_path")
     if icon is not None and (type(icon) is not str or not icon.strip() or "\x00" in icon):
         raise ValueError("tray_config")
+
     return ui == "tray", (path.parent / icon).resolve() if icon else None
 #------------------------------------------------------------------------------------------------------------------
 
@@ -124,14 +131,18 @@ def run_tray(
     """
 
     # spec — пароль, control token, application Identity и журналы не нужны GUI.
+
     enabled, icon = tray_settings(spec.config)
     if not enabled:
         return 0
+
     if current_sid() != spec.operator_sid:
         raise ValueError("operator_sid")
+
     session = ctypes.c_uint32()
     if not ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session)) or session.value == 0:
         raise ValueError("tray_requires_session")
+
     root = Path(os.environ["LOCALAPPDATA"]) / "RemoteWatch" / "tray"
     private_directory(root)
     digest = hashlib.sha256(str(spec.config).casefold().encode()).hexdigest()[:24]
@@ -141,6 +152,7 @@ def run_tray(
     except Exception:
         # Второй запуск иконки в том же сеансе не создаёт второй controller.
         return 0
+
     close = threading.Event()
     stop = threading.Event()
     tray = GatewayTray(stop.set, icon_path=icon, title_prefix="Remote Watch service: ")
@@ -173,6 +185,7 @@ def run_tray(
         owner.close()
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

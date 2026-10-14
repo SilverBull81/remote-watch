@@ -1,10 +1,10 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого
@@ -84,6 +84,7 @@ def validate_endpoint(
         )
     except ValueError:
         valid = False
+
     if not valid:
         raise ValueError("endpoint must be an absolute safe HTTPS base URL") from None
 #------------------------------------------------------------------------------------------------------------------
@@ -140,6 +141,7 @@ def read_token(
     if len(value) > 512 or re.fullmatch(pattern, value) is None:
         # Не включаем имя переменной, её значение или исключение окружения в диагностику.
         raise ValueError("provider token is missing or invalid")
+
     return value
 #------------------------------------------------------------------------------------------------------------------
 
@@ -175,6 +177,7 @@ def truncate(
     data = text.encode(encoding)
     if len(data) <= limit:
         return text
+
     marker = "\n[truncated]"
     return data[:limit - len(marker.encode(encoding))].decode(encoding, errors="ignore") + marker
 #------------------------------------------------------------------------------------------------------------------
@@ -209,12 +212,15 @@ def render(
 
     event = delivery.notification
     identity = event.identity
+
     # Настройка конкретной доставки имеет приоритет над режимом канала.
     # При отсутствии override старые direct/gateway назначения работают как прежде.
     if delivery.display_mode is not None:
         mode, fields = delivery.display_mode, delivery.display_fields
+
     selected = fields if fields is not None else (
         ("identity", "level", "logger", "time", "ids") if mode == "full" else ("identity", "level"))
+
     # Полная Identity различает источники даже при одинаковом instance_id в разных регионах.
     # JSON-массив в compact не допускает неоднозначности разделителей внутри самих полей.
     identity_text = (json.dumps([identity.service, identity.environment, identity.region,
@@ -234,9 +240,11 @@ def render(
                   + "\n" + metadata["ids"])
     else:
         header = (" " if mode == "compact" else "\n").join(metadata[field] for field in selected)
+
     source = (header + "\n\n" if header else "") + event.message
     if event.exception:
         source += "\n\n" + event.exception
+
     return source
 #------------------------------------------------------------------------------------------------------------------
 
@@ -265,6 +273,7 @@ def retry_after(
     # now - время UTC для вычисления относительной задержки.
 
     # Некорректный заголовок не превращается в исключение с содержимым ответа.
+
     if type(value) in (int, float):
         try:
             result = float(value)
@@ -283,6 +292,7 @@ def retry_after(
                 return None
     else:
         return None
+
     return result if math.isfinite(result) and result >= 0 else None
 #------------------------------------------------------------------------------------------------------------------
 
@@ -313,17 +323,21 @@ def http_failure(
     if status == 429:
         return DeliveryResult(status=DeliveryStatus.RATE_LIMITED, reason_code="rate_limited",
                               retry_after=delay, http_status=status)
+
     if status == 408 or 500 <= status <= 599:
         return DeliveryResult(
             status=DeliveryStatus.TRANSIENT_FAILURE, reason_code="http_temporary", retry_after=delay,
             http_status=status,
         )
+
     if 300 <= status <= 499:
         return DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, reason_code="http_rejected",
                               http_status=status)
+
     return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response")
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

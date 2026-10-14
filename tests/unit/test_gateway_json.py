@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Функции:
 # -> document(): Синтетический файл настроек без секретов
@@ -119,11 +119,14 @@ def test_json_valid(
     destination["timeouts"] = {"connect_timeout": 2, "attempt_timeout": 4, "ttl": 60}
     if provider == "ntfy":
         destination["settings"] = {"topic": "synthetic-topic", "token_env": None, "tags": ["warning"]}
+
     destination["settings"]["display_mode"] = display
     if display == "compact":
         destination["settings"]["display_fields"] = ["identity", "level"]
+
     value["gateway"] = {"capacity": 10, "clock_skew_tolerance": 600}
     path = tmp_path / "config.json"
+
     # BOM принимается для файлов, сохранённых стандартными средствами Windows.
     path.write_text(json.dumps(value), encoding="utf-8-sig")
     config = load_notification_gateway_config(path)
@@ -215,8 +218,10 @@ def test_json_rejects(
     path = tmp_path / "config.json"
     if case != "missing":
         path.write_bytes(data)
+
     with pytest.raises(ValueError, match="Invalid gateway JSON configuration") as error:
         load_notification_gateway_config(path)
+
     assert "PRIVATE_VALUE" not in str(error.value)
     assert error.value.__suppress_context__
 #------------------------------------------------------------------------------------------------------------------
@@ -324,6 +329,7 @@ def test_json_cli_exclusive(
 
     with pytest.raises(SystemExit) as error:
         main(arguments)
+
     assert error.value.code == 2
 #------------------------------------------------------------------------------------------------------------------
 
@@ -371,6 +377,7 @@ def test_json_example() -> None:
         assert principal.aliases == (destination.destination_id,)
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-142149
+# Дата и время последнего изменения: 261014-164146
 #
 # Классы:
 # -> CommandError: Ошибка с безопасным фиксированным кодом
@@ -94,6 +94,7 @@ class CommandError(RuntimeError):
                  "capacity", "expired", "already_started", "outcome_conflict", "closed"}
         self.code = code if code in known else "unavailable"
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+
         # Для TLS оставляем прежний code, но сохраняем причину отдельно и в str(error).
         # Неизвестные строки, bool и произвольные объекты не проходят эту границу.
         self.error_kind = (error_kind if type(error_kind) is str
@@ -102,6 +103,7 @@ class CommandError(RuntimeError):
                             and type(verify_code) is int and 0 <= verify_code <= 999999 else None)
         self.tls_reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
                            else "handshake_failed" if self.error_kind else None)
+
         # busy_reason — только известная категория конкуренции, без имён/текста запроса.
         reasons = {"storage_busy", "storage_queue_full", "storage_wait_timeout", "session_poll_active",
                    "http_requests_full", "http_polls_full", "transport_requests_full", "client_operation_active"}
@@ -110,9 +112,11 @@ class CommandError(RuntimeError):
         message = self.code
         if self.busy_reason:
             message += f"; busy_reason={self.busy_reason}"
+
         if self.error_kind:
             message += (f"; error_kind={self.error_kind}; verify_code={self.verify_code}"
                         f"; tls_reason={self.tls_reason}")
+
         super().__init__(message)
     #--------------------------------------------------------------------------------------------------------------
 
@@ -155,6 +159,7 @@ class CommandOffer:
 
         if self.sequence > 2**63 - 1 or type(self.request) is not CommandRequest:
             raise ValueError("invalid command offer")
+
         require_number(self.remaining_ttl, "command lifetime")
 
         if self.remaining_ttl > 300:
@@ -229,6 +234,7 @@ class CommandTransport(Protocol):
 
 #------------------------------------------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
