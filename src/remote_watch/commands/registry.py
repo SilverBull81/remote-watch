@@ -1,36 +1,34 @@
 ﻿# Локальная регистрация пользовательских команд без удалённого приёма и исполнения.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandContext: Данные запроса для обработчика команды.
+# -> CommandContext: Контекст вызова команды в приложении
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация контекста.
+#    -> __post_init__(): Проверка и фиксация контекста
 #
-# -> CommandSpec: Обработчик команды и условия его вызова.
+# -> CommandSpec: Описание команды и условий её выполнения
 #    Специальные методы:
-#    -> __post_init__(): Проверка описания команды при регистрации.
+#    -> __post_init__(): Проверка описания команды при регистрации
 #
-# -> CommandRegistry: Реестр команд с поиском по имени.
+# -> CommandRegistry: Реестр команд приложения
 #    Интерфейс:
-#    -> from_callbacks(): Адаптация словаря callback-функций.
+#    -> from_callbacks(): Адаптация словаря callback-функций
 #    Специальные методы:
-#    -> __post_init__(): Проверка уникальности и фиксация реестра.
-#    -> __getitem__(): Поиск зарегистрированной команды.
-#    -> __iter__(): Перечисление имён команд.
-#    -> __len__(): Размер реестра.
-#
-# Типы:
-# -> CommandCallback, ArgumentValidator: Контракты локальных функций.
+#    -> __post_init__(): Проверка уникальности и фиксация реестра
+#    -> __getitem__(): Поиск зарегистрированной команды
+#    -> __iter__(): Перечисление имён команд
+#    -> __len__(): Размер реестра
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import re
@@ -42,28 +40,53 @@ from typing import TypeAlias
 from remote_watch._validation import require_callback, require_number, require_text
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КОНСТАНТЫ
 #******************************************************************************************************************
+
 CommandCallback: TypeAlias = Callable[..., object]
 ArgumentValidator: TypeAlias = Callable[[Mapping[str, str]], None]
+
+#------------------------------------------------------------------------------------------------------------------
+
 
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контекст вызова команды в приложении
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandContext:
-    """Carry bounded request metadata after future dispatcher authorization.
+    """
+    Carry bounded request metadata after future dispatcher authorization.
 
     command_id, actor_id and conversation_id identify a request and its sender.
     identity/session_id bind the exact application session. arguments is a copied
     read-only mapping of named textual inputs; the command's validator checks their
     semantics. This data class itself does not authenticate or authorize a caller.
+
+    :param command_id: Stable identifier preserved across retries of the same command intent.
+    :type command_id: str
+
+    :param actor_id: Authenticated command actor or explicitly configured private-topic writer.
+    :type actor_id: str
+
+    :param conversation_id: Provider conversation identifier checked by the command ACL.
+    :type conversation_id: str
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param session_id: Identifier of the original application session.
+    :type session_id: str
+
+    :param arguments: Validated named command arguments.
+    :type arguments: Mapping[str, str]
     """
 
     command_id: str         # Идентификатор запроса на выполнение команды.
@@ -71,7 +94,7 @@ class CommandContext:
     conversation_id: str    # Идентификатор чата или беседы.
     identity: Identity      # Сведения о целевом приложении.
     session_id: str         # Идентификатор целевого запуска приложения.
-    arguments: Mapping[str, str] = field(   # Именованные строковые аргументы команды.
+    arguments: Mapping[str, str] = field(  # Именованные строковые аргументы команды.
         default_factory=dict,
         repr=False,
         )
@@ -79,9 +102,13 @@ class CommandContext:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация контекста
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy bounded textual arguments and validate explicit identities."""
+        """
+        Copy bounded textual arguments and validate explicit identities.
+        """
 
         # Контекст хранит сведения о запросе, но сам по себе не подтверждает права отправителя.
         # Проверку доступа должен выполнить будущий диспетчер до вызова обработчика.
@@ -116,13 +143,13 @@ class CommandContext:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Описание команды и условий её выполнения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandSpec:
-    """Register a local handler and metadata without executing or exposing it.
+    """
+    Register a local handler and metadata without executing or exposing it.
 
     name is a lowercase identifier. callback is sync or async, including partials.
     takes_context chooses callback() versus callback(context). description is local
@@ -132,6 +159,33 @@ class CommandSpec:
     validate_arguments is a synchronous validator for context-mode textual arguments;
     it returns None or raises ValueError. Without it, remote arguments must be empty.
     Registration never invokes callback/validator and never grants command access.
+
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
+
+    :param callback: Application-defined command handler; never serialized.
+    :type callback: CommandCallback
+
+    :param takes_context: Whether the callback receives CommandContext.
+    :type takes_context: bool
+
+    :param description: Application command description shown in help.
+    :type description: str
+
+    :param required_scope: Scope required to execute the command; does not grant permission.
+    :type required_scope: str | None
+
+    :param timeout: Maximum command or gateway operation duration, in seconds.
+    :type timeout: float
+
+    :param read_only: Application declaration that the command does not mutate its state.
+    :type read_only: bool
+
+    :param idempotent: Application declaration of idempotence; never enables automatic callback replay.
+    :type idempotent: bool
+
+    :param validate_arguments: Application-defined argument validator run before the callback.
+    :type validate_arguments: ArgumentValidator | None
     """
 
     name: str                                       # Имя команды в приложении.
@@ -142,7 +196,7 @@ class CommandSpec:
     timeout: float = 10.0                           # Предельное время выполнения, секунды.
     read_only: bool = False                         # Заявлено ли отсутствие изменений состояния.
     idempotent: bool = False                        # Заявлена ли безопасность повторного вызова.
-    validate_arguments: ArgumentValidator | None = field(   # Проверка аргументов до вызова обработчика.
+    validate_arguments: ArgumentValidator | None = field(  # Проверка аргументов до вызова обработчика.
         default=None,
         repr=False,
         )
@@ -150,9 +204,13 @@ class CommandSpec:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка описания команды при регистрации
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate name, policy and callable signatures without executing handlers."""
+        """
+        Validate name, policy and callable signatures without executing handlers.
+        """
 
         # Имя команды используется при поиске и формировании права доступа, поэтому формат строгий.
         require_text(self.name, "command name", 64)
@@ -186,17 +244,23 @@ class CommandSpec:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Реестр команд приложения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandRegistry(Mapping[str, CommandSpec]):
-    """Provide read-only name lookup for an application-owned command catalogue.
+    """
+    Provide read-only name lookup for an application-owned command catalogue.
 
     specs is copied to a tuple. Duplicate names are rejected. Callback references
     remain local and may capture mutable application state; they are not serialized.
     This registry has no remote transport, authorization or dispatch method.
+
+    :param specs: Registered application command specifications.
+    :type specs: tuple[CommandSpec, ...]
+
+    :param _by_name: Immutable command lookup by registered name.
+    :type _by_name: Mapping[str, CommandSpec]
     """
 
     specs: tuple[CommandSpec, ...] = field(default=(), repr=False)  # Зарегистрированные команды приложения.
@@ -213,9 +277,10 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     def from_callbacks(
         cls,
         callbacks: Mapping[str, CommandCallback],
-    ) -> CommandRegistry:
+        ) -> CommandRegistry:
 
-        """Register zero-argument functions or partials with conservative defaults.
+        """
+        Register zero-argument functions or partials with conservative defaults.
 
         :param callbacks: Mapping from command names to local callable handlers.
         :type callbacks: Mapping[str, CommandCallback]
@@ -237,9 +302,13 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка уникальности и фиксация реестра
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy the finite command list and reject duplicate names."""
+        """
+        Copy the finite command list and reject duplicate names.
+        """
 
         if not isinstance(self.specs, (list, tuple)):
             raise TypeError("specs must be a list or tuple")
@@ -269,9 +338,10 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     def __getitem__(
         self,
         name: str,
-    ) -> CommandSpec:
+        ) -> CommandSpec:
 
-        """Look up a command specification without invoking it.
+        """
+        Look up a command specification without invoking it.
 
         :param name: Exact registered command name.
         :type name: str
@@ -288,9 +358,12 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Перечисление имён команд
     #--------------------------------------------------------------------------------------------------------------
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(
+        self,
+        ) -> Iterator[str]:
 
-        """Return command names in registration order.
+        """
+        Return command names in registration order.
 
         :return: Iterator over registered names.
         :rtype: Iterator[str]
@@ -302,9 +375,12 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Размер реестра
     #--------------------------------------------------------------------------------------------------------------
-    def __len__(self) -> int:
+    def __len__(
+        self,
+        ) -> int:
 
-        """Return the number of registered commands.
+        """
+        Return the number of registered commands.
 
         :return: Command count.
         :rtype: int
@@ -314,8 +390,6 @@ class CommandRegistry(Mapping[str, CommandSpec]):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

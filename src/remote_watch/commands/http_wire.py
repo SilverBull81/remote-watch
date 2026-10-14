@@ -1,27 +1,38 @@
 ﻿# Строгая упаковка ответа long poll поверх командного протокола.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> encode_response(): Кодирование сообщения либо предложения команды.
-# -> decode_response(): Строгий разбор ограниченного ответа.
-# -> decode_error(): Проверка безопасного кода отказа и его HTTP-статуса.
-# -> _unique(): Запрет повторных ключей во всех объектах JSON.
+# -> encode_response(): Кодирование сообщения либо предложения команды
+#
+# -> decode_response(): Строгий разбор ограниченного ответа
+#
+# -> decode_error(): Проверка безопасного кода отказа и его HTTP-статуса
+#
+# -> _unique(): Запрет повторных ключей во всех объектах JSON
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
 
 from remote_watch.commands.protocol import CommandMessage, CommandRequest, decode_command, encode_command
 from remote_watch.commands.transport import CommandError, CommandOffer
+
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
 
 MAX_HTTP_BYTES = 70000
 MAX_HTTP_ERROR_BYTES = 256
@@ -34,13 +45,22 @@ ERROR_HTTP_STATUS = {
 }
 OPERATIONS = frozenset({"register", "heartbeat", "poll", "claim", "result", "release"})
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Кодирование сообщения либо предложения команды
 #------------------------------------------------------------------------------------------------------------------
-def encode_response(message: CommandMessage | CommandOffer) -> bytes:
+def encode_response(
+    message: CommandMessage | CommandOffer,
+    ) -> bytes:
 
-    """Encode a command response or a bounded polling envelope.
+    """
+    Encode a command response or a bounded polling envelope.
 
     :param message: Typed request for the selected command operation.
     :type message: CommandMessage | CommandOffer
@@ -58,13 +78,15 @@ def encode_response(message: CommandMessage | CommandOffer) -> bytes:
                       separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Строгий разбор ограниченного ответа
 #------------------------------------------------------------------------------------------------------------------
-def decode_response(data: bytes) -> CommandMessage | CommandOffer:
+def decode_response(
+    data: bytes,
+    ) -> CommandMessage | CommandOffer:
 
-    """Reject malformed or oversized responses before constructing protocol objects.
+    """
+    Reject malformed or oversized responses before constructing protocol objects.
 
     :param data: Bounded UTF-8 response bytes.
     :type data: bytes
@@ -91,16 +113,16 @@ def decode_response(data: bytes) -> CommandMessage | CommandOffer:
         raise CommandError("invalid") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка безопасного кода отказа и его HTTP-статуса
 #------------------------------------------------------------------------------------------------------------------
 def decode_error(
     data: bytes,
     status: int,
-) -> CommandError:
+    ) -> CommandError:
 
-    """Accept only a bounded error envelope matching the server status contract.
+    """
+    Accept only a bounded error envelope matching the server status contract.
 
     :param data: Bounded UTF-8 body, or empty bytes when the response cannot be trusted.
     :type data: bytes
@@ -137,13 +159,15 @@ def decode_error(
     return CommandError(code, http_status=status, busy_reason=busy_reason)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет повторных ключей во всех объектах JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет повторных ключей во всех объектах JSON
 #------------------------------------------------------------------------------------------------------------------
-def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+def _unique(
+    pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
 
-    """Reject repeated JSON keys at every nesting level.
+    """
+    Reject repeated JSON keys at every nesting level.
 
     :param pairs: Field pairs from one JSON object.
     :type pairs: list[tuple[str, object]]
@@ -163,8 +187,6 @@ def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

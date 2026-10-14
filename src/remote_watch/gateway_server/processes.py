@@ -1,27 +1,29 @@
 ﻿# Владение дочерними процессами и закрытый каталог локального управления.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> ProcessGroup: Владение собственными процессами через механизм ОС.
+# Классы:
+# -> ProcessGroup: Владение собственными процессами через механизм ОС
 #    Конструктор:
-#    -> __init__(): Создание объекта без запуска рабочих ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> spawn(): Запуск процесса с закрытым стартовым каналом.
-#    -> close(): Освобождение только собственных ресурсов.
+#    -> spawn(): Запуск процесса с закрытым стартовым каналом
+#    -> close(): Освобождение только собственных ресурсов
 #
 # Функции:
 # -> parent_guard(): Привязка Linux-процесса к времени жизни родителя.
+#
 # -> private_directory(): Ограничение доступа к токену локального управления.
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import ctypes
@@ -32,20 +34,31 @@ import subprocess
 import sys
 from pathlib import Path
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Владение собственными процессами через механизм ОС
 #------------------------------------------------------------------------------------------------------------------
 class ProcessGroup:
-
-    """Own exact process handles; never discover or terminate processes by a port or stale PID."""
+    """
+    Own exact process handles; never discover or terminate processes by a port or stale PID.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Create a kill-on-close job before any Windows child is allowed to open resources."""
+        """
+        Create a kill-on-close job before any Windows child is allowed to open resources.
+        """
 
         self._handle = None
         if os.name == "nt":
@@ -80,9 +93,10 @@ class ProcessGroup:
         self,
         arguments: list[str],
         capture: bool = False,
-    ) -> subprocess.Popen:
+        ) -> subprocess.Popen:
 
-        """Start a gated bootstrap with inherited output discarded and no interactive window.
+        """
+        Start a gated bootstrap with inherited output discarded and no interactive window.
 
         :param arguments: Library-built argument vector, never a shell command from JSON.
         :type arguments: list[str]
@@ -95,6 +109,9 @@ class ProcessGroup:
         :return: Exact owned process object with a still-open startup gate on stdin.
         :rtype: subprocess.Popen
         """
+
+        # capture — передавать ли вывод дочернего процесса в журнал manager.
+
 
         # arguments — только bootstrap библиотеки; ресурсы открываются после
         # помещения в Job и передачи стартового сообщения через закрытый pipe.
@@ -114,9 +131,13 @@ class ProcessGroup:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение только собственных ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Close the Windows job, terminating only its own still-running members."""
+        """
+        Close the Windows job, terminating only its own still-running members.
+        """
 
         if self._handle is not None:
             self._kernel.CloseHandle(self._handle)
@@ -125,12 +146,19 @@ class ProcessGroup:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Привязка Linux-процесса к времени жизни родителя.
 #------------------------------------------------------------------------------------------------------------------
-def parent_guard(parent: int) -> None:
+def parent_guard(
+    parent: int,
+    ) -> None:
 
-    """Arm Linux parent-death cleanup before reading config or opening a listener.
+    """
+    Arm Linux parent-death cleanup before reading config or opening a listener.
 
     :param parent: Expected living bootstrap parent, passed by library code.
     :type parent: int
@@ -145,16 +173,16 @@ def parent_guard(parent: int) -> None:
         raise RuntimeError("platform_unsupported")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограничение доступа к токену локального управления.
 #------------------------------------------------------------------------------------------------------------------
 def private_directory(
     path: Path,
     operator_sid: str | None = None,
-) -> None:
+    ) -> None:
 
-    """Protect control credentials with user/System ACL or POSIX owner-only permissions.
+    """
+    Protect control credentials with user/System ACL or POSIX owner-only permissions.
 
     :param path: Dedicated local control directory, never component data or Caddy storage.
     :type path: Path
@@ -225,8 +253,6 @@ def private_directory(
             kernel.LocalFree(descriptor)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

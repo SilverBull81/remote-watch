@@ -1,26 +1,30 @@
 ﻿# Запуск отдельного командного gateway из JSON без пользовательского Python-кода.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandParser: Разбор CLI без раскрытия ошибочных значений.
+# -> CommandParser: Разбор CLI без раскрытия ошибочных значений
 #    Интерфейс:
-#    -> error(): Безопасное сообщение об ошибке CLI.
+#    -> error(): Безопасное сообщение об ошибке CLI
 #
 # Функции:
-# -> serve(): Работа gateway до остановки или отказа источника.
-# -> main(): Разбор параметров и явный запуск выбранного режима.
-# -> _version(): Версия установленного пакета без приватных путей.
-# -> _failure_details(): Причина отказа и подсказка без исходного текста исключения.
+# -> serve(): Работа gateway до остановки или отказа источника
+#
+# -> main(): Разбор параметров и явный запуск выбранного режима
+#
+# -> _version(): Версия установленного пакета без приватных путей
+#
+# -> _failure_details(): Причина отказа и подсказка без исходного текста исключения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import argparse
@@ -38,13 +42,20 @@ from remote_watch.commands.transport import CommandError
 from remote_watch.gateway.command_config import CommandConfigError, check_command_gateway, load_command_gateway
 from remote_watch.gateway.command_service import CommandGateway
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Разбор CLI без раскрытия ошибочных значений
 #------------------------------------------------------------------------------------------------------------------
 class CommandParser(argparse.ArgumentParser):
-    """Report fixed CLI failures without echoing values that may contain credentials."""
-
+    """
+    Report fixed CLI failures without echoing values that may contain credentials.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Безопасное сообщение об ошибке CLI
@@ -52,9 +63,10 @@ class CommandParser(argparse.ArgumentParser):
     def error(
         self,
         message: str,
-    ) -> None:
+        ) -> None:
 
-        """Reject invalid arguments without including their content in stderr.
+        """
+        Reject invalid arguments without including their content in stderr.
 
         :param message: Argument parser error text, deliberately omitted from public output.
         :type message: str
@@ -68,6 +80,10 @@ class CommandParser(argparse.ArgumentParser):
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Работа gateway до остановки или отказа источника
 #------------------------------------------------------------------------------------------------------------------
@@ -79,9 +95,10 @@ async def serve(
     context: ssl.SSLContext | None,
     allow_loopback_http: bool,
     stop_file: Path | None,
-) -> None:
+    ) -> None:
 
-    """Run the explicit command service until interruption, source failure or a local stop file.
+    """
+    Run the explicit command service until interruption, source failure or a local stop file.
 
     :param gateway: Command service owning its listener and source readers.
     :type gateway: CommandGateway
@@ -152,13 +169,15 @@ async def serve(
             print(json.dumps(summary, sort_keys=True), flush=True)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор параметров и явный запуск выбранного режима
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Validate or run a separate command-only gateway with explicit JSON configuration and TLS.
+    """
+    Validate or run a separate command-only gateway with explicit JSON configuration and TLS.
 
     :param argv: Explicit CLI arguments, or None for the process arguments.
     :type argv: Sequence[str] | None
@@ -212,13 +231,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Версия установленного пакета без приватных путей
 #------------------------------------------------------------------------------------------------------------------
 def _version() -> str:
 
-    """Read installed distribution metadata without exposing installation paths.
+    """
+    Read installed distribution metadata without exposing installation paths.
 
     :return: Installed version or a fixed label for an unpackaged source checkout.
     :rtype: str
@@ -230,16 +249,16 @@ def _version() -> str:
         return "unknown (source checkout)"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Причина отказа и подсказка без исходного текста исключения
 #------------------------------------------------------------------------------------------------------------------
 def _failure_details(
     error: Exception,
     stage: str,
-) -> tuple[str, str, str]:
+    ) -> tuple[str, str, str]:
 
-    """Classify failures by trusted types and numeric codes, never by exception messages.
+    """
+    Classify failures by trusted types and numeric codes, never by exception messages.
 
     :param error: Failure caught at the CLI boundary.
     :type error: Exception
@@ -308,7 +327,6 @@ def _failure_details(
     return "operation_failed", field, hint
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Явный запуск CLI
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

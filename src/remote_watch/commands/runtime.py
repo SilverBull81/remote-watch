@@ -1,31 +1,34 @@
 ﻿# Подключение командного dispatcher к синхронному и асинхронному приложению.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandRuntime: Владение циклом команд при выбранном режиме запуска.
+# -> CommandRuntime: Владение циклом команд при выбранном режиме запуска
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> astart(): Запуск с привязкой async callbacks к циклу приложения.
-#    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов.
-#    -> astop(): Асинхронная остановка командного исполнителя.
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> astart(): Запуск с привязкой async callbacks к циклу приложения
+#    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов
+#    -> astop(): Асинхронная остановка командного исполнителя
 #    Служебные методы:
-#    -> _startup_tls(): Безопасная TLS-причина в верхней ошибке запуска.
-#    -> _serve(): Работа отдельного командного цикла синхронного приложения.
+#    -> _startup_tls(): Безопасная TLS-причина в верхней ошибке запуска
+#    -> _serve(): Работа отдельного командного цикла синхронного приложения
+#       Вложенные объявления:
+#       -> serve(): Запуск dispatcher и обработка остановки во время старта
 #
 # Функции:
-# -> _startup_cause(): Безопасная классификация причины отказа командного потока.
+# -> _startup_cause(): Безопасная классификация причины отказа командного потока
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -38,12 +41,20 @@ from remote_watch.commands.dispatcher import CommandDispatcher, command_context,
 from remote_watch.commands.storage import StoreError
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Владение циклом команд при выбранном режиме запуска
 #------------------------------------------------------------------------------------------------------------------
 class CommandRuntime:
-    """Bridge explicit watcher lifecycle to application-loop or synchronous command ownership."""
+    """
+    Bridge explicit watcher lifecycle to application-loop or synchronous command ownership.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -53,9 +64,10 @@ class CommandRuntime:
         dispatcher: CommandDispatcher,
         *,
         startup_timeout: float = 10.0,
-    ) -> None:
+        ) -> None:
 
-        """Retain the dispatcher without creating threads or an event loop.
+        """
+        Retain the dispatcher without creating threads or an event loop.
 
         :param dispatcher: Owned executor with a fixed application registry.
         :type dispatcher: CommandDispatcher
@@ -85,9 +97,13 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
-    def start(self) -> None:
+    def start(
+        self,
+        ) -> None:
 
-        """Start a dedicated command loop only for a registry containing synchronous callbacks."""
+        """
+        Start a dedicated command loop only for a registry containing synchronous callbacks.
+        """
 
         if command_context.get():
             raise RuntimeError("command lifecycle cannot run inside a callback")
@@ -114,9 +130,13 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск с привязкой async callbacks к циклу приложения
     #--------------------------------------------------------------------------------------------------------------
-    async def astart(self) -> None:
+    async def astart(
+        self,
+        ) -> None:
 
-        """Bind all asynchronous callbacks to the loop calling this method."""
+        """
+        Bind all asynchronous callbacks to the loop calling this method.
+        """
 
         if self._mode == "async" and not self._stopping.is_set():
             if asyncio.get_running_loop() is not self._loop:
@@ -136,9 +156,13 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка приёма команд и принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def stop(self) -> None:
+    def stop(
+        self,
+        ) -> None:
 
-        """Request bounded shutdown of the synchronous owner's loop."""
+        """
+        Request bounded shutdown of the synchronous owner's loop.
+        """
 
         if command_context.get():
             raise RuntimeError("command lifecycle cannot run inside a callback")
@@ -162,9 +186,13 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронная остановка командного исполнителя
     #--------------------------------------------------------------------------------------------------------------
-    async def astop(self) -> None:
+    async def astop(
+        self,
+        ) -> None:
 
-        """Close the dispatcher on its application loop or offload a synchronous stop."""
+        """
+        Close the dispatcher on its application loop or offload a synchronous stop.
+        """
 
         if self._mode == "sync":
             await asyncio.to_thread(self.stop)
@@ -179,9 +207,12 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Безопасная TLS-причина в верхней ошибке запуска
     #--------------------------------------------------------------------------------------------------------------
-    def _startup_tls(self) -> dict[str, str | int | None]:
+    def _startup_tls(
+        self,
+        ) -> dict[str, str | int | None]:
 
-        """Expose sanitized TLS details on the outer synchronous startup error.
+        """
+        Expose sanitized TLS details on the outer synchronous startup error.
 
         :return: Bounded metadata copied from the already sanitized worker failure.
         :rtype: dict[str, str | int | None]
@@ -196,17 +227,22 @@ class CommandRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Работа отдельного командного цикла синхронного приложения
     #--------------------------------------------------------------------------------------------------------------
-    def _serve(self) -> None:
+    def _serve(
+        self,
+        ) -> None:
 
-        """Own network and heartbeat work independently of the notification runtime."""
-
+        """
+        Own network and heartbeat work independently of the notification runtime.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Запуск dispatcher и обработка остановки во время старта
         #----------------------------------------------------------------------------------------------------------
         async def serve() -> None:
 
-            """Open the dispatcher and handle a stop requested during startup."""
+            """
+            Open the dispatcher and handle a stop requested during startup.
+            """
 
             self._loop = asyncio.get_running_loop()
             self._stop = asyncio.Event()
@@ -235,12 +271,19 @@ class CommandRuntime:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Безопасная классификация причины отказа командного потока
-#------------------------------------------------------------------------------------------------------------------
-def _startup_cause(error: BaseException) -> BaseException:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Copy only a known failure category without retaining the original exception.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Безопасная классификация причины отказа командного потока
+#------------------------------------------------------------------------------------------------------------------
+def _startup_cause(
+    error: BaseException,
+    ) -> BaseException:
+
+    """
+    Copy only a known failure category without retaining the original exception.
 
     :param error: Worker failure whose text, attributes and traceback must remain private.
     :type error: BaseException
@@ -279,8 +322,6 @@ def _startup_cause(error: BaseException) -> BaseException:
     return RuntimeError("command startup failed")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

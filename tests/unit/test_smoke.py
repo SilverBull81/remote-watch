@@ -1,34 +1,50 @@
 ﻿# Проверки ручных smoke-команд без реальных токенов и сетевых запросов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> FakeChannel: Тестовый канал для ручной проверки.
+# -> FakeChannel: Тестовый канал для ручной проверки
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка клиента и данных авторизации.
-#    -> send(): Одна попытка отправки и проверка ответа.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
+#    -> open(): Подготовка клиента и данных авторизации
+#    -> send(): Одна попытка отправки и проверка ответа
+#    -> close(): Закрытие клиента и освобождение ресурсов
+#
+# Функции:
+# -> channels(): Подмена каналов без запуска сети
+#    Вложенные объявления:
+#    -> create(): Создание и сохранение тестовой сессии
 #
 # Тесты:
-# -> channels(): Подмена каналов без запуска сети.
-# -> test_smoke_command(): Выбор одного сервиса, свежие данные и очистка временного токена.
-# -> test_bad_credentials(): Безопасная ошибка при неверном локальном файле.
-# -> test_default_path_and_missing_file(): Чтение настроек из текущего каталога.
-# -> test_cleanup_on_failure(): Очистка после отмены и ошибок запуска или доставки.
-# -> test_argument_errors_are_private(): Ошибочные аргументы не попадают в вывод.
-# -> test_failure_diagnostics(): Известные причины видны, произвольные строки скрыты.
-# -> test_removed_provider(): Старое имя CLI отвергается до чтения настроек.
+# -> test_smoke_command(): Выбор одного сервиса, свежие данные и очистка временного токена
+#
+# -> test_bad_credentials(): Безопасная ошибка при неверном локальном файле
+#
+# -> test_default_path_and_missing_file(): Чтение настроек из текущего каталога
+#
+# -> test_cleanup_on_failure(): Очистка после отмены и ошибок запуска или доставки
+#    Вложенные объявления:
+#    -> create(): Создание и сохранение тестовой сессии
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_argument_errors_are_private(): Ошибочные аргументы не попадают в вывод
+#
+# -> test_failure_diagnostics(): Известные причины видны, произвольные строки скрыты
+#    Вложенные объявления:
+#    -> send(): Возврат результата без чтения секретов и сетевой отправки
+#
+# -> test_removed_provider(): Старое имя CLI отвергается до чтения настроек
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -50,12 +66,20 @@ from remote_watch.adapters import ntfy_notifications as ntfy
 from remote_watch.adapters import telegram_notifications as telegram
 from remote_watch.diagnostics import smoke as smoke
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Тестовый канал для ручной проверки
 #------------------------------------------------------------------------------------------------------------------
 class FakeChannel:
-    """Capture smoke delivery and model startup failures or cancellation."""
+    """
+    Capture smoke delivery and model startup failures or cancellation.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -65,9 +89,10 @@ class FakeChannel:
         config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy,
-    ) -> None:
+        ) -> None:
 
-        """Keep the real validated configuration but skip the HTTP client.
+        """
+        Keep the real validated configuration but skip the HTTP client.
 
         :param config: Validated provider configuration.
         :type config: TelegramConfig | NtfyConfig | NotificationGatewayClientConfig
@@ -91,9 +116,13 @@ class FakeChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка клиента и данных авторизации
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Check temporary authentication or reproduce a private startup error."""
+        """
+        Check temporary authentication or reproduce a private startup error.
+        """
 
         expected = ("synthetic_service_token_01234567890123456789"
                     if isinstance(self.config, notification_gateway.NotificationGatewayClientConfig)
@@ -109,9 +138,10 @@ class FakeChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Record one attempt or propagate cancellation to the smoke owner.
+        """
+        Record one attempt or propagate cancellation to the smoke owner.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -131,22 +161,33 @@ class FakeChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record cleanup without touching the network."""
+        """
+        Record cleanup without touching the network.
+        """
 
         self.closed = True
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подмена каналов без запуска сети
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
-def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
+def channels(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> list[FakeChannel]:
 
-    """Replace adapter constructors while preserving configuration validation.
+    """
+    Replace adapter constructors while preserving configuration validation.
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -166,9 +207,10 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
         config: telegram.TelegramConfig | ntfy.NtfyConfig | notification_gateway.NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy,
-    ) -> FakeChannel:
+        ) -> FakeChannel:
 
-        """Capture a channel constructed by the smoke command.
+        """
+        Capture a channel constructed by the smoke command.
 
         :param config: Validated provider configuration.
         :type config: TelegramConfig | NtfyConfig | NotificationGatewayClientConfig
@@ -195,6 +237,10 @@ def channels(monkeypatch: pytest.MonkeyPatch) -> list[FakeChannel]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Выбор одного сервиса, свежие данные и очистка временного токена
 #------------------------------------------------------------------------------------------------------------------
@@ -206,9 +252,10 @@ def test_smoke_command(
     tmp_path: Path,
     channels: list[FakeChannel],
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Use one provider from the local file, send fresh data and remove its temporary token.
+    """
+    Use one provider from the local file, send fresh data and remove its temporary token.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -254,7 +301,6 @@ def test_smoke_command(
     assert "synthetic_service_token" not in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасная ошибка при неверном локальном файле
 #------------------------------------------------------------------------------------------------------------------
@@ -268,9 +314,10 @@ def test_bad_credentials(
     content: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Report invalid local data without printing its values or JSON parser details.
+    """
+    Report invalid local data without printing its values or JSON parser details.
 
     :param content: Synthetic local JSON content.
     :type content: str
@@ -292,7 +339,6 @@ def test_bad_credentials(
     assert "synthetic_secret" not in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Чтение настроек из текущего каталога
 #------------------------------------------------------------------------------------------------------------------
@@ -300,9 +346,10 @@ def test_default_path_and_missing_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     channels: list[FakeChannel],
-) -> None:
+    ) -> None:
 
-    """Read only the current directory by default and fail before network access if absent.
+    """
+    Read only the current directory by default and fail before network access if absent.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -328,7 +375,6 @@ def test_default_path_and_missing_file(
     assert len(channels) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Очистка после отмены и ошибок запуска или доставки
 #------------------------------------------------------------------------------------------------------------------
@@ -336,9 +382,10 @@ def test_default_path_and_missing_file(
 def test_cleanup_on_failure(
     mode: str,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Remove the temporary token and close the adapter for every failure outcome.
+    """
+    Remove the temporary token and close the adapter for every failure outcome.
 
     :param mode: Selected failure or success scenario.
     :type mode: str
@@ -359,9 +406,10 @@ def test_cleanup_on_failure(
         config: telegram.TelegramConfig,
         *,
         retry: RetryPolicy,
-    ) -> FakeChannel:
+        ) -> FakeChannel:
 
-        """Prepare one selected failure mode.
+        """
+        Prepare one selected failure mode.
 
         :param config: Validated provider configuration.
         :type config: telegram.TelegramConfig
@@ -393,7 +441,9 @@ def test_cleanup_on_failure(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check cancellation and exceptions separately from classified provider results."""
+        """
+        Check cancellation and exceptions separately from classified provider results.
+        """
 
         settings = {"token": "123:synthetic_secret", "chat": "-123"}
         if mode == "cancel":
@@ -411,13 +461,15 @@ def test_cleanup_on_failure(
     assert len(created[0].deliveries) <= 1 and dict(os.environ) == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибочные аргументы не попадают в вывод
 #------------------------------------------------------------------------------------------------------------------
-def test_argument_errors_are_private(capsys: pytest.CaptureFixture[str]) -> None:
+def test_argument_errors_are_private(
+    capsys: pytest.CaptureFixture[str],
+    ) -> None:
 
-    """Do not echo even an accidentally supplied token-like command argument.
+    """
+    Do not echo even an accidentally supplied token-like command argument.
 
     :param capsys: Captured command output.
     :type capsys: pytest.CaptureFixture[str]
@@ -429,7 +481,6 @@ def test_argument_errors_are_private(capsys: pytest.CaptureFixture[str]) -> None
     assert "synthetic_secret" not in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Известные причины видны, произвольные строки скрыты
 #------------------------------------------------------------------------------------------------------------------
@@ -439,9 +490,10 @@ def test_failure_diagnostics(
     reason: str | None,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Expose only allowlisted reasons and validated numeric diagnostics.
+    """
+    Expose only allowlisted reasons and validated numeric diagnostics.
 
     :param reason: Known reason, private text or no reason.
     :type reason: str | None
@@ -462,9 +514,10 @@ def test_failure_diagnostics(
     async def send(
         provider: str,
         settings: dict[str, object],
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Return a controlled failure without accessing a provider.
+        """
+        Return a controlled failure without accessing a provider.
 
         :param provider: Requested smoke adapter.
         :type provider: str
@@ -492,13 +545,15 @@ def test_failure_diagnostics(
         assert f"reason_code={reason}" in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Старое имя CLI отвергается до чтения настроек
 #------------------------------------------------------------------------------------------------------------------
-def test_removed_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_removed_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
 
-    """Reject the removed CLI selector before touching a local credentials file.
+    """
+    Reject the removed CLI selector before touching a local credentials file.
 
     :param monkeypatch: Fail immediately if configuration loading is attempted.
     :type monkeypatch: pytest.MonkeyPatch
@@ -511,8 +566,6 @@ def test_removed_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     loader.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

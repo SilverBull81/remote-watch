@@ -1,38 +1,42 @@
 ﻿# Общий интерфейс отправки уведомлений без зависимости от конкретного сервиса.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationChannel: Подготовка, отправка и закрытие канала.
+# -> NotificationChannel: Интерфейс канала для одного получателя
 #    Интерфейс:
-#    -> open(): Создание клиента.
-#    -> send(): Одна попытка отправки.
-#    -> close(): Закрытие клиента.
+#    -> open(): Создание клиента
+#    -> send(): Одна попытка отправки
+#    -> close(): Закрытие клиента
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from typing import Protocol
 
 from remote_watch.notifications.delivery import Delivery, DeliveryResult
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Интерфейс канала для одного получателя
 #------------------------------------------------------------------------------------------------------------------
 class NotificationChannel(Protocol):
-    """Own an async client for one destination without performing hidden retries.
+    """
+    Own an async client for one destination without performing hidden retries.
 
     Runtime calls all methods in its worker loop. Implementations must cooperate
     with cancellation and must not block that loop with synchronous network I/O.
@@ -43,9 +47,13 @@ class NotificationChannel(Protocol):
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Создание клиента
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Create local resources without requiring a provider health request."""
+        """
+        Create local resources without requiring a provider health request.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
@@ -56,9 +64,10 @@ class NotificationChannel(Protocol):
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Attempt delivery once and return a classified, sanitized result.
+        """
+        Attempt delivery once and return a classified, sanitized result.
 
         :param delivery: Immutable attempt with stable identifiers.
         :type delivery: Delivery
@@ -75,16 +84,18 @@ class NotificationChannel(Protocol):
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release owned resources, including after a partially failed open."""
+        """
+        Release owned resources, including after a partially failed open.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

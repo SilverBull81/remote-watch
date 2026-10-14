@@ -1,46 +1,46 @@
 ﻿# Проверка возраста команд по достоверному времени без зависимости от часов VM.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> TimeUnavailable: Отказ при отсутствии достоверного времени.
+# -> TimeUnavailable: Отказ при отсутствии достоверного времени
 #
-# -> TimeSample: Границы UTC в момент получения показания.
+# -> TimeSample: Границы UTC в момент получения показания
 #    Специальные методы:
-#    -> __post_init__(): Проверка типов и согласованности полей.
+#    -> __post_init__(): Проверка типов и согласованности полей
 #
-# -> TimeSource: Контракт источника достоверного времени.
+# -> TimeSource: Контракт источника достоверного времени
 #    Интерфейс:
-#    -> sample(): Получение одного показания времени.
+#    -> sample(): Получение одного показания времени
 #
-# -> FreshnessPolicy: Ограничения возраста и точности времени.
+# -> FreshnessPolicy: Ограничения возраста и точности времени
 #    Специальные методы:
-#    -> __post_init__(): Проверка типов и согласованности полей.
+#    -> __post_init__(): Проверка типов и согласованности полей
 #
-# -> FreshnessReason: Причина отказа до принятия команды.
+# -> FreshnessReason: Причина отказа до принятия команды
 #
-# -> FreshnessDecision: Результат проверки возраста команды.
+# -> FreshnessDecision: Результат проверки возраста команды
 #    Специальные методы:
-#    -> __post_init__(): Проверка типов и согласованности полей.
+#    -> __post_init__(): Проверка типов и согласованности полей
 #
-# -> TrustedClock: Локальный отсчёт времени на основе доверенного источника.
+# -> TrustedClock: Локальный отсчёт времени на основе доверенного источника
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> install(): Проверка и установка нового показания.
-#    -> refresh(): Явное обновление времени из источника.
-#    -> bounds(): Текущий интервал UTC с учётом дрейфа.
-#    -> check(): Проверка отметки сообщения и оставшегося срока.
-#
+#    -> install(): Проверка и установка нового показания
+#    -> refresh(): Явное обновление времени из источника
+#    -> bounds(): Текущий интервал UTC с учётом дрейфа
+#    -> check(): Проверка отметки сообщения и оставшегося срока
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -54,21 +54,39 @@ from remote_watch._validation import require_int, require_number
 from remote_watch.commands.protocol import MAX_COMMAND_SECONDS
 from remote_watch.commands.state import CommandDeadline
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Отказ при отсутствии достоверного времени
 #------------------------------------------------------------------------------------------------------------------
 class TimeUnavailable(RuntimeError):
-    """Report unavailable trusted time without exposing provider details."""
+    """
+    Report unavailable trusted time without exposing provider details.
+    """
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Границы UTC в момент получения показания
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TimeSample:
-    """Bound UTC at one local monotonic instant; never persist this anchor."""
+    """
+    Bound UTC at one local monotonic instant; never persist this anchor.
+
+    :param lower_utc: Earliest UTC instant allowed by the trusted sample.
+    :type lower_utc: float
+
+    :param upper_utc: Latest UTC instant allowed by sample accuracy and response delay.
+    :type upper_utc: float
+
+    :param observed_at: Local monotonic time at which the trusted sample was observed.
+    :type observed_at: float
+    """
 
     lower_utc: float        # Нижняя граница UTC при получении ответа, секунды Unix.
     upper_utc: float        # Верхняя граница с учётом погрешности и задержки ответа.
@@ -77,9 +95,13 @@ class TimeSample:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и согласованности полей
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite ordered bounds."""
+        """
+        Validate finite ordered bounds.
+        """
 
         for value in (self.lower_utc, self.upper_utc, self.observed_at):
             require_number(value, "time sample", allow_zero=True)
@@ -88,19 +110,23 @@ class TimeSample:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контракт источника достоверного времени
 #------------------------------------------------------------------------------------------------------------------
 class TimeSource(Protocol):
-    """Provide a fresh authenticated UTC interval in the caller's monotonic domain."""
+    """
+    Provide a fresh authenticated UTC interval in the caller's monotonic domain.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение одного показания времени
     #--------------------------------------------------------------------------------------------------------------
-    async def sample(self) -> TimeSample:
+    async def sample(
+        self,
+        ) -> TimeSample:
 
-        """Obtain a bounded fresh sample or raise TimeUnavailable.
+        """
+        Obtain a bounded fresh sample or raise TimeUnavailable.
 
         :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
@@ -110,13 +136,29 @@ class TimeSource(Protocol):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ограничения возраста и точности времени
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FreshnessPolicy:
-    """Limit message age and uncertainty independently of VM wall clocks."""
+    """
+    Limit message age and uncertainty independently of VM wall clocks.
+
+    :param max_age: Maximum accepted command age, in seconds.
+    :type max_age: float
+
+    :param sample_ttl: Maximum trusted-time sample lifetime, in seconds.
+    :type sample_ttl: float
+
+    :param max_uncertainty: Maximum accepted trusted-time uncertainty, in seconds.
+    :type max_uncertainty: float
+
+    :param drift_ppm: Maximum assumed monotonic clock drift in parts per million.
+    :type drift_ppm: float
+
+    :param future_tolerance: Allowed provider timestamp uncertainty in the future, in seconds.
+    :type future_tolerance: float
+    """
 
     max_age: float = 120.0              # Предельный возраст команды по времени провайдера.
     sample_ttl: float = 300.0           # Срок использования показания источника времени.
@@ -127,9 +169,13 @@ class FreshnessPolicy:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и согласованности полей
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject unbounded policies and bool-as-number values."""
+        """
+        Reject unbounded policies and bool-as-number values.
+        """
 
         for value in (self.max_age, self.sample_ttl, self.max_uncertainty):
             require_number(value, "freshness policy")
@@ -141,25 +187,33 @@ class FreshnessPolicy:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Причина отказа до принятия команды
 #------------------------------------------------------------------------------------------------------------------
 class FreshnessReason(str, Enum):
-    """Describe a bounded reason for refusing a command before admission."""
+    """
+    Describe a bounded reason for refusing a command before admission.
+    """
 
     TIME_UNAVAILABLE = "time_unavailable"
     TOO_OLD = "too_old"
     FUTURE = "future"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Результат проверки возраста команды
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FreshnessDecision:
-    """Carry a local admission deadline or a fixed rejection reason."""
+    """
+    Carry a local admission deadline or a fixed rejection reason.
+
+    :param deadline: Locally enforced command deadline.
+    :type deadline: CommandDeadline | None
+
+    :param reason: Fixed decision or failure reason without private exception text.
+    :type reason: FreshnessReason | None
+    """
 
     deadline: CommandDeadline | None    # Остаток исходного срока; None означает отказ.
     reason: FreshnessReason | None      # Причина отказа; None означает свежую команду.
@@ -167,9 +221,13 @@ class FreshnessDecision:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и согласованности полей
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Keep acceptance and rejection mutually exclusive."""
+        """
+        Keep acceptance and rejection mutually exclusive.
+        """
 
         if self.deadline is not None and type(self.deadline) is not CommandDeadline:
             raise TypeError("invalid freshness deadline")
@@ -180,12 +238,13 @@ class FreshnessDecision:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Локальный отсчёт времени на основе доверенного источника
 #------------------------------------------------------------------------------------------------------------------
 class TrustedClock:
-    """Maintain bounded UTC estimates without reading or setting the system UTC clock."""
+    """
+    Maintain bounded UTC estimates without reading or setting the system UTC clock.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -195,9 +254,10 @@ class TrustedClock:
         policy: FreshnessPolicy = FreshnessPolicy(),
         *,
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Keep an initially unavailable process-local time estimate.
+        """
+        Keep an initially unavailable process-local time estimate.
 
         :param policy: Freshness limits and drift bound.
         :type policy: FreshnessPolicy
@@ -224,9 +284,10 @@ class TrustedClock:
     def install(
         self,
         sample: TimeSample,
-    ) -> None:
+        ) -> None:
 
-        """Install only a currently usable sample from a trusted source.
+        """
+        Install only a currently usable sample from a trusted source.
 
         :param sample: Authenticated UTC interval at its local receipt time.
         :type sample: TimeSample
@@ -261,9 +322,10 @@ class TrustedClock:
     async def refresh(
         self,
         source: TimeSource,
-    ) -> None:
+        ) -> None:
 
-        """Replace the anchor explicitly; failure invalidates the previous estimate.
+        """
+        Replace the anchor explicitly; failure invalidates the previous estimate.
 
         :param source: Explicit trusted time provider.
         :type source: TimeSource
@@ -294,9 +356,12 @@ class TrustedClock:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Текущий интервал UTC с учётом дрейфа
     #--------------------------------------------------------------------------------------------------------------
-    def bounds(self) -> TimeSample:
+    def bounds(
+        self,
+        ) -> TimeSample:
 
-        """Return conservative current bounds or invalidate an expired estimate.
+        """
+        Return conservative current bounds or invalidate an expired estimate.
 
         :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
@@ -330,9 +395,10 @@ class TrustedClock:
         self,
         message_date: int,
         hub_epoch: str,
-    ) -> FreshnessDecision:
+        ) -> FreshnessDecision:
 
-        """Check provider seconds and preserve only the remaining original lifetime.
+        """
+        Check provider seconds and preserve only the remaining original lifetime.
 
         :param message_date: Provider-assigned Unix timestamp in whole seconds.
         :type message_date: int
@@ -365,8 +431,6 @@ class TrustedClock:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

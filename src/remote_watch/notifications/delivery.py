@@ -1,28 +1,29 @@
 ﻿# Контракты одной попытки доставки и результата провайдера.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DeliveryStatus: Классификация результата попытки.
+# -> DeliveryStatus: Классификация результата одной попытки
 #
-# -> ResultSource: Источник ответа.
+# -> ResultSource: Источник результата
 #
-# -> Delivery: Неизменяемое задание одной попытки.
+# -> Delivery: Одна попытка доставки
 #    Специальные методы:
-#    -> __post_init__(): Проверка задания.
+#    -> __post_init__(): Проверка задания
 #
-# -> DeliveryResult: Безопасный структурированный результат.
+# -> DeliveryResult: Результат одной попытки
 #    Специальные методы:
-#    -> __post_init__(): Проверка согласованности результата.
+#    -> __post_init__(): Проверка согласованности результата
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import re
@@ -34,16 +35,20 @@ from remote_watch._validation import require_int, require_number, require_text
 from remote_watch.events import Notification
 from remote_watch.notifications.display import validate_display
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Классификация результата одной попытки
 #------------------------------------------------------------------------------------------------------------------
 class DeliveryStatus(str, Enum):
-    """Distinguish provider acceptance, retryable failures and uncertain outcomes."""
+    """
+    Distinguish provider acceptance, retryable failures and uncertain outcomes.
+    """
 
     PROVIDER_ACCEPTED = "provider_accepted"
     TRANSIENT_FAILURE = "transient_failure"
@@ -52,30 +57,52 @@ class DeliveryStatus(str, Enum):
     UNKNOWN = "unknown"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Источник результата
 #------------------------------------------------------------------------------------------------------------------
 class ResultSource(str, Enum):
-    """Identify whether the provider or gateway originated the result."""
+    """
+    Identify whether the provider or gateway originated the result.
+    """
 
     PROVIDER = "provider"
     GATEWAY = "gateway"
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Одна попытка доставки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Delivery:
-    """Bind a notification to a destination and stable delivery identifier.
+    """
+    Bind a notification to a destination and stable delivery identifier.
 
     notification is an immutable snapshot. destination_id is a local logical name.
     delivery_id remains unchanged across retries. attempt is one-based.
     remaining_timeout is the runtime's finite remaining attempt budget in seconds;
     None permits a standalone adapter call to apply its configured timeout.
     This value describes an attempt; it does not schedule or execute it.
+
+    :param notification: Immutable notification prepared for delivery.
+    :type notification: Notification
+
+    :param destination_id: Unique destination name within the runtime configuration.
+    :type destination_id: str
+
+    :param delivery_id: Stable delivery identifier shared by all retries.
+    :type delivery_id: str
+
+    :param attempt: One-based delivery attempt number.
+    :type attempt: int
+
+    :param remaining_timeout: Remaining attempt duration in seconds, or None outside the runtime.
+    :type remaining_timeout: float | None
+
+    :param display_mode: Full, compact or text presentation; None inherits gateway settings where supported.
+    :type display_mode: str | None
+
+    :param display_fields: Selected presentation field groups, or None for mode defaults.
+    :type display_fields: tuple[str, ...] | None
     """
 
     notification: Notification  # Подготовленное уведомление.
@@ -83,15 +110,19 @@ class Delivery:
     delivery_id: str            # Общий идентификатор всех повторов отправки.
     attempt: int = 1            # Номер попытки, начиная с единицы.
     remaining_timeout: float | None = None  # Остаток срока попытки; None — вызов вне runtime.
-    display_mode: str | None = None         # Режим этой доставки; None — настройка provider-канала.
-    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
+    display_mode: str | None = None  # Режим этой доставки; None — настройка provider-канала.
+    display_fields: tuple[str, ...] | None = None  # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка задания
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate the snapshot, identifiers and one-based attempt number."""
+        """
+        Validate the snapshot, identifiers and one-based attempt number.
+        """
 
         # Задание ссылается на уже проверенное уведомление; повторы сохраняют тот же delivery_id.
         if not isinstance(self.notification, Notification):
@@ -114,19 +145,55 @@ class Delivery:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Результат одной попытки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DeliveryResult:
-    """Describe one attempt without leaking provider exceptions or response bodies.
+    """
+    Describe one attempt without leaking provider exceptions or response bodies.
 
     status classifies the attempt; source identifies the reporting boundary.
     reason_code is an optional safe machine code, not arbitrary provider text.
     provider_message_id is available only for accepted messages. retry_after is an
     optional finite delay in seconds for transient/rate-limited responses.
     Adapters must redact sensitive information before constructing this result.
+
+    :param status: Fixed delivery attempt outcome.
+    :type status: DeliveryStatus
+
+    :param source: Authority that produced the delivery outcome.
+    :type source: ResultSource
+
+    :param reason_code: Safe bounded delivery failure code, or None.
+    :type reason_code: str | None
+
+    :param provider_message_id: Opaque message identifier returned by the provider, or None.
+    :type provider_message_id: str | None
+
+    :param retry_after: Provider-requested retry delay in seconds, or None.
+    :type retry_after: float | None
+
+    :param http_status: Observed HTTP status, or None when no valid status was received.
+    :type http_status: int | None
+
+    :param provider_code: Allowlisted numeric provider error code, or None.
+    :type provider_code: int | None
+
+    :param message_bytes: Rendered provider message size, or None when unknown.
+    :type message_bytes: int | None
+
+    :param request_bytes: Serialized request size in UTF-8 bytes, or None when unknown.
+    :type request_bytes: int | None
+
+    :param error_kind: Safe local transport error category, or None.
+    :type error_kind: str | None
+
+    :param verify_code: OpenSSL certificate verification code, or None.
+    :type verify_code: int | None
+
+    :param tls_reason: Allowlisted TLS failure reason without server addresses or exception text.
+    :type tls_reason: str | None
     """
 
     status: DeliveryStatus                          # Результат попытки отправки.
@@ -145,9 +212,13 @@ class DeliveryResult:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности результата
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject contradictory statuses, invalid codes and unbounded retry delays."""
+        """
+        Reject contradictory statuses, invalid codes and unbounded retry delays.
+        """
 
         # Результат описывает ответ сервиса или шлюза, а не показ уведомления на телефоне.
         if not isinstance(self.status, DeliveryStatus):
@@ -206,8 +277,6 @@ class DeliveryResult:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

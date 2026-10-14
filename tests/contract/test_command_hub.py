@@ -1,47 +1,89 @@
 ﻿# Проверки маршрутизации, прав, сроков и отказов двух постоянных журналов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DirectTransport: Подставной транспорт с потерей уже записанного ответа.
+# -> DirectTransport: Подставной транспорт с потерей уже записанного ответа
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие принадлежащих объекту ресурсов.
-#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> open(): Открытие принадлежащих объекту ресурсов
+#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 #
-# -> Rig: Согласованные часы, права и два настоящих журнала SQLite.
+# -> Rig: Согласованные часы, права и два настоящих журнала SQLite
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
-#    -> request(): Подставная команда для точной сессии приложения.
-#    -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
+#    -> request(): Подставная команда для точной сессии приложения
+#    -> submit(): Проверка прав и свежести перед атомарной записью с cursor
 #
 # Тесты:
-# -> test_command_end_to_end(): Полный обмен с callback, квитанцией и подтверждением источника.
-# -> test_command_acl_and_freshness(): Отказ чужим и просроченным сообщениям с сохранением cursor.
-# -> test_command_credentials_separate(): Разделение секретов источника, приложения и gateway.
-# -> test_command_session_fencing(): Запрет второй живой цели и возрождения истёкшей сессии.
-# -> test_command_lost_response_no_reexecution(): Потеря ответа после commit без повторного callback.
-# -> test_command_capacity_and_scope(): Ограничение хранения и запрет повышения прав.
-# -> test_command_heartbeat_does_not_extend_command(): Независимость срока команды от heartbeat.
-# -> test_command_poll_bounds_and_shutdown(): Один poll на сессию и пробуждение при остановке.
-# -> test_command_worker_cancellation(): Занятый рабочий поток журнала после отмены ожидающего caller.
-# -> test_command_two_apps_and_chats(): Два приложения и два чата на одном hub.
-# -> test_command_fail_closed_boundaries(): Отказ при потере достоверного времени, прав или корреляции.
-# -> test_command_background_heartbeat(): Автоматическое продление регистрации клиентом.
+# -> test_command_end_to_end(): Полный обмен с callback, квитанцией и подтверждением источника
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_acl_and_freshness(): Отказ чужим и просроченным сообщениям с сохранением cursor
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_credentials_separate(): Разделение секретов источника, приложения и gateway
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_session_fencing(): Запрет второй живой цели и возрождения истёкшей сессии
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_lost_response_no_reexecution(): Потеря ответа после commit без повторного callback
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_capacity_and_scope(): Ограничение хранения и запрет повышения прав
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_heartbeat_does_not_extend_command(): Независимость срока команды от heartbeat
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_poll_bounds_and_shutdown(): Один poll на сессию и пробуждение при остановке
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_worker_cancellation(): Занятый рабочий поток журнала после отмены ожидающего caller
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> blocked(): Подставная запись, переживающая отмену ожидающего caller
+#
+# -> test_command_two_apps_and_chats(): Два приложения и два чата на одном hub
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_fail_closed_boundaries(): Отказ при потере достоверного времени, прав или корреляции
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> delayed(): Задержка ответа после сохранения разрешения hub
+#
+# -> test_command_background_heartbeat(): Автоматическое продление регистрации клиентом
+#    Вложенные объявления:
+#    -> scenario(): Ожидание одного heartbeat с конечным сроком теста
+#       Вложенные объявления:
+#       -> observed(): Наблюдение ответа на автоматический heartbeat
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -70,18 +112,32 @@ from remote_watch.commands.time import TimeSample, TrustedClock
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 APP_TOKEN = "application_command_secret_" + "a" * 32
 SOURCE_TOKEN = "source_command_secret_" + "b" * 32
 EPOCH = "a" * 32
 SESSION = "b" * 32
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подставной транспорт с потерей уже записанного ответа
 #------------------------------------------------------------------------------------------------------------------
 class DirectTransport:
-    """Inject response loss while preserving real hub and journal behavior."""
-
+    """
+    Inject response loss while preserving real hub and journal behavior.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -89,9 +145,10 @@ class DirectTransport:
     def __init__(
         self,
         hub: CommandHub,
-    ) -> None:
+        ) -> None:
 
-        """Bind the synthetic transport without opening the hub.
+        """
+        Bind the synthetic transport without opening the hub.
 
         :param hub: Independently configured command hub.
         :type hub: CommandHub
@@ -104,15 +161,17 @@ class DirectTransport:
         self.delay = 0.0
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Keep the fake transport free from network resources."""
+        """
+        Keep the fake transport free from network resources.
+        """
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Один обмен с проверкой ответа и без скрытого retry
@@ -121,9 +180,10 @@ class DirectTransport:
         self,
         operation: str,
         message: CommandMessage,
-    ) -> CommandMessage | CommandOffer | None:
+        ) -> CommandMessage | CommandOffer | None:
 
-        """Forward an authenticated call and optionally lose its committed response.
+        """
+        Forward an authenticated call and optionally lose its committed response.
 
         :param operation: Single operation executed within the documented limits.
         :type operation: str
@@ -147,24 +207,27 @@ class DirectTransport:
         return response
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Leave hub ownership with the test fixture."""
+        """
+        Leave hub ownership with the test fixture.
+        """
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Согласованные часы, права и два настоящих журнала SQLite
 #------------------------------------------------------------------------------------------------------------------
 class Rig:
-    """Own deterministic clocks and two independent real SQLite journals."""
-
+    """
+    Own deterministic clocks and two independent real SQLite journals.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -173,9 +236,10 @@ class Rig:
         self,
         path: Path,
         **overrides: Any,
-    ) -> None:
+        ) -> None:
 
-        """Prepare a single application, source ACL and matching command client.
+        """
+        Prepare a single application, source ACL and matching command client.
 
         :param path: Temporary directory for isolated persistent journals.
         :type path: Path
@@ -208,25 +272,31 @@ class Rig:
         self.client = CommandClient(self.registration, self.transport, self.local, clock=lambda: self.now)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Open hub and client in the current test event loop."""
+        """
+        Open hub and client in the current test event loop.
+        """
 
         await self.hub.start()
         await self.client.start()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close both owners even when the client fails to close."""
+        """
+        Close both owners even when the client fails to close.
+        """
 
         try:
             await self.client.close()
@@ -234,16 +304,16 @@ class Rig:
             await self.hub.close()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подставная команда для точной сессии приложения
     #--------------------------------------------------------------------------------------------------------------
     def request(
         self,
         number: int = 1,
-    ) -> CommandRequest:
+        ) -> CommandRequest:
 
-        """Construct a synthetic provider intent bound to the exact live session.
+        """
+        Construct a synthetic provider intent bound to the exact live session.
 
         :param number: Synthetic command and provider event number.
         :type number: int
@@ -262,16 +332,16 @@ class Rig:
             command_display_mode=self.registration.command_display_mode)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка прав и свежести перед атомарной записью с cursor
     #--------------------------------------------------------------------------------------------------------------
     async def submit(
         self,
         request: CommandRequest,
-    ) -> None:
+        ) -> None:
 
-        """Commit one in-order fake source event using the trusted UTC timestamp.
+        """
+        Commit one in-order fake source event using the trusted UTC timestamp.
 
         :param request: Incoming request validated before dispatch.
         :type request: CommandRequest
@@ -287,12 +357,19 @@ class Rig:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полный обмен с callback, квитанцией и подтверждением источника
 #------------------------------------------------------------------------------------------------------------------
-def test_command_end_to_end(tmp_path: Path) -> None:
+def test_command_end_to_end(
+    tmp_path: Path,
+    ) -> None:
 
-    """Execute one fake callback through both durable journals and acknowledge the reply.
+    """
+    Execute one fake callback through both durable journals and acknowledge the reply.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -300,13 +377,14 @@ def test_command_end_to_end(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise registration, admission, claim, execution, receipt and source ACK."""
+        """
+        Exercise registration, admission, claim, execution, receipt and source ACK.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -336,7 +414,6 @@ def test_command_end_to_end(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ чужим и просроченным сообщениям с сохранением cursor
 #------------------------------------------------------------------------------------------------------------------
@@ -344,9 +421,10 @@ def test_command_end_to_end(tmp_path: Path) -> None:
 def test_command_acl_and_freshness(
     tmp_path: Path,
     field: str,
-) -> None:
+    ) -> None:
 
-    """Commit rejected source positions without making them executable.
+    """
+    Commit rejected source positions without making them executable.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -358,13 +436,14 @@ def test_command_acl_and_freshness(
     # tmp_path — отдельный временный каталог теста.
     # field — поле команды, подменяемое в сценарии отказа.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Change one admission boundary while retaining all remaining valid fields."""
+        """
+        Change one admission boundary while retaining all remaining valid fields.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -394,7 +473,6 @@ def test_command_acl_and_freshness(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Разделение секретов источника, приложения и gateway
 #------------------------------------------------------------------------------------------------------------------
@@ -402,9 +480,10 @@ def test_command_acl_and_freshness(
 def test_command_credentials_separate(
     tmp_path: Path,
     token: str,
-) -> None:
+    ) -> None:
 
-    """Reject provider and gateway credentials at application registration.
+    """
+    Reject provider and gateway credentials at application registration.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -416,13 +495,14 @@ def test_command_credentials_separate(
     # tmp_path — отдельный временный каталог теста.
     # token — отдельный секрет команд, не выводимый в сообщения и журнал.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check both directions of the source/application credential boundary."""
+        """
+        Check both directions of the source/application credential boundary.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -439,13 +519,15 @@ def test_command_credentials_separate(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет второй живой цели и возрождения истёкшей сессии
 #------------------------------------------------------------------------------------------------------------------
-def test_command_session_fencing(tmp_path: Path) -> None:
+def test_command_session_fencing(
+    tmp_path: Path,
+    ) -> None:
 
-    """Prevent duplicate live targets and refuse to revive expired process sessions.
+    """
+    Prevent duplicate live targets and refuse to revive expired process sessions.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -453,13 +535,14 @@ def test_command_session_fencing(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check registration idempotence, heartbeat and old-session fencing."""
+        """
+        Check registration idempotence, heartbeat and old-session fencing.
+        """
 
         rig = Rig(tmp_path, session_ttl=10)
         await rig.start()
@@ -488,7 +571,6 @@ def test_command_session_fencing(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Потеря ответа после commit без повторного callback
 #------------------------------------------------------------------------------------------------------------------
@@ -496,9 +578,10 @@ def test_command_session_fencing(tmp_path: Path) -> None:
 def test_command_lost_response_no_reexecution(
     tmp_path: Path,
     operation: str,
-) -> None:
+    ) -> None:
 
-    """Recover lost result receipts and refuse a second grant after a lost start response.
+    """
+    Recover lost result receipts and refuse a second grant after a lost start response.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -510,13 +593,14 @@ def test_command_lost_response_no_reexecution(
     # tmp_path — отдельный временный каталог теста.
     # operation — одна операция в пределах доступной ёмкости.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Inject one failure strictly after hub commit."""
+        """
+        Inject one failure strictly after hub commit.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -551,13 +635,15 @@ def test_command_lost_response_no_reexecution(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение хранения и запрет повышения прав
 #------------------------------------------------------------------------------------------------------------------
-def test_command_capacity_and_scope(tmp_path: Path) -> None:
+def test_command_capacity_and_scope(
+    tmp_path: Path,
+    ) -> None:
 
-    """Bound pending records and reject capabilities outside application permissions.
+    """
+    Bound pending records and reject capabilities outside application permissions.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -565,13 +651,14 @@ def test_command_capacity_and_scope(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Verify backpressure before source ACK and registration escalation."""
+        """
+        Verify backpressure before source ACK and registration escalation.
+        """
 
         rig = Rig(tmp_path, max_pending=1, max_sessions=1)
         await rig.start()
@@ -595,13 +682,15 @@ def test_command_capacity_and_scope(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимость срока команды от heartbeat
 #------------------------------------------------------------------------------------------------------------------
-def test_command_heartbeat_does_not_extend_command(tmp_path: Path) -> None:
+def test_command_heartbeat_does_not_extend_command(
+    tmp_path: Path,
+    ) -> None:
 
-    """Expire admitted work despite a renewed application lease.
+    """
+    Expire admitted work despite a renewed application lease.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -609,13 +698,14 @@ def test_command_heartbeat_does_not_extend_command(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Advance only deterministic time and inspect the terminal result."""
+        """
+        Advance only deterministic time and inspect the terminal result.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -634,13 +724,15 @@ def test_command_heartbeat_does_not_extend_command(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Один poll на сессию и пробуждение при остановке
 #------------------------------------------------------------------------------------------------------------------
-def test_command_poll_bounds_and_shutdown(tmp_path: Path) -> None:
+def test_command_poll_bounds_and_shutdown(
+    tmp_path: Path,
+    ) -> None:
 
-    """Wake a pending poll during shutdown and reject a second poll for the same session.
+    """
+    Wake a pending poll during shutdown and reject a second poll for the same session.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -648,13 +740,14 @@ def test_command_poll_bounds_and_shutdown(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use a real long wait which must be interrupted by hub closure."""
+        """
+        Use a real long wait which must be interrupted by hub closure.
+        """
 
         rig = Rig(tmp_path)
         rig.hub.config = replace(rig.hub.config, poll_timeout=5)
@@ -675,13 +768,15 @@ def test_command_poll_bounds_and_shutdown(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Занятый рабочий поток журнала после отмены ожидающего caller
 #------------------------------------------------------------------------------------------------------------------
-def test_command_worker_cancellation(tmp_path: Path) -> None:
+def test_command_worker_cancellation(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retain the single storage slot until a cancelled caller's actual commit finishes.
+    """
+    Retain the single storage slot until a cancelled caller's actual commit finishes.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -689,13 +784,14 @@ def test_command_worker_cancellation(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Block one store job and verify bounded rejection without blocking the loop."""
+        """
+        Block one store job and verify bounded rejection without blocking the loop.
+        """
 
         rig = Rig(tmp_path)
         # Проверяем явную отмену caller, а не скорость создания базы или timeout.
@@ -705,13 +801,14 @@ def test_command_worker_cancellation(tmp_path: Path) -> None:
         entered = threading.Event()
         released = threading.Event()
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставная запись, переживающая отмену ожидающего caller
         #----------------------------------------------------------------------------------------------------------
         def blocked() -> None:
 
-            """Simulate a storage operation whose caller may disappear."""
+            """
+            Simulate a storage operation whose caller may disappear.
+            """
 
             entered.set()
             released.wait(10)
@@ -736,13 +833,15 @@ def test_command_worker_cancellation(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Два приложения и два чата на одном hub
 #------------------------------------------------------------------------------------------------------------------
-def test_command_two_apps_and_chats(tmp_path: Path) -> None:
+def test_command_two_apps_and_chats(
+    tmp_path: Path,
+    ) -> None:
 
-    """Route two application identities on one hub without sharing credentials or chat permissions.
+    """
+    Route two application identities on one hub without sharing credentials or chat permissions.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -750,13 +849,14 @@ def test_command_two_apps_and_chats(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Admit commands from two chats and deny cross-application polling."""
+        """
+        Admit commands from two chats and deny cross-application polling.
+        """
 
         rig = Rig(tmp_path)
         other = replace(rig.identity, service="quotes", instance_id="two")
@@ -796,7 +896,6 @@ def test_command_two_apps_and_chats(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ при потере достоверного времени, прав или корреляции
 #------------------------------------------------------------------------------------------------------------------
@@ -804,9 +903,10 @@ def test_command_two_apps_and_chats(tmp_path: Path) -> None:
 def test_command_fail_closed_boundaries(
     tmp_path: Path,
     boundary: str,
-) -> None:
+    ) -> None:
 
-    """Check source scope, trusted UTC, transport delay, monotonic rollback and restart fencing.
+    """
+    Check source scope, trusted UTC, transport delay, monotonic rollback and restart fencing.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -818,13 +918,14 @@ def test_command_fail_closed_boundaries(
     # tmp_path — отдельный временный каталог теста.
     # boundary — проверяемая утрата необходимого условия выполнения.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Remove one prerequisite without allowing another command start."""
+        """
+        Remove one prerequisite without allowing another command start.
+        """
 
         rig = Rig(tmp_path)
 
@@ -848,16 +949,16 @@ def test_command_fail_closed_boundaries(
             elif boundary == "rtt":
                 original = rig.transport.exchange
 
-
                 #--------------------------------------------------------------------------------------------------
                 # ФУНКЦИЯ : Задержка ответа после сохранения разрешения hub
                 #--------------------------------------------------------------------------------------------------
                 async def delayed(
                     operation: str,
                     message: CommandMessage,
-                ) -> CommandMessage | CommandOffer | None:
+                    ) -> CommandMessage | CommandOffer | None:
 
-                    """Spend the entire execution budget after the committed grant leaves the hub.
+                    """
+                    Spend the entire execution budget after the committed grant leaves the hub.
 
                     :param operation: Single operation executed within the documented limits.
                     :type operation: str
@@ -911,9 +1012,12 @@ def test_command_fail_closed_boundaries(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Автоматическое продление регистрации клиентом
 #------------------------------------------------------------------------------------------------------------------
-def test_command_background_heartbeat(tmp_path: Path) -> None:
+def test_command_background_heartbeat(
+    tmp_path: Path,
+    ) -> None:
 
-    """Observe the actual background heartbeat rather than invoking the hub method directly.
+    """
+    Observe the actual background heartbeat rather than invoking the hub method directly.
 
     :param tmp_path: Isolated directory for both journals.
     :type tmp_path: Path
@@ -926,7 +1030,9 @@ def test_command_background_heartbeat(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Allow one real timer wakeup and verify that shutdown stops its task."""
+        """
+        Allow one real timer wakeup and verify that shutdown stops its task.
+        """
 
         rig = Rig(tmp_path, session_ttl=10)
         received = asyncio.Event()
@@ -938,9 +1044,10 @@ def test_command_background_heartbeat(tmp_path: Path) -> None:
         async def observed(
             operation: str,
             message: CommandMessage,
-        ) -> CommandMessage | CommandOffer | None:
+            ) -> CommandMessage | CommandOffer | None:
 
-            """Record heartbeat only after the hub has accepted its request.
+            """
+            Record heartbeat only after the hub has accepted its request.
 
             :param operation: Selected command transport operation.
             :type operation: str
@@ -975,8 +1082,6 @@ def test_command_background_heartbeat(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

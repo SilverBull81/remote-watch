@@ -1,53 +1,62 @@
 ﻿# Клиент команд с регистрацией, heartbeat и журналом разрешений на выполнение.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю.
+# -> CommandTicket: Сохранённое разрешение перед передачей команды исполнителю
 #
-# -> CommandClient: Регистрация приложения и получение разрешений на выполнение.
+# -> CommandClient: Регистрация приложения и получение разрешений на выполнение
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> session(): Чтение выданной регистрации приложения.
-#    -> health(): Чтение текущей готовности и истории отказов.
-#    -> journal_status(): Кэш сводки клиентского журнала.
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> acquire(): Подготовка команды и запись разрешения до callback.
-#    -> begin(): Однократная проверка права перед непосредственным вызовом callback.
-#    -> complete(): Сохранение результата callback и попытка его доставки.
-#    -> flush_results(): Повтор доставки сохранённых результатов без повторного исполнения.
-#    -> remaining(): Остаток срока для последней проверки в рабочем потоке.
-#    -> pending(): Чтение сохранённых записей для явного разбора неизвестных исходов.
-#    -> lookup(): Чтение одной записи, включая уже подтверждённый результат.
-#    -> reconcile(): Очистка заведомо неисполненных записей с сохранением UNKNOWN.
-#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> session(): Чтение выданной регистрации приложения
+#    -> health(): Чтение текущей готовности и истории отказов
+#    -> journal_status(): Кэш сводки клиентского журнала
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> acquire(): Подготовка команды и запись разрешения до callback
+#       Вложенные объявления:
+#       -> prepare(): Запись команды и выбор единственного claim_id
+#       -> start(): Фиксация STARTED перед передачей разрешения исполнителю
+#    -> begin(): Однократная проверка права перед непосредственным вызовом callback
+#    -> complete(): Сохранение результата callback и попытка его доставки
+#       Вложенные объявления:
+#       -> finish(): Сохранение точного результата выданного исполнения
+#    -> flush_results(): Повтор доставки сохранённых результатов без повторного исполнения
+#    -> remaining(): Остаток срока для последней проверки в рабочем потоке
+#    -> pending(): Чтение сохранённых записей для явного разбора неизвестных исходов
+#    -> lookup(): Чтение одной записи, включая уже подтверждённый результат
+#    -> reconcile(): Очистка заведомо неисполненных записей с сохранением UNKNOWN
+#       Вложенные объявления:
+#       -> retire(): Подтверждение истёкших записей без возможного callback
+#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 #    Служебные методы:
-#    -> _open_storage(): Наблюдение открытия локального журнала.
-#    -> _storage(): Наблюдение одной завершённой операции хранения.
-#    -> _refresh_results(): Проверка неподтверждённых результатов по журналу.
-#    -> _heartbeat_once(): Один проверенный обмен продления регистрации.
-#    -> _check(): Проверка жизненного цикла и владельца event loop.
-#    -> _now(): Проверка монотонного времени с запретом работы после отката.
-#    -> _live(): Проверка оставшегося срока регистрации клиента.
-#    -> _install_session(): Проверка корреляции и сокращение срока на полный RTT.
-#    -> _send_result(): Подтверждение локального результата только после квитанции hub.
-#    -> _reject(): Фиксация отказа до получения разрешения на исполнение.
-#    -> _release_remote(): Доставка отдельного подтверждения фактической остановки.
-#    -> _reconcile_ticket(): Восстановление занятости в памяти по подтверждённой записи журнала.
-#    -> _reconnect_once(): Сверка журнала и новая сессия без повторного callback.
-#    -> _keep_alive(): Последовательный heartbeat без накопления повторных запросов.
-#
+#    -> _open_storage(): Наблюдение открытия локального журнала
+#    -> _storage(): Наблюдение одной завершённой операции хранения
+#    -> _refresh_results(): Проверка неподтверждённых результатов по журналу
+#    -> _heartbeat_once(): Один проверенный обмен продления регистрации
+#    -> _check(): Проверка жизненного цикла и владельца event loop
+#    -> _now(): Проверка монотонного времени с запретом работы после отката
+#    -> _live(): Проверка оставшегося срока регистрации клиента
+#    -> _install_session(): Проверка корреляции и сокращение срока на полный RTT
+#    -> _send_result(): Подтверждение локального результата только после квитанции hub
+#    -> _reject(): Фиксация отказа до получения разрешения на исполнение
+#       Вложенные объявления:
+#       -> reject(): Запись отказа без разрешения запускать callback
+#    -> _release_remote(): Доставка отдельного подтверждения фактической остановки
+#    -> _reconcile_ticket(): Восстановление занятости в памяти по подтверждённой записи журнала
+#    -> _reconnect_once(): Сверка старой работы перед новой регистрацией
+#    -> _keep_alive(): Последовательный heartbeat без накопления повторных запросов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -78,27 +87,48 @@ from remote_watch.commands.state import CommandAction, CommandDeadline
 from remote_watch.commands.storage import CommandStore, StoredCommand
 from remote_watch.commands.transport import CommandError, CommandOffer, CommandTransport
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 T = TypeVar("T")
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Сохранённое разрешение перед передачей команды исполнителю
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandTicket:
-    """Hold a durably prepared command without invoking application callbacks."""
+    """
+    Hold a durably prepared command without invoking application callbacks.
+
+    :param grant: Exact hub execution grant bound to a request and claim.
+    :type grant: CommandGrant
+
+    :param deadline: Locally enforced command deadline.
+    :type deadline: CommandDeadline
+    """
 
     grant: CommandGrant         # Разрешение hub с точной командой и claim_id.
     deadline: CommandDeadline   # Срок выполнения на локальных часах клиента.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Регистрация приложения и получение разрешений на выполнение
 #------------------------------------------------------------------------------------------------------------------
 class CommandClient:
-    """Maintain a lease and durable handshake for a single cooperative application executor."""
-
+    """
+    Maintain a lease and durable handshake for a single cooperative application executor.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -115,9 +145,10 @@ class CommandClient:
         reconnect_delay: float = 1.0,
         reconnect_max_delay: float = 30.0,
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Configure a command client without opening network or journal resources.
+        """
+        Configure a command client without opening network or journal resources.
 
         :param registration: Explicit identity, process nonce and allowed capabilities.
         :type registration: CommandRegistration
@@ -193,14 +224,16 @@ class CommandClient:
         self._health = HealthState()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение выданной регистрации приложения
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def session(self) -> CommandSession:
+    def session(
+        self,
+        ) -> CommandSession:
 
-        """Return the authenticated session after startup.
+        """
+        Return the authenticated session after startup.
 
         :return: Exact registration with a conservative remaining lifetime.
         :rtype: CommandSession
@@ -213,14 +246,16 @@ class CommandClient:
         return self._session
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение текущей готовности и истории отказов
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def health(self) -> CommandHealth:
+    def health(
+        self,
+        ) -> CommandHealth:
 
-        """Read stage health from any thread without network or journal access.
+        """
+        Read stage health from any thread without network or journal access.
 
         :return: Immutable observations and current lease validity.
         :rtype: CommandHealth
@@ -229,14 +264,16 @@ class CommandClient:
         return self._health.snapshot(self._clock(), self._last)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Кэш сводки клиентского журнала
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def journal_status(self) -> dict:
+    def journal_status(
+        self,
+        ) -> dict:
 
-        """Read cached journal metrics from any thread without I/O or new registration.
+        """
+        Read cached journal metrics from any thread without I/O or new registration.
 
         :return: Fixed observation state, age and optional last successful snapshot.
         :rtype: dict
@@ -249,9 +286,13 @@ class CommandClient:
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
     @observe("heartbeat")
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Register the exact application identity and start one heartbeat task."""
+        """
+        Register the exact application identity and start one heartbeat task.
+        """
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
@@ -270,7 +311,6 @@ class CommandClient:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка команды и запись разрешения до callback
     #--------------------------------------------------------------------------------------------------------------
@@ -278,9 +318,10 @@ class CommandClient:
     async def acquire(
         self,
         validate: Callable[[CommandRequest, float], Awaitable[CommandReason | None]] | None = None,
-    ) -> CommandTicket | None:
+        ) -> CommandTicket | None:
 
-        """Persist the start permission before returning one command to the executor.
+        """
+        Persist the start permission before returning one command to the executor.
 
         :param validate: Optional argument check before requesting the execution grant.
         :type validate: Callable[[CommandRequest, float], Awaitable[CommandReason | None]] | None
@@ -317,13 +358,13 @@ class CommandClient:
                 offer.remaining_ttl, sent, self._now(), self.session.hub_epoch)
             lease = self._live()
 
-
             #------------------------------------------------------------------------------------------------------
             # ФУНКЦИЯ : Запись команды и выбор единственного claim_id
             #------------------------------------------------------------------------------------------------------
             def prepare() -> CommandClaim | None:
 
-                """Deduplicate the offer and durably select one claim identifier.
+                """
+                Deduplicate the offer and durably select one claim identifier.
 
                 :return: Durably selected execution claim, or None for terminal work.
                 :rtype: CommandClaim | None
@@ -370,13 +411,13 @@ class CommandClient:
                 grant.execution_timeout, sent, self._now(), self.session.hub_epoch)
             lease = self._live()
 
-
             #------------------------------------------------------------------------------------------------------
             # ФУНКЦИЯ : Фиксация STARTED перед передачей разрешения исполнителю
             #------------------------------------------------------------------------------------------------------
             def start() -> CommandTicket | None:
 
-                """Commit STARTED before handing execution ownership to the caller.
+                """
+                Commit STARTED before handing execution ownership to the caller.
 
                 :return: Durably prepared execution ticket, or None when no start is allowed.
                 :rtype: CommandTicket | None
@@ -404,16 +445,16 @@ class CommandClient:
             self._acquiring = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Однократная проверка права перед непосредственным вызовом callback
     #--------------------------------------------------------------------------------------------------------------
     def begin(
         self,
         ticket: CommandTicket,
-    ) -> bool:
+        ) -> bool:
 
-        """Consume the execution permission once, immediately before invoking a callback.
+        """
+        Consume the execution permission once, immediately before invoking a callback.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -432,7 +473,6 @@ class CommandClient:
         return self.remaining(ticket) > 0
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сохранение результата callback и попытка его доставки
     #--------------------------------------------------------------------------------------------------------------
@@ -442,9 +482,10 @@ class CommandClient:
         ticket: CommandTicket,
         result: CommandResult,
         execution_finished: bool = True,
-    ) -> None:
+        ) -> None:
 
-        """Commit a completed callback result before attempting its delivery to the hub.
+        """
+        Commit a completed callback result before attempting its delivery to the hub.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -470,13 +511,14 @@ class CommandClient:
                 or result.claim_id != grant.claim_id):
             raise CommandError("invalid")
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Сохранение точного результата выданного исполнения
         #----------------------------------------------------------------------------------------------------------
         def finish() -> None:
 
-            """Retain the exact result even when the following HTTP exchange fails."""
+            """
+            Retain the exact result even when the following HTTP exchange fails.
+            """
 
             store = self._worker.store
             stored = store.get(result.ref)
@@ -500,14 +542,17 @@ class CommandClient:
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Повтор доставки сохранённых результатов без повторного исполнения
     #--------------------------------------------------------------------------------------------------------------
     @observe("result")
-    async def flush_results(self) -> None:
+    async def flush_results(
+        self,
+        ) -> None:
 
-        """Retry persisted results without replaying callbacks or old process sessions."""
+        """
+        Retry persisted results without replaying callbacks or old process sessions.
+        """
 
         self._check()
         await self.reconcile()
@@ -534,16 +579,16 @@ class CommandClient:
         await self._refresh_results()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остаток срока для последней проверки в рабочем потоке
     #--------------------------------------------------------------------------------------------------------------
     def remaining(
         self,
         ticket: CommandTicket,
-    ) -> float:
+        ) -> float:
 
-        """Read the conservative remaining execution budget, including from the callback worker.
+        """
+        Read the conservative remaining execution budget, including from the callback worker.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -566,13 +611,15 @@ class CommandClient:
                    self._lease.remaining(now, self._session.hub_epoch))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение сохранённых записей для явного разбора неизвестных исходов
     #--------------------------------------------------------------------------------------------------------------
-    async def pending(self) -> tuple[StoredCommand, ...]:
+    async def pending(
+        self,
+        ) -> tuple[StoredCommand, ...]:
 
-        """Expose retained records for explicit local reconciliation, without replaying them.
+        """
+        Expose retained records for explicit local reconciliation, without replaying them.
 
         :return: Up to 1000 unacknowledged or still active local journal records.
         :rtype: tuple[StoredCommand, ...]
@@ -582,16 +629,16 @@ class CommandClient:
         return await self._storage(lambda: self._worker.store.pending(limit=1000))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение одной записи, включая уже подтверждённый результат
     #--------------------------------------------------------------------------------------------------------------
     async def lookup(
         self,
         ref: CommandRef,
-    ) -> StoredCommand | None:
+        ) -> StoredCommand | None:
 
-        """Read one retained record, including an already acknowledged callback result.
+        """
+        Read one retained record, including an already acknowledged callback result.
 
         :param ref: Exact identity, process session, hub epoch and command identifier.
         :type ref: CommandRef
@@ -606,26 +653,30 @@ class CommandClient:
         return await self._storage(lambda: self._worker.store.get(ref))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Очистка заведомо неисполненных записей с сохранением UNKNOWN
     #--------------------------------------------------------------------------------------------------------------
-    async def reconcile(self) -> None:
+    async def reconcile(
+        self,
+        ) -> None:
 
-        """Retire provably unexecuted expired records while retaining unknown executions for review."""
+        """
+        Retire provably unexecuted expired records while retaining unknown executions for review.
+        """
 
         self._check()
         await self._reconcile_ticket()
         session = self.session
         lease = self._lease
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подтверждение истёкших записей без возможного callback
         #----------------------------------------------------------------------------------------------------------
         def retire() -> None:
 
-            """Acknowledge only records which cannot represent an executed callback."""
+            """
+            Acknowledge only records which cannot represent an executed callback.
+            """
 
             store = self._worker.store
             for row in store.pending(limit=1000):
@@ -648,7 +699,6 @@ class CommandClient:
         await self._storage(retire)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение фактического окончания ранее неизвестного исполнения
     #--------------------------------------------------------------------------------------------------------------
@@ -656,9 +706,10 @@ class CommandClient:
     async def release(
         self,
         ticket: CommandTicket,
-    ) -> None:
+        ) -> None:
 
-        """Release a timed-out execution only after the executor observed its actual termination.
+        """
+        Release a timed-out execution only after the executor observed its actual termination.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -678,13 +729,16 @@ class CommandClient:
         await self._send_result(result)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Stop heartbeat and close owned resources without claiming callback termination."""
+        """
+        Stop heartbeat and close owned resources without claiming callback termination.
+        """
 
         if self._closed:
             return
@@ -703,18 +757,20 @@ class CommandClient:
             await asyncio.wait({self._heartbeat}, timeout=0)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Наблюдение открытия локального журнала
     #--------------------------------------------------------------------------------------------------------------
     @observe("storage")
-    async def _open_storage(self) -> None:
+    async def _open_storage(
+        self,
+        ) -> None:
 
-        """Observe journal startup without changing worker ownership."""
+        """
+        Observe journal startup without changing worker ownership.
+        """
 
         await self._worker.open()
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Наблюдение одной завершённой операции хранения
@@ -723,9 +779,10 @@ class CommandClient:
     async def _storage(
         self,
         operation: Callable[[], T],
-    ) -> T:
+        ) -> T:
 
-        """Observe actual worker completion; timeout never reports recovery.
+        """
+        Observe actual worker completion; timeout never reports recovery.
 
         :param operation: One bounded journal operation.
         :type operation: Callable[[], T]
@@ -738,13 +795,16 @@ class CommandClient:
         return await self._worker.call(operation)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка неподтверждённых результатов по журналу
     #--------------------------------------------------------------------------------------------------------------
-    async def _refresh_results(self) -> None:
+    async def _refresh_results(
+        self,
+        ) -> None:
 
-        """Clear pending delivery only after a bounded durable journal inspection."""
+        """
+        Clear pending delivery only after a bounded durable journal inspection.
+        """
 
         rows = await self._storage(lambda: self._worker.store.pending(limit=1000))
         # Полная порция может скрывать продолжение. В этом случае готовность консервативна.
@@ -754,14 +814,17 @@ class CommandClient:
         self._health.pending(pending)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Один проверенный обмен продления регистрации
     #--------------------------------------------------------------------------------------------------------------
     @observe("heartbeat")
-    async def _heartbeat_once(self) -> None:
+    async def _heartbeat_once(
+        self,
+        ) -> None:
 
-        """Recover heartbeat only after validating the renewed session and its remaining lease."""
+        """
+        Recover heartbeat only after validating the renewed session and its remaining lease.
+        """
 
         self._live()
         sent = self._now()
@@ -769,26 +832,31 @@ class CommandClient:
         self._install_session(response, sent)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка жизненного цикла и владельца event loop
     #--------------------------------------------------------------------------------------------------------------
-    def _check(self) -> None:
+    def _check(
+        self,
+        ) -> None:
 
-        """Reject use outside the owning event loop or after shutdown."""
+        """
+        Reject use outside the owning event loop or after shutdown.
+        """
 
         if self._closed or self._loop is None or asyncio.get_running_loop() is not self._loop:
             raise CommandError("closed")
         self._now()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка монотонного времени с запретом работы после отката
     #--------------------------------------------------------------------------------------------------------------
-    def _now(self) -> float:
+    def _now(
+        self,
+        ) -> float:
 
-        """Invalidate this client permanently if its monotonic clock rolls back.
+        """
+        Invalidate this client permanently if its monotonic clock rolls back.
 
         :return: Current validated monotonic time in seconds.
         :rtype: float
@@ -804,13 +872,15 @@ class CommandClient:
         return now
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка оставшегося срока регистрации клиента
     #--------------------------------------------------------------------------------------------------------------
-    def _live(self) -> CommandDeadline:
+    def _live(
+        self,
+        ) -> CommandDeadline:
 
-        """Require an unexpired local lease before acquiring or starting new work.
+        """
+        Require an unexpired local lease before acquiring or starting new work.
 
         :return: Conservative local deadline in the shared monotonic domain.
         :rtype: CommandDeadline
@@ -823,7 +893,6 @@ class CommandClient:
         return self._lease
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка корреляции и сокращение срока на полный RTT
     #--------------------------------------------------------------------------------------------------------------
@@ -831,9 +900,10 @@ class CommandClient:
         self,
         response: CommandSession,
         sent: float,
-    ) -> None:
+        ) -> None:
 
-        """Verify identity and epoch before replacing the conservative local lease.
+        """
+        Verify identity and epoch before replacing the conservative local lease.
 
         :param response: Authenticated registration returned by the hub.
         :type response: CommandSession
@@ -861,7 +931,6 @@ class CommandClient:
         self._health.lease(lease.expires_at)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Подтверждение локального результата только после квитанции hub
     #--------------------------------------------------------------------------------------------------------------
@@ -869,9 +938,10 @@ class CommandClient:
     async def _send_result(
         self,
         result: CommandResult,
-    ) -> None:
+        ) -> None:
 
-        """Acknowledge local storage only after an exact durable hub receipt.
+        """
+        Acknowledge local storage only after an exact durable hub receipt.
 
         :param result: Correlated terminal result whose exact contents must be retained.
         :type result: CommandResult
@@ -893,7 +963,6 @@ class CommandClient:
         await self._refresh_results()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Фиксация отказа до получения разрешения на исполнение
     #--------------------------------------------------------------------------------------------------------------
@@ -902,9 +971,10 @@ class CommandClient:
         self,
         claim: CommandClaim,
         reason: CommandReason,
-    ) -> None:
+        ) -> None:
 
-        """Persist a failed pre-execution validation before reporting it to the hub.
+        """
+        Persist a failed pre-execution validation before reporting it to the hub.
 
         :param claim: Correlated request for a single execution permission.
         :type claim: CommandClaim
@@ -921,13 +991,13 @@ class CommandClient:
         result = CommandResult(ref=claim.ref, claim_id=claim.claim_id,
                                outcome=CommandOutcome.REJECTED, reason=reason)
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Запись отказа без разрешения запускать callback
         #----------------------------------------------------------------------------------------------------------
         def reject() -> CommandResult:
 
-            """Record rejection without granting callback permission.
+            """
+            Record rejection without granting callback permission.
 
             :return: Correlated bounded outcome without callback exception details.
             :rtype: CommandResult
@@ -953,7 +1023,6 @@ class CommandClient:
             await self._storage(lambda: self._worker.store.acknowledge(saved))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Доставка отдельного подтверждения фактической остановки
     #--------------------------------------------------------------------------------------------------------------
@@ -961,9 +1030,10 @@ class CommandClient:
     async def _release_remote(
         self,
         result: CommandResult,
-    ) -> None:
+        ) -> None:
 
-        """Confirm actual termination separately from the earlier UNKNOWN result.
+        """
+        Confirm actual termination separately from the earlier UNKNOWN result.
 
         :param result: Correlated terminal result whose exact contents must be retained.
         :type result: CommandResult
@@ -981,13 +1051,16 @@ class CommandClient:
             raise CommandError("outcome_conflict")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Восстановление занятости в памяти по подтверждённой записи журнала
     #--------------------------------------------------------------------------------------------------------------
-    async def _reconcile_ticket(self) -> None:
+    async def _reconcile_ticket(
+        self,
+        ) -> None:
 
-        """Release stale in-memory ownership only after durable completion and acknowledgement."""
+        """
+        Release stale in-memory ownership only after durable completion and acknowledgement.
+        """
 
         if self._active is None:
             return
@@ -1001,13 +1074,15 @@ class CommandClient:
             self._active = None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Сверка старой работы перед новой регистрацией
     #--------------------------------------------------------------------------------------------------------------
-    async def _reconnect_once(self) -> bool:
+    async def _reconnect_once(
+        self,
+        ) -> bool:
 
-        """Reconcile the old session before installing one idempotent replacement.
+        """
+        Reconcile the old session before installing one idempotent replacement.
 
         :return: True when registration completed; False while application work remains active.
         :rtype: bool
@@ -1069,9 +1144,13 @@ class CommandClient:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Последовательный heartbeat без накопления повторных запросов
     #--------------------------------------------------------------------------------------------------------------
-    async def _keep_alive(self) -> None:
+    async def _keep_alive(
+        self,
+        ) -> None:
 
-        """Send sequential heartbeats without an accumulating retry queue."""
+        """
+        Send sequential heartbeats without an accumulating retry queue.
+        """
 
         delay = self._reconnect_delay
         while not self._closed:
@@ -1133,7 +1212,6 @@ class CommandClient:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

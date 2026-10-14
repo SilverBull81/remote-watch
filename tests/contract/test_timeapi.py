@@ -1,21 +1,31 @@
 ﻿# Проверки TimeAPI через локальный TLS: формат UTC, границы ответа и отказ при сбое.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-114053
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_timeapi_tls(): Настоящий TLS и обработка ответов API.
-# -> test_timeapi_settings(): Отказ от небезопасных настроек до открытия соединения.
-# -> test_timeapi_probe(): Код возврата диагностики и безопасный вывод при ошибке.
-# -> test_timeapi_fraction(): Дробные секунды API, включая формат для Python 3.10.
+# -> test_timeapi_tls(): Проверка времени через локальный HTTPS и обработка недопустимых ответов
+#    Вложенные объявления:
+#    -> scenario(): Работа локального сервера и библиотечного клиента в одном цикле
+#       Вложенные объявления:
+#       -> handler(): Подставной ответ TimeAPI
+#
+# -> test_timeapi_settings(): Запрет небезопасных настроек источника
+#
+# -> test_timeapi_probe(): Конечная диагностика и безопасный отказ
+#    Вложенные объявления:
+#    -> sample(): Подставное показание времени для проверки CLI
+#
+# -> test_timeapi_fraction(): Разная точность времени API без зависимости от версии fromisoformat
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -33,6 +43,12 @@ from remote_watch.adapters.timeapi import TimeApiTimeSource, _parse_time
 from remote_watch.commands.time import TimeSample, TimeUnavailable, TrustedClock
 from remote_watch.diagnostics import time_probe
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка времени через локальный HTTPS и обработка недопустимых ответов
@@ -45,9 +61,10 @@ from remote_watch.diagnostics import time_probe
 def test_timeapi_tls(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Exercise the real TLS transport and strict TimeAPI response validation.
+    """
+    Exercise the real TLS transport and strict TimeAPI response validation.
 
     :param tmp_path: Temporary certificate directory.
     :type tmp_path: Path
@@ -71,7 +88,9 @@ def test_timeapi_tls(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Serve synthetic UTC without using real provider credentials or public networking."""
+        """
+        Serve synthetic UTC without using real provider credentials or public networking.
+        """
 
         seen = []
         entered = asyncio.Event()
@@ -80,9 +99,12 @@ def test_timeapi_tls(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной ответ TimeAPI
         #----------------------------------------------------------------------------------------------------------
-        async def handler(request: web.Request) -> web.Response:
+        async def handler(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Return one controlled TimeAPI response.
+            """
+            Return one controlled TimeAPI response.
 
             :param request: Incoming HTTPS request to the test server.
             :type request: web.Request
@@ -190,7 +212,6 @@ def test_timeapi_tls(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет небезопасных настроек источника
 #------------------------------------------------------------------------------------------------------------------
@@ -199,9 +220,12 @@ def test_timeapi_tls(
     {"endpoint": "https://host/time?q=secret"}, {"accuracy": -1}, {"accuracy": float("nan")},
     {"accuracy": 6}, {"timeout": 0}, {"timeout": 31}, {"clock": None},
 ])
-def test_timeapi_settings(settings: dict[str, object]) -> None:
+def test_timeapi_settings(
+    settings: dict[str, object],
+    ) -> None:
 
-    """Reject unsafe settings without making a network request.
+    """
+    Reject unsafe settings without making a network request.
 
     :param settings: Constructor arguments containing one invalid value.
     :type settings: dict[str, object]
@@ -213,7 +237,6 @@ def test_timeapi_settings(settings: dict[str, object]) -> None:
         TimeApiTimeSource(**settings)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конечная диагностика и безопасный отказ
 #------------------------------------------------------------------------------------------------------------------
@@ -222,9 +245,10 @@ def test_timeapi_probe(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     failed: bool,
-) -> None:
+    ) -> None:
 
-    """Verify CLI exit codes and output using a deterministic source.
+    """
+    Verify CLI exit codes and output using a deterministic source.
 
     :param monkeypatch: Dependency replacement fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -243,9 +267,12 @@ def test_timeapi_probe(
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Подставное показание времени для проверки CLI
     #--------------------------------------------------------------------------------------------------------------
-    async def sample(self: TimeApiTimeSource) -> TimeSample:
+    async def sample(
+        self: TimeApiTimeSource,
+        ) -> TimeSample:
 
-        """Return a bounded interval or a private synthetic error.
+        """
+        Return a bounded interval or a private synthetic error.
 
         :return: Synthetic UTC bounds tied to the source monotonic clock.
         :rtype: TimeSample
@@ -263,14 +290,16 @@ def test_timeapi_probe(
     assert "private" not in json.dumps(row)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Разная точность времени API без зависимости от версии fromisoformat
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("fraction", ["", "1", "12", "123", "1234", "12345", "123456", "1234567"])
-def test_timeapi_fraction(fraction: str) -> None:
+def test_timeapi_fraction(
+    fraction: str,
+    ) -> None:
 
-    """Preserve decimal precision while accepting provider timestamps on Python 3.10.
+    """
+    Preserve decimal precision while accepting provider timestamps on Python 3.10.
 
     :param fraction: Fractional-second digits, including an absent fraction.
     :type fraction: str
@@ -289,8 +318,6 @@ def test_timeapi_fraction(fraction: str) -> None:
     assert resolution == 10 ** -min(len(fraction), 6)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

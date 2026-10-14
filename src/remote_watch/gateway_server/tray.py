@@ -1,34 +1,34 @@
-﻿# Необязательная иконка Windows: состояние manager и общая команда остановки.
+﻿# Необязательная иконка Windows: состояние сервера и общая команда остановки.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> GatewayTray: Иконка состояния и команда общей остановки в Windows.
+# Классы:
+# -> GatewayTray: Иконка состояния и команда общей остановки в Windows
 #    Конструктор:
-#    -> __init__(): Создание объекта без запуска рабочих ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Подготовка ресурсов и запуск фоновой работы.
-#    -> update(): Обновление подписи иконки по состоянию сервера.
-#    -> ready(): Проверка живого цикла трея без обращения к GUI.
-#    -> close(): Освобождение только собственных ресурсов.
+#    -> start(): Подготовка ресурсов и запуск фоновой работы
+#    -> update(): Обновление подписи иконки по состоянию сервера
+#    -> ready(): Проверка живого цикла трея без обращения к GUI
+#    -> close(): Освобождение только собственных ресурсов
 #    Служебные методы:
-#    -> _request_stop(): Передача команды трея в общий механизм остановки.
-#    -> _setup(): Подтверждение видимости иконки.
-#    -> _run(): Цикл сообщений Windows без вывода приватных исключений.
-#    -> _stop_icon(): Остановка GUI без вывода исключения backend.
+#    -> _request_stop(): Передача команды трея в общий механизм остановки
+#    -> _setup(): Подтверждение видимости иконки
+#    -> _run(): Цикл сообщений Windows без вывода приватных исключений
+#    -> _stop_icon(): Остановка GUI без вывода исключения backend
 #
 # Функции:
-# -> default_icon(): Поиск ICO из корневой logo или установленного окружения.
-#
+# -> default_icon(): Поиск стандартной иконки в исходном проекте либо установленном окружении
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import os
@@ -38,13 +38,20 @@ from datetime import date
 from importlib.metadata import distribution, version
 from pathlib import Path
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Иконка состояния и команда общей остановки в Windows
 #------------------------------------------------------------------------------------------------------------------
 class GatewayTray:
-
-    """Keep GUI ownership separate from the asyncio supervisor and optional on headless hosts."""
+    """
+    Keep GUI ownership separate from the asyncio supervisor and optional on headless hosts.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -56,9 +63,10 @@ class GatewayTray:
         *,
         exit_callback: Callable[[], None] | None = None,
         title_prefix: str = "Remote Watch: ",
-    ) -> None:
+        ) -> None:
 
-        """Retain only a thread-safe stop callback.
+        """
+        Retain only a thread-safe stop callback.
 
         :param stop: Schedule common manager shutdown from the tray thread.
         :type stop: Callable[[], None]
@@ -75,7 +83,7 @@ class GatewayTray:
 
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
         # icon_path — файл читается только при явном запуске GUI.
-        # exit_callback/title_prefix — служебный controller живёт отдельно от manager.
+        # exit_callback/title_prefix — служебный контроллер трея работает отдельно от управляющего процесса.
         self._stop = stop
         self._exit_callback = exit_callback
         self._title_prefix = title_prefix
@@ -90,9 +98,13 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка ресурсов и запуск фоновой работы
     #--------------------------------------------------------------------------------------------------------------
-    def start(self) -> None:
+    def start(
+        self,
+        ) -> None:
 
-        """Start the optional Windows UI without blocking its host console."""
+        """
+        Start the optional Windows UI without blocking its host console.
+        """
 
         if os.name != "nt":
             raise RuntimeError("tray_requires_windows")
@@ -131,9 +143,10 @@ class GatewayTray:
     def update(
         self,
         state: str,
-    ) -> None:
+        ) -> None:
 
-        """Update the tooltip from fixed supervisor state only.
+        """
+        Update the tooltip from fixed supervisor state only.
 
         :param state: Sanitized manager lifecycle state.
         :type state: str
@@ -152,9 +165,12 @@ class GatewayTray:
     # ИНТЕРФЕЙС : Проверка живого цикла трея без обращения к GUI
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def ready(self) -> bool:
+    def ready(
+        self,
+        ) -> bool:
 
-        """Read cached GUI readiness without calling the native backend.
+        """
+        Read cached GUI readiness without calling the native backend.
 
         :return: Whether the initialized tray thread is alive and has not failed.
         :rtype: bool
@@ -166,9 +182,13 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение только собственных ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Stop the icon and bound its thread join."""
+        """
+        Stop the icon and bound its thread join.
+        """
 
         if self._icon is not None:
             # Неисправный GUI не должен удерживать остановку серверных процессов.
@@ -186,9 +206,10 @@ class GatewayTray:
         self,
         icon: object,
         item: object,
-    ) -> None:
+        ) -> None:
 
-        """Dispatch the menu action without doing process work on the GUI thread.
+        """
+        Dispatch the menu action without doing process work on the GUI thread.
 
         :param icon: pystray callback argument.
         :type icon: object
@@ -207,9 +228,10 @@ class GatewayTray:
     def _setup(
         self,
         icon: object,
-    ) -> None:
+        ) -> None:
 
-        """Signal readiness only after the icon becomes visible.
+        """
+        Signal readiness only after the icon becomes visible.
 
         :param icon: Initialized pystray icon.
         :type icon: object
@@ -223,9 +245,13 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Цикл сообщений Windows без вывода приватных исключений
     #--------------------------------------------------------------------------------------------------------------
-    def _run(self) -> None:
+    def _run(
+        self,
+        ) -> None:
 
-        """Run the Windows message loop without printing third-party exceptions."""
+        """
+        Run the Windows message loop without printing third-party exceptions.
+        """
 
         try:
             self._icon.run(setup=self._setup)
@@ -237,9 +263,13 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Остановка GUI без вывода исключения backend
     #--------------------------------------------------------------------------------------------------------------
-    def _stop_icon(self) -> None:
+    def _stop_icon(
+        self,
+        ) -> None:
 
-        """Keep a failing native stop operation away from the supervisor loop."""
+        """
+        Keep a failing native stop operation away from the supervisor loop.
+        """
 
         try:
             self._icon.stop()
@@ -249,12 +279,17 @@ class GatewayTray:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Поиск стандартной иконки в исходном проекте либо установленном окружении
 #------------------------------------------------------------------------------------------------------------------
 def default_icon() -> Path:
 
-    """Locate the canonical checkout icon or its installed data-file copy.
+    """
+    Locate the canonical checkout icon or its installed data-file copy.
 
     :return: Absolute icon path independent of the current working directory.
     :rtype: Path
@@ -279,8 +314,6 @@ def default_icon() -> Path:
     raise FileNotFoundError("default_gateway_icon_missing")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

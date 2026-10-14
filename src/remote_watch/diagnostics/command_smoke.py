@@ -1,31 +1,33 @@
 ﻿# Конечная проверка команд с телефона на безопасном тестовом состоянии.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> SmokeApplication: Безопасное приложение для проверки команд с телефона.
+# -> SmokeApplication: Безопасное приложение для проверки команд с телефона
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> status(): Проверка флага подставной загрузки.
-#    -> suspend_load(): Приостановка подставной загрузки.
-#    -> resume_load(): Разрешение только подставной загрузки.
-#    -> report(): Ограниченный отчёт о тестовом состоянии.
+#    -> status(): Проверка флага подставной загрузки
+#    -> suspend_load(): Приостановка подставной загрузки
+#    -> resume_load(): Разрешение только подставной загрузки
+#    -> report(): Ограниченный отчёт о тестовом состоянии
 #    Служебные методы:
-#    -> _record(): Учёт результата подставного обработчика.
+#    -> _record(): Учёт результата подставного обработчика
 #
 # Функции:
-# -> run_smoke(): Конечный запуск тестового приложения и сохранение отчёта.
-# -> main(): Разбор параметров и явный запуск выбранного режима.
+# -> run_smoke(): Конечный запуск тестового приложения и сохранение отчёта
+#
+# -> main(): Разбор параметров и явный запуск выбранного режима
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import argparse
@@ -40,20 +42,31 @@ from remote_watch import CommandRegistry, RemoteWatcher, WatcherConfig
 from remote_watch.gateway.command_config import CommandConfigError, load_command_client
 from remote_watch.gateway.commands import CommandParser
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасное приложение для проверки команд с телефона
 #------------------------------------------------------------------------------------------------------------------
 class SmokeApplication:
-    """Expose harmless application-owned commands over an isolated in-memory state."""
-
+    """
+    Expose harmless application-owned commands over an isolated in-memory state.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Create a local loading flag and a bounded observation history."""
+        """
+        Create a local loading flag and a bounded observation history.
+        """
 
         self.paused = threading.Event()
         self._lock = threading.Lock()
@@ -61,13 +74,15 @@ class SmokeApplication:
         self._count = 0
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка флага подставной загрузки
     #--------------------------------------------------------------------------------------------------------------
-    def status(self) -> str:
+    def status(
+        self,
+        ) -> str:
 
-        """Report the synthetic state without observing a real application.
+        """
+        Report the synthetic state without observing a real application.
 
         :return: Human-readable state of the synthetic loading flag.
         :rtype: str
@@ -76,13 +91,15 @@ class SmokeApplication:
         return self._record("status")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Приостановка подставной загрузки
     #--------------------------------------------------------------------------------------------------------------
-    def suspend_load(self) -> str:
+    def suspend_load(
+        self,
+        ) -> str:
 
-        """Pause only the synthetic loading flag.
+        """
+        Pause only the synthetic loading flag.
 
         :return: Confirmation that the synthetic loading flag pauses work.
         :rtype: str
@@ -92,13 +109,15 @@ class SmokeApplication:
         return self._record("suspend")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Разрешение только подставной загрузки
     #--------------------------------------------------------------------------------------------------------------
-    def resume_load(self) -> str:
+    def resume_load(
+        self,
+        ) -> str:
 
-        """Resume only the synthetic loading flag.
+        """
+        Resume only the synthetic loading flag.
 
         :return: Confirmation that the synthetic loading flag permits work.
         :rtype: str
@@ -108,13 +127,15 @@ class SmokeApplication:
         return self._record("resume")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ограниченный отчёт о тестовом состоянии
     #--------------------------------------------------------------------------------------------------------------
-    def report(self) -> dict[str, object]:
+    def report(
+        self,
+        ) -> dict[str, object]:
 
-        """Return bounded nonsecret observations without command IDs or connection settings.
+        """
+        Return bounded nonsecret observations without command IDs or connection settings.
 
         :return: Bounded nonsecret smoke observations and their sequence verdict.
         :rtype: dict[str, object]
@@ -128,16 +149,16 @@ class SmokeApplication:
                     "sequence_verified": verified, "observations": list(history)}
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Учёт результата подставного обработчика
     #--------------------------------------------------------------------------------------------------------------
     def _record(
         self,
         name: str,
-    ) -> str:
+        ) -> str:
 
-        """Record one callback completion with the observed test flag.
+        """
+        Record one callback completion with the observed test flag.
 
         :param name: Application command or smoke observation name.
         :type name: str
@@ -160,6 +181,10 @@ class SmokeApplication:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конечный запуск тестового приложения и сохранение отчёта
 #------------------------------------------------------------------------------------------------------------------
@@ -167,9 +192,10 @@ def run_smoke(
     config: Path,
     duration: float,
     report: Path | None = None,
-) -> int:
+    ) -> int:
 
-    """Run a finite explicit field scenario and always stop the owned watcher.
+    """
+    Run a finite explicit field scenario and always stop the owned watcher.
 
     :param config: Explicit credentials, access rules and finite limits.
     :type config: Path
@@ -214,13 +240,15 @@ def run_smoke(
     return 0 if result["sequence_verified"] else 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор параметров и явный запуск выбранного режима
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Run an explicitly configured harmless command test without printing private settings.
+    """
+    Run an explicitly configured harmless command test without printing private settings.
 
     :param argv: Explicit CLI arguments, or None for the process arguments.
     :type argv: Sequence[str] | None
@@ -249,7 +277,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Явный запуск CLI
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

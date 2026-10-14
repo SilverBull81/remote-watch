@@ -1,32 +1,39 @@
 ﻿# Формат запроса и ответа одной попытки доставки через gateway.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationGatewayRequest: Версионированный запрос одной попытки через gateway.
+# -> NotificationGatewayRequest: Версионированный запрос одной попытки через gateway
 #    Интерфейс:
-#    -> to_dict(): Данные запроса без секретов и локальных настроек.
-#    -> from_bytes(): Проверка входящего JSON и создание запроса.
+#    -> to_dict(): Данные запроса без секретов и локальных настроек
+#    -> from_bytes(): Проверка входящего JSON и создание запроса
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек и ограничений.
+#    -> __post_init__(): Проверка настроек и ограничений
 #
 # Функции:
-# -> validate_alias(): Проверка логического имени получателя на gateway.
-# -> _object(): Запрет повторяющихся ключей JSON.
-# -> _decode(): Разбор ограниченного JSON без неоднозначных полей.
-# -> _keys(): Проверка версии и точного состава envelope.
-# -> encode_json(): Единое кодирование проверяемых и отправляемых данных.
-# -> encode_response(): Кодирование безопасного результата с корреляцией попытки.
-# -> decode_response(): Проверка ответа и его принадлежности текущей попытке.
+# -> encode_json(): Единое кодирование проверяемых и отправляемых данных
+#
+# -> validate_alias(): Проверка логического имени получателя на gateway
+#
+# -> _object(): Запрет повторяющихся ключей JSON
+#
+# -> _decode(): Разбор ограниченного JSON без неоднозначных полей
+#
+# -> _keys(): Проверка версии и точного состава envelope
+#
+# -> encode_response(): Кодирование безопасного результата с корреляцией попытки
+#
+# -> decode_response(): Проверка ответа и его принадлежности текущей попытке
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -42,18 +49,34 @@ from remote_watch.notifications.delivery import (
     ResultSource,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 SCHEMA_VERSION = 1
 MAX_REQUEST_BYTES = 65536
 MAX_RESPONSE_BYTES = 4096
 DIAGNOSTIC_FIELDS = ("http_status", "provider_code", "message_bytes", "request_bytes")
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Единое кодирование проверяемых и отправляемых данных
 #------------------------------------------------------------------------------------------------------------------
-def encode_json(payload: object) -> str:
+def encode_json(
+    payload: object,
+    ) -> str:
 
-    """Encode both validated and transmitted envelopes identically.
+    """
+    Encode both validated and transmitted envelopes identically.
 
     :param payload: JSON-compatible protocol data.
     :type payload: object
@@ -67,13 +90,15 @@ def encode_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка логического имени получателя на gateway
 #------------------------------------------------------------------------------------------------------------------
-def validate_alias(alias: str) -> None:
+def validate_alias(
+    alias: str,
+    ) -> None:
 
-    """Validate a logical gateway alias that cannot carry a URL or provider address.
+    """
+    Validate a logical gateway alias that cannot carry a URL or provider address.
 
     :param alias: Authorized gateway destination name.
     :type alias: str
@@ -85,13 +110,15 @@ def validate_alias(alias: str) -> None:
         raise ValueError("gateway alias must be a short ASCII identifier")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+def _object(
+    pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
 
-    """Reject duplicate JSON keys rather than choosing an ambiguous value.
+    """
+    Reject duplicate JSON keys rather than choosing an ambiguous value.
 
     :param pairs: JSON object key/value pairs.
     :type pairs: list[tuple[str, object]]
@@ -110,16 +137,16 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Разбор ограниченного JSON без неоднозначных полей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Разбор ограниченного JSON без неоднозначных полей
 #------------------------------------------------------------------------------------------------------------------
 def _decode(
     data: bytes,
     limit: int,
-) -> dict[str, object]:
+    ) -> dict[str, object]:
 
-    """Parse bounded UTF-8 JSON with one unambiguous object at its root.
+    """
+    Parse bounded UTF-8 JSON with one unambiguous object at its root.
 
     :param data: Bounded UTF-8 JSON bytes.
     :type data: bytes
@@ -145,16 +172,16 @@ def _decode(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка версии и точного состава envelope
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка версии и точного состава envelope
 #------------------------------------------------------------------------------------------------------------------
 def _keys(
     payload: dict[str, object],
     expected: set[str],
-) -> None:
+    ) -> None:
 
-    """Require an exact envelope shape and a supported integer schema version.
+    """
+    Require an exact envelope shape and a supported integer schema version.
 
     :param payload: Decoded JSON envelope.
     :type payload: dict[str, object]
@@ -173,12 +200,33 @@ def _keys(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Версионированный запрос одной попытки через gateway
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NotificationGatewayRequest:
-    """Describe one attempt, never asynchronous acceptance or a durable receipt."""
+    """
+    Describe one attempt, never asynchronous acceptance or a durable receipt.
+
+    :param delivery: Prepared delivery attempt with immutable notification data.
+    :type delivery: Delivery
+
+    :param alias: Configured destination name authorized by the gateway principal.
+    :type alias: str
+
+    :param remaining_ttl: Remaining registration or request lifetime, in seconds.
+    :type remaining_ttl: float
+
+    :param timeout: Maximum command or gateway operation duration, in seconds.
+    :type timeout: float
+
+    :param schema_version: Serialized schema version, or automatic selection where explicitly supported.
+    :type schema_version: int
+    """
 
     delivery: Delivery                  # Подготовленная попытка с неизменяемым уведомлением.
     alias: str                          # Разрешённое на gateway имя получателя.
@@ -189,9 +237,12 @@ class NotificationGatewayRequest:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Данные запроса без секретов и локальных настроек
     #--------------------------------------------------------------------------------------------------------------
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(
+        self,
+        ) -> dict[str, object]:
 
-        """Create a JSON-ready request with no provider or service credentials.
+        """
+        Create a JSON-ready request with no provider or service credentials.
 
         :return: JSON-compatible request fields without transport credentials.
         :rtype: dict[str, object]
@@ -216,9 +267,10 @@ class NotificationGatewayRequest:
     def from_bytes(
         cls,
         data: bytes,
-    ) -> NotificationGatewayRequest:
+        ) -> NotificationGatewayRequest:
 
-        """Decode a bounded request; authentication, ACL and expiry checks belong to the gateway.
+        """
+        Decode a bounded request; authentication, ACL and expiry checks belong to the gateway.
 
         :param data: Bounded UTF-8 JSON bytes.
         :type data: bytes
@@ -257,9 +309,13 @@ class NotificationGatewayRequest:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate budgets and bound the complete serialized request."""
+        """
+        Validate budgets and bound the complete serialized request.
+        """
 
         if not isinstance(self.delivery, Delivery):
             raise TypeError("delivery must be Delivery")
@@ -284,6 +340,10 @@ class NotificationGatewayRequest:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Кодирование безопасного результата с корреляцией попытки
 #------------------------------------------------------------------------------------------------------------------
@@ -292,9 +352,10 @@ def encode_response(
     result: DeliveryResult,
     *,
     schema_version: int = 1,
-) -> bytes:
+    ) -> bytes:
 
-    """Encode a correlated gateway response without arbitrary provider error text.
+    """
+    Encode a correlated gateway response without arbitrary provider error text.
 
     :param delivery: Immutable delivery attempt.
     :type delivery: Delivery
@@ -328,7 +389,6 @@ def encode_response(
     return data
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка ответа и его принадлежности текущей попытке
 #------------------------------------------------------------------------------------------------------------------
@@ -337,9 +397,10 @@ def decode_response(
     delivery: Delivery,
     *,
     schema_version: int = 1,
-) -> DeliveryResult:
+    ) -> DeliveryResult:
 
-    """Require an exact versioned response correlated to the attempted delivery.
+    """
+    Require an exact versioned response correlated to the attempted delivery.
 
     :param payload: Decoded JSON envelope.
     :type payload: object
@@ -383,8 +444,6 @@ def decode_response(
         raise ValueError("invalid gateway result") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

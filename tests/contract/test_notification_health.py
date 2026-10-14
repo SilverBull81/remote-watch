@@ -1,25 +1,30 @@
 ﻿# Состояние доставки, восстановление и независимость назначений без сети.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-095557
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> wait_for(): Ограниченное ожидание результата фоновой отправки.
+# -> wait_for(): Ограниченное ожидание результата фоновой отправки
 #
 # Тесты:
-# -> test_health_recovery(): Отказ, последующий успех и сохранение истории.
-# -> test_retry_health(): Восстановление внутри повтора одной доставки.
-# -> test_health_unobserved(): Чтение до попыток, без сети и с закрытым runtime.
-# -> test_loss_is_not_connection_health(): Переполнение очереди остаётся отдельным счётчиком.
-# -> test_observation_times(): Монотонные отметки и счётчик последовательных отказов.
+# -> test_health_recovery(): Отказ, последующий успех и сохранение истории
+#
+# -> test_retry_health(): Восстановление внутри повтора одной доставки
+#
+# -> test_health_unobserved(): Чтение до попыток, без сети и с закрытым runtime
+#
+# -> test_loss_is_not_connection_health(): Переполнение очереди остаётся отдельным счётчиком
+#
+# -> test_observation_times(): Монотонные отметки и счётчик последовательных отказов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -44,13 +49,22 @@ from remote_watch import (
 )
 from remote_watch.notifications.health import observe_result
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограниченное ожидание результата фоновой отправки
 #------------------------------------------------------------------------------------------------------------------
-def wait_for(predicate: Callable[[], bool]) -> None:
+def wait_for(
+    predicate: Callable[[], bool],
+    ) -> None:
 
-    """Wait for a bounded background observation without changing runtime state.
+    """
+    Wait for a bounded background observation without changing runtime state.
 
     :param predicate: Side-effect-free check on snapshots.
     :type predicate: Callable[[], bool]
@@ -65,6 +79,10 @@ def wait_for(predicate: Callable[[], bool]) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ, последующий успех и сохранение истории
 #------------------------------------------------------------------------------------------------------------------
@@ -73,9 +91,10 @@ def wait_for(predicate: Callable[[], bool]) -> None:
 def test_health_recovery(
     identity: Identity,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Recover one destination after a later success without resetting counters or another destination.
+    """
+    Recover one destination after a later success without resetting counters or another destination.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -137,13 +156,15 @@ def test_health_recovery(
     assert runtime.health("0").destinations[0].recoveries == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление внутри повтора одной доставки
 #------------------------------------------------------------------------------------------------------------------
-def test_retry_health(identity: Identity) -> None:
+def test_retry_health(
+    identity: Identity,
+    ) -> None:
 
-    """Make a transient first attempt recover while retaining failed_attempts for the same event.
+    """
+    Make a transient first attempt recover while retaining failed_attempts for the same event.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -170,13 +191,15 @@ def test_retry_health(identity: Identity) -> None:
         runtime.stop()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Чтение до попыток, без сети и с закрытым runtime
 #------------------------------------------------------------------------------------------------------------------
-def test_health_unobserved(identity: Identity) -> None:
+def test_health_unobserved(
+    identity: Identity,
+    ) -> None:
 
-    """Keep idle/unused destinations unobserved and distinguish lifecycle without probing.
+    """
+    Keep idle/unused destinations unobserved and distinguish lifecycle without probing.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -206,13 +229,15 @@ def test_health_unobserved(identity: Identity) -> None:
     assert failed.health().delivery_state == "unobserved"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Переполнение очереди остаётся отдельным счётчиком
 #------------------------------------------------------------------------------------------------------------------
-def test_loss_is_not_connection_health(identity: Identity) -> None:
+def test_loss_is_not_connection_health(
+    identity: Identity,
+    ) -> None:
 
-    """Do not diagnose connectivity from a local capacity rejection without an attempt.
+    """
+    Do not diagnose connectivity from a local capacity rejection without an attempt.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -239,13 +264,14 @@ def test_loss_is_not_connection_health(identity: Identity) -> None:
         runtime.stop()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Монотонные отметки и счётчик последовательных отказов
 #------------------------------------------------------------------------------------------------------------------
 def test_observation_times() -> None:
 
-    """Retain history with deterministic observations and count only actual recoveries."""
+    """
+    Retain history with deterministic observations and count only actual recoveries.
+    """
 
     initial = DestinationHealth("one")
     result = DeliveryResult(status=DeliveryStatus.RATE_LIMITED, source=ResultSource.GATEWAY, http_status=429)
@@ -265,8 +291,6 @@ def test_observation_times() -> None:
     assert next_failure.consecutive_failures == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

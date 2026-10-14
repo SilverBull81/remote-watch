@@ -1,44 +1,51 @@
 ﻿# Длительная проверка доставки с разных серверов и журналом результатов без секретов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> FieldConfig: Продолжительность и отправитель полевой проверки.
+# -> FieldConfig: Продолжительность и отправитель полевой проверки
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек и ограничений.
+#    -> __post_init__(): Проверка настроек и ограничений
 #
-# -> _Journal: Ограниченный буфер безопасных сведений о попытках.
+# -> _Journal: Ограниченный буфер безопасных сведений о попытках
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> record(): Добавление результата в ограниченный буфер.
-#    -> flush(): Запись накопленных результатов вне рабочего потока.
+#    -> record(): Добавление результата в ограниченный буфер
+#    -> flush(): Запись накопленных результатов вне рабочего потока
 #
-# -> _ObservedChannel: Канал с записью результатов без доступа к диску из worker.
+# -> _ObservedChannel: Канал с записью результатов без доступа к диску из worker
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие канала в принадлежащем ему цикле событий.
-#    -> send(): Одна попытка отправки без собственного цикла повторов.
-#    -> close(): Закрытие канала и освобождение временных данных.
+#    -> open(): Открытие канала в принадлежащем ему цикле событий
+#    -> send(): Одна попытка отправки без собственного цикла повторов
+#    -> close(): Закрытие канала и освобождение временных данных
 #
 # Функции:
-# -> _utc(): Текущее время UTC для сопоставления серверов.
-# -> _write(): Запись одной строки отчёта с немедленным flush.
-# -> _redact(): Удаление известного тестового секрета из удалённого текста.
-# -> _sample(): Локальные записи и одно контрольное уведомление.
-# -> _run(): Ограниченная по времени проверка с настоящим runtime.
-# -> _destination(): Подготовка выбранного адаптера из локальных настроек.
-# -> main(): Разбор параметров явного запуска и безопасные сообщения об ошибках.
+# -> _utc(): Текущее время UTC для сопоставления серверов
+#
+# -> _write(): Запись одной строки отчёта с немедленным flush
+#
+# -> _redact(): Удаление известного тестового секрета из удалённого текста
+#
+# -> _sample(): Локальные записи и одно контрольное уведомление
+#
+# -> _run(): Ограниченная по времени проверка с настоящим runtime
+#
+# -> _destination(): Подготовка выбранного адаптера из локальных настроек
+#
+# -> main(): Разбор параметров явного запуска и безопасные сообщения об ошибках
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -74,13 +81,30 @@ from remote_watch.notifications.channels import NotificationChannel
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 from remote_watch.watcher import RemoteWatcher, RotatingFileConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Продолжительность и отправитель полевой проверки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FieldConfig:
-    """Bound a finite field run; phone display remains a manual observation."""
+    """
+    Bound a finite field run; phone display remains a manual observation.
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param duration: Observation duration, in seconds.
+    :type duration: float
+
+    :param interval: Interval between observations, in seconds.
+    :type interval: float
+    """
 
     identity: Identity                  # Явные сведения о сервере и экземпляре проверки.
     duration: float = 86400             # Продолжительность наблюдения, секунды.
@@ -89,9 +113,13 @@ class FieldConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject infinite runs and excessive sample counts before network startup."""
+        """
+        Reject infinite runs and excessive sample counts before network startup.
+        """
 
         if not isinstance(self.identity, Identity):
             raise TypeError("identity must be Identity")
@@ -103,19 +131,24 @@ class FieldConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ограниченный буфер безопасных сведений о попытках
 #------------------------------------------------------------------------------------------------------------------
 class _Journal:
-    """Buffer bounded attempt diagnostics; only the application thread writes files."""
+    """
+    Buffer bounded attempt diagnostics; only the application thread writes files.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Prepare a bounded buffer without allocating files or worker threads."""
+        """
+        Prepare a bounded buffer without allocating files or worker threads.
+        """
 
         self._lock = threading.Lock()
         self._records: deque[dict[str, object]] = deque()
@@ -128,9 +161,10 @@ class _Journal:
     def record(
         self,
         record: dict[str, object],
-    ) -> None:
+        ) -> None:
 
-        """Append one sanitized diagnostic or count its loss without waiting for disk.
+        """
+        Append one sanitized diagnostic or count its loss without waiting for disk.
 
         :param record: Sanitized diagnostic record.
         :type record: dict[str, object]
@@ -151,9 +185,10 @@ class _Journal:
     def flush(
         self,
         stream: TextIO,
-    ) -> None:
+        ) -> None:
 
-        """Drain a snapshot of diagnostics outside the worker and its buffer lock.
+        """
+        Drain a snapshot of diagnostics outside the worker and its buffer lock.
 
         :param stream: Caller-owned output stream.
         :type stream: TextIO
@@ -169,12 +204,13 @@ class _Journal:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Канал с записью результатов без доступа к диску из worker
 #------------------------------------------------------------------------------------------------------------------
 class _ObservedChannel:
-    """Delegate one provider attempt and capture only safe result fields."""
+    """
+    Delegate one provider attempt and capture only safe result fields.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -184,9 +220,10 @@ class _ObservedChannel:
         factory: Callable[[], NotificationChannel],
         journal: _Journal,
         provider: str,
-    ) -> None:
+        ) -> None:
 
-        """Create the actual channel lazily in the runtime worker.
+        """
+        Create the actual channel lazily in the runtime worker.
 
         :param factory: Zero-argument lazy channel factory.
         :type factory: Callable[[], NotificationChannel]
@@ -210,9 +247,13 @@ class _ObservedChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие канала в принадлежащем ему цикле событий
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Open the underlying client in its owning loop."""
+        """
+        Open the underlying client in its owning loop.
+        """
 
         await self._channel.open()
     #--------------------------------------------------------------------------------------------------------------
@@ -223,9 +264,10 @@ class _ObservedChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Observe one attempt without adding retries or swallowing cancellation.
+        """
+        Observe one attempt without adding retries or swallowing cancellation.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -244,7 +286,7 @@ class _ObservedChannel:
                 raise TypeError("invalid channel result")
             return result
         finally:
-            # Не записываем настройки канала, адрес чата, токен, payload или текст исключения.
+            # Не записываем настройки канала, адрес чата, токен, данные запроса или текст исключения.
             safe = result if isinstance(result, DeliveryResult) else DeliveryResult(status=DeliveryStatus.UNKNOWN)
             self._journal.record({
                 "kind": "attempt", "utc": _utc(), "provider": self._provider,
@@ -260,21 +302,30 @@ class _ObservedChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие канала и освобождение временных данных
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the actual client, including after incomplete startup."""
+        """
+        Close the actual client, including after incomplete startup.
+        """
 
         await self._channel.close()
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Текущее время UTC для сопоставления серверов
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Текущее время UTC для сопоставления серверов
 #------------------------------------------------------------------------------------------------------------------
 def _utc() -> str:
 
-    """Return an explicit UTC timestamp for cross-server comparison.
+    """
+    Return an explicit UTC timestamp for cross-server comparison.
 
     :return: Current UTC timestamp in ISO 8601 format.
     :rtype: str
@@ -283,16 +334,16 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запись одной строки отчёта с немедленным flush
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запись одной строки отчёта с немедленным flush
 #------------------------------------------------------------------------------------------------------------------
 def _write(
     stream: TextIO,
     record: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Write a complete JSONL record and flush it for inspection during the run.
+    """
+    Write a complete JSONL record and flush it for inspection during the run.
 
     :param stream: Caller-owned output stream.
     :type stream: TextIO
@@ -308,13 +359,15 @@ def _write(
     stream.flush()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Удаление известного тестового секрета из удалённого текста
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Удаление известного тестового секрета из удалённого текста
 #------------------------------------------------------------------------------------------------------------------
-def _redact(text: str) -> str:
+def _redact(
+    text: str,
+    ) -> str:
 
-    """Remove only the known synthetic marker used by this test.
+    """
+    Remove only the known synthetic marker used by this test.
 
     :param text: Text to shorten.
     :type text: str
@@ -328,17 +381,17 @@ def _redact(text: str) -> str:
     return text.replace("FIELD_TEST_SECRET", "[удалено]")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Локальные записи и одно контрольное уведомление
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Локальные записи и одно контрольное уведомление
 #------------------------------------------------------------------------------------------------------------------
 def _sample(
     logger: logging.Logger,
     run_id: str,
     number: int,
-) -> str:
+    ) -> str:
 
-    """Exercise local-only records and one remote-eligible record per sample.
+    """
+    Exercise local-only records and one remote-eligible record per sample.
 
     :param logger: Ordinary application logger.
     :type logger: logging.Logger
@@ -382,9 +435,8 @@ def _sample(
     return kind
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Ограниченная по времени проверка с настоящим runtime
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Ограниченная по времени проверка с настоящим runtime
 #------------------------------------------------------------------------------------------------------------------
 def _run(
     config: FieldConfig,
@@ -393,9 +445,10 @@ def _run(
     *,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-) -> int:
+    ) -> int:
 
-    """Run a finite real runtime scenario and persist a sanitized attempt journal.
+    """
+    Run a finite real runtime scenario and persist a sanitized attempt journal.
 
     :param config: Validated settings.
     :type config: FieldConfig
@@ -496,17 +549,17 @@ def _run(
     return 130 if interrupted else 0 if complete else 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Подготовка выбранного адаптера из локальных настроек
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Подготовка выбранного адаптера из локальных настроек
 #------------------------------------------------------------------------------------------------------------------
 def _destination(
     provider: str,
     settings: dict[str, object],
     token_env: str,
-) -> Destination:
+    ) -> Destination:
 
-    """Build provider settings using the same local credential aliases as one-message smoke.
+    """
+    Build provider settings using the same local credential aliases as one-message smoke.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -552,13 +605,15 @@ def _destination(
     return config.destination(provider, retry=policy, outstanding_capacity=16)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор параметров явного запуска и безопасные сообщения об ошибках
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Run only an explicitly requested field scenario with bounded duration and safe errors.
+    """
+    Run only an explicitly requested field scenario with bounded duration and safe errors.
 
     :param argv: Explicit command arguments or None for process arguments.
     :type argv: Sequence[str] | None
@@ -606,8 +661,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явный запуск полевой проверки
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

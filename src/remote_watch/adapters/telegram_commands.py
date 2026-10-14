@@ -1,33 +1,34 @@
 ﻿# Приём исходных сообщений Telegram с проверкой отправителя и чата.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> TelegramCommandConfig: Настройки единственного получателя сообщений bot.
+# -> TelegramCommandConfig: Настройки единственного получателя сообщений bot
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> TelegramCommandProvider: Получатель исходных пользовательских сообщений Telegram.
+# -> TelegramCommandProvider: Получатель исходных пользовательских сообщений Telegram
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> poll(): Получение ограниченной порции неподтверждённых событий.
-#    -> acknowledge(): Подтверждение только записанного события.
-#    -> reply(): Одна попытка отправить ответ проверенному получателю.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> poll(): Получение ограниченной порции неподтверждённых событий
+#    -> acknowledge(): Подтверждение только записанного события
+#    -> reply(): Одна попытка отправить ответ проверенному получателю
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 #    Служебные методы:
-#    -> _call(): Один запрос Bot API с проверкой результата.
-#    -> _event(): Выделение проверенного отправителя исходного сообщения.
+#    -> _call(): Один запрос Bot API с проверкой результата
+#    -> _event(): Выделение проверенного отправителя исходного сообщения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import re
@@ -38,26 +39,49 @@ from remote_watch.adapters._source_http import SourceHttp
 from remote_watch.commands.source_protocol import SourceEvent
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки единственного получателя сообщений bot
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TelegramCommandConfig:
-    """Configure one exclusive Telegram Bot API reader without borrowing outbound permissions."""
+    """
+    Configure one exclusive Telegram Bot API reader without borrowing outbound permissions.
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param allow_loopback_http: Explicit opt-in to numeric loopback HTTP for local tests only.
+    :type allow_loopback_http: bool
+    """
 
     token: str | None = field(default=None, repr=False)     # Токен bot, скрытый из repr.
     token_env: str | None = None                            # Альтернатива literal-токену; читается при open.
     endpoint: str = "https://api.telegram.org"              # Явный адрес Bot API.
     allow_loopback_http: bool = False                       # HTTP разрешён только для локальных тестов.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate credentials and the fixed provider endpoint without opening it."""
+        """
+        Validate credentials and the fixed provider endpoint without opening it.
+        """
 
         validate_credentials(self.token, self.token_env, "telegram")
         SourceHttp(self.endpoint, allow_loopback_http=self.allow_loopback_http)
@@ -65,13 +89,13 @@ class TelegramCommandConfig:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Получатель исходных пользовательских сообщений Telegram
 #------------------------------------------------------------------------------------------------------------------
 class TelegramCommandProvider:
-    """Read only original user messages and confirm Telegram offsets after durable decisions."""
-
+    """
+    Read only original user messages and confirm Telegram offsets after durable decisions.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -79,9 +103,10 @@ class TelegramCommandProvider:
     def __init__(
         self,
         config: TelegramCommandConfig,
-    ) -> None:
+        ) -> None:
 
-        """Retain validated settings without resolving credentials or importing aiohttp.
+        """
+        Retain validated settings without resolving credentials or importing aiohttp.
 
         :param config: Explicit credentials, access rules and finite limits.
         :type config: TelegramCommandConfig
@@ -95,13 +120,15 @@ class TelegramCommandProvider:
         self._username = ""
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> str:
+    async def open(
+        self,
+        ) -> str:
 
-        """Verify the bot identity and refuse an existing webhook instead of deleting it.
+        """
+        Verify the bot identity and refuse an existing webhook instead of deleting it.
 
         :return: Stable nonsecret fingerprint of the opened provider stream.
         :rtype: str
@@ -122,16 +149,16 @@ class TelegramCommandProvider:
         return f"telegram:{self.config.endpoint}:{me['id']}"
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение ограниченной порции неподтверждённых событий
     #--------------------------------------------------------------------------------------------------------------
     async def poll(
         self,
         cursor: str,
-    ) -> tuple[SourceEvent, ...]:
+        ) -> tuple[SourceEvent, ...]:
 
-        """Read the first unconfirmed update without assuming IDs grow forever.
+        """
+        Read the first unconfirmed update without assuming IDs grow forever.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -151,16 +178,16 @@ class TelegramCommandProvider:
         return tuple(self._event(value) for value in result)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение только записанного события
     #--------------------------------------------------------------------------------------------------------------
     async def acknowledge(
         self,
         cursor: str,
-    ) -> None:
+        ) -> None:
 
-        """Confirm a committed update; leave any newly returned update unconfirmed for the next read.
+        """
+        Confirm a committed update; leave any newly returned update unconfirmed for the next read.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -182,7 +209,6 @@ class TelegramCommandProvider:
                                         "allowed_updates": ["message"]})
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Одна попытка отправить ответ проверенному получателю
     #--------------------------------------------------------------------------------------------------------------
@@ -190,9 +216,10 @@ class TelegramCommandProvider:
         self,
         conversation_id: str,
         text: str,
-    ) -> None:
+        ) -> None:
 
-        """Send one plain-text correlated reply to the original authenticated chat.
+        """
+        Send one plain-text correlated reply to the original authenticated chat.
 
         :param conversation_id: Authenticated chat ID or configured private command topic.
         :type conversation_id: str
@@ -213,20 +240,22 @@ class TelegramCommandProvider:
             raise CommandError("invalid")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the provider session and discard the resolved bot credential."""
+        """
+        Close the provider session and discard the resolved bot credential.
+        """
 
         try:
             await self._http.close()
         finally:
             self._token = None
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Один запрос Bot API с проверкой результата
@@ -235,9 +264,10 @@ class TelegramCommandProvider:
         self,
         method: str,
         payload: dict[str, object],
-    ) -> object:
+        ) -> object:
 
-        """Perform one Bot API POST and validate its success envelope without exposing its description.
+        """
+        Perform one Bot API POST and validate its success envelope without exposing its description.
 
         :param method: Fixed HTTP method or Bot API operation.
         :type method: str
@@ -270,16 +300,16 @@ class TelegramCommandProvider:
         return value["result"]
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Выделение проверенного отправителя исходного сообщения
     #--------------------------------------------------------------------------------------------------------------
     def _event(
         self,
         value: object,
-    ) -> SourceEvent:
+        ) -> SourceEvent:
 
-        """Accept original human messages while acknowledging unsupported Telegram update types safely.
+        """
+        Accept original human messages while acknowledging unsupported Telegram update types safely.
 
         :param value: Untrusted configuration or provider value under validation.
         :type value: object
@@ -324,7 +354,6 @@ class TelegramCommandProvider:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,39 +1,40 @@
 ﻿# Проверки регистрации команд, partial и неизменяемого контекста.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> set_stop(): Пример обработчика приложения
+#
+# -> context_status(): Обработчик с явным контекстом
+#
+# -> async_status(): Асинхронный обработчик приложения
+#
+# -> validate_count(): Валидатор аргументов команды
 #
 # Тесты:
+# -> test_partial_callbacks_are_not_invoked_by_registration(): Регистрация словаря не вызывает partial и копирует
+#    набор команд
 #
-# -> set_stop(): Обработчик приложения с привязанным Event.
+# -> test_specs_and_async_callbacks(): Явные спецификации и async-функции регистрируются вместе
 #
-# -> context_status(): Обработчик с контекстом.
+# -> test_registry_copies_specs_and_rejects_duplicates(): Реестр фиксирует список и запрещает неоднозначные имена
 #
-# -> async_status(): Асинхронный обработчик.
+# -> test_invalid_command_specs(): Неправильный callback или политика отклоняются до исполнения
 #
-# -> validate_count(): Пример валидации именованных аргументов.
+# -> test_context_copies_arguments(): Аргументы контекста копируются и не выводятся в repr
 #
-# Тесты:
-#
-# -> test_partial_callbacks_are_not_invoked_by_registration(): Пользовательский сценарий.
-#
-# -> test_specs_and_async_callbacks(): Расширенные настройки и асинхронные обработчики.
-#
-# -> test_registry_copies_specs_and_rejects_duplicates(): Неизменяемость реестра.
-#
-# -> test_invalid_command_specs(): Неправильные имена, сигнатуры и политики.
-#
-# -> test_context_copies_arguments(): Контекст не зависит от исходного словаря.
-#
-# -> test_context_rejects_unbounded_arguments(): Типы и размеры аргументов.
+# -> test_context_rejects_unbounded_arguments(): Контекст не удерживает произвольные объекты или неограниченные
+#    данные
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 import asyncio
 from collections.abc import Mapping
 from dataclasses import FrozenInstanceError
@@ -50,10 +51,12 @@ from remote_watch import (
     WatcherConfig,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # ФУНКЦИИ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Пример обработчика приложения
@@ -61,9 +64,10 @@ from remote_watch import (
 def set_stop(
     *,
     load_stop_event: Event,
-) -> None:
+    ) -> None:
 
-    """Set application-owned state when explicitly called.
+    """
+    Set application-owned state when explicitly called.
 
     :param load_stop_event: Event owned by the application.
     :type load_stop_event: Event
@@ -74,15 +78,15 @@ def set_stop(
     load_stop_event.set()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Обработчик с явным контекстом
 #------------------------------------------------------------------------------------------------------------------
 def context_status(
     context: CommandContext,
-) -> str:
+    ) -> str:
 
-    """Return the addressed instance name.
+    """
+    Return the addressed instance name.
 
     :param context: Authorized request context supplied by a future dispatcher.
     :type context: CommandContext
@@ -96,13 +100,13 @@ def context_status(
     return context.identity.instance_id
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Асинхронный обработчик приложения
 #------------------------------------------------------------------------------------------------------------------
 async def async_status() -> str:
 
-    """Return a deterministic asynchronous result.
+    """
+    Return a deterministic asynchronous result.
 
     :return: Status text.
     :rtype: str
@@ -111,15 +115,15 @@ async def async_status() -> str:
     return "ready"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Валидатор аргументов команды
 #------------------------------------------------------------------------------------------------------------------
 def validate_count(
     arguments: Mapping[str, str],
-) -> None:
+    ) -> None:
 
-    """Require one positive integer argument.
+    """
+    Require one positive integer argument.
 
     :param arguments: Named textual command arguments.
     :type arguments: Mapping[str, str]
@@ -136,15 +140,15 @@ def validate_count(
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Регистрация словаря не вызывает partial и копирует набор команд
 #------------------------------------------------------------------------------------------------------------------
 def test_partial_callbacks_are_not_invoked_by_registration(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Preserve the user's partial/Event pattern without registration side effects.
+    """
+    Preserve the user's partial/Event pattern without registration side effects.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -175,13 +179,14 @@ def test_partial_callbacks_are_not_invoked_by_registration(
     assert "load_stop_event" not in repr(spec)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явные спецификации и async-функции регистрируются вместе
 #------------------------------------------------------------------------------------------------------------------
 def test_specs_and_async_callbacks() -> None:
 
-    """Support contextual, validated and asynchronous user handlers."""
+    """
+    Support contextual, validated and asynchronous user handlers.
+    """
 
     spec = CommandSpec(name="check_load", callback=context_status, takes_context=True,
                        required_scope="load:read", read_only=True, idempotent=True,
@@ -193,13 +198,14 @@ def test_specs_and_async_callbacks() -> None:
     assert registry.get("absent") is None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Реестр фиксирует список и запрещает неоднозначные имена
 #------------------------------------------------------------------------------------------------------------------
 def test_registry_copies_specs_and_rejects_duplicates() -> None:
 
-    """Freeze the registry and reject ambiguous duplicate registrations."""
+    """
+    Freeze the registry and reject ambiguous duplicate registrations.
+    """
 
     spec = CommandSpec(name="check", callback=async_status)
     specs = [spec]
@@ -217,7 +223,6 @@ def test_registry_copies_specs_and_rejects_duplicates() -> None:
         registry["missing"]
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неправильный callback или политика отклоняются до исполнения
 #------------------------------------------------------------------------------------------------------------------
@@ -230,9 +235,10 @@ def test_registry_copies_specs_and_rejects_duplicates() -> None:
 ])
 def test_invalid_command_specs(
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Fail registration for invalid command declarations.
+    """
+    Fail registration for invalid command declarations.
 
     :param changes: Invalid specification fields.
     :type changes: dict[str, object]
@@ -244,15 +250,15 @@ def test_invalid_command_specs(
         CommandSpec(**({"name": "check", "callback": async_status} | changes))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Аргументы контекста копируются и не выводятся в repr
 #------------------------------------------------------------------------------------------------------------------
 def test_context_copies_arguments(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Detach request arguments from caller-owned mutable state.
+    """
+    Detach request arguments from caller-owned mutable state.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -272,7 +278,6 @@ def test_context_copies_arguments(
     assert "count" not in repr(context)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Контекст не удерживает произвольные объекты или неограниченные данные
 #------------------------------------------------------------------------------------------------------------------
@@ -282,9 +287,10 @@ def test_context_copies_arguments(
 def test_context_rejects_unbounded_arguments(
     identity: Identity,
     arguments: object,
-) -> None:
+    ) -> None:
 
-    """Reject invalid types and both individual and aggregate argument overflow.
+    """
+    Reject invalid types and both individual and aggregate argument overflow.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -301,8 +307,6 @@ def test_context_rejects_unbounded_arguments(
                        identity=identity, session_id="s1", arguments=arguments)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

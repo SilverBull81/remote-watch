@@ -1,19 +1,29 @@
 ﻿# Клиентское отображение через работающий gateway без изменения его конфигурации.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_gateway_display_override(): Разные режимы клиентов при одном неизменном provider-канале.
-# -> test_display_old_gateway(): Несовместимый gateway не вызывает скрытого повторного POST.
+# -> test_gateway_display_override(): Разные режимы клиентов при одном неизменном provider-канале
+#    Вложенные объявления:
+#    -> scenario(): Один gateway и последовательные запуски клиентов с разным отображением
+#       Вложенные объявления:
+#       -> post(): Перехват итогового запроса к провайдеру
+#
+# -> test_display_old_gateway(): Несовместимый gateway не вызывает скрытого повторного POST
+#    Вложенные объявления:
+#    -> scenario(): Проверка одной попытки без автоматического понижения схемы
+#       Вложенные объявления:
+#       -> post(): Ответ старого сервера на новую схему
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -31,6 +41,12 @@ from remote_watch.adapters.telegram_notifications import TelegramChannel, Telegr
 from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 from remote_watch.gateway.notification_server import NotificationGateway
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Разные режимы клиентов при одном неизменном provider-канале
@@ -40,9 +56,10 @@ def test_gateway_display_override(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     provider: str,
-) -> None:
+    ) -> None:
 
-    """Exercise real gateway HTTP and provider rendering while retaining one gateway lifecycle.
+    """
+    Exercise real gateway HTTP and provider rendering while retaining one gateway lifecycle.
 
     :param notification: Immutable event fixture with synthetic identity.
     :type notification: Notification
@@ -54,6 +71,11 @@ def test_gateway_display_override(
     :type provider: str
     """
 
+    # notification — подготовленное уведомление с фиксированными тестовыми данными.
+    # monkeypatch — временная подмена окружения или зависимостей только на время теста.
+    # provider — выбранный провайдер тестовой доставки.
+
+
     # Сеть используется только на loopback. Provider token и service token вымышлены.
     pytest.importorskip("aiohttp")
 
@@ -62,7 +84,9 @@ def test_gateway_display_override(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep gateway configuration and provider instance unchanged between client restarts."""
+        """
+        Keep gateway configuration and provider instance unchanged between client restarts.
+        """
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
@@ -80,9 +104,10 @@ def test_gateway_display_override(
             url: str,
             payload: dict[str, Any],
             token: str | None = None,
-        ) -> tuple[int, dict[str, str | None], dict[str, Any]]:
+            ) -> tuple[int, dict[str, str | None], dict[str, Any]]:
 
-            """Capture concrete provider output without external network calls.
+            """
+            Capture concrete provider output without external network calls.
 
             :param url: Configured provider endpoint.
             :type url: str
@@ -96,6 +121,9 @@ def test_gateway_display_override(
             :return: Fixed successful provider response.
             :rtype: tuple[int, dict[str, str | None], dict[str, Any]]
             """
+
+            # payload — данные запроса для проверки протокола.
+
 
             # url/token принадлежат серверу; запрос клиента не может заменить их.
             assert url.startswith("https://")
@@ -159,16 +187,16 @@ def test_gateway_display_override(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Несовместимый gateway не вызывает скрытого повторного POST
 #------------------------------------------------------------------------------------------------------------------
 def test_display_old_gateway(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Reject an unsupported schema without downgrading or replaying the request.
+    """
+    Reject an unsupported schema without downgrading or replaying the request.
 
     :param notification: Immutable synthetic event.
     :type notification: Notification
@@ -176,6 +204,10 @@ def test_display_old_gateway(
     :param monkeypatch: Replace the gateway response with an old-schema rejection.
     :type monkeypatch: pytest.MonkeyPatch
     """
+
+    # notification — подготовленное уведомление с фиксированными тестовыми данными.
+    # monkeypatch — временная подмена окружения или зависимостей только на время теста.
+
 
     # Старый сервер возвращает отказ; повтор с прежней схемой мог бы скрыть настройку пользователя.
     pytest.importorskip("aiohttp")
@@ -185,7 +217,9 @@ def test_display_old_gateway(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Count requests without contacting a real gateway."""
+        """
+        Count requests without contacting a real gateway.
+        """
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
@@ -201,9 +235,10 @@ def test_display_old_gateway(
             url: str,
             payload: dict[str, Any],
             token: str | None,
-        ) -> tuple[int, dict[str, str | None], dict[str, Any]]:
+            ) -> tuple[int, dict[str, str | None], dict[str, Any]]:
 
-            """Return the existing unsupported-request status.
+            """
+            Return the existing unsupported-request status.
 
             :param url: Synthetic endpoint.
             :type url: str
@@ -217,6 +252,11 @@ def test_display_old_gateway(
             :return: Rejection without a provider attempt.
             :rtype: tuple[int, dict[str, str | None], dict[str, Any]]
             """
+
+            # url — адрес тестового запроса.
+            # payload — данные запроса для проверки протокола.
+            # token — токен аутентификации; его значение не включается в ошибки.
+
 
             # Содержимое ответа не раскрывает подробностей сервера.
             calls.append(payload)
@@ -236,8 +276,6 @@ def test_display_old_gateway(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

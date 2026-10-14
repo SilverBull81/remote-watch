@@ -1,28 +1,29 @@
 ﻿# Отдельный HTTP-сервер команд, не включаемый настройками notification gateway.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд.
+# -> CommandHubServer: Сетевые endpoints регистрации и выполнения команд
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 #    Служебные методы:
-#    -> _probe_auth(): Проверка credentials для диагностики без изменения lifecycle.
-#    -> _probe_status(): Наблюдение готовности и уже существующей сессии клиента.
-#    -> _expect(): Отказ от Expect до чтения тела запроса.
-#    -> _handle(): Авторизация до чтения тела и вызов подходящей операции.
+#    -> _probe_auth(): Проверка токенов без регистрации сессии и изменения состояния сервера
+#    -> _probe_status(): Наблюдение готовности и существующей сессии
+#    -> _expect(): Отказ от Expect до чтения тела запроса
+#    -> _handle(): Авторизация до чтения тела и вызов подходящей операции
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -45,13 +46,20 @@ from remote_watch.commands.transport import CommandError
 from remote_watch.events import Identity
 from remote_watch.gateway.doctor_protocol import ProbeEndpoint
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Сетевые endpoints регистрации и выполнения команд
 #------------------------------------------------------------------------------------------------------------------
 class CommandHubServer:
-    """Expose client command routes independently of outbound gateway routes and credentials."""
-
+    """
+    Expose client command routes independently of outbound gateway routes and credentials.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -62,9 +70,10 @@ class CommandHubServer:
         *,
         max_requests: int = 16,
         max_polls: int = 8,
-    ) -> None:
+        ) -> None:
 
-        """Bind one hub and reserve capacity for heartbeat, claims and results.
+        """
+        Bind one hub and reserve capacity for heartbeat, claims and results.
 
         :param hub: Independently configured command hub.
         :type hub: CommandHub
@@ -95,7 +104,6 @@ class CommandHubServer:
         self._closed = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
@@ -106,9 +114,10 @@ class CommandHubServer:
         port: int = 0,
         ssl_context: ssl.SSLContext | None = None,
         allow_loopback_http: bool = False,
-    ) -> None:
+        ) -> None:
 
-        """Start an owned hub on TLS or explicitly allowed loopback HTTP.
+        """
+        Start an owned hub on TLS or explicitly allowed loopback HTTP.
 
         :param host: Explicit listener address.
         :type host: str
@@ -160,13 +169,16 @@ class CommandHubServer:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Wake hub polls before stopping the listener and its active handlers."""
+        """
+        Wake hub polls before stopping the listener and its active handlers.
+        """
 
         if self._closed:
             return
@@ -177,16 +189,16 @@ class CommandHubServer:
             await self._runner.cleanup()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Проверка credentials без изменения lifecycle
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка токенов без регистрации сессии и изменения состояния сервера
     #--------------------------------------------------------------------------------------------------------------
     def _probe_auth(
         self,
         request: Any,
-    ) -> Any:
+        ) -> Any:
 
-        """Authenticate diagnostics even when maintenance is degraded, without checking storage.
+        """
+        Authenticate diagnostics even when maintenance is degraded, without checking storage.
 
         :param request: Incoming request containing exactly one bearer header.
         :type request: Any
@@ -212,9 +224,10 @@ class CommandHubServer:
     def _probe_status(
         self,
         identity: Identity,
-    ) -> dict[str, Any]:
+        ) -> dict[str, Any]:
 
-        """Read cached hub readiness and the presence of the already authorized client.
+        """
+        Read cached hub readiness and the presence of the already authorized client.
 
         :param identity: Exact identity authorized by the probe endpoint.
         :type identity: Identity
@@ -227,16 +240,16 @@ class CommandHubServer:
         return dict(self.hub.health(), session_present=self.hub.client_present(identity))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Отказ от Expect до чтения тела запроса
     #--------------------------------------------------------------------------------------------------------------
     async def _expect(
         self,
         request: Any,
-    ) -> Any:
+        ) -> Any:
 
-        """Reject Expect before accepting a request body or disclosing authentication state.
+        """
+        Reject Expect before accepting a request body or disclosing authentication state.
 
         :param request: Incoming request validated before dispatch.
         :type request: Any
@@ -253,16 +266,16 @@ class CommandHubServer:
         return response
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Авторизация до чтения тела и вызов подходящей операции
     #--------------------------------------------------------------------------------------------------------------
     async def _handle(
         self,
         request: Any,
-    ) -> Any:
+        ) -> Any:
 
-        """Authenticate before bounded body reading and dispatch one typed operation.
+        """
+        Authenticate before bounded body reading and dispatch one typed operation.
 
         :param request: Incoming request validated before dispatch.
         :type request: Any
@@ -325,7 +338,6 @@ class CommandHubServer:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

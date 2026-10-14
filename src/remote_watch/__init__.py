@@ -1,10 +1,10 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-095557
+# Дата и время последнего изменения: 261014-142149
 #
 # Экспорт:
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
@@ -23,6 +23,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from remote_watch.commands.registry import ArgumentValidator as ArgumentValidator
 from remote_watch.commands.registry import CommandCallback as CommandCallback
 from remote_watch.commands.registry import CommandContext as CommandContext
@@ -58,14 +59,4 @@ from remote_watch.watcher import ConsoleConfig as ConsoleConfig
 from remote_watch.watcher import RemoteWatcher as RemoteWatcher
 from remote_watch.watcher import RotatingFileConfig as RotatingFileConfig
 
-#------------------------------------------------------------------------------------------------------------------
-
-
-#------------------------------------------------------------------------------------------------------------------
-# СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
-#------------------------------------------------------------------------------------------------------------------
-if __name__ == "__main__":
-    print(
-        'Модуль remote_watch.__init__ не предназначен для прямого запуска.',
-    )
 #------------------------------------------------------------------------------------------------------------------

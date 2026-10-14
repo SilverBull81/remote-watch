@@ -1,32 +1,57 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> Provider: Канал с управляемым завершением попытки.
+# -> Provider: Канал с управляемым завершением попытки
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие без сетевых обращений.
-#    -> send(): Одна попытка с сохранением принадлежности и результата.
-#    -> close(): Завершение и освобождение ресурсов.
+#    -> open(): Открытие без сетевых обращений
+#    -> send(): Одна попытка с сохранением принадлежности и результата
+#    -> close(): Завершение и освобождение ресурсов
 #
 # Тесты:
-# -> test_cli_summary(): Единственная сводка после завершения CLI.
-# -> test_config_categories(): Безопасные категории ошибок JSON.
-# -> test_cli_private_arguments(): Отсутствие приватных аргументов в ошибке CLI.
-# -> test_shared_alias(): Конкуренция двух приложений за общего получателя.
-# -> test_cli_process_stop(): Штатная остановка настоящего дочернего процесса.
-# -> test_mixed_field(): Полевой сценарий через gateway и прямой ntfy.
+# -> test_cli_summary(): Единственная сводка после завершения CLI
+#    Вложенные объявления:
+#    -> Managed: Подставной gateway для проверки CLI
+#       Конструктор:
+#       -> __init__(): Подготовка состояния объекта.
+#       Интерфейс:
+#       -> start(): Управляемый исход запуска
+#       -> close(): Завершение и освобождение ресурсов
+#       -> stats(): Сводка после завершения очистки
+#
+# -> test_config_categories(): Безопасные категории ошибок JSON
+#
+# -> test_cli_private_arguments(): Отсутствие приватных аргументов в ошибке CLI
+#
+# -> test_shared_alias(): Конкуренция двух приложений за общего получателя
+#    Вложенные объявления:
+#    -> scenario(): Выполнение ограниченного асинхронного сценария
+#       Вложенные объявления:
+#       -> post(): Запрос с токеном выбранного приложения
+#
+# -> test_cli_process_stop(): Штатная остановка настоящего дочернего процесса
+#
+# -> test_mixed_field(): Полевой сценарий через gateway и прямой ntfy
+#    Вложенные объявления:
+#    -> fast_run(): Ускорение расписания без подмены доставки
+#       Вложенные объявления:
+#       -> advance(): Продвижение часов расписания
+#    -> scenario(): Выполнение ограниченного асинхронного сценария
+#       Вложенные объявления:
+#       -> publish(): Локальное подтверждение ntfy
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -58,19 +83,31 @@ from remote_watch.gateway.notification_json_config import (
 from remote_watch.gateway.notification_server import NotificationGateway
 from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest, decode_response
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Канал с управляемым завершением попытки
 #------------------------------------------------------------------------------------------------------------------
 class Provider:
-    """Hold one attempt to make competing requests deterministic."""
+    """
+    Hold one attempt to make competing requests deterministic.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Create barriers in the test event loop."""
+        """
+        Create barriers in the test event loop.
+        """
 
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
@@ -80,9 +117,13 @@ class Provider:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие без сетевых обращений
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Open without reading provider credentials."""
+        """
+        Open without reading provider credentials.
+        """
 
         pass
     #--------------------------------------------------------------------------------------------------------------
@@ -93,9 +134,10 @@ class Provider:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Retain identity and correlation until the test releases the provider.
+        """
+        Retain identity and correlation until the test releases the provider.
 
         :param delivery: Prepared delivery.
         :type delivery: Delivery
@@ -115,14 +157,22 @@ class Provider:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Завершение и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release the local barrier on cleanup."""
+        """
+        Release the local barrier on cleanup.
+        """
 
         self.release.set()
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Единственная сводка после завершения CLI
@@ -133,9 +183,10 @@ def test_cli_summary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Emit one bounded summary after cleanup for every managed lifecycle outcome.
+    """
+    Emit one bounded summary after cleanup for every managed lifecycle outcome.
 
     :param mode: Selected scenario.
     :type mode: str
@@ -164,7 +215,9 @@ def test_cli_summary(
     # КЛАСС : Подставной gateway для проверки CLI
     #--------------------------------------------------------------------------------------------------------------
     class Managed:
-        """Replace networking while retaining the real CLI lifecycle."""
+        """
+        Replace networking while retaining the real CLI lifecycle.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # КОНСТРУКТОР
@@ -172,9 +225,10 @@ def test_cli_summary(
         def __init__(
             self,
             config: object,
-        ) -> None:
+            ) -> None:
 
-            """Accept the synthetic configuration.
+            """
+            Accept the synthetic configuration.
 
             :param config: Validated or synthetic configuration.
             :type config: object
@@ -191,9 +245,10 @@ def test_cli_summary(
         async def start(
             self,
             **kwargs: object,
-        ) -> None:
+            ) -> None:
 
-            """Exercise normal start, cancellation and a sanitized startup failure.
+            """
+            Exercise normal start, cancellation and a sanitized startup failure.
 
             :param kwargs: Listener settings.
             :type kwargs: object
@@ -211,9 +266,13 @@ def test_cli_summary(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Завершение и освобождение ресурсов
         #----------------------------------------------------------------------------------------------------------
-        async def close(self) -> None:
+        async def close(
+            self,
+            ) -> None:
 
-            """Record cleanup before statistics are obtained."""
+            """
+            Record cleanup before statistics are obtained.
+            """
 
             closed.append(True)
         #----------------------------------------------------------------------------------------------------------
@@ -221,9 +280,12 @@ def test_cli_summary(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Сводка после завершения очистки
         #----------------------------------------------------------------------------------------------------------
-        def stats(self) -> dict[str, int]:
+        def stats(
+            self,
+            ) -> dict[str, int]:
 
-            """Return counters only after cleanup.
+            """
+            Return counters only after cleanup.
 
             :return: Synthetic aggregate counters consumed by the shutdown summary.
             :rtype: dict[str, int]
@@ -248,7 +310,6 @@ def test_cli_summary(
     assert rows == [{"kind": "gateway_summary", "stats": {"active": 0, "destinations_busy": 0}}]
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасные категории ошибок JSON
 #------------------------------------------------------------------------------------------------------------------
@@ -264,9 +325,10 @@ def test_config_categories(
     field: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Expose only predefined error codes and schema groups, never arbitrary JSON keys.
+    """
+    Expose only predefined error codes and schema groups, never arbitrary JSON keys.
 
     :param raw: Synthetic input bytes or absent file.
     :type raw: bytes | None
@@ -302,13 +364,15 @@ def test_config_categories(
     assert "private" not in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие приватных аргументов в ошибке CLI
 #------------------------------------------------------------------------------------------------------------------
-def test_cli_private_arguments(capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_private_arguments(
+    capsys: pytest.CaptureFixture[str],
+    ) -> None:
 
-    """Do not echo a private argument even when argparse rejects it.
+    """
+    Do not echo a private argument even when argparse rejects it.
 
     :param capsys: Captured console output.
     :type capsys: pytest.CaptureFixture[str]
@@ -322,16 +386,16 @@ def test_cli_private_arguments(capsys: pytest.CaptureFixture[str]) -> None:
     assert "private_value" not in capsys.readouterr().err
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конкуренция двух приложений за общего получателя
 #------------------------------------------------------------------------------------------------------------------
 def test_shared_alias(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Keep two principals isolated while contending for one provider destination.
+    """
+    Keep two principals isolated while contending for one provider destination.
 
     :param notification: Synthetic notification.
     :type notification: Notification
@@ -352,7 +416,9 @@ def test_shared_alias(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Reject competing and unauthorized calls before any extra provider attempt."""
+        """
+        Reject competing and unauthorized calls before any extra provider attempt.
+        """
 
         provider = Provider()
         other = replace(notification, identity=replace(notification.identity, instance_id="two"))
@@ -375,9 +441,10 @@ def test_shared_alias(
             delivery: Delivery,
             env: str,
             alias: str = 'shared',
-        ) -> tuple[int, dict]:
+            ) -> tuple[int, dict]:
 
-            """Submit a correlated gateway envelope with the selected principal token.
+            """
+            Submit a correlated gateway envelope with the selected principal token.
 
             :param client: Local HTTP client.
             :type client: aiohttp.ClientSession
@@ -439,7 +506,6 @@ def test_shared_alias(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Штатная остановка настоящего дочернего процесса
 #------------------------------------------------------------------------------------------------------------------
@@ -447,9 +513,10 @@ def test_shared_alias(
 def test_cli_process_stop(
     tmp_path: Path,
     output_encoding: str,
-) -> None:
+    ) -> None:
 
-    """Stop a real gateway child process through the local file on Windows and Unix.
+    """
+    Stop a real gateway child process through the local file on Windows and Unix.
 
     :param tmp_path: Temporary test directory.
     :type tmp_path: Path
@@ -508,7 +575,6 @@ def test_cli_process_stop(
     assert b"synthetic_process_" not in data
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полевой сценарий через gateway и прямой ntfy
 #------------------------------------------------------------------------------------------------------------------
@@ -518,9 +584,10 @@ def test_mixed_field(
     notification: Notification,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Run the mixed CLI through real gateway HTTP and direct ntfy without Telegram credentials.
+    """
+    Run the mixed CLI through real gateway HTTP and direct ntfy without Telegram credentials.
 
     :param authorized: Whether the gateway token is authorized.
     :type authorized: bool
@@ -553,9 +620,10 @@ def test_mixed_field(
         config: field_smoke.FieldConfig,
         destinations: tuple[Destination, ...],
         output: Path,
-    ) -> int:
+        ) -> int:
 
-        """Accelerate sample scheduling while leaving the real delivery worker untouched.
+        """
+        Accelerate sample scheduling while leaving the real delivery worker untouched.
 
         :param config: Validated or synthetic configuration.
         :type config: field_smoke.FieldConfig
@@ -579,9 +647,12 @@ def test_mixed_field(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Продвижение часов расписания
         #----------------------------------------------------------------------------------------------------------
-        def advance(delay: float) -> None:
+        def advance(
+            delay: float,
+            ) -> None:
 
-            """Advance only the application scheduling clock.
+            """
+            Advance only the application scheduling clock.
 
             :param delay: Synthetic elapsed seconds.
             :type delay: float
@@ -602,16 +673,21 @@ def test_mixed_field(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep the gateway event loop running while the field CLI owns its runtime thread."""
+        """
+        Keep the gateway event loop running while the field CLI owns its runtime thread.
+        """
 
         ntfy_calls = []
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Локальное подтверждение ntfy
         #----------------------------------------------------------------------------------------------------------
-        async def publish(request: web.Request) -> web.Response:
+        async def publish(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Accept one direct synthetic notification.
+            """
+            Accept one direct synthetic notification.
 
             :param request: Local HTTP request.
             :type request: web.Request
@@ -674,8 +750,6 @@ def test_mixed_field(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

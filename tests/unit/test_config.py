@@ -1,35 +1,34 @@
 ﻿# Проверки конфигурации, ленивых фабрик и результатов доставки.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> unused_factory(): Контроль отсутствия побочных действий при конфигурации
 #
 # Тесты:
+# -> test_configuration_is_lazy_and_detached(): Конфигурация не создаёт каналы и не сохраняет изменяемые списки
 #
-# -> unused_factory(): Фабрика, которую конфигурация не должна вызывать.
+# -> test_configuration_rejects_invalid_references(): Неоднозначная конфигурация не принимается
 #
-# Тесты:
+# -> test_finite_policy_bounds(): Временные бюджеты должны быть конечными и согласованными
 #
-# -> test_configuration_is_lazy_and_detached(): Защитные копии без создания клиента.
+# -> test_runtime_and_destination_validation(): Проверка способов доставки и ограничений очереди
 #
-# -> test_configuration_rejects_invalid_references(): Дубликаты и отсутствующие адресаты.
+# -> test_delivery_results(): Результаты различают известный успех, ограничение и неизвестный исход
 #
-# -> test_finite_policy_bounds(): Неправильные временные бюджеты.
+# -> test_invalid_delivery_result(): Несовместимые поля результата отклоняются
 #
-# -> test_runtime_and_destination_validation(): Неподдерживаемые режимы и типы.
-#
-# -> test_delivery_results(): Классификация одной попытки.
-#
-# -> test_invalid_delivery_result(): Противоречивые поля результата.
-#
-# -> test_delivery_retry_preserves_ids(): Явное изменение номера попытки.
+# -> test_delivery_retry_preserves_ids(): Повтор использует прежний delivery ID и прежний снимок
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from dataclasses import replace
 
 import pytest
@@ -49,17 +48,20 @@ from remote_watch import (
     WatcherConfig,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # ФУНКЦИИ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Контроль отсутствия побочных действий при конфигурации
 #------------------------------------------------------------------------------------------------------------------
 def unused_factory() -> NotificationChannel:
 
-    """Fail if validation tries to create a channel.
+    """
+    Fail if validation tries to create a channel.
 
     :return: Never returns; invocation is a test failure.
     :rtype: NotificationChannel
@@ -73,15 +75,15 @@ def unused_factory() -> NotificationChannel:
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конфигурация не создаёт каналы и не сохраняет изменяемые списки
 #------------------------------------------------------------------------------------------------------------------
 def test_configuration_is_lazy_and_detached(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Keep provider factories lazy and configuration collections immutable.
+    """
+    Keep provider factories lazy and configuration collections immutable.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -104,15 +106,15 @@ def test_configuration_is_lazy_and_detached(
     assert "unused_factory" not in repr(config)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неоднозначная конфигурация не принимается
 #------------------------------------------------------------------------------------------------------------------
 def test_configuration_rejects_invalid_references(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Reject duplicate IDs, missing targets and exceeded destination budgets.
+    """
+    Reject duplicate IDs, missing targets and exceeded destination budgets.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -139,7 +141,6 @@ def test_configuration_rejects_invalid_references(
         WatcherConfig(identity=identity, commands={"invalid": object()})
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Временные бюджеты должны быть конечными и согласованными
 #------------------------------------------------------------------------------------------------------------------
@@ -150,9 +151,10 @@ def test_configuration_rejects_invalid_references(
 ])
 def test_finite_policy_bounds(
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject nonfinite, incorrectly typed and contradictory retry policies.
+    """
+    Reject nonfinite, incorrectly typed and contradictory retry policies.
 
     :param changes: Invalid policy fields.
     :type changes: dict[str, object]
@@ -164,13 +166,14 @@ def test_finite_policy_bounds(
         RetryPolicy(**changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка способов доставки и ограничений очереди
 #------------------------------------------------------------------------------------------------------------------
 def test_runtime_and_destination_validation() -> None:
 
-    """Accept explicit transport modes and reject invalid queue/factory values eagerly."""
+    """
+    Accept explicit transport modes and reject invalid queue/factory values eagerly.
+    """
 
     destination = Destination(destination_id="phone", channel_factory=unused_factory, mode=DeliveryMode.GATEWAY)
     assert destination.mode is DeliveryMode.GATEWAY
@@ -191,13 +194,14 @@ def test_runtime_and_destination_validation() -> None:
         RuntimeConfig(shutdown_timeout=float("inf"))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Результаты различают известный успех, ограничение и неизвестный исход
 #------------------------------------------------------------------------------------------------------------------
 def test_delivery_results() -> None:
 
-    """Represent accepted, rate-limited and ambiguous attempts separately."""
+    """
+    Represent accepted, rate-limited and ambiguous attempts separately.
+    """
 
     accepted = DeliveryResult(status=DeliveryStatus.PROVIDER_ACCEPTED, provider_message_id="message-1")
     limited = DeliveryResult(status=DeliveryStatus.RATE_LIMITED, retry_after=0, reason_code="http_429")
@@ -206,7 +210,6 @@ def test_delivery_results() -> None:
     assert limited.retry_after == 0
     assert unknown.provider_message_id is None
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Несовместимые поля результата отклоняются
@@ -219,9 +222,10 @@ def test_delivery_results() -> None:
 ])
 def test_invalid_delivery_result(
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Prevent impossible combinations and unsafe provider result data.
+    """
+    Prevent impossible combinations and unsafe provider result data.
 
     :param changes: Invalid result fields.
     :type changes: dict[str, object]
@@ -233,15 +237,15 @@ def test_invalid_delivery_result(
         DeliveryResult(**({"status": DeliveryStatus.PROVIDER_ACCEPTED} | changes))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Повтор использует прежний delivery ID и прежний снимок
 #------------------------------------------------------------------------------------------------------------------
 def test_delivery_retry_preserves_ids(
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Model another attempt without changing event or delivery identity.
+    """
+    Model another attempt without changing event or delivery identity.
 
     :param notification: Valid immutable snapshot.
     :type notification: Notification
@@ -258,8 +262,6 @@ def test_delivery_retry_preserves_ids(
         replace(first, attempt=0)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

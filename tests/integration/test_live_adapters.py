@@ -1,18 +1,21 @@
 ﻿# Явно включаемая проверка доставки одного синтетического сообщения реальному сервису.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_live_notification(): Явно разрешённая отправка реальному сервису.
+# -> test_live_notification(): Явно разрешённая отправка реальному сервису
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -24,15 +27,23 @@ from remote_watch import Delivery, DeliveryStatus, Notification
 from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 pytestmark = [pytest.mark.integration, pytest.mark.skipif(
     os.environ.get("REMOTE_WATCH_LIVE") != "1", reason="set REMOTE_WATCH_LIVE=1 explicitly",
 )]
+
+#------------------------------------------------------------------------------------------------------------------
 
 
 #******************************************************************************************************************
 # ТЕСТЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явно разрешённая отправка реальному сервису
@@ -41,9 +52,10 @@ pytestmark = [pytest.mark.integration, pytest.mark.skipif(
 def test_live_notification(
     provider: str,
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Send one synthetic notification only when live execution is explicitly enabled.
+    """
+    Send one synthetic notification only when live execution is explicitly enabled.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -72,7 +84,9 @@ def test_live_notification(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Close the client even when the live provider rejects the request."""
+        """
+        Close the client even when the live provider rejects the request.
+        """
 
         try:
             await channel.open()
@@ -85,8 +99,6 @@ def test_live_notification(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,20 +1,26 @@
 ﻿# Проверка границ настройки адаптеров и освобождения частично созданного клиента.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_invalid_settings(): Отклонение неверных настроек до чтения токена.
-# -> test_partial_open_cleanup(): Закрытие соединителя при ошибке создания сессии.
-# -> test_loop_ownership(): Запрет обращения к клиенту из чужого цикла asyncio.
+# -> test_invalid_settings(): Отклонение неверных настроек до чтения токена
+#
+# -> test_partial_open_cleanup(): Закрытие соединителя при ошибке создания сессии
+#    Вложенные объявления:
+#    -> fail(): Воспроизведение ошибки при создании клиента
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_loop_ownership(): Запрет обращения к клиенту из чужого цикла asyncio
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -27,10 +33,12 @@ from remote_watch.adapters._http import HttpSender
 from remote_watch.adapters.ntfy_notifications import NtfyConfig
 from remote_watch.adapters.telegram_notifications import TelegramConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # ТЕСТЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение неверных настроек до чтения токена
@@ -49,9 +57,10 @@ from remote_watch.adapters.telegram_notifications import TelegramConfig
 def test_invalid_settings(
     provider: str,
     settings: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject invalid settings before any client or secret is accessed.
+    """
+    Reject invalid settings before any client or secret is accessed.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -72,13 +81,15 @@ def test_invalid_settings(
         config(**values)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Закрытие соединителя при ошибке создания сессии
 #------------------------------------------------------------------------------------------------------------------
-def test_partial_open_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_partial_open_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
 
-    """Close a connector whose session constructor failed without exposing its error.
+    """
+    Close a connector whose session constructor failed without exposing its error.
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -92,9 +103,12 @@ def test_partial_open_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Воспроизведение ошибки при создании клиента
     #--------------------------------------------------------------------------------------------------------------
-    def fail(**kwargs: Any) -> None:
+    def fail(
+        **kwargs: Any,
+        ) -> None:
 
-        """Capture the connector before reproducing a private client error.
+        """
+        Capture the connector before reproducing a private client error.
 
         :param kwargs: Captured request or client keyword arguments.
         :type kwargs: Any
@@ -113,7 +127,9 @@ def test_partial_open_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise cleanup after a partially failed initialization."""
+        """
+        Exercise cleanup after a partially failed initialization.
+        """
 
         sender = HttpSender(RetryPolicy())
         with pytest.raises(RuntimeError, match="could not be created") as caught:
@@ -125,13 +141,14 @@ def test_partial_open_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет обращения к клиенту из чужого цикла asyncio
 #------------------------------------------------------------------------------------------------------------------
 def test_loop_ownership() -> None:
 
-    """Reject use outside the original loop and leave cleanup to that owner."""
+    """
+    Reject use outside the original loop and leave cleanup to that owner.
+    """
 
     pytest.importorskip("aiohttp")
     owner = asyncio.new_event_loop()
@@ -149,8 +166,6 @@ def test_loop_ownership() -> None:
         other.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

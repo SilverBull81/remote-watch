@@ -1,24 +1,34 @@
 ﻿# Проверки JSON-конфигурации gateway и выбора способа запуска.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> document(): Синтетический файл настроек без секретов
 #
 # Тесты:
-# -> document(): Синтетический файл настроек без секретов.
-# -> test_json_valid(): Создание настроек обоих провайдеров без токенов.
-# -> test_json_rejects(): Отклонение неверных и неоднозначных настроек.
-# -> test_json_cli(): Проверка обоих способов настройки и запуска.
-# -> test_json_cli_exclusive(): Выбор единственного источника настроек.
-# -> test_json_cli_private_error(): Отсутствие локальных данных в сообщении об ошибке.
-# -> test_json_example(): Проверка примера для четырёх приложений.
+# -> test_json_valid(): Создание настроек обоих провайдеров без токенов
+#
+# -> test_json_rejects(): Отклонение неверных и неоднозначных настроек
+#
+# -> test_json_cli(): Проверка обоих способов настройки и запуска
+#    Вложенные объявления:
+#    -> serve(): Перехват запуска сервера без открытия порта
+#
+# -> test_json_cli_exclusive(): Выбор единственного источника настроек
+#
+# -> test_json_cli_private_error(): Отсутствие локальных данных в сообщении об ошибке
+#
+# -> test_json_example(): Проверка примера для четырёх приложений
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -33,13 +43,20 @@ from remote_watch import DeliveryMode
 from remote_watch.gateway.notification_json_config import MAX_CONFIG_BYTES, load_notification_gateway_config
 from remote_watch.gateway.notification_server import main
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Синтетический файл настроек без секретов
 #------------------------------------------------------------------------------------------------------------------
 def document() -> dict[str, Any]:
 
-    """Build a small configuration containing no real credentials.
+    """
+    Build a small configuration containing no real credentials.
 
     :return: Mutable synthetic JSON configuration with placeholders for credentials.
     :rtype: dict[str, Any]
@@ -57,6 +74,10 @@ def document() -> dict[str, Any]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Создание настроек обоих провайдеров без токенов
 #------------------------------------------------------------------------------------------------------------------
@@ -67,9 +88,10 @@ def test_json_valid(
     provider: str,
     monkeypatch: pytest.MonkeyPatch,
     display: str,
-) -> None:
+    ) -> None:
 
-    """Create typed destinations without reading provider or service credentials.
+    """
+    Create typed destinations without reading provider or service credentials.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -117,7 +139,6 @@ def test_json_valid(
     assert provider_config.display_fields == (("identity", "level") if display == "compact" else None)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение неверных и неоднозначных настроек
 #------------------------------------------------------------------------------------------------------------------
@@ -129,9 +150,10 @@ def test_json_valid(
 def test_json_rejects(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous, unsafe or oversized documents without echoing their contents.
+    """
+    Reject ambiguous, unsafe or oversized documents without echoing their contents.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -199,7 +221,6 @@ def test_json_rejects(
     assert error.value.__suppress_context__
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка обоих способов настройки и запуска
 #------------------------------------------------------------------------------------------------------------------
@@ -209,9 +230,10 @@ def test_json_cli(
     monkeypatch: pytest.MonkeyPatch,
     factory: bool,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Preserve Python factories and validate JSON without starting the server.
+    """
+    Preserve Python factories and validate JSON without starting the server.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -251,9 +273,10 @@ def test_json_cli(
         host: str,
         port: int,
         context: Any,
-    ) -> None:
+        ) -> None:
 
-        """Capture the configuration instead of opening a socket.
+        """
+        Capture the configuration instead of opening a socket.
 
         :param config: Validated gateway configuration.
         :type config: Any
@@ -282,14 +305,16 @@ def test_json_cli(
     assert calls[0][1:] == ("127.0.0.1", 8765, None)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Выбор единственного источника настроек
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("arguments", [[], ["module:factory", "--config", "config.json"]])
-def test_json_cli_exclusive(arguments: list[str]) -> None:
+def test_json_cli_exclusive(
+    arguments: list[str],
+    ) -> None:
 
-    """Require exactly one explicit configuration source.
+    """
+    Require exactly one explicit configuration source.
 
     :param arguments: Explicit CLI arguments.
     :type arguments: list[str]
@@ -302,16 +327,16 @@ def test_json_cli_exclusive(arguments: list[str]) -> None:
     assert error.value.code == 2
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие локальных данных в сообщении об ошибке
 #------------------------------------------------------------------------------------------------------------------
 def test_json_cli_private_error(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Report invalid local configuration without leaking field values.
+    """
+    Report invalid local configuration without leaking field values.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -329,13 +354,14 @@ def test_json_cli_private_error(
     assert "PRIVATE_VALUE" not in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка примера для четырёх приложений
 #------------------------------------------------------------------------------------------------------------------
 def test_json_example() -> None:
 
-    """Validate the distributed four-application example as executable configuration."""
+    """
+    Validate the distributed four-application example as executable configuration.
+    """
 
     config = load_notification_gateway_config(
         Path(__file__).parents[2] / "docs/examples/notification_gateway.example.json")
@@ -345,8 +371,6 @@ def test_json_example() -> None:
         assert principal.aliases == (destination.destination_id,)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

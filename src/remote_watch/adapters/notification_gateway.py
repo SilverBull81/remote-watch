@@ -1,33 +1,33 @@
-﻿# Одна исходящая попытка доставки через HTTPS gateway без provider credentials.
+﻿# Одна попытка доставки через HTTPS-шлюз без передачи клиенту токенов мессенджера.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationGatewayClientConfig: Настройки адреса gateway и разрешённого назначения.
+# -> NotificationGatewayClientConfig: Настройки адреса gateway и разрешённого назначения
 #    Интерфейс:
-#    -> destination(): Ленивое назначение с заданным способом доставки.
+#    -> destination(): Ленивое назначение с заданным способом доставки
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек и ограничений.
+#    -> __post_init__(): Проверка настроек и ограничений
 #    Служебные методы:
-#    -> _check_policy(): Проверка резерва времени на сетевой обмен.
+#    -> _check_policy(): Проверка резерва времени на сетевой обмен
 #
-# -> NotificationGatewayChannel: Доставка через gateway без provider credentials.
+# -> NotificationGatewayChannel: Доставка через шлюз без токенов мессенджера на клиенте
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие канала в принадлежащем ему цикле событий.
-#    -> send(): Одна попытка отправки без собственного цикла повторов.
-#    -> close(): Закрытие канала и освобождение временных данных.
-#
+#    -> open(): Открытие канала в принадлежащем ему цикле событий
+#    -> send(): Одна попытка отправки без собственного цикла повторов
+#    -> close(): Закрытие канала и освобождение временных данных
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import ssl
@@ -60,25 +60,66 @@ from remote_watch.notifications.gateway_protocol import (
     validate_alias,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки адреса gateway и разрешённого назначения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NotificationGatewayClientConfig:
-    """Bind a destination to a fixed gateway endpoint and one authorized alias."""
+    """
+    Bind a destination to a fixed gateway endpoint and one authorized alias.
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param alias: Configured destination name authorized by the gateway principal.
+    :type alias: str
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param server_timeout: Maximum gateway processing duration, in seconds.
+    :type server_timeout: float
+
+    :param network_margin: Additional network allowance around the gateway timeout, in seconds.
+    :type network_margin: float
+
+    :param allow_http: Explicit opt-in to unencrypted HTTP for supported local tests.
+    :type allow_http: bool
+
+    :param schema_version: Serialized schema version, or automatic selection where explicitly supported.
+    :type schema_version: int | None
+
+    :param ssl_context: Explicit verifying TLS context, or None for default trust.
+    :type ssl_context: ssl.SSLContext | None
+
+    :param display_mode: Full, compact or text presentation; None inherits gateway settings where supported.
+    :type display_mode: str | None
+
+    :param display_fields: Selected presentation field groups, or None for mode defaults.
+    :type display_fields: tuple[str, ...] | None
+    """
 
     endpoint: str                       # Базовый HTTPS-адрес gateway, без токена и query.
     alias: str                          # Имя получателя в конфигурации gateway.
     token_env: str | None = field(default=None, repr=False)  # Имя переменной; альтернатива token.
-    token: str | None = field(default=None, repr=False)      # Сервисный токен из приватных настроек.
+    token: str | None = field(default=None, repr=False)  # Сервисный токен из приватных настроек.
     server_timeout: float = 8.0         # Верхний срок обработки запроса gateway, секунды.
     network_margin: float = 1.0         # Резерв на обмен с gateway, секунды.
     allow_http: bool = False            # Явное разрешение HTTP только для локальной проверки.
     schema_version: int | None = None   # None — выбор 1 либо 3 при заданном display_mode.
     ssl_context: ssl.SSLContext | None = field(default=None, repr=False, compare=False)  # Явное доверие CA.
     display_mode: str | None = None     # full/compact/text; None — оставить серверный режим.
-    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
+    display_fields: tuple[str, ...] | None = None  # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ленивое назначение с заданным способом доставки
@@ -89,9 +130,10 @@ class NotificationGatewayClientConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-    ) -> Destination:
+        ) -> Destination:
 
-        """Create a gateway-mode destination whose retries remain owned by the application runtime.
+        """
+        Create a gateway-mode destination whose retries remain owned by the application runtime.
 
         :param destination_id: Logical routing identifier.
         :type destination_id: str
@@ -120,9 +162,13 @@ class NotificationGatewayClientConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate fixed routing and finite budgets without reading credentials."""
+        """
+        Validate fixed routing and finite budgets without reading credentials.
+        """
 
         validate_endpoint(self.endpoint, self.allow_http)
         validate_alias(self.alias)
@@ -154,9 +200,10 @@ class NotificationGatewayClientConfig:
     def _check_policy(
         self,
         policy: RetryPolicy,
-    ) -> None:
+        ) -> None:
 
-        """Require room for a gateway result within the client's attempt deadline.
+        """
+        Require room for a gateway result within the client's attempt deadline.
 
         :param policy: Timeout and retry policy.
         :type policy: RetryPolicy
@@ -171,12 +218,13 @@ class NotificationGatewayClientConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Доставка через gateway без provider credentials
+# КЛАСС : Доставка через шлюз без токенов мессенджера на клиенте
 #------------------------------------------------------------------------------------------------------------------
 class NotificationGatewayChannel:
-    """Send one correlated request; it does not import a concrete provider or retry internally."""
+    """
+    Send one correlated request; it does not import a concrete provider or retry internally.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -186,9 +234,10 @@ class NotificationGatewayChannel:
         config: NotificationGatewayClientConfig,
         *,
         retry: RetryPolicy | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Prepare lazy HTTP ownership without accessing the network or credentials.
+        """
+        Prepare lazy HTTP ownership without accessing the network or credentials.
 
         :param config: Validated settings.
         :type config: NotificationGatewayClientConfig
@@ -215,9 +264,13 @@ class NotificationGatewayChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие канала в принадлежащем ему цикле событий
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Resolve a service credential and open the client in the worker loop."""
+        """
+        Resolve a service credential and open the client in the worker loop.
+        """
 
         if self._token is not None:
             await self._http.open()
@@ -234,9 +287,10 @@ class NotificationGatewayChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Perform one request with conservative expiry and correlated result validation.
+        """
+        Perform one request with conservative expiry and correlated result validation.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -295,9 +349,13 @@ class NotificationGatewayChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие канала и освобождение временных данных
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the client and discard the cached service token."""
+        """
+        Close the client and discard the cached service token.
+        """
 
         try:
             await self._http.close()
@@ -306,8 +364,6 @@ class NotificationGatewayChannel:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

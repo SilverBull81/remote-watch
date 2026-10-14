@@ -1,23 +1,29 @@
 ﻿# Проверки ограничений перезапуска без процессов, сети и реального ожидания.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-184007
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_backoff_and_latched_limit(): Задержки, верхняя граница и окончательное исчерпание.
-# -> test_permanent_failures(): Отказы, которые нельзя исправлять перезапуском.
-# -> test_window_and_disabled_restarts(): Граница окна и явный запрет повторов.
-# -> test_invalid_policy(): Недопустимые сроки и ёмкость истории.
-# -> test_invalid_observation(): Ошибки монотонного времени и случайной поправки.
-# -> test_long_running_budget(): Ограничение истории при долгой работе.
+# -> test_backoff_and_latched_limit(): Задержки, верхняя граница и окончательное исчерпание
+#
+# -> test_permanent_failures(): Отказы, которые нельзя исправлять перезапуском
+#
+# -> test_window_and_disabled_restarts(): Граница окна и явный запрет повторов
+#
+# -> test_invalid_policy(): Недопустимые сроки и ёмкость истории
+#
+# -> test_invalid_observation(): Ошибки монотонного времени и случайной поправки
+#
+# -> test_long_running_budget(): Ограничение истории при долгой работе
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,13 +32,21 @@ import pytest
 
 from remote_watch.gateway_server import FailureKind, RestartBudget, RestartPolicy
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Задержки, верхняя граница и окончательное исчерпание
 #------------------------------------------------------------------------------------------------------------------
 def test_backoff_and_latched_limit() -> None:
 
-    """Cap both restart count and jittered delays, keeping exhaustion latched."""
+    """
+    Cap both restart count and jittered delays, keeping exhaustion latched.
+    """
 
     budget = RestartBudget(RestartPolicy(max_restarts=3, initial_delay=2, max_delay=5))
     assert budget.record_failure(0, FailureKind.CRASH, jitter=0).delay == pytest.approx(1.6)
@@ -46,15 +60,17 @@ def test_backoff_and_latched_limit() -> None:
     assert budget.record_failure(100000, FailureKind.CRASH) == blocked
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказы, которые нельзя исправлять перезапуском
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("failure", [FailureKind.CONFIGURATION, FailureKind.AUTHORIZATION,
                                      FailureKind.OWNERSHIP, FailureKind.STORAGE, FailureKind.SHUTDOWN])
-def test_permanent_failures(failure: FailureKind) -> None:
+def test_permanent_failures(
+    failure: FailureKind,
+    ) -> None:
 
-    """Never turn configuration, authorization, storage or ownership faults into retries.
+    """
+    Never turn configuration, authorization, storage or ownership faults into retries.
 
     :param failure: Non-retryable termination reason.
     :type failure: FailureKind
@@ -69,13 +85,14 @@ def test_permanent_failures(failure: FailureKind) -> None:
     assert budget.record_failure(1000, FailureKind.CRASH) == decision
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Граница окна и явный запрет повторов
 #------------------------------------------------------------------------------------------------------------------
 def test_window_and_disabled_restarts() -> None:
 
-    """Expire old reservations at the exact boundary while honoring zero restarts."""
+    """
+    Expire old reservations at the exact boundary while honoring zero restarts.
+    """
 
     policy = RestartPolicy(max_restarts=1, window=10, initial_delay=1, max_delay=2)
     before = RestartBudget(policy)
@@ -88,7 +105,6 @@ def test_window_and_disabled_restarts() -> None:
     assert RestartBudget(RestartPolicy(max_restarts=0)).record_failure(0, FailureKind.CRASH).delay is None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Недопустимые сроки и ёмкость истории
 #------------------------------------------------------------------------------------------------------------------
@@ -98,9 +114,12 @@ def test_window_and_disabled_restarts() -> None:
     {"initial_delay": 0}, {"initial_delay": -1}, {"initial_delay": 31},
     {"max_delay": True}, {"max_delay": 301}, {"window": 1},
 ])
-def test_invalid_policy(values: dict[str, Any]) -> None:
+def test_invalid_policy(
+    values: dict[str, Any],
+    ) -> None:
 
-    """Reject unbounded or inconsistent restart settings before acquiring any resource.
+    """
+    Reject unbounded or inconsistent restart settings before acquiring any resource.
 
     :param values: Invalid overrides for policy defaults.
     :type values: dict[str, Any]
@@ -112,13 +131,14 @@ def test_invalid_policy(values: dict[str, Any]) -> None:
         RestartPolicy(**values)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибки монотонного времени и случайной поправки
 #------------------------------------------------------------------------------------------------------------------
 def test_invalid_observation() -> None:
 
-    """Reject invalid samples without consuming a valid restart reservation."""
+    """
+    Reject invalid samples without consuming a valid restart reservation.
+    """
 
     budget = RestartBudget(RestartPolicy())
     budget.record_failure(10, FailureKind.CRASH)
@@ -130,13 +150,14 @@ def test_invalid_observation() -> None:
     assert budget.record_failure(11, FailureKind.HANG).delay == 4
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение истории при долгой работе
 #------------------------------------------------------------------------------------------------------------------
 def test_long_running_budget() -> None:
 
-    """Retain only active reservations even across thousands of widely spaced failures."""
+    """
+    Retain only active reservations even across thousands of widely spaced failures.
+    """
 
     budget = RestartBudget(RestartPolicy(max_restarts=2, window=10, initial_delay=1, max_delay=2))
     for index in range(10000):
@@ -144,8 +165,6 @@ def test_long_running_budget() -> None:
     assert len(budget._attempts) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

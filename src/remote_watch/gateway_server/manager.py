@@ -1,36 +1,34 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи.
+# Классы:
+# -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
 #    Интерфейс:
-#    -> handleError(): Учёт ошибки записи без traceback.
+#    -> handleError(): Учёт отказа записи без traceback и рекурсивного logging
 #
-# Класс:
-# -> ChildState: Состояние текущего дочернего процесса и его бюджет восстановления.
+# -> ChildState: Состояние текущего дочернего процесса и его бюджет восстановления
 #
-# Класс:
-# -> GatewayManager: Запуск компонентов, контроль работоспособности и общая остановка.
+# -> GatewayManager: Запуск компонентов, контроль работоспособности и общая остановка
 #    Конструктор:
-#    -> __init__(): Создание объекта без запуска рабочих ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> status(): Чтение безопасного состояния компонентов.
-#    -> run(): Работа до остановки с общим откатом неудачного запуска.
+#    -> status(): Чтение безопасного состояния компонентов
+#    -> run(): Работа до остановки с общим откатом неудачного запуска
 #    Служебные методы:
-#    -> _component_status(): Копия статуса с возрастом последнего снимка журнала.
-#    -> _open_control(): Создание закрытого listener и файла текущего владельца.
-#    -> _read(): Проверка токена и ограниченное чтение локального запроса.
-#    -> _control(): Статус либо запрос общей остановки текущего запуска.
-#    -> _heartbeat(): Приём heartbeat только от своего текущего дочернего процесса.
-#    -> _spawn(): Запуск под контролем ОС до передачи настроек компоненту.
-#    -> _tick(): Контроль зависаний и резервирование конечного числа перезапусков.
-#    -> _report(): Запись переходов состояния и оповещение владельца.
-#    -> _shutdown(): Общая остановка с конечными сроками ожидания.
+#    -> _component_status(): Копия статуса с возрастом последнего снимка журнала
+#    -> _open_control(): Открытие локального управления
+#    -> _read(): Проверка токена и ограниченное чтение локального запроса
+#    -> _control(): Статус либо запрос общей остановки текущего запуска
+#    -> _heartbeat(): Приём heartbeat только от своего текущего дочернего процесса
+#    -> _spawn(): Запуск под контролем ОС до передачи настроек компоненту
+#    -> _tick(): Контроль зависаний и резервирование конечного числа перезапусков
+#    -> _report(): Запись переходов состояния и оповещение владельца
+#    -> _shutdown(): Общая остановка с конечными сроками ожидания
 #
 # Функции:
 # -> control_request(): Локальный status/stop по защищённому файлу текущего запуска.
@@ -39,6 +37,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -63,13 +62,20 @@ from remote_watch.gateway_server.messages import read_limited, status_message
 from remote_watch.gateway_server.policy import FailureKind, RestartBudget
 from remote_watch.gateway_server.processes import ProcessGroup, private_directory
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ограниченный журнал с безопасным признаком ошибки записи
 #------------------------------------------------------------------------------------------------------------------
 class StatusLog(RotatingFileHandler):
-
-    """Expose logging failure without printing exception text or file contents."""
+    """
+    Expose logging failure without printing exception text or file contents.
+    """
 
     failed: bool = False
 
@@ -79,9 +85,10 @@ class StatusLog(RotatingFileHandler):
     def handleError(
         self,
         record: logging.LogRecord,
-    ) -> None:
+        ) -> None:
 
-        """Latch a failed log write for local status and an independent owner alert.
+        """
+        Latch a failed log write for local status and an independent owner alert.
 
         :param record: Safe status whose file write failed.
         :type record: logging.LogRecord
@@ -92,37 +99,73 @@ class StatusLog(RotatingFileHandler):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Состояние текущего дочернего процесса и его бюджет восстановления
 #------------------------------------------------------------------------------------------------------------------
 @dataclass
 class ChildState:
+    """
+    Retain only current owned handles and bounded recovery state.
 
-    """Retain only current owned handles and bounded recovery state."""
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
 
-    name: str                         # Фиксированное имя компонента.
-    budget: RestartBudget             # Независимый бюджет перезапусков.
+    :param budget: Independent restart budget for this component.
+    :type budget: RestartBudget
+
+    :param process: Owned child process handle; never rediscovered by PID.
+    :type process: subprocess.Popen | None
+
+    :param group: Process containment object owned by this component.
+    :type group: ProcessGroup | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str
+
+    :param message: Prepared notification text or latest bounded child status message.
+    :type message: dict
+
+    :param contact: Last heartbeat time measured by the manager's monotonic clock.
+    :type contact: float
+
+    :param contacted: Whether the first child heartbeat completed bootstrap.
+    :type contacted: bool
+
+    :param launched: Monotonic time when the child process was launched.
+    :type launched: float
+
+    :param retry_at: Monotonic time of the next permitted retry.
+    :type retry_at: float | None
+
+    :param stopping: Whether only this child should receive a stop instruction.
+    :type stopping: bool
+
+    :param restarts: Number of actual component restarts.
+    :type restarts: int
+    """
+
+    name: str                          # Фиксированное имя компонента.
+    budget: RestartBudget              # Независимый бюджет перезапусков.
     process: subprocess.Popen | None = None  # Только собственный процесс, без поиска по PID.
     group: ProcessGroup | None = None  # Job данного компонента, не соседних gateway.
     token: str = field(default="", repr=False)  # Секрет текущего incarnation для heartbeat.
     message: dict = field(default_factory=lambda: {  # Последний безопасный heartbeat текущего запуска.
         "state": "starting", "reason": None, "time_reason": None, "failure": None, "counters": {}})
     contact: float = 0.0               # Время приёма heartbeat по часам manager.
-    contacted: bool = False           # Первый heartbeat уже получен, интерпретатор завершил bootstrap.
+    contacted: bool = False            # Первый heartbeat уже получен, интерпретатор завершил bootstrap.
     launched: float = 0.0              # Начало текущей попытки запуска.
     retry_at: float | None = None      # Момент следующей разрешённой попытки.
-    stopping: bool = False            # Ответить stop только этому дочернему процессу.
+    stopping: bool = False             # Ответить stop только этому дочернему процессу.
     restarts: int = 0                  # Число фактических повторных запусков.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Запуск компонентов, контроль работоспособности и общая остановка
 #------------------------------------------------------------------------------------------------------------------
 class GatewayManager:
-
-    """Supervise independent gated processes without touching external Caddy or client sessions."""
+    """
+    Supervise independent gated processes without touching external Caddy or client sessions.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -132,9 +175,10 @@ class GatewayManager:
         config: DeploymentConfig,
         *,
         operator_sid: str | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Retain validated settings without opening deployment resources.
+        """
+        Retain validated settings without opening deployment resources.
 
         :param config: Immutable deployment settings.
         :type config: DeploymentConfig
@@ -173,9 +217,12 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение безопасного состояния компонентов
     #--------------------------------------------------------------------------------------------------------------
-    def status(self) -> dict:
+    def status(
+        self,
+        ) -> dict:
 
-        """Read cached sanitized status without opening journals or probing providers.
+        """
+        Read cached sanitized status without opening journals or probing providers.
 
         :return: Bounded operational snapshot with no credentials or filesystem paths.
         :rtype: dict
@@ -196,9 +243,12 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Работа до остановки с общим откатом неудачного запуска
     #--------------------------------------------------------------------------------------------------------------
-    async def run(self) -> int:
+    async def run(
+        self,
+        ) -> int:
 
-        """Own one deployment until stop, rolling startup failures back as a single operation.
+        """
+        Own one deployment until stop, rolling startup failures back as a single operation.
 
         :return: Zero after requested shutdown, one after failed startup or supervision.
         :rtype: int
@@ -301,12 +351,14 @@ class GatewayManager:
     def _component_status(
         self,
         child: ChildState,
-    ) -> dict:
+        ) -> dict:
 
-        """Age cached journal observations without querying a child or changing its heartbeat.
+        """
+        Age cached journal observations without querying a child or changing its heartbeat.
 
         :param child: Current owned component state.
         :type child: ChildState
+
         :return: Independent sanitized component snapshot.
         :rtype: dict
         """
@@ -328,9 +380,13 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Открытие локального управления
     #--------------------------------------------------------------------------------------------------------------
-    async def _open_control(self) -> None:
+    async def _open_control(
+        self,
+        ) -> None:
 
-        """Bind a numeric loopback endpoint and publish one protected generation token."""
+        """
+        Bind a numeric loopback endpoint and publish one protected generation token.
+        """
 
         from aiohttp import web
 
@@ -364,9 +420,10 @@ class GatewayManager:
         request: object,
         token: str,
         limit: int = 4096,
-    ) -> dict:
+        ) -> dict:
 
-        """Authenticate before bounded body reads and reject unrelated browser requests.
+        """
+        Authenticate before bounded body reads and reject unrelated browser requests.
 
         :param request: Private aiohttp request.
         :type request: object
@@ -414,9 +471,10 @@ class GatewayManager:
     async def _control(
         self,
         request: object,
-    ) -> object:
+        ) -> object:
 
-        """Serve cached status or signal common shutdown for the current generation.
+        """
+        Serve cached status or signal common shutdown for the current generation.
 
         :param request: Authenticated local operation candidate.
         :type request: object
@@ -445,9 +503,10 @@ class GatewayManager:
     async def _heartbeat(
         self,
         request: object,
-    ) -> object:
+        ) -> object:
 
-        """Receive event-loop state only from the active incarnation of an owned child.
+        """
+        Receive event-loop state only from the active incarnation of an owned child.
 
         :param request: Private child heartbeat.
         :type request: object
@@ -480,9 +539,10 @@ class GatewayManager:
     async def _spawn(
         self,
         child: ChildState,
-    ) -> None:
+        ) -> None:
 
-        """Start a gated child and assign OS ownership before releasing startup data.
+        """
+        Start a gated child and assign OS ownership before releasing startup data.
 
         :param child: Terminated component with a reserved restart, or its first launch.
         :type child: ChildState
@@ -530,9 +590,10 @@ class GatewayManager:
     async def _tick(
         self,
         started: bool,
-    ) -> None:
+        ) -> None:
 
-        """Observe liveness and reserve retries only after confirming process death.
+        """
+        Observe liveness and reserve retries only after confirming process death.
 
         :param started: Whether all components passed the initial readiness barrier.
         :type started: bool
@@ -590,9 +651,13 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Запись переходов состояния и оповещение владельца
     #--------------------------------------------------------------------------------------------------------------
-    def _report(self) -> None:
+    def _report(
+        self,
+        ) -> None:
 
-        """Emit changed bounded status and feed coalesced owner alerts without recursion."""
+        """
+        Emit changed bounded status and feed coalesced owner alerts without recursion.
+        """
 
         snapshot = self.status()
         # Счётчики меняются часто; логируем переходы, а полный снимок доступен через status.
@@ -619,9 +684,13 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Общая остановка с конечными сроками ожидания
     #--------------------------------------------------------------------------------------------------------------
-    async def _shutdown(self) -> None:
+    async def _shutdown(
+        self,
+        ) -> None:
 
-        """Apply one graceful deadline, then kill only exact owned process groups."""
+        """
+        Apply one graceful deadline, then kill only exact owned process groups.
+        """
 
         self.state = "stopping"
         self.stop_event.set()
@@ -663,15 +732,20 @@ class GatewayManager:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Локальный status/stop по защищённому файлу текущего запуска.
 #------------------------------------------------------------------------------------------------------------------
 async def control_request(
     config: DeploymentConfig | Path,
     action: str,
-) -> dict:
+    ) -> dict:
 
-    """Contact only the protected local endpoint; stale files never authorize process termination.
+    """
+    Contact only the protected local endpoint; stale files never authorize process termination.
 
     :param config: Deployment settings used only to locate its control directory.
     :type config: DeploymentConfig | Path
@@ -716,8 +790,6 @@ async def control_request(
         raise RuntimeError("control_unavailable") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,48 +1,58 @@
-﻿# Общие настройки deployment и их проверка без запуска серверов.
+﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-184704
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DeploymentConfigError: Безопасная ошибка общего конфига.
+# -> DeploymentConfigError: Безопасная ошибка общего конфига
 #    Конструктор:
-#    -> __init__(): Сохранение только известных кодов и полей.
+#    -> __init__(): Подготовка состояния объекта.
 #
-# -> ComponentConfig: Путь к настройкам и внутренний listener компонента.
+# -> ComponentConfig: Путь к настройкам и внутренний listener компонента
 #    Специальные методы:
-#    -> __post_init__(): Проверка пути и loopback-адреса.
+#    -> __post_init__(): Проверка пути и loopback-адреса
 #
-# -> CaddyConfig: Явное владение процессом Caddy.
+# -> CaddyConfig: Явное владение процессом Caddy
 #    Специальные методы:
-#    -> __post_init__(): Проверка режима и обязательных путей.
+#    -> __post_init__(): Проверка режима и обязательных путей
 #
-# -> LifecycleConfig: Сроки запуска, наблюдения и остановки.
+# -> LifecycleConfig: Сроки запуска, наблюдения и остановки
 #    Специальные методы:
-#    -> __post_init__(): Проверка сроков и частоты наблюдения.
+#    -> __post_init__(): Проверка сроков и частоты наблюдения
 #
-# -> DeploymentConfig: Общие настройки двух независимых компонентов.
+# -> DeploymentConfig: Общие настройки двух независимых компонентов
 #    Специальные методы:
-#    -> __post_init__(): Проверка согласованности deployment.
+#    -> __post_init__(): Проверка согласованности настроек сервера
 #
 # Функции:
-# -> load_control_directory(): Поиск локального управления без чтения связанных конфигов.
-# -> load_deployment_config(): Чтение общего конфига и проверка связанных файлов.
-# -> _read_json(): Ограниченное чтение строгого JSON.
-# -> _unique_object(): Отказ при повторном ключе объекта.
-# -> _reject_constant(): Отказ при NaN и Infinity.
-# -> _object(): Проверка известных и обязательных полей.
-# -> _path(): Разрешение пути относительно deployment-файла.
-# -> _absolute_path(): Проверка уже разрешённого пути.
-# -> _origin(): Проверка внешнего HTTPS origin.
-# -> _check_components(): Проверка существующих схем без открытия ресурсов.
+# -> load_control_directory(): Поиск локального управления без чтения связанных конфигов
+#
+# -> load_deployment_config(): Чтение общего конфига и проверка связанных файлов
+#
+# -> _read_json(): Ограниченное чтение строгого JSON
+#
+# -> _unique_object(): Отказ при повторном ключе объекта
+#
+# -> _reject_constant(): Отказ при NaN и Infinity
+#
+# -> _object(): Проверка известных и обязательных полей
+#
+# -> _path(): Разрешение пути относительно общего файла настроек сервера
+#
+# -> _absolute_path(): Проверка уже разрешённого пути
+#
+# -> _origin(): Проверка внешнего HTTPS origin
+#
+# -> _check_components(): Проверка существующих схем без открытия ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import ipaddress
@@ -57,13 +67,20 @@ from .._validation import require_int, require_text
 from .application import ApplicationConfig, application_config
 from .policy import RestartPolicy, _bounded_seconds
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная ошибка общего конфига
 #------------------------------------------------------------------------------------------------------------------
 class DeploymentConfigError(ValueError):
-
-    """Expose fixed schema labels without paths, credentials or nested exceptions."""
+    """
+    Expose fixed schema labels without paths, credentials or nested exceptions.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -74,9 +91,10 @@ class DeploymentConfigError(ValueError):
         field_name: str,
         *,
         component_error: Exception | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Retain only allowlisted error labels.
+        """
+        Retain only allowlisted error labels.
 
         :param code: Fixed diagnostic category.
         :type code: str
@@ -126,25 +144,38 @@ class DeploymentConfigError(ValueError):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Путь к настройкам и внутренний listener компонента
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class ComponentConfig:
+    """
+    An enabled component using an existing configuration file and a loopback listener.
 
-    """An enabled component using an existing configuration file and a loopback listener."""
+    :param config: Configuration file bound to this component or service.
+    :type config: Path
+
+    :param port: Numeric internal listener TCP port.
+    :type port: int
+
+    :param host: Explicit application host or component listener address.
+    :type host: str
+    """
 
     config: Path = field(repr=False)     # Абсолютный путь к прежнему конфигу компонента.
-    port: int                           # TCP-порт внутреннего HTTP listener.
+    port: int                            # TCP-порт внутреннего HTTP listener.
     host: str = "127.0.0.1"              # Числовой loopback-адрес, без DNS и wildcard.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка пути и loopback-адреса
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Require an absolute file path and a concrete loopback TCP endpoint."""
+        """
+        Require an absolute file path and a concrete loopback TCP endpoint.
+        """
 
         _absolute_path(self.config)
         require_int(self.port, "port")
@@ -156,16 +187,28 @@ class ComponentConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Явное владение процессом Caddy
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class CaddyConfig:
+    """
+    External Caddy is observed only; managed Caddy requires explicit persistent storage.
 
-    """External Caddy is observed only; managed Caddy requires explicit persistent storage."""
+    :param mode: Explicit delivery or process ownership mode.
+    :type mode: str
 
-    mode: str = "external"                              # external не даёт права управлять чужим процессом.
+    :param executable: Installed executable; no download is performed.
+    :type executable: Path | None
+
+    :param config: Configuration file bound to this component or service.
+    :type config: Path | None
+
+    :param data_dir: Persistent Caddy data directory, including its original CA.
+    :type data_dir: Path | None
+    """
+
+    mode: str = "external"                                     # external не даёт права управлять чужим процессом.
     executable: Path | None = field(default=None, repr=False)  # Уже установленный binary; без скачивания.
     config: Path | None = field(default=None, repr=False)      # Caddyfile для собственного дочернего процесса.
     data_dir: Path | None = field(default=None, repr=False)    # Постоянные данные Caddy, включая прежний CA.
@@ -173,9 +216,13 @@ class CaddyConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка режима и обязательных путей
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject ambiguous ownership and incomplete managed configuration."""
+        """
+        Reject ambiguous ownership and incomplete managed configuration.
+        """
 
         paths = (self.executable, self.config, self.data_dir)
         if self.mode == "external":
@@ -189,14 +236,29 @@ class CaddyConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Сроки запуска, наблюдения и остановки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class LifecycleConfig:
+    """
+    Monotonic deadlines for the future manager, independent of provider request timeouts.
 
-    """Monotonic deadlines for the future manager, independent of provider request timeouts."""
+    :param startup_timeout: Maximum startup wait, in seconds.
+    :type startup_timeout: float
+
+    :param shutdown_timeout: Maximum graceful shutdown wait, in seconds.
+    :type shutdown_timeout: float
+
+    :param kill_timeout: Final child termination wait, in seconds.
+    :type kill_timeout: float
+
+    :param heartbeat_interval: Child heartbeat interval, in seconds.
+    :type heartbeat_interval: float
+
+    :param heartbeat_timeout: Maximum permitted child heartbeat silence, in seconds.
+    :type heartbeat_timeout: float
+    """
 
     startup_timeout: float = 60.0        # Общий срок начального запуска всех собственных компонентов.
     shutdown_timeout: float = 30.0       # Общий срок мягкой остановки, секунды.
@@ -207,9 +269,13 @@ class LifecycleConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка сроков и частоты наблюдения
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite deadlines and leave room for multiple heartbeat observations."""
+        """
+        Validate finite deadlines and leave room for multiple heartbeat observations.
+        """
 
         for name in ("startup_timeout", "shutdown_timeout", "kill_timeout",
                      "heartbeat_interval", "heartbeat_timeout"):
@@ -222,31 +288,62 @@ class LifecycleConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Общие настройки двух независимых компонентов
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class DeploymentConfig:
+    """
+    Validated deployment paths and policies; construction does not acquire resources.
 
-    """Validated deployment paths and policies; construction does not acquire resources."""
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param control_dir: Private directory for manager ownership and local control.
+    :type control_dir: Path
+
+    :param log_dir: Dedicated directory for server-owned log files.
+    :type log_dir: Path
+
+    :param notifications: Notification component configuration, or None when disabled.
+    :type notifications: ComponentConfig | None
+
+    :param commands: Command component settings or application command definitions.
+    :type commands: ComponentConfig | None
+
+    :param caddy: Explicit external or managed Caddy ownership settings.
+    :type caddy: CaddyConfig
+
+    :param lifecycle: Finite startup, heartbeat and shutdown settings.
+    :type lifecycle: LifecycleConfig
+
+    :param restart: Finite component restart policy.
+    :type restart: RestartPolicy
+
+    :param application: Server UI and direct owner-notification settings.
+    :type application: ApplicationConfig
+    """
 
     endpoint: str = field(repr=False)        # Внешний HTTPS origin; не внутренний порт компонента.
     control_dir: Path = field(repr=False)    # Каталог будущего локального управления manager.
     log_dir: Path = field(repr=False)        # Отдельный каталог ограниченных служебных логов.
-    notifications: ComponentConfig | None = None     # None отключает исходящий gateway.
-    commands: ComponentConfig | None = None          # None отключает командный gateway.
-    caddy: CaddyConfig = field(default_factory=CaddyConfig)           # Режим владения Caddy.
+    notifications: ComponentConfig | None = None  # None отключает исходящий gateway.
+    commands: ComponentConfig | None = None  # None отключает командный gateway.
+    caddy: CaddyConfig = field(default_factory=CaddyConfig)  # Режим владения Caddy.
     lifecycle: LifecycleConfig = field(default_factory=LifecycleConfig)  # Сроки управления процессами.
-    restart: RestartPolicy = field(default_factory=RestartPolicy)    # Лимит повторных запусков компонента.
+    restart: RestartPolicy = field(default_factory=RestartPolicy)  # Лимит повторных запусков компонента.
     application: ApplicationConfig = field(default_factory=ApplicationConfig)  # Трей и сообщения владельцу.
 
     #--------------------------------------------------------------------------------------------------------------
-    # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности deployment
+    # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка согласованности настроек сервера
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject empty deployments, ambiguous paths and shared listener ports."""
+        """
+        Reject empty deployments, ambiguous paths and shared listener ports.
+        """
 
         _origin(self.endpoint)
         for path in (self.control_dir, self.log_dir):
@@ -282,12 +379,19 @@ class DeploymentConfig:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Поиск локального управления без чтения связанных конфигов
 #------------------------------------------------------------------------------------------------------------------
-def load_control_directory(path: str | Path) -> Path:
+def load_control_directory(
+    path: str | Path,
+    ) -> Path:
 
-    """Locate control state even when a linked component config was removed or broken.
+    """
+    Locate control state even when a linked component config was removed or broken.
 
     :param path: Deployment JSON selected explicitly by the local operator.
     :type path: str | Path
@@ -309,13 +413,15 @@ def load_control_directory(path: str | Path) -> Path:
         raise DeploymentConfigError("config_value", "control_dir") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение общего конфига и проверка связанных файлов
 #------------------------------------------------------------------------------------------------------------------
-def load_deployment_config(path: str | Path) -> DeploymentConfig:
+def load_deployment_config(
+    path: str | Path,
+    ) -> DeploymentConfig:
 
-    """Validate local deployment files without acquiring owners, stores or network clients.
+    """
+    Validate local deployment files without acquiring owners, stores or network clients.
 
     :param path: Deployment JSON file; relative references are based on its directory.
     :type path: str | Path
@@ -386,13 +492,15 @@ def load_deployment_config(path: str | Path) -> DeploymentConfig:
         raise DeploymentConfigError("config_value", section) from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Ограниченное чтение строгого JSON
 #------------------------------------------------------------------------------------------------------------------
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(
+    path: Path,
+    ) -> dict[str, Any]:
 
-    """Read at most one MiB and reject duplicate keys and non-finite JSON constants.
+    """
+    Read at most one MiB and reject duplicate keys and non-finite JSON constants.
 
     :param path: Explicit deployment file path.
     :type path: Path
@@ -417,13 +525,15 @@ def _read_json(path: Path) -> dict[str, Any]:
         raise DeploymentConfigError(code, "config") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ при повторном ключе объекта
 #------------------------------------------------------------------------------------------------------------------
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+def _unique_object(
+    pairs: list[tuple[str, Any]],
+    ) -> dict[str, Any]:
 
-    """Build a JSON object without silently replacing earlier keys.
+    """
+    Build a JSON object without silently replacing earlier keys.
 
     :param pairs: Object entries supplied by the JSON decoder.
     :type pairs: list[tuple[str, Any]]
@@ -442,13 +552,15 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ при NaN и Infinity
 #------------------------------------------------------------------------------------------------------------------
-def _reject_constant(value: str) -> None:
+def _reject_constant(
+    value: str,
+    ) -> None:
 
-    """Reject nonstandard numeric constants without echoing their source.
+    """
+    Reject nonstandard numeric constants without echoing their source.
 
     :param value: Decoder token that must not be accepted.
     :type value: str
@@ -459,7 +571,6 @@ def _reject_constant(value: str) -> None:
     raise ValueError("nonstandard JSON constant")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка известных и обязательных полей
 #------------------------------------------------------------------------------------------------------------------
@@ -467,9 +578,10 @@ def _object(
     value: object,
     required: set[str],
     optional: set[str],
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
 
-    """Require an object containing only declared schema keys.
+    """
+    Require an object containing only declared schema keys.
 
     :param value: Candidate JSON object.
     :type value: object
@@ -493,16 +605,16 @@ def _object(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# СЛУЖЕБНАЯ ФУНКЦИЯ : Разрешение пути относительно deployment-файла
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Разрешение пути относительно общего файла настроек сервера
 #------------------------------------------------------------------------------------------------------------------
 def _path(
     location: Path,
     value: object,
-) -> Path:
+    ) -> Path:
 
-    """Resolve a literal path without environment or home expansion.
+    """
+    Resolve a literal path without environment or home expansion.
 
     :param location: Absolute deployment file path.
     :type location: Path
@@ -523,13 +635,15 @@ def _path(
     return (location.parent / value).resolve()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка уже разрешённого пути
 #------------------------------------------------------------------------------------------------------------------
-def _absolute_path(value: object) -> None:
+def _absolute_path(
+    value: object,
+    ) -> None:
 
-    """Require an absolute pathlib path for the typed configuration interface.
+    """
+    Require an absolute pathlib path for the typed configuration interface.
 
     :param value: Candidate resolved path.
     :type value: object
@@ -543,13 +657,15 @@ def _absolute_path(value: object) -> None:
         raise ValueError("normalized path required")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка внешнего HTTPS origin
 #------------------------------------------------------------------------------------------------------------------
-def _origin(value: object) -> None:
+def _origin(
+    value: object,
+    ) -> None:
 
-    """Require an HTTPS origin without credentials, paths, query or fragments.
+    """
+    Require an HTTPS origin without credentials, paths, query or fragments.
 
     :param value: External URL used by gateway clients.
     :type value: object
@@ -582,13 +698,15 @@ def _origin(value: object) -> None:
             raise ValueError("invalid origin host")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка существующих схем без открытия ресурсов
 #------------------------------------------------------------------------------------------------------------------
-def _check_components(config: DeploymentConfig) -> None:
+def _check_components(
+    config: DeploymentConfig,
+    ) -> None:
 
-    """Delegate to existing read-only validators, hiding nested paths and secret values.
+    """
+    Delegate to existing read-only validators, hiding nested paths and secret values.
 
     :param config: Structurally valid deployment configuration.
     :type config: DeploymentConfig
@@ -612,8 +730,6 @@ def _check_components(config: DeploymentConfig) -> None:
             raise DeploymentConfigError("component_config", name, component_error=error) from None
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

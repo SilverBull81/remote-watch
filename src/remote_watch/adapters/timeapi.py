@@ -1,28 +1,30 @@
 ﻿# Получение UTC от выбранного сервиса TimeAPI без изменения часов операционной системы.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-114053
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> TimeApiTimeSource: Ограниченный HTTPS-запрос текущего UTC в формате TimeAPI.
+# -> TimeApiTimeSource: Время от TimeAPI с обязательной проверкой TLS
 #    Конструктор:
-#    -> __init__(): Настройки источника и допустимой погрешности.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> sample(): Одно показание времени с учётом сетевой задержки.
+#    -> sample(): Получение одного показания времени
 #    Служебные методы:
-#    -> _fetch(): Проверяемое HTTPS-соединение и ограниченное чтение ответа.
+#    -> _fetch(): Один HTTPS-запрос с ограничением размера и времени
 #
 # Функции:
-# -> _unique_object(): Проверка отсутствия повторяющихся полей JSON.
-# -> _parse_time(): Проверка UTC и согласованности полей ответа.
+# -> _unique_object(): Запрет неоднозначных полей ответа JSON
+#
+# -> _parse_time(): Проверка времени UTC и взаимного соответствия полей
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -38,12 +40,20 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from remote_watch._validation import require_number, require_text
 from remote_watch.commands.time import TimeSample, TimeUnavailable
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Время от TimeAPI с обязательной проверкой TLS
 #------------------------------------------------------------------------------------------------------------------
 class TimeApiTimeSource:
-    """Read UTC from TimeAPI under an explicit assumption about its clock accuracy."""
+    """
+    Read UTC from TimeAPI under an explicit assumption about its clock accuracy.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -56,9 +66,10 @@ class TimeApiTimeSource:
         endpoint: str = "https://timeapi.io/api/time/current/zone",
         ssl_context: ssl.SSLContext | None = None,
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Configure one bounded request without opening a connection.
+        """
+        Configure one bounded request without opening a connection.
 
         :param accuracy: Assumed maximum server clock error, not a provider guarantee, in seconds.
         :type accuracy: float
@@ -113,9 +124,12 @@ class TimeApiTimeSource:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение одного показания времени
     #--------------------------------------------------------------------------------------------------------------
-    async def sample(self) -> TimeSample:
+    async def sample(
+        self,
+        ) -> TimeSample:
 
-        """Fetch one sample, rejecting concurrent calls and hiding provider error details.
+        """
+        Fetch one sample, rejecting concurrent calls and hiding provider error details.
 
         :return: UTC bounds at the local monotonic response-completion time.
         :rtype: TimeSample
@@ -138,9 +152,12 @@ class TimeApiTimeSource:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Один HTTPS-запрос с ограничением размера и времени
     #--------------------------------------------------------------------------------------------------------------
-    async def _fetch(self) -> TimeSample:
+    async def _fetch(
+        self,
+        ) -> TimeSample:
 
-        """Fetch and validate one fresh JSON response over authenticated HTTPS.
+        """
+        Fetch and validate one fresh JSON response over authenticated HTTPS.
 
         :return: Conservative UTC interval including precision and full round-trip delay.
         :rtype: TimeSample
@@ -202,12 +219,19 @@ class TimeApiTimeSource:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет неоднозначных полей ответа JSON
-#------------------------------------------------------------------------------------------------------------------
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Reject duplicate keys at every object level.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет неоднозначных полей ответа JSON
+#------------------------------------------------------------------------------------------------------------------
+def _unique_object(
+    pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
+
+    """
+    Reject duplicate keys at every object level.
 
     :param pairs: Object members emitted by the JSON decoder.
     :type pairs: list[tuple[str, object]]
@@ -224,13 +248,15 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка времени UTC и взаимного соответствия полей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка времени UTC и взаимного соответствия полей
 #------------------------------------------------------------------------------------------------------------------
-def _parse_time(body: bytes) -> tuple[float, float]:
+def _parse_time(
+    body: bytes,
+    ) -> tuple[float, float]:
 
-    """Validate the TimeAPI UTC representation without consulting local wall time.
+    """
+    Validate the TimeAPI UTC representation without consulting local wall time.
 
     :param body: Bounded UTF-8 JSON response bytes.
     :type body: bytes
@@ -275,8 +301,6 @@ def _parse_time(body: bytes) -> tuple[float, float]:
     return date.timestamp(), resolution
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

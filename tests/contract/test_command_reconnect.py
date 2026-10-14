@@ -1,35 +1,85 @@
 ﻿# Восстановление командной сессии без повторного исполнения и потери результатов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-125903
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> restart(): Новый hub над тем же журналом.
-# -> wait_for(): Конечное ожидание наблюдаемого состояния.
-# -> fast_client(): Короткий интервал фонового наблюдения в тесте.
+# -> restart(): Новый hub над тем же журналом
+#    Вложенные объявления:
+#    -> offline(): Сетевая недоступность на время остановки listener
+#
+# -> wait_for(): Конечное ожидание наблюдаемого состояния
+#
+# -> fast_client(): Короткий интервал фонового наблюдения в тесте
+#    Вложенные объявления:
+#    -> remote_exchange(): HTTP-смысл закрытия hub для уже выполняющихся fake RPC
+#    -> beat(): Сохранение короткого интервала после очередного heartbeat
 #
 # Тесты:
-# -> test_idle_reconnect(): Перезапуск hub и истечение сессии с новыми командами.
-# -> test_lost_result_receipt(): Сверка точного результата предыдущего hub.
-# -> test_running_command_blocks_reconnect(): Удержание живого callback и сохранение UNKNOWN.
-# -> test_reconnect_errors(): Разделение временных и постоянных отказов.
-# -> test_lost_registration_response(): Повтор одного nonce после потери ответа.
-# -> test_reconnect_shutdown(): Остановка во время задержки без дальнейшей регистрации.
-# -> test_dispatcher_reconnect(): Продолжение работы исполнителя после восстановления.
-# -> test_reconnect_https(): Настоящий HTTPS с неизменным доверием CA.
-# -> test_reconnect_lost_grant(): Сохранение неопределённости сервера без исполнения.
-# -> test_reconnect_storage_failure(): Ошибка локальной фиксации новой сессии.
-# -> test_two_reconnecting_clients(): Независимое восстановление двух Identity.
-# -> test_reconnect_conservative_lease(): Разница локального и серверного lease.
-# -> test_previous_process_result(): Сверка завершённого результата предыдущего запуска приложения.
+# -> test_idle_reconnect(): Перезапуск hub и истечение сессии с новыми командами
+#    Вложенные объявления:
+#    -> scenario(): Проверка восстановления и сохранения старой адресации
+#
+# -> test_lost_result_receipt(): Сверка точного результата предыдущего hub
+#    Вложенные объявления:
+#    -> scenario(): Потеря квитанции после устойчивой записи
+#
+# -> test_running_command_blocks_reconnect(): Удержание живого callback и сохранение UNKNOWN
+#    Вложенные объявления:
+#    -> scenario(): Остановка hub между началом и завершением callback
+#
+# -> test_reconnect_errors(): Разделение временных и постоянных отказов
+#    Вложенные объявления:
+#    -> scenario(): Управляемый отказ регистрации
+#       Вложенные объявления:
+#       -> exchange(): Подмена одного ответа регистрации
+#
+# -> test_lost_registration_response(): Повтор одного nonce после потери ответа
+#    Вложенные объявления:
+#    -> scenario(): Потеря ответа на новую регистрацию
+#
+# -> test_reconnect_shutdown(): Остановка во время задержки без дальнейшей регистрации
+#    Вложенные объявления:
+#    -> scenario(): Закрытие клиента в состоянии восстановления
+#
+# -> test_dispatcher_reconnect(): Исполнитель продолжает опрос после новой регистрации
+#    Вложенные объявления:
+#    -> scenario(): Две команды по обе стороны перезапуска
+#       Вложенные объявления:
+#       -> resume(): Подставное изменение приложения
+#
+# -> test_reconnect_https(): Восстановление по настоящему HTTPS с тем же доверенным CA
+#    Вложенные объявления:
+#    -> scenario(): Смена listener и эпохи без пересоздания транспорта клиента
+#
+# -> test_reconnect_lost_grant(): Неисполненный потерянный grant не переносится в новую сессию
+#    Вложенные объявления:
+#    -> scenario(): Потеря grant перед перезапуском
+#
+# -> test_reconnect_storage_failure(): Ошибка локальной записи не превращается в готовность
+#    Вложенные объявления:
+#    -> scenario(): Отказ хранения после успешного register
+#
+# -> test_two_reconnecting_clients(): Два приложения независимо восстанавливаются на одном hub
+#    Вложенные объявления:
+#    -> scenario(): Независимая адресация после общего рестарта
+#
+# -> test_reconnect_conservative_lease(): Короткий разрыв между локальным и серверным lease
+#    Вложенные объявления:
+#    -> scenario(): Временный конфликт со своей предыдущей регистрацией
+#
+# -> test_previous_process_result(): Завершённый результат прежнего процесса не теряется при новой регистрации
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -49,6 +99,12 @@ from remote_watch.commands.sqlite_store import SQLiteCommandStore
 from remote_watch.commands.storage import StoreRole
 from remote_watch.commands.transport import CommandError, CommandOffer
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Новый hub над тем же журналом
@@ -56,9 +112,10 @@ from remote_watch.commands.transport import CommandError, CommandOffer
 async def restart(
     rig: Rig,
     path: Path,
-) -> None:
+    ) -> None:
 
-    """Restart only the gateway owner while retaining the application's open journal.
+    """
+    Restart only the gateway owner while retaining the application's open journal.
 
     :param rig: Running synthetic application and hub.
     :type rig: Rig
@@ -77,9 +134,10 @@ async def restart(
     async def offline(
         operation: str,
         message: CommandMessage,
-    ) -> CommandMessage | CommandOffer | None:
+        ) -> CommandMessage | CommandOffer | None:
 
-        """Represent a stopped listener as a network outage.
+        """
+        Represent a stopped listener as a network outage.
 
         :param operation: Original operation name.
         :type operation: str
@@ -106,16 +164,16 @@ async def restart(
     rig.transport.exchange = original_exchange
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конечное ожидание наблюдаемого состояния
 #------------------------------------------------------------------------------------------------------------------
 async def wait_for(
     predicate: Callable[[],
     bool],
-) -> None:
+    ) -> None:
 
-    """Wait for asynchronous evidence with a finite test deadline.
+    """
+    Wait for asynchronous evidence with a finite test deadline.
 
     :param predicate: Read-only observation of the expected state.
     :type predicate: Callable[[], bool]
@@ -128,13 +186,15 @@ async def wait_for(
         await asyncio.sleep(0.005)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Короткий интервал фонового наблюдения в тесте
 #------------------------------------------------------------------------------------------------------------------
-def fast_client(rig: Rig) -> None:
+def fast_client(
+    rig: Rig,
+    ) -> None:
 
-    """Shorten observation timers and model remote shutdown without changing command deadlines.
+    """
+    Shorten observation timers and model remote shutdown without changing command deadlines.
 
     :param rig: Client whose first heartbeat task has not yet resumed.
     :type rig: Rig
@@ -151,14 +211,17 @@ def fast_client(rig: Rig) -> None:
         async def remote_exchange(
             operation: str,
             message: CommandMessage,
-        ) -> CommandMessage | CommandOffer | None:
+            ) -> CommandMessage | CommandOffer | None:
 
-            """Match the real gateway's 503 for an in-flight request finishing during shutdown.
+            """
+            Match the real gateway's 503 for an in-flight request finishing during shutdown.
 
             :param operation: Original synthetic remote operation.
             :type operation: str
+
             :param message: Original authenticated protocol object.
             :type message: CommandMessage
+
             :return: Unchanged response, with only local hub closed mapped to HTTP 503.
             :rtype: CommandMessage | CommandOffer | None
             """
@@ -185,7 +248,9 @@ def fast_client(rig: Rig) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def beat() -> None:
 
-        """Retain short observation intervals after successful heartbeats."""
+        """
+        Retain short observation intervals after successful heartbeats.
+        """
 
         await heartbeat()
         rig.client._session = replace(rig.client.session, remaining_ttl=0.03)
@@ -195,6 +260,10 @@ def fast_client(rig: Rig) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Перезапуск hub и истечение сессии с новыми командами
 #------------------------------------------------------------------------------------------------------------------
@@ -202,9 +271,10 @@ def fast_client(rig: Rig) -> None:
 def test_idle_reconnect(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Resume fresh commands with a new nonce while retaining the source cursor.
+    """
+    Resume fresh commands with a new nonce while retaining the source cursor.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -213,6 +283,9 @@ def test_idle_reconnect(
     :type mode: str
     """
 
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
+
     # mode — оба случая требуют новой сессии, но не нового владельца локальной БД.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -220,7 +293,9 @@ def test_idle_reconnect(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Execute one command before and another after automatic registration."""
+        """
+        Execute one command before and another after automatic registration.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -258,13 +333,15 @@ def test_idle_reconnect(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сверка точного результата предыдущего hub
 #------------------------------------------------------------------------------------------------------------------
-def test_lost_result_receipt(tmp_path: Path) -> None:
+def test_lost_result_receipt(
+    tmp_path: Path,
+    ) -> None:
 
-    """Recover a committed result receipt after a gateway restart without replaying the callback.
+    """
+    Recover a committed result receipt after a gateway restart without replaying the callback.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -277,7 +354,9 @@ def test_lost_result_receipt(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Obtain the exact old result receipt under current principal authorization."""
+        """
+        Obtain the exact old result receipt under current principal authorization.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -308,13 +387,15 @@ def test_lost_result_receipt(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Удержание живого callback и сохранение UNKNOWN
 #------------------------------------------------------------------------------------------------------------------
-def test_running_command_blocks_reconnect(tmp_path: Path) -> None:
+def test_running_command_blocks_reconnect(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep the old execution slot and expose a durable unknown outcome after restart.
+    """
+    Keep the old execution slot and expose a durable unknown outcome after restart.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -327,7 +408,9 @@ def test_running_command_blocks_reconnect(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Prove that active work prevents replacement registration and callback replay."""
+        """
+        Prove that active work prevents replacement registration and callback replay.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -372,7 +455,6 @@ def test_running_command_blocks_reconnect(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Разделение временных и постоянных отказов
 #------------------------------------------------------------------------------------------------------------------
@@ -380,9 +462,10 @@ def test_running_command_blocks_reconnect(tmp_path: Path) -> None:
 def test_reconnect_errors(
     tmp_path: Path,
     failure: str,
-) -> None:
+    ) -> None:
 
-    """Retry temporary registration failures and fence authentication or trust failures.
+    """
+    Retry temporary registration failures and fence authentication or trust failures.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -391,6 +474,9 @@ def test_reconnect_errors(
     :type failure: str
     """
 
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
+
     # failure — сетевые отказы повторяются; доверие, права и чужая Identity требуют вмешательства.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -398,7 +484,9 @@ def test_reconnect_errors(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Observe bounded retries without creating multiple candidate session identifiers."""
+        """
+        Observe bounded retries without creating multiple candidate session identifiers.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -412,9 +500,10 @@ def test_reconnect_errors(
         async def exchange(
             operation: str,
             message: CommandMessage,
-        ) -> CommandMessage | CommandOffer | None:
+            ) -> CommandMessage | CommandOffer | None:
 
-            """Fail the first replacement request with a safe synthetic error.
+            """
+            Fail the first replacement request with a safe synthetic error.
 
             :param operation: Requested transport operation.
             :type operation: str
@@ -456,13 +545,15 @@ def test_reconnect_errors(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Повтор одного nonce после потери ответа
 #------------------------------------------------------------------------------------------------------------------
-def test_lost_registration_response(tmp_path: Path) -> None:
+def test_lost_registration_response(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retry the same registration after the hub committed it but its reply was lost.
+    """
+    Retry the same registration after the hub committed it but its reply was lost.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -475,7 +566,9 @@ def test_lost_registration_response(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Recover through idempotent registration without growing the issued-session table."""
+        """
+        Recover through idempotent registration without growing the issued-session table.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -493,13 +586,15 @@ def test_lost_registration_response(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Остановка во время задержки без дальнейшей регистрации
 #------------------------------------------------------------------------------------------------------------------
-def test_reconnect_shutdown(tmp_path: Path) -> None:
+def test_reconnect_shutdown(
+    tmp_path: Path,
+    ) -> None:
 
-    """Cancel a delayed recovery without reopening resources after client shutdown.
+    """
+    Cancel a delayed recovery without reopening resources after client shutdown.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -512,7 +607,9 @@ def test_reconnect_shutdown(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Stop the only heartbeat and recovery coordinator during its backoff."""
+        """
+        Stop the only heartbeat and recovery coordinator during its backoff.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -534,13 +631,15 @@ def test_reconnect_shutdown(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Исполнитель продолжает опрос после новой регистрации
 #------------------------------------------------------------------------------------------------------------------
-def test_dispatcher_reconnect(tmp_path: Path) -> None:
+def test_dispatcher_reconnect(
+    tmp_path: Path,
+    ) -> None:
 
-    """Resume application callbacks through the actual dispatcher after reconnect.
+    """
+    Resume application callbacks through the actual dispatcher after reconnect.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -556,7 +655,9 @@ def test_dispatcher_reconnect(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run exactly one callback for each distinct fresh command."""
+        """
+        Run exactly one callback for each distinct fresh command.
+        """
 
         calls = []
 
@@ -565,7 +666,8 @@ def test_dispatcher_reconnect(tmp_path: Path) -> None:
         #----------------------------------------------------------------------------------------------------------
         def resume() -> str:
 
-            """Record one observable application side effect.
+            """
+            Record one observable application side effect.
 
             :return: Safe callback reply.
             :rtype: str
@@ -600,13 +702,15 @@ def test_dispatcher_reconnect(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление по настоящему HTTPS с тем же доверенным CA
 #------------------------------------------------------------------------------------------------------------------
-def test_reconnect_https(tmp_path: Path) -> None:
+def test_reconnect_https(
+    tmp_path: Path,
+    ) -> None:
 
-    """Restart a TLS listener on the same endpoint and resume an installed transport.
+    """
+    Restart a TLS listener on the same endpoint and resume an installed transport.
 
     :param tmp_path: Isolated journals and temporary certificate authority.
     :type tmp_path: Path
@@ -627,7 +731,9 @@ def test_reconnect_https(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use the same verified TLS context and persistent client journal after restart."""
+        """
+        Use the same verified TLS context and persistent client journal after restart.
+        """
 
         ca, cert, key = certificates(tmp_path, "trusted")
         server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -668,13 +774,15 @@ def test_reconnect_https(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неисполненный потерянный grant не переносится в новую сессию
 #------------------------------------------------------------------------------------------------------------------
-def test_reconnect_lost_grant(tmp_path: Path) -> None:
+def test_reconnect_lost_grant(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retire a locally unstarted claim while preserving the hub's unknown execution record.
+    """
+    Retire a locally unstarted claim while preserving the hub's unknown execution record.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -687,7 +795,9 @@ def test_reconnect_lost_grant(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep old source and grant references fenced after a fresh registration."""
+        """
+        Keep old source and grant references fenced after a fresh registration.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -712,13 +822,15 @@ def test_reconnect_lost_grant(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибка локальной записи не превращается в готовность
 #------------------------------------------------------------------------------------------------------------------
-def test_reconnect_storage_failure(tmp_path: Path) -> None:
+def test_reconnect_storage_failure(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retry a failed local binding without reopening or clearing the client's journal.
+    """
+    Retry a failed local binding without reopening or clearing the client's journal.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -732,7 +844,9 @@ def test_reconnect_storage_failure(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep one server registration while waiting for local storage recovery."""
+        """
+        Keep one server registration while waiting for local storage recovery.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -756,13 +870,15 @@ def test_reconnect_storage_failure(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Два приложения независимо восстанавливаются на одном hub
 #------------------------------------------------------------------------------------------------------------------
-def test_two_reconnecting_clients(tmp_path: Path) -> None:
+def test_two_reconnecting_clients(
+    tmp_path: Path,
+    ) -> None:
 
-    """Re-register two identities independently without changing their source routing.
+    """
+    Re-register two identities independently without changing their source routing.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -780,7 +896,9 @@ def test_two_reconnecting_clients(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Execute only the commands addressed to each client's replacement session."""
+        """
+        Execute only the commands addressed to each client's replacement session.
+        """
 
         rig = Rig(tmp_path)
         second_identity = replace(rig.identity, instance_id="two")
@@ -824,13 +942,15 @@ def test_two_reconnecting_clients(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Короткий разрыв между локальным и серверным lease
 #------------------------------------------------------------------------------------------------------------------
-def test_reconnect_conservative_lease(tmp_path: Path) -> None:
+def test_reconnect_conservative_lease(
+    tmp_path: Path,
+    ) -> None:
 
-    """Wait for the old server lease when conservative local expiry occurs first.
+    """
+    Wait for the old server lease when conservative local expiry occurs first.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -843,7 +963,9 @@ def test_reconnect_conservative_lease(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Bound self-conflict retries by the last observed server lifetime."""
+        """
+        Bound self-conflict retries by the last observed server lifetime.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -866,7 +988,6 @@ def test_reconnect_conservative_lease(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Завершённый результат прежнего процесса не теряется при новой регистрации
 #------------------------------------------------------------------------------------------------------------------
@@ -874,9 +995,10 @@ def test_reconnect_conservative_lease(tmp_path: Path) -> None:
 def test_previous_process_result(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Recover a lost receipt across application and hub restarts without replaying execution.
+    """
+    Recover a lost receipt across application and hub restarts without replaying execution.
 
     :param tmp_path: Isolated persistent journals retained by both process generations.
     :type tmp_path: Path
@@ -886,9 +1008,15 @@ def test_previous_process_result(
     """
 
     # tmp_path/mode — результат клиента есть в обоих случаях; истина на hub различается.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Retain old references and require a matching durable gateway receipt."""
+        """
+        Retain old references and require a matching durable gateway receipt.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -954,8 +1082,6 @@ def test_previous_process_result(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,47 +1,77 @@
 ﻿# Сквозные проверки logging, фоновой отправки, очередей и остановки без сети.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> RecordingChannel: Тестовый канал с управляемыми отказами и задержкой.
+# -> RecordingChannel: Тестовый канал с управляемыми отказами и задержкой
 #    Конструктор:
-#    -> __init__(): Подготовка состояния объекта без запуска фоновой работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка тестового клиента.
-#    -> send(): Тестовая отправка с управляемым результатом.
-#    -> close(): Закрытие тестового клиента.
+#    -> open(): Подготовка тестового клиента
+#    -> send(): Тестовая отправка с управляемым результатом
+#    -> close(): Закрытие тестового клиента
+#
+# Функции:
+# -> make_runtime(): Настройки фоновой отправки для тестовых каналов
+#
+# -> logger(): Изолированный стандартный логгер для тестов
+#
+# -> wait_for_routing(): Ожидание обработки входной очереди через тестовый барьер
+#    Вложенные объявления:
+#    -> barrier(): Проверка опустошения входной очереди
 #
 # Тесты:
-# -> make_runtime(): Настройки фоновой отправки для тестовых каналов.
-# -> logger(): Изолированный стандартный логгер для тестов.
-# -> wait_for_routing(): Ожидание обработки входной очереди через тестовый барьер.
+# -> test_logging_end_to_end(): Совместная работа консоли, файла и двух каналов
 #
-# Тесты:
-# -> test_logging_end_to_end(): Совместная работа консоли, файла и двух каналов.
-# -> test_local_survives_bad_metadata_and_formatting(): Локальное логирование при ошибках подготовки уведомления.
-# -> test_slow_destination_and_shutdown(): Независимость получателей и отмена активной отправки.
-# -> test_ingress_and_wakeups_are_bounded(): Ограничение входной очереди и числа пробуждений.
-# -> test_adapter_failures_and_recursive_logging(): Изоляция отказов и защита двух runtime от рекурсии.
-# -> test_lifecycle_and_open_failure(): Границы запуска и откат частично открытых клиентов.
-# -> test_redaction_and_size_limits(): Удаление чувствительных данных и контроль размера.
-# -> test_default_retry_configuration(): Применение стандартной политики повторов.
-# -> test_levels_filters_and_hierarchy(): Стандартные уровни, фильтры и иерархия logging.
-# -> test_internal_namespace_and_redactor_recursion(): Исключение внутреннего logging и рекурсии редактора.
-# -> test_multiple_producers(): Учёт сообщений нескольких потоков без потери пробуждений.
-# -> test_shutdown_counts_queued_deliveries(): Различение активной и ещё не начатой отправки при остановке.
-# -> test_stop_from_channel(): Остановка из адаптера без ожидания собственного потока.
-# -> test_startup_timeout_cleans_up(): Закрытие частично открытого клиента после таймаута запуска.
-# -> test_expiry_and_attempt_timeout(): Истёкшее уведомление и ограничение времени попытки.
-# -> test_no_worker_or_logging_changes_on_construction(): Отсутствие изменений logging и потоков при создании.
+# -> test_local_survives_bad_metadata_and_formatting(): Локальное логирование при ошибках подготовки уведомления
+#
+# -> test_slow_destination_and_shutdown(): Независимость получателей и отмена активной отправки
+#
+# -> test_ingress_and_wakeups_are_bounded(): Ограничение входной очереди и числа пробуждений
+#    Вложенные объявления:
+#    -> hold_loop(): Остановка consumer на время контролируемого заполнения очереди
+#
+# -> test_adapter_failures_and_recursive_logging(): Изоляция отказов и защита двух runtime от рекурсии
+#
+# -> test_lifecycle_and_open_failure(): Границы запуска и откат частично открытых клиентов
+#
+# -> test_redaction_and_size_limits(): Удаление чувствительных данных и контроль размера
+#
+# -> test_default_retry_configuration(): Применение стандартной политики повторов
+#
+# -> test_levels_filters_and_hierarchy(): Стандартные уровни, фильтры и иерархия logging
+#
+# -> test_internal_namespace_and_redactor_recursion(): Исключение внутреннего logging и рекурсии редактора
+#    Вложенные объявления:
+#    -> redact(): Проверка логирования из редактора текста
+#
+# -> test_multiple_producers(): Учёт сообщений нескольких потоков без потери пробуждений
+#    Вложенные объявления:
+#    -> produce(): Порция сообщений из отдельного потока
+#
+# -> test_shutdown_counts_queued_deliveries(): Различение активной и ещё не начатой отправки при остановке
+#
+# -> test_stop_from_channel(): Остановка из адаптера без ожидания собственного потока
+#    Вложенные объявления:
+#    -> send_and_stop(): Запрос остановки из адаптера
+#
+# -> test_startup_timeout_cleans_up(): Закрытие частично открытого клиента после таймаута запуска
+#    Вложенные объявления:
+#    -> blocked_open(): Ожидание отмены по сроку запуска
+#
+# -> test_expiry_and_attempt_timeout(): Истёкшее уведомление и ограничение времени попытки
+#
+# -> test_no_worker_or_logging_changes_on_construction(): Отсутствие изменений logging и потоков при создании
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -71,23 +101,31 @@ from remote_watch import (
     WatcherConfig,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Тестовый канал с управляемыми отказами и задержкой
 #------------------------------------------------------------------------------------------------------------------
 class RecordingChannel:
-    """Record calls and provide a cooperatively blocked send for concurrency tests."""
+    """
+    Record calls and provide a cooperatively blocked send for concurrency tests.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Prepare synchronization primitives without creating an event loop."""
+        """
+        Prepare synchronization primitives without creating an event loop.
+        """
 
         self.deliveries: list[Delivery] = []
         self.calls: list[tuple[str, int, asyncio.AbstractEventLoop]] = []
@@ -106,9 +144,13 @@ class RecordingChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка тестового клиента
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Initialize all asynchronous primitives on the worker loop."""
+        """
+        Initialize all asynchronous primitives on the worker loop.
+        """
 
         self.calls.append(("open", threading.get_ident(), asyncio.get_running_loop()))
         self.gate = asyncio.Event()
@@ -123,9 +165,10 @@ class RecordingChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Record an attempt and optionally block, log recursively or fail.
+        """
+        Record an attempt and optionally block, log recursively or fail.
 
         :param delivery: Delivery under test.
         :type delivery: Delivery
@@ -165,9 +208,13 @@ class RecordingChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие тестового клиента
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record cleanup, including after a partially failed open."""
+        """
+        Record cleanup, including after a partially failed open.
+        """
 
         self.calls.append(("close", threading.get_ident(), asyncio.get_running_loop()))
         self.closed = True
@@ -179,7 +226,6 @@ class RecordingChannel:
 # ФУНКЦИИ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Настройки фоновой отправки для тестовых каналов
 #------------------------------------------------------------------------------------------------------------------
@@ -189,9 +235,10 @@ def make_runtime(
     *,
     capacity: int = 16,
     timeout: float = 1.0,
-) -> NotificationRuntime:
+    ) -> NotificationRuntime:
 
-    """Configure single-attempt fake destinations with bounded queues.
+    """
+    Configure single-attempt fake destinations with bounded queues.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -225,14 +272,14 @@ def make_runtime(
     return NotificationRuntime(config, clock=lambda: datetime(2026, 9, 28, tzinfo=timezone.utc))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Изолированный стандартный логгер для тестов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
 def logger() -> Iterator[logging.Logger]:
 
-    """Create an isolated standard logger and close its handlers after the test.
+    """
+    Create an isolated standard logger and close its handlers after the test.
 
     :return: Isolated logging fixture.
     :rtype: Iterator[logging.Logger]
@@ -248,15 +295,15 @@ def logger() -> Iterator[logging.Logger]:
             handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ожидание обработки входной очереди через тестовый барьер
 #------------------------------------------------------------------------------------------------------------------
 def wait_for_routing(
     runtime: NotificationRuntime,
-) -> None:
+    ) -> None:
 
-    """Synchronize a test with the worker after already admitted events are dispatched.
+    """
+    Synchronize a test with the worker after already admitted events are dispatched.
 
     :param runtime: Running runtime under test.
     :type runtime: NotificationRuntime
@@ -269,7 +316,9 @@ def wait_for_routing(
     #--------------------------------------------------------------------------------------------------------------
     async def barrier() -> None:
 
-        """Yield until the ingress is empty, with a finite outer test deadline."""
+        """
+        Yield until the ingress is empty, with a finite outer test deadline.
+        """
 
         while True:
             with runtime._lock:
@@ -287,7 +336,6 @@ def wait_for_routing(
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Совместная работа консоли, файла и двух каналов
 #------------------------------------------------------------------------------------------------------------------
@@ -295,9 +343,10 @@ def test_logging_end_to_end(
     identity: Identity,
     logger: logging.Logger,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Preserve console/file logging while a LoggerAdapter reaches two channels.
+    """
+    Preserve console/file logging while a LoggerAdapter reaches two channels.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -344,16 +393,16 @@ def test_logging_end_to_end(
         assert len({id(call[2]) for call in channel.calls}) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Локальное логирование при ошибках подготовки уведомления
 #------------------------------------------------------------------------------------------------------------------
 def test_local_survives_bad_metadata_and_formatting(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Contain normalization failures and continue delivery of later valid records.
+    """
+    Contain normalization failures and continue delivery of later valid records.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -384,16 +433,16 @@ def test_local_survives_bad_metadata_and_formatting(
     assert [item.notification.message for item in channel.deliveries] == ["valid"]
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимость получателей и отмена активной отправки
 #------------------------------------------------------------------------------------------------------------------
 def test_slow_destination_and_shutdown(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Keep a healthy destination independent and count a cancelled send as unknown.
+    """
+    Keep a healthy destination independent and count a cancelled send as unknown.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -427,16 +476,16 @@ def test_slow_destination_and_shutdown(
     assert slow.cancelled and slow.closed and healthy.closed
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение входной очереди и числа пробуждений
 #------------------------------------------------------------------------------------------------------------------
 def test_ingress_and_wakeups_are_bounded(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Fill ingress while a controlled worker barrier prevents consumer progress.
+    """
+    Fill ingress while a controlled worker barrier prevents consumer progress.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -456,7 +505,9 @@ def test_ingress_and_wakeups_are_bounded(
     #--------------------------------------------------------------------------------------------------------------
     def hold_loop() -> None:
 
-        """Hold the loop only until the test has submitted a bounded burst."""
+        """
+        Hold the loop only until the test has submitted a bounded burst.
+        """
 
         blocked.set()
         assert release.wait(2)
@@ -481,7 +532,6 @@ def test_ingress_and_wakeups_are_bounded(
             release.set()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Изоляция отказов и защита двух runtime от рекурсии
 #------------------------------------------------------------------------------------------------------------------
@@ -490,9 +540,10 @@ def test_adapter_failures_and_recursive_logging(
     identity: Identity,
     logger: logging.Logger,
     failure: str,
-) -> None:
+    ) -> None:
 
-    """Contain adapter failures and prevent channel logs from feeding another runtime.
+    """
+    Contain adapter failures and prevent channel logs from feeding another runtime.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -525,16 +576,16 @@ def test_adapter_failures_and_recursive_logging(
     assert first.stats().suppressed == second.stats().suppressed == 2
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Границы запуска и откат частично открытых клиентов
 #------------------------------------------------------------------------------------------------------------------
 def test_lifecycle_and_open_failure(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Handle inactive logging, idempotent lifecycle and rollback after a failed open.
+    """
+    Handle inactive logging, idempotent lifecycle and rollback after a failed open.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -574,16 +625,16 @@ def test_lifecycle_and_open_failure(
     assert failed.stats().startup_failed == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Удаление чувствительных данных и контроль размера
 #------------------------------------------------------------------------------------------------------------------
 def test_redaction_and_size_limits(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Redact before truncation and reject metadata exceeding the total budget.
+    """
+    Redact before truncation and reject metadata exceeding the total budget.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -612,15 +663,15 @@ def test_redaction_and_size_limits(
     assert runtime.stats().normalization_failed == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Применение стандартной политики повторов
 #------------------------------------------------------------------------------------------------------------------
 def test_default_retry_configuration(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Accept the default retry policy once retry scheduling is available.
+    """
+    Accept the default retry policy once retry scheduling is available.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -638,16 +689,16 @@ def test_default_retry_configuration(
     runtime.stop()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Стандартные уровни, фильтры и иерархия logging
 #------------------------------------------------------------------------------------------------------------------
 def test_levels_filters_and_hierarchy(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Respect standard logger filtering and preserve parent propagation.
+    """
+    Respect standard logger filtering and preserve parent propagation.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -678,16 +729,16 @@ def test_levels_filters_and_hierarchy(
     assert child.level == logging.ERROR and len(child.filters) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Исключение внутреннего logging и рекурсии редактора
 #------------------------------------------------------------------------------------------------------------------
 def test_internal_namespace_and_redactor_recursion(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Suppress internal names and recursive records emitted during normalization.
+    """
+    Suppress internal names and recursive records emitted during normalization.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -705,9 +756,10 @@ def test_internal_namespace_and_redactor_recursion(
     #--------------------------------------------------------------------------------------------------------------
     def redact(
         text: str,
-    ) -> str:
+        ) -> str:
 
-        """Log once from the redactor without recursive notification delivery.
+        """
+        Log once from the redactor without recursive notification delivery.
 
         :param text: Source text.
         :type text: str
@@ -734,16 +786,16 @@ def test_internal_namespace_and_redactor_recursion(
     assert len(channel.deliveries) == 1 and runtime.stats().suppressed == 3
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Учёт сообщений нескольких потоков без потери пробуждений
 #------------------------------------------------------------------------------------------------------------------
 def test_multiple_producers(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Keep concurrent producers accounted for without losing wakeups.
+    """
+    Keep concurrent producers accounted for without losing wakeups.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -764,7 +816,9 @@ def test_multiple_producers(
     #--------------------------------------------------------------------------------------------------------------
     def produce() -> None:
 
-        """Submit a small burst after all producer threads are ready."""
+        """
+        Submit a small burst after all producer threads are ready.
+        """
 
         barrier.wait()
 
@@ -788,16 +842,16 @@ def test_multiple_producers(
     assert len({item.delivery_id for item in channel.deliveries}) == 80
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Различение активной и ещё не начатой отправки при остановке
 #------------------------------------------------------------------------------------------------------------------
 def test_shutdown_counts_queued_deliveries(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Distinguish a cancelled active attempt from work that never started.
+    """
+    Distinguish a cancelled active attempt from work that never started.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -825,16 +879,16 @@ def test_shutdown_counts_queued_deliveries(
     assert runtime.stats().routed == 3
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Остановка из адаптера без ожидания собственного потока
 #------------------------------------------------------------------------------------------------------------------
 def test_stop_from_channel(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Allow a channel to request shutdown without joining its own worker.
+    """
+    Allow a channel to request shutdown without joining its own worker.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -854,9 +908,10 @@ def test_stop_from_channel(
     #--------------------------------------------------------------------------------------------------------------
     async def send_and_stop(
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Request stop from the worker and finish the active send.
+        """
+        Request stop from the worker and finish the active send.
 
         :param delivery: Current delivery.
         :type delivery: Delivery
@@ -881,15 +936,15 @@ def test_stop_from_channel(
     assert runtime.state is RuntimeState.CLOSED and channel.closed
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Закрытие частично открытого клиента после таймаута запуска
 #------------------------------------------------------------------------------------------------------------------
 def test_startup_timeout_cleans_up(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Cancel a cooperative open and retain time for closing the partial client.
+    """
+    Cancel a cooperative open and retain time for closing the partial client.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -909,7 +964,9 @@ def test_startup_timeout_cleans_up(
     #--------------------------------------------------------------------------------------------------------------
     async def blocked_open() -> None:
 
-        """Wait indefinitely until the startup deadline cancels initialization."""
+        """
+        Wait indefinitely until the startup deadline cancels initialization.
+        """
 
         open_started.set()
         await asyncio.Event().wait()
@@ -927,16 +984,16 @@ def test_startup_timeout_cleans_up(
     assert not runtime._thread.is_alive()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Истёкшее уведомление и ограничение времени попытки
 #------------------------------------------------------------------------------------------------------------------
 def test_expiry_and_attempt_timeout(
     identity: Identity,
     logger: logging.Logger,
-) -> None:
+    ) -> None:
 
-    """Skip an already expired event and cancel a cooperative send at its attempt deadline.
+    """
+    Skip an already expired event and cancel a cooperative send at its attempt deadline.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -967,15 +1024,15 @@ def test_expiry_and_attempt_timeout(
     assert runtime.stats().expired == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие изменений logging и потоков при создании
 #------------------------------------------------------------------------------------------------------------------
 def test_no_worker_or_logging_changes_on_construction(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Leave global logging and application event loops untouched during construction.
+    """
+    Leave global logging and application event loops untouched during construction.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -992,8 +1049,6 @@ def test_no_worker_or_logging_changes_on_construction(
     runtime.stop()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

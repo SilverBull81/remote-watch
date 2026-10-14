@@ -1,21 +1,21 @@
 ﻿# Управление только собственным Caddy с проверенным постоянным хранилищем CA.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> ManagedCaddy: Проверка хранилища и управление собственным Caddy.
+# Классы:
+# -> ManagedCaddy: Проверка хранилища и управление собственным Caddy
 #    Конструктор:
-#    -> __init__(): Создание объекта без запуска рабочих ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Подготовка ресурсов и запуск фоновой работы.
-#    -> status(): Чтение безопасного состояния компонентов.
-#    -> close(): Освобождение только собственных ресурсов.
+#    -> start(): Подготовка ресурсов и запуск фоновой работы
+#    -> status(): Чтение безопасного состояния компонентов
+#    -> close(): Освобождение только собственных ресурсов
 #    Служебные методы:
-#    -> _spawn(): Запуск под контролем ОС до передачи настроек компоненту.
+#    -> _spawn(): Запуск под контролем ОС до передачи настроек компоненту
 #
 # Функции:
 # -> check_caddy(): Проверка файлового storage и закрытого admin endpoint.
@@ -24,6 +24,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -37,6 +38,12 @@ from time import monotonic
 from remote_watch.gateway_server.messages import read_limited
 from remote_watch.gateway_server.processes import ProcessGroup
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка файлового storage и закрытого admin endpoint.
@@ -44,9 +51,10 @@ from remote_watch.gateway_server.processes import ProcessGroup
 def check_caddy(
     value: object,
     data_dir: Path,
-) -> str:
+    ) -> str:
 
-    """Verify persistent filesystem storage and a numeric loopback admin endpoint.
+    """
+    Verify persistent filesystem storage and a numeric loopback admin endpoint.
 
     :param value: Adapted Caddy JSON kept private.
     :type value: object
@@ -82,12 +90,17 @@ def check_caddy(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Проверка хранилища и управление собственным Caddy
 #------------------------------------------------------------------------------------------------------------------
 class ManagedCaddy:
-
-    """Own the launched Caddy only; external Caddy never enters this class."""
+    """
+    Own the launched Caddy only; external Caddy never enters this class.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -95,9 +108,10 @@ class ManagedCaddy:
     def __init__(
         self,
         settings: dict,
-    ) -> None:
+        ) -> None:
 
-        """Retain parent settings and prepare one bounded subprocess owner.
+        """
+        Retain parent settings and prepare one bounded subprocess owner.
 
         :param settings: Private bootstrap paths supplied by the manager.
         :type settings: dict
@@ -116,9 +130,13 @@ class ManagedCaddy:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка ресурсов и запуск фоновой работы
     #--------------------------------------------------------------------------------------------------------------
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Adapt within limits, verify storage, then run an immutable private JSON snapshot."""
+        """
+        Adapt within limits, verify storage, then run an immutable private JSON snapshot.
+        """
 
         arguments = [self.settings["executable"], "adapt", "--config", self.settings["config"],
                      "--adapter", "caddyfile"]
@@ -158,9 +176,12 @@ class ManagedCaddy:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение безопасного состояния компонентов
     #--------------------------------------------------------------------------------------------------------------
-    async def status(self) -> dict:
+    async def status(
+        self,
+        ) -> dict:
 
-        """Probe bounded admin responsiveness without reloading or stopping by admin API.
+        """
+        Probe bounded admin responsiveness without reloading or stopping by admin API.
 
         :return: Fixed current state; ingress TLS remains unverified.
         :rtype: dict
@@ -190,9 +211,13 @@ class ManagedCaddy:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение только собственных ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release only the exact owned group, preserving persistent CA files."""
+        """
+        Release only the exact owned group, preserving persistent CA files.
+        """
 
         self.group.close()
         if self.process is not None:
@@ -213,9 +238,10 @@ class ManagedCaddy:
         self,
         arguments: list[str],
         capture: bool,
-    ) -> None:
+        ) -> None:
 
-        """Use a parent-bound binary bootstrap rather than a shell or unmanaged subprocess.
+        """
+        Use a parent-bound binary bootstrap rather than a shell or unmanaged subprocess.
 
         :param arguments: Fixed Caddy operation and verified paths.
         :type arguments: list[str]
@@ -235,8 +261,6 @@ class ManagedCaddy:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,30 +1,31 @@
 ﻿# Команды и ответы через два закрытых топика ntfy.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NtfyCommandConfig: Настройки закрытых топиков команд и ответов.
+# -> NtfyCommandConfig: Настройки закрытых топиков команд и ответов
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> NtfyCommandProvider: Получатель команд из закрытого топика.
+# -> NtfyCommandProvider: Получатель команд из закрытого топика
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> poll(): Получение ограниченной порции неподтверждённых событий.
-#    -> acknowledge(): Подтверждение только записанного события.
-#    -> reply(): Одна попытка отправить ответ проверенному получателю.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> poll(): Получение ограниченной порции неподтверждённых событий
+#    -> acknowledge(): Подтверждение только записанного события
+#    -> reply(): Одна попытка отправить ответ проверенному получателю
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import re
@@ -36,30 +37,65 @@ from remote_watch.adapters._source_http import SourceHttp
 from remote_watch.commands.source_protocol import SourceEvent
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки закрытых топиков команд и ответов
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NtfyCommandConfig:
-    """Map a private topic's authorized writers to one explicitly configured application actor."""
+    """
+    Map a private topic's authorized writers to one explicitly configured application actor.
+
+    :param topic: Notification topic or routing topic selector.
+    :type topic: str
+
+    :param reply_topic: Separate private ntfy topic for command replies.
+    :type reply_topic: str
+
+    :param actor_id: Authenticated command actor or explicitly configured private-topic writer.
+    :type actor_id: str
+
+    :param private_topic_confirmed: Operator assertion that only authorized actors can write to the command topic.
+    :type private_topic_confirmed: bool
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param allow_loopback_http: Explicit opt-in to numeric loopback HTTP for local tests only.
+    :type allow_loopback_http: bool
+    """
 
     topic: str = field(repr=False)              # Закрытый топик только для команд.
     reply_topic: str = field(repr=False)        # Другой закрытый топик для ответов.
     actor_id: str                               # Локальное имя владельца права записи в командный топик.
     private_topic_confirmed: bool               # Оператор проверил запрет чужой записи и чтения обоих топиков.
-    token: str | None = field(default=None, repr=False)     # Чтение команд и публикация ответов.
+    token: str | None = field(default=None, repr=False)  # Чтение команд и публикация ответов.
     token_env: str | None = None                # Альтернатива literal-токену, без чтения при конструировании.
     endpoint: str = "https://ntfy.sh"           # Доверенный сервер ntfy.
     allow_loopback_http: bool = False           # Только локальный тестовый HTTP.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Require explicit private-topic ownership and distinct command/reply streams."""
+        """
+        Require explicit private-topic ownership and distinct command/reply streams.
+        """
 
         for value in (self.topic, self.reply_topic):
             if type(value) is not str or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) is None:
@@ -77,13 +113,13 @@ class NtfyCommandConfig:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Получатель команд из закрытого топика
 #------------------------------------------------------------------------------------------------------------------
 class NtfyCommandProvider:
-    """Read bounded batches from one private topic without trusting claimed authors in message text."""
-
+    """
+    Read bounded batches from one private topic without trusting claimed authors in message text.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -91,9 +127,10 @@ class NtfyCommandProvider:
     def __init__(
         self,
         config: NtfyCommandConfig,
-    ) -> None:
+        ) -> None:
 
-        """Keep private topic configuration without creating a network client.
+        """
+        Keep private topic configuration without creating a network client.
 
         :param config: Explicit credentials, access rules and finite limits.
         :type config: NtfyCommandConfig
@@ -106,13 +143,15 @@ class NtfyCommandProvider:
         self._token: str | None = None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> str:
+    async def open(
+        self,
+        ) -> str:
 
-        """Verify anonymous reading is denied without publishing test messages or changing server ACL.
+        """
+        Verify anonymous reading is denied without publishing test messages or changing server ACL.
 
         :return: Stable nonsecret fingerprint of the opened provider stream.
         :rtype: str
@@ -129,16 +168,16 @@ class NtfyCommandProvider:
         return f"ntfy:{self.config.endpoint}:{self.config.topic}:{self.config.reply_topic}:{self.config.actor_id}"
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение ограниченной порции неподтверждённых событий
     #--------------------------------------------------------------------------------------------------------------
     async def poll(
         self,
         cursor: str,
-    ) -> tuple[SourceEvent, ...]:
+        ) -> tuple[SourceEvent, ...]:
 
-        """Read the first bounded cache page; the source journal handles opaque IDs and redelivery.
+        """
+        Read the first bounded cache page; the source journal handles opaque IDs and redelivery.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -169,16 +208,16 @@ class NtfyCommandProvider:
         return tuple(result)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение только записанного события
     #--------------------------------------------------------------------------------------------------------------
     async def acknowledge(
         self,
         cursor: str,
-    ) -> None:
+        ) -> None:
 
-        """Leave ntfy cache intact; subsequent reads use only the locally committed message ID.
+        """
+        Leave ntfy cache intact; subsequent reads use only the locally committed message ID.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -189,7 +228,6 @@ class NtfyCommandProvider:
         require_text(cursor, "ntfy checkpoint", 128)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Одна попытка отправить ответ проверенному получателю
     #--------------------------------------------------------------------------------------------------------------
@@ -197,9 +235,10 @@ class NtfyCommandProvider:
         self,
         conversation_id: str,
         text: str,
-    ) -> None:
+        ) -> None:
 
-        """Publish a result only to the configured private reply topic, never an incoming URL.
+        """
+        Publish a result only to the configured private reply topic, never an incoming URL.
 
         :param conversation_id: Authenticated chat ID or configured private command topic.
         :type conversation_id: str
@@ -221,13 +260,16 @@ class NtfyCommandProvider:
             raise CommandError("invalid")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close owned provider resources and discard the resolved access token."""
+        """
+        Close owned provider resources and discard the resolved access token.
+        """
 
         try:
             await self._http.close()
@@ -237,7 +279,6 @@ class NtfyCommandProvider:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

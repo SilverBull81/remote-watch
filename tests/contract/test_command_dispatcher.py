@@ -1,35 +1,106 @@
 ﻿# Исполнение callbacks, проверка аргументов и независимость команд от уведомлений.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> configured(): Подготовка согласованных прав, реестра и двух журналов
+#
+# -> until(): Конечное ожидание наблюдаемого результата теста
+#
+# -> submit(): Проверка прав и свежести перед атомарной записью с cursor
 #
 # Тесты:
-# -> test_sync_startup_cause(): Сохранение первичной ошибки синхронного старта.
-# -> configured(): Подготовка согласованных прав, реестра и двух журналов.
-# -> until(): Конечное ожидание наблюдаемого результата теста.
-# -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
-# -> test_dispatcher_callback_forms(): Формы callbacks и проверка их потока либо event loop.
-# -> test_dispatcher_argument_validation(): Проверка аргументов до grant и удержание зависшего валидатора.
-# -> test_dispatcher_outcome_and_retry(): Безопасные неизвестные исходы и повтор только доставки результата.
-# -> test_dispatcher_timeout_keeps_slot(): Удержание слота до фактического окончания после timeout.
-# -> test_dispatcher_shutdown_pins_live_callback(): Конечная остановка с сохранением живого исполнения.
-# -> test_watcher_commands_and_partial_events(): Проверка и изменение Event через словарь и partial.
-# -> test_dispatcher_exact_registry_binding(): Запрет несовпадения реестра, scope и Identity клиента.
-# -> test_watcher_rejects_callback_lifecycle(): Запрет рекурсивной остановки watcher из обработчика.
-# -> test_watcher_sync_commands_leave_notifications_live(): Доставка уведомления при занятом командном потоке.
-# -> test_watcher_sync_start_rejects_async_callback(): Явный выбор цикла приложения для async-обработчика.
-# -> test_dispatcher_final_worker_deadline(): Запрет callback после истечения срока перед входом в поток.
-# -> test_dispatcher_recovered_journal(): Разбор старых записей без повторного callback.
-# -> test_dispatcher_result_persisted_before_release_failure(): Восстановление слота после отказа очистки.
-# -> test_sync_startup_cause(): Безопасная причина старта без исходной цепочки исключений.
+# -> test_dispatcher_callback_forms(): Формы callbacks и проверка их потока либо event loop
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> sync(): Подставной обработчик для проверки рабочего потока
+#       -> asynchronous(): Подставной обработчик для проверки цикла приложения
+#       -> Handler: Подставной вызываемый объект с обычным методом
+#          Специальные методы:
+#          -> __call__(): Вызов подставного обработчика
+#       -> AsyncHandler: Подставной вызываемый объект с асинхронным методом
+#          Специальные методы:
+#          -> __call__(): Вызов подставного обработчика
+#
+# -> test_dispatcher_argument_validation(): Проверка аргументов до grant и удержание зависшего валидатора
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> validate(): Чистая проверка аргументов без запуска обработчика
+#       -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_dispatcher_outcome_and_retry(): Безопасные неизвестные исходы и повтор только доставки результата
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_dispatcher_timeout_keeps_slot(): Удержание слота до фактического окончания после timeout
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> callback(): Изменение только подставного состояния приложения
+#       -> asynchronous(): Подставной обработчик для проверки цикла приложения
+#
+# -> test_dispatcher_shutdown_pins_live_callback(): Конечная остановка с сохранением живого исполнения
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_watcher_commands_and_partial_events(): Проверка и изменение Event через словарь и partial
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_dispatcher_exact_registry_binding(): Запрет несовпадения реестра, scope и Identity клиента
+#
+# -> test_watcher_rejects_callback_lifecycle(): Запрет рекурсивной остановки watcher из обработчика
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> sync(): Подставной обработчик для проверки рабочего потока
+#       -> asynchronous(): Подставной обработчик для проверки цикла приложения
+#
+# -> test_watcher_sync_commands_leave_notifications_live(): Доставка уведомления при занятом командном потоке
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_watcher_sync_start_rejects_async_callback(): Явный выбор цикла приложения для async-обработчика
+#    Вложенные объявления:
+#    -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_dispatcher_final_worker_deadline(): Запрет callback после истечения срока перед входом в поток
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> delayed(): Исчерпание срока перед входом в рабочий поток
+#
+# -> test_dispatcher_recovered_journal(): Разбор восстановленных записей без повторного callback
+#    Вложенные объявления:
+#    -> scenario(): Смена поколения клиента при сохранении базы и неизвестного результата
+#
+# -> test_dispatcher_result_persisted_before_release_failure(): Восстановление локального слота после сохранения
+#    результата и отказа очистки
+#    Вложенные объявления:
+#    -> scenario(): Отказ между постоянным результатом и освобождением ticket в памяти
+#       Вложенные объявления:
+#       -> fail_release(): Однократный отказ после фиксации COMPLETED
+#       -> fail_ack(): Потеря ответа уже выполненной операции ACK
+#
+# -> test_sync_startup_cause(): Безопасная причина старта без исходной цепочки исключений
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -63,6 +134,12 @@ from remote_watch.commands.sqlite_store import SQLiteCommandStore
 from remote_watch.commands.storage import StoreError, StoreRole
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка согласованных прав, реестра и двух журналов
@@ -70,9 +147,10 @@ from remote_watch.commands.transport import CommandError
 def configured(
     path: Path,
     registry: CommandRegistry,
-) -> tuple[Rig, CommandDispatcher]:
+    ) -> tuple[Rig, CommandDispatcher]:
 
-    """Bind an application registry to matching principal/source permissions and a real client journal.
+    """
+    Bind an application registry to matching principal/source permissions and a real client journal.
 
     :param path: Temporary directory for isolated persistent journals.
     :type path: Path
@@ -99,16 +177,16 @@ def configured(
                                   shutdown_timeout=0.2)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конечное ожидание наблюдаемого результата теста
 #------------------------------------------------------------------------------------------------------------------
 async def until(
     predicate: Callable[[], bool],
     timeout: float = 10.0,
-) -> None:
+    ) -> None:
 
-    """Wait for an observable effect under a fixed test deadline.
+    """
+    Wait for an observable effect under a fixed test deadline.
 
     :param predicate: Thread-safe predicate observing test progress, possibly reading SQLite.
     :type predicate: Callable[[], bool]
@@ -139,7 +217,6 @@ async def until(
         await asyncio.sleep(0.02)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка прав и свежести перед атомарной записью с cursor
 #------------------------------------------------------------------------------------------------------------------
@@ -148,9 +225,10 @@ async def submit(
     name: str = 'resume_load',
     number: int = 1,
     arguments: Mapping[str, str] | None = None,
-) -> CommandRequest:
+    ) -> CommandRequest:
 
-    """Submit a synthetic source event using the exact registered session.
+    """
+    Submit a synthetic source event using the exact registered session.
 
     :param rig: Isolated hub, client, clocks and temporary journals.
     :type rig: Rig
@@ -187,6 +265,10 @@ async def submit(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Формы callbacks и проверка их потока либо event loop
 #------------------------------------------------------------------------------------------------------------------
@@ -196,9 +278,10 @@ async def submit(
 def test_dispatcher_callback_forms(
     tmp_path: Path,
     kind: str,
-) -> None:
+    ) -> None:
 
-    """Run supported callback forms on their documented thread or loop.
+    """
+    Run supported callback forms on their documented thread or loop.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -215,19 +298,23 @@ def test_dispatcher_callback_forms(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Record the execution owner and verify the final durable result."""
+        """
+        Record the execution owner and verify the final durable result.
+        """
 
         calls = []
         loop = asyncio.get_running_loop()
         owner_thread = threading.get_ident()
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной обработчик для проверки рабочего потока
         #----------------------------------------------------------------------------------------------------------
-        def sync(value: str = 'done') -> str:
+        def sync(
+            value: str = 'done',
+            ) -> str:
 
-            """Record synchronous worker ownership.
+            """
+            Record synchronous worker ownership.
 
             :param value: Synthetic callback response.
             :type value: str
@@ -242,13 +329,13 @@ def test_dispatcher_callback_forms(
             return value
         #----------------------------------------------------------------------------------------------------------
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной обработчик для проверки цикла приложения
         #----------------------------------------------------------------------------------------------------------
         async def asynchronous() -> str:
 
-            """Record application-loop ownership.
+            """
+            Record application-loop ownership.
 
             :return: Short confirmation of the synthetic application state change.
             :rtype: str
@@ -258,19 +345,23 @@ def test_dispatcher_callback_forms(
             return "done"
         #----------------------------------------------------------------------------------------------------------
 
-
         #----------------------------------------------------------------------------------------------------------
         # КЛАСС : Подставной вызываемый объект с обычным методом
         #----------------------------------------------------------------------------------------------------------
         class Handler:
-            """Expose an ordinary callable object."""
+            """
+            Expose an ordinary callable object.
+            """
 
             #------------------------------------------------------------------------------------------------------
             # СПЕЦИАЛЬНЫЙ МЕТОД : Вызов подставного обработчика
             #------------------------------------------------------------------------------------------------------
-            def __call__(self) -> str:
+            def __call__(
+                self,
+                ) -> str:
 
-                """Delegate to the synchronous test handler.
+                """
+                Delegate to the synchronous test handler.
 
                 :return: Short confirmation of the synthetic application state change.
                 :rtype: str
@@ -281,19 +372,23 @@ def test_dispatcher_callback_forms(
 
         #----------------------------------------------------------------------------------------------------------
 
-
         #----------------------------------------------------------------------------------------------------------
         # КЛАСС : Подставной вызываемый объект с асинхронным методом
         #----------------------------------------------------------------------------------------------------------
         class AsyncHandler:
-            """Expose an asynchronous callable object."""
+            """
+            Expose an asynchronous callable object.
+            """
 
             #------------------------------------------------------------------------------------------------------
             # СПЕЦИАЛЬНЫЙ МЕТОД : Вызов подставного обработчика
             #------------------------------------------------------------------------------------------------------
-            async def __call__(self) -> str:
+            async def __call__(
+                self,
+                ) -> str:
 
-                """Delegate to the asynchronous test handler.
+                """
+                Delegate to the asynchronous test handler.
 
                 :return: Short confirmation of the synthetic application state change.
                 :rtype: str
@@ -331,7 +426,6 @@ def test_dispatcher_callback_forms(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка аргументов до grant и удержание зависшего валидатора
 #------------------------------------------------------------------------------------------------------------------
@@ -339,9 +433,10 @@ def test_dispatcher_callback_forms(
 def test_dispatcher_argument_validation(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Validate arguments before grant and retain the worker occupied by a slow validator.
+    """
+    Validate arguments before grant and retain the worker occupied by a slow validator.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -358,20 +453,24 @@ def test_dispatcher_argument_validation(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise pure validators without letting failures invoke the application callback."""
+        """
+        Exercise pure validators without letting failures invoke the application callback.
+        """
 
         calls = []
         entered = threading.Event()
         release = threading.Event()
         validator_threads = []
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Чистая проверка аргументов без запуска обработчика
         #----------------------------------------------------------------------------------------------------------
-        def validate(arguments: Mapping[str, str]) -> None:
+        def validate(
+            arguments: Mapping[str, str],
+            ) -> None:
 
-            """Validate one bounded integer argument on the callback worker.
+            """
+            Validate one bounded integer argument on the callback worker.
 
             :param arguments: Bounded immutable textual command arguments.
             :type arguments: Mapping[str, str]
@@ -395,13 +494,15 @@ def test_dispatcher_argument_validation(
                 raise ValueError("private invalid value")
         #----------------------------------------------------------------------------------------------------------
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Изменение только подставного состояния приложения
         #----------------------------------------------------------------------------------------------------------
-        def callback(context: CommandContext) -> str:
+        def callback(
+            context: CommandContext,
+            ) -> str:
 
-            """Record the validated context without converting its arguments implicitly.
+            """
+            Record the validated context without converting its arguments implicitly.
 
             :param context: Validated application context with exact target and arguments.
             :type context: CommandContext
@@ -449,7 +550,6 @@ def test_dispatcher_argument_validation(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасные неизвестные исходы и повтор только доставки результата
 #------------------------------------------------------------------------------------------------------------------
@@ -457,9 +557,10 @@ def test_dispatcher_argument_validation(
 def test_dispatcher_outcome_and_retry(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Keep exceptions private and retry result delivery without invoking the callback again.
+    """
+    Keep exceptions private and retry result delivery without invoking the callback again.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -476,17 +577,19 @@ def test_dispatcher_outcome_and_retry(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Count side effects across callback failures and a lost durable receipt."""
+        """
+        Count side effects across callback failures and a lost durable receipt.
+        """
 
         calls = []
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Изменение только подставного состояния приложения
         #----------------------------------------------------------------------------------------------------------
         def callback() -> object:
 
-            """Change synthetic state before returning or raising.
+            """
+            Change synthetic state before returning or raising.
 
             :return: Synthetic handler value used to exercise result normalization.
             :rtype: object
@@ -527,7 +630,6 @@ def test_dispatcher_outcome_and_retry(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Удержание слота до фактического окончания после timeout
 #------------------------------------------------------------------------------------------------------------------
@@ -535,9 +637,10 @@ def test_dispatcher_outcome_and_retry(
 def test_dispatcher_timeout_keeps_slot(
     tmp_path: Path,
     kind: str,
-) -> None:
+    ) -> None:
 
-    """Retain a timed-out execution until its real termination and deliver release durably.
+    """
+    Retain a timed-out execution until its real termination and deliver release durably.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -554,20 +657,22 @@ def test_dispatcher_timeout_keeps_slot(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Hold a callback past timeout and prove that a second command cannot overtake it."""
+        """
+        Hold a callback past timeout and prove that a second command cannot overtake it.
+        """
 
         entered = threading.Event()
         released = threading.Event()
         async_release = asyncio.Event()
         calls = []
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Изменение только подставного состояния приложения
         #----------------------------------------------------------------------------------------------------------
         def callback() -> str:
 
-            """Wait under test control without cooperating with cancellation.
+            """
+            Wait under test control without cooperating with cancellation.
 
             :return: Short confirmation of the synthetic application state change.
             :rtype: str
@@ -579,13 +684,13 @@ def test_dispatcher_timeout_keeps_slot(
             return "late completion"
         #----------------------------------------------------------------------------------------------------------
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной обработчик для проверки цикла приложения
         #----------------------------------------------------------------------------------------------------------
         async def asynchronous() -> str:
 
-            """Suppress the first cancellation to model asynchronous cleanup still in progress.
+            """
+            Suppress the first cancellation to model asynchronous cleanup still in progress.
 
             :return: Short confirmation of the synthetic application state change.
             :rtype: str
@@ -636,13 +741,15 @@ def test_dispatcher_timeout_keeps_slot(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конечная остановка с сохранением живого исполнения
 #------------------------------------------------------------------------------------------------------------------
-def test_dispatcher_shutdown_pins_live_callback(tmp_path: Path) -> None:
+def test_dispatcher_shutdown_pins_live_callback(
+    tmp_path: Path,
+    ) -> None:
 
-    """Bound shutdown without declaring a still-running synchronous handler terminated.
+    """
+    Bound shutdown without declaring a still-running synchronous handler terminated.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -655,18 +762,21 @@ def test_dispatcher_shutdown_pins_live_callback(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Stop while a callback owns its execution and inspect the retained hub record."""
+        """
+        Stop while a callback owns its execution and inspect the retained hub record.
+        """
 
         entered = threading.Event()
         released = threading.Event()
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Изменение только подставного состояния приложения
         #----------------------------------------------------------------------------------------------------------
         def callback() -> None:
 
-            """Remain active until the test explicitly releases the worker."""
+            """
+            Remain active until the test explicitly releases the worker.
+            """
 
             entered.set()
             released.wait(2)
@@ -696,13 +806,15 @@ def test_dispatcher_shutdown_pins_live_callback(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка и изменение Event через словарь и partial
 #------------------------------------------------------------------------------------------------------------------
-def test_watcher_commands_and_partial_events(tmp_path: Path) -> None:
+def test_watcher_commands_and_partial_events(
+    tmp_path: Path,
+    ) -> None:
 
-    """Integrate arbitrary status and mutation names through the original mapping/partial API.
+    """
+    Integrate arbitrary status and mutation names through the original mapping/partial API.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -715,7 +827,9 @@ def test_watcher_commands_and_partial_events(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Change an application Event and distinguish its acknowledgement from business completion."""
+        """
+        Change an application Event and distinguish its acknowledgement from business completion.
+        """
 
         stopped = threading.Event()
         registry = CommandRegistry.from_callbacks({"suspend_load": partial(stopped.set),
@@ -742,13 +856,15 @@ def test_watcher_commands_and_partial_events(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет несовпадения реестра, scope и Identity клиента
 #------------------------------------------------------------------------------------------------------------------
-def test_dispatcher_exact_registry_binding(tmp_path: Path) -> None:
+def test_dispatcher_exact_registry_binding(
+    tmp_path: Path,
+    ) -> None:
 
-    """Reject a client registration that advertises different callback permissions.
+    """
+    Reject a client registration that advertises different callback permissions.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -765,7 +881,6 @@ def test_dispatcher_exact_registry_binding(tmp_path: Path) -> None:
         RemoteWatcher(WatcherConfig(identity=foreign, commands=registry), command_client=rig.client)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет рекурсивной остановки watcher из обработчика
 #------------------------------------------------------------------------------------------------------------------
@@ -773,9 +888,10 @@ def test_dispatcher_exact_registry_binding(tmp_path: Path) -> None:
 def test_watcher_rejects_callback_lifecycle(
     tmp_path: Path,
     kind: str,
-) -> None:
+    ) -> None:
 
-    """Reject recursive watcher shutdown from either callback execution context.
+    """
+    Reject recursive watcher shutdown from either callback execution context.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -792,28 +908,32 @@ def test_watcher_rejects_callback_lifecycle(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run a lifecycle misuse without blocking the callback or notification worker."""
+        """
+        Run a lifecycle misuse without blocking the callback or notification worker.
+        """
 
         owner = []
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной обработчик для проверки рабочего потока
         #----------------------------------------------------------------------------------------------------------
         def sync() -> None:
 
-            """Attempt unsupported watcher shutdown from the callback worker."""
+            """
+            Attempt unsupported watcher shutdown from the callback worker.
+            """
 
             owner[0].stop()
         #----------------------------------------------------------------------------------------------------------
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной обработчик для проверки цикла приложения
         #----------------------------------------------------------------------------------------------------------
         async def asynchronous() -> None:
 
-            """Attempt unsupported watcher shutdown from the application-loop callback."""
+            """
+            Attempt unsupported watcher shutdown from the application-loop callback.
+            """
 
             await owner[0].astop()
         #----------------------------------------------------------------------------------------------------------
@@ -839,13 +959,15 @@ def test_watcher_rejects_callback_lifecycle(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Доставка уведомления при занятом командном потоке
 #------------------------------------------------------------------------------------------------------------------
-def test_watcher_sync_commands_leave_notifications_live(tmp_path: Path) -> None:
+def test_watcher_sync_commands_leave_notifications_live(
+    tmp_path: Path,
+    ) -> None:
 
-    """Use separate command and notification loops while a synchronous callback is blocked.
+    """
+    Use separate command and notification loops while a synchronous callback is blocked.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -865,19 +987,22 @@ def test_watcher_sync_commands_leave_notifications_live(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Drive the synchronous watcher over HTTP from a separately owned hub loop."""
+        """
+        Drive the synchronous watcher over HTTP from a separately owned hub loop.
+        """
 
         entered = threading.Event()
         released = threading.Event()
         channel = MemoryChannel()
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Изменение только подставного состояния приложения
         #----------------------------------------------------------------------------------------------------------
         def callback() -> None:
 
-            """Hold the command worker while the notification worker delivers a log entry."""
+            """
+            Hold the command worker while the notification worker delivers a log entry.
+            """
 
             entered.set()
             released.wait(2)
@@ -915,13 +1040,15 @@ def test_watcher_sync_commands_leave_notifications_live(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явный выбор цикла приложения для async-обработчика
 #------------------------------------------------------------------------------------------------------------------
-def test_watcher_sync_start_rejects_async_callback(tmp_path: Path) -> None:
+def test_watcher_sync_start_rejects_async_callback(
+    tmp_path: Path,
+    ) -> None:
 
-    """Require the application to choose its event loop explicitly for asynchronous callbacks.
+    """
+    Require the application to choose its event loop explicitly for asynchronous callbacks.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -934,7 +1061,9 @@ def test_watcher_sync_start_rejects_async_callback(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def callback() -> None:
 
-        """Represent a callback requiring the application's event loop."""
+        """
+        Represent a callback requiring the application's event loop.
+        """
 
         raise AssertionError("must not run during startup")
     #--------------------------------------------------------------------------------------------------------------
@@ -948,13 +1077,15 @@ def test_watcher_sync_start_rejects_async_callback(tmp_path: Path) -> None:
     assert watcher.logger.handlers == []
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет callback после истечения срока перед входом в поток
 #------------------------------------------------------------------------------------------------------------------
-def test_dispatcher_final_worker_deadline(tmp_path: Path) -> None:
+def test_dispatcher_final_worker_deadline(
+    tmp_path: Path,
+    ) -> None:
 
-    """Refuse callback invocation when the budget expires between scheduling and worker entry.
+    """
+    Refuse callback invocation when the budget expires between scheduling and worker entry.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -967,13 +1098,14 @@ def test_dispatcher_final_worker_deadline(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Advance only the command clock before the final in-worker permission check."""
+        """
+        Advance only the command clock before the final in-worker permission check.
+        """
 
         calls = []
         rig, dispatcher = configured(
             tmp_path, CommandRegistry.from_callbacks({"resume_load": lambda: calls.append(1)}))
         original = dispatcher._invoke_sync
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Исчерпание срока перед входом в рабочий поток
@@ -981,9 +1113,10 @@ def test_dispatcher_final_worker_deadline(tmp_path: Path) -> None:
         def delayed(
             spec: CommandSpec,
             ticket: Any,
-        ) -> Any:
+            ) -> Any:
 
-            """Spend the lease before invoking the production worker guard.
+            """
+            Spend the lease before invoking the production worker guard.
 
             :param spec: Exact locally registered command specification.
             :type spec: CommandSpec
@@ -1027,9 +1160,10 @@ def test_dispatcher_final_worker_deadline(tmp_path: Path) -> None:
 def test_dispatcher_recovered_journal(
     tmp_path: Path,
     started: bool,
-) -> None:
+    ) -> None:
 
-    """Retire recovered pre-grant records while retaining uncertain executions after restart.
+    """
+    Retire recovered pre-grant records while retaining uncertain executions after restart.
 
     :param tmp_path: Isolated directory containing both persistent journals.
     :type tmp_path: Path
@@ -1046,7 +1180,9 @@ def test_dispatcher_recovered_journal(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Reopen the real client journal with a new generation and inspect reconciliation."""
+        """
+        Reopen the real client journal with a new generation and inspect reconciliation.
+        """
 
         calls = []
         registry = CommandRegistry.from_callbacks({"resume_load": lambda: calls.append(1)})
@@ -1093,7 +1229,6 @@ def test_dispatcher_recovered_journal(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление локального слота после сохранения результата и отказа очистки
 #------------------------------------------------------------------------------------------------------------------
@@ -1101,9 +1236,10 @@ def test_dispatcher_recovered_journal(
 def test_dispatcher_result_persisted_before_release_failure(
     tmp_path: Path,
     lose_ack: bool,
-) -> None:
+    ) -> None:
 
-    """Recover an active in-memory ticket from durable completion without replaying its callback.
+    """
+    Recover an active in-memory ticket from durable completion without replaying its callback.
 
     :param tmp_path: Isolated journals used by the production client and dispatcher.
     :type tmp_path: Path
@@ -1120,7 +1256,9 @@ def test_dispatcher_result_persisted_before_release_failure(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Inject a finite cleanup failure and require the next command to make progress."""
+        """
+        Inject a finite cleanup failure and require the next command to make progress.
+        """
 
         calls = []
         rig, dispatcher = configured(
@@ -1136,9 +1274,10 @@ def test_dispatcher_result_persisted_before_release_failure(
         def fail_release(
             ref: CommandRef,
             claim_id: str,
-        ) -> None:
+            ) -> None:
 
-            """Fail once after the preceding FINISH has persisted the callback result.
+            """
+            Fail once after the preceding FINISH has persisted the callback result.
 
             :param ref: Exact reference of the completed command.
             :type ref: CommandRef
@@ -1160,9 +1299,12 @@ def test_dispatcher_result_persisted_before_release_failure(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Потеря ответа уже выполненной операции ACK
         #----------------------------------------------------------------------------------------------------------
-        def fail_ack(result: CommandResult) -> None:
+        def fail_ack(
+            result: CommandResult,
+            ) -> None:
 
-            """Persist acknowledgement before optionally losing its first response.
+            """
+            Persist acknowledgement before optionally losing its first response.
 
             :param result: Exact completed result acknowledged by the hub.
             :type result: CommandResult
@@ -1199,7 +1341,6 @@ def test_dispatcher_result_persisted_before_release_failure(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасная причина старта без исходной цепочки исключений
 #------------------------------------------------------------------------------------------------------------------
@@ -1209,9 +1350,10 @@ def test_dispatcher_result_persisted_before_release_failure(
 def test_sync_startup_cause(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Retain safe startup classification without leaking the original exception chain.
+    """
+    Retain safe startup classification without leaking the original exception chain.
 
     :param tmp_path: Isolated command journal directory.
     :type tmp_path: Path
@@ -1267,8 +1409,6 @@ def test_sync_startup_cause(
     watcher.stop()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

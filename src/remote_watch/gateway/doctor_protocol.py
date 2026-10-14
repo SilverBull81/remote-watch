@@ -1,27 +1,30 @@
 ﻿# Ограниченная проверка прав и готовности без регистрации и исполнения команд.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> ProbeEndpoint: Отдельный read-only обработчик с ограничением нагрузки.
+# -> ProbeEndpoint: Отдельный read-only обработчик с ограничением нагрузки
 #    Конструктор:
-#    -> __init__(): Привязка проверки credentials и наблюдения состояния.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> handle(): Проверка запроса и возврат только безопасных признаков.
+#    -> handle(): Проверка запроса и возврат только безопасных признаков
 #
 # Функции:
-# -> decode_probe(): Строгая ограниченная схема диагностического запроса.
-# -> _pairs(): Запрет повторяющихся ключей JSON.
-# -> probe_response(): Отбор разрешённых полей состояния без исходных значений.
+# -> decode_probe(): Строгая ограниченная схема диагностического запроса
+#
+# -> _pairs(): Запрет повторяющихся ключей JSON
+#
+# -> probe_response(): Отбор разрешённых полей состояния без исходных значений
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -31,13 +34,22 @@ from typing import Any
 
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Строгая ограниченная схема диагностического запроса
 #------------------------------------------------------------------------------------------------------------------
-def decode_probe(data: bytes) -> tuple[Identity, tuple[str, ...]]:
+def decode_probe(
+    data: bytes,
+    ) -> tuple[Identity, tuple[str, ...]]:
 
-    """Decode a bounded identity and requested permissions without accepting execution data.
+    """
+    Decode a bounded identity and requested permissions without accepting execution data.
 
     :param data: UTF-8 JSON request, at most sixteen KiB.
     :type data: bytes
@@ -65,13 +77,15 @@ def decode_probe(data: bytes) -> tuple[Identity, tuple[str, ...]]:
     return Identity(**identity), tuple(permissions)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
+def _pairs(
+    items: list[tuple[str, Any]],
+    ) -> dict[str, Any]:
 
-    """Reject ambiguous duplicate fields without including their names in an error.
+    """
+    Reject ambiguous duplicate fields without including their names in an error.
 
     :param items: Decoded JSON object members.
     :type items: list[tuple[str, Any]]
@@ -87,16 +101,16 @@ def _pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Отбор разрешённых полей состояния без исходных значений
 #------------------------------------------------------------------------------------------------------------------
 def probe_response(
     component: str,
     state: dict[str, Any],
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
 
-    """Build a fixed response that cannot disclose configuration or journal records.
+    """
+    Build a fixed response that cannot disclose configuration or journal records.
 
     :param component: Fixed commands or notifications channel label.
     :type component: str
@@ -123,12 +137,17 @@ def probe_response(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Отдельный read-only обработчик с ограничением нагрузки
 #------------------------------------------------------------------------------------------------------------------
 class ProbeEndpoint:
-
-    """Authorize before body reading and never call registration, storage or delivery operations."""
+    """
+    Authorize before body reading and never call registration, storage or delivery operations.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -138,9 +157,10 @@ class ProbeEndpoint:
         component: str,
         authenticate: Callable[[Any], Any],
         observe: Callable[[Identity], dict[str, Any]],
-    ) -> None:
+        ) -> None:
 
-        """Retain read-only callbacks and an independent two-request admission bound.
+        """
+        Retain read-only callbacks and an independent two-request admission bound.
 
         :param component: Commands or notifications channel label.
         :type component: str
@@ -165,9 +185,10 @@ class ProbeEndpoint:
     async def handle(
         self,
         request: Any,
-    ) -> Any:
+        ) -> Any:
 
-        """Answer one bounded authenticated probe without consuming operational queue capacity.
+        """
+        Answer one bounded authenticated probe without consuming operational queue capacity.
 
         :param request: Incoming aiohttp request; optional dependency is imported at call time.
         :type request: Any
@@ -225,8 +246,6 @@ class ProbeEndpoint:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

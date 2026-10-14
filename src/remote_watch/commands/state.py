@@ -1,39 +1,43 @@
 ﻿# Переходы состояний команд и относительные сроки без постоянного хранилища.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195347
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandPhase: Состояния исполнения в постоянном журнале.
+# -> CommandPhase: Состояния исполнения в постоянном журнале
 #
-# -> CommandAction: Явные действия над состоянием команды.
+# -> CommandAction: Явные действия над состоянием команды
 #
-# -> CommandDeadline: Локальный монотонный срок без сравнения часов VM.
+# -> CommandDeadline: Локальный монотонный срок без сравнения часов VM
 #    Интерфейс:
-#    -> from_response(): Вычисление срока с вычетом времени запроса.
-#    -> remaining(): Остаток срока с проверкой эпохи и монотонного времени.
+#    -> from_response(): Вычисление срока с вычетом времени запроса
+#    -> remaining(): Остаток срока с проверкой эпохи и монотонного времени
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandRecord: Проверенная запись будущего журнала исполнения.
+# -> CommandRecord: Проверенная запись будущего журнала исполнения
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandTransition: Предлагаемый переход до атомарной фиксации.
+# -> CommandTransition: Предлагаемый переход до атомарной фиксации
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> _finish(): Создание согласованного терминального результата.
-# -> recover_command(): Закрытие незавершённых команд после перезапуска.
-# -> advance_command(): Проверка перехода без исполнения и изменения хранилища.
+# Функции:
+# -> _finish(): Создание согласованного терминального результата
+#
+# -> recover_command(): Закрытие незавершённых команд после перезапуска
+#
+# -> advance_command(): Проверка перехода без исполнения и изменения хранилища
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -53,12 +57,20 @@ from remote_watch.commands.protocol import (
     message_digest,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Состояния исполнения в постоянном журнале
 #------------------------------------------------------------------------------------------------------------------
 class CommandPhase(str, Enum):
-    """Describe durable execution progress independently of message delivery."""
+    """
+    Describe durable execution progress independently of message delivery.
+    """
 
     READY = "ready"
     CLAIMED = "claimed"
@@ -69,12 +81,13 @@ class CommandPhase(str, Enum):
     UNKNOWN = "unknown"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Явные действия над состоянием команды
 #------------------------------------------------------------------------------------------------------------------
 class CommandAction(str, Enum):
-    """Describe explicit state changes, never an implicit execution retry."""
+    """
+    Describe explicit state changes, never an implicit execution retry.
+    """
 
     CLAIM = "claim"
     START = "start"
@@ -82,13 +95,26 @@ class CommandAction(str, Enum):
     REJECT = "reject"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Локальный монотонный срок без сравнения часов VM
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandDeadline:
-    """Keep a local monotonic deadline; never serialize it or rebuild it after restart."""
+    """
+    Keep a local monotonic deadline; never serialize it or rebuild it after restart.
+
+    :param hub_epoch: Hub generation identifier fencing prior sessions.
+    :type hub_epoch: str
+
+    :param sent_at: Local monotonic request start time.
+    :type sent_at: float
+
+    :param received_at: Local monotonic response receipt time.
+    :type received_at: float
+
+    :param expires_at: Expiration time in the clock domain described by this contract.
+    :type expires_at: float
+    """
 
     hub_epoch: str          # Запуск hub, которому принадлежит срок.
     sent_at: float          # Монотонный момент начала исходящего запроса.
@@ -105,9 +131,10 @@ class CommandDeadline:
         sent_at: float,
         received_at: float,
         hub_epoch: str,
-    ) -> CommandDeadline:
+        ) -> CommandDeadline:
 
-        """Conservatively subtract the complete round trip from a remote remaining budget.
+        """
+        Conservatively subtract the complete round trip from a remote remaining budget.
 
         :param remaining_ttl: Remaining budget reported by the hub, in seconds.
         :type remaining_ttl: float
@@ -148,9 +175,10 @@ class CommandDeadline:
         self,
         now: float,
         hub_epoch: str,
-    ) -> float:
+        ) -> float:
 
-        """Return zero for expiry, clock rollback or another hub incarnation.
+        """
+        Return zero for expiry, clock rollback or another hub incarnation.
 
         :param now: Current local monotonic time.
         :type now: float
@@ -174,9 +202,13 @@ class CommandDeadline:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite monotonic observations without consulting wall clocks."""
+        """
+        Validate finite monotonic observations without consulting wall clocks.
+        """
 
         _nonce(self.hub_epoch)
         for value in (self.sent_at, self.received_at, self.expires_at):
@@ -186,25 +218,42 @@ class CommandDeadline:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Проверенная запись будущего журнала исполнения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandRecord:
-    """Represent one journal entry; persistence and atomic compare-and-swap belong to storage."""
+    """
+    Represent one journal entry; persistence and atomic compare-and-swap belong to storage.
+
+    :param request: Exact command request bound to the original session.
+    :type request: CommandRequest
+
+    :param phase: Durable command execution phase.
+    :type phase: CommandPhase
+
+    :param claim_id: Unique identifier of the single execution claim.
+    :type claim_id: str | None
+
+    :param result: Durable command result or current result-delivery health.
+    :type result: CommandResult | None
+    """
 
     request: CommandRequest                 # Неизменяемое намерение с точной целью.
-    phase: CommandPhase = CommandPhase.READY    # Текущее состояние записи.
+    phase: CommandPhase = CommandPhase.READY  # Текущее состояние записи.
     claim_id: str | None = None             # Единственная попытка; None до резервирования.
     result: CommandResult | None = None     # Сохранённый итог; None до терминального состояния.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject impossible journal states before they can be persisted."""
+        """
+        Reject impossible journal states before they can be persisted.
+        """
 
         if type(self.request) is not CommandRequest or type(self.phase) is not CommandPhase:
             raise TypeError("invalid command record type")
@@ -229,13 +278,20 @@ class CommandRecord:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Предлагаемый переход до атомарной фиксации
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandTransition:
-    """Describe a proposed durable change, never execute its callback."""
+    """
+    Describe a proposed durable change, never execute its callback.
+
+    :param record: Exact durable command record associated with the transition.
+    :type record: CommandRecord
+
+    :param start_callback: Whether the durable STARTED transition permits callback execution.
+    :type start_callback: bool
+    """
 
     record: CommandRecord           # Новая запись для атомарной фиксации вместо предыдущей.
     start_callback: bool = False    # Разрешено только после успешной фиксации перехода STARTED.
@@ -243,9 +299,13 @@ class CommandTransition:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Keep callback authorization consistent with the proposed journal state."""
+        """
+        Keep callback authorization consistent with the proposed journal state.
+        """
 
         if type(self.record) is not CommandRecord or type(self.start_callback) is not bool:
             raise TypeError("invalid command transition type")
@@ -255,16 +315,21 @@ class CommandTransition:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Создание согласованного терминального результата
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Создание согласованного терминального результата
 #------------------------------------------------------------------------------------------------------------------
 def _finish(
     record: CommandRecord,
     outcome: CommandOutcome,
     reason: CommandReason,
-) -> CommandRecord:
+    ) -> CommandRecord:
 
-    """Create a correlated terminal record without arbitrary diagnostic text.
+    """
+    Create a correlated terminal record without arbitrary diagnostic text.
 
     :param record: Current immutable journal snapshot.
     :type record: CommandRecord
@@ -287,13 +352,15 @@ def _finish(
     return replace(record, phase=CommandPhase(outcome.value), result=result)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Закрытие незавершённых команд после перезапуска
 #------------------------------------------------------------------------------------------------------------------
-def recover_command(record: CommandRecord) -> CommandRecord:
+def recover_command(
+    record: CommandRecord,
+    ) -> CommandRecord:
 
-    """Fence pre-restart work instead of granting it a fresh lifetime or another execution.
+    """
+    Fence pre-restart work instead of granting it a fresh lifetime or another execution.
 
     :param record: Current immutable journal snapshot.
     :type record: CommandRecord
@@ -313,7 +380,6 @@ def recover_command(record: CommandRecord) -> CommandRecord:
     return _finish(record, CommandOutcome.EXPIRED, CommandReason.RESTART)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка перехода без исполнения и изменения хранилища
 #------------------------------------------------------------------------------------------------------------------
@@ -327,9 +393,10 @@ def advance_command(
     now: float,
     grant: CommandGrant | None = None,
     result: CommandResult | None = None,
-) -> CommandTransition:
+    ) -> CommandTransition:
 
-    """Propose one fenced transition; a storage transaction must commit it before any side effect.
+    """
+    Propose one fenced transition; a storage transaction must commit it before any side effect.
 
     :param record: Current immutable journal snapshot.
     :type record: CommandRecord
@@ -446,8 +513,6 @@ def advance_command(
     raise ValueError("invalid command transition")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

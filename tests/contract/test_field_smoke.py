@@ -1,39 +1,47 @@
 ﻿# Полевой сценарий с подставными каналами, ускоренным временем и безопасным отчётом.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> RecordingChannel: Подставной канал для полевой проверки.
+# -> RecordingChannel: Подставной канал для полевой проверки
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие канала в принадлежащем ему цикле событий.
-#    -> send(): Одна попытка отправки без собственного цикла повторов.
-#    -> close(): Закрытие канала и освобождение временных данных.
+#    -> open(): Открытие канала в принадлежащем ему цикле событий
+#    -> send(): Одна попытка отправки без собственного цикла повторов
+#    -> close(): Закрытие канала и освобождение временных данных
 #
-# -> FastClock: Ускоренные часы расписания тестовых сообщений.
+# -> FastClock: Ускоренные часы расписания тестовых сообщений
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> monotonic(): Чтение управляемого времени расписания.
-#    -> sleep(): Продвижение расписания без реального ожидания.
+#    -> monotonic(): Чтение управляемого времени расписания
+#    -> sleep(): Продвижение расписания без реального ожидания
 #
 # Тесты:
-# -> test_field_run(): Полный полевой сценарий через два подставных канала.
-# -> test_field_failure_and_interrupt(): Отчёт при отказе сервиса и прерывании пользователем.
-# -> test_field_bounds(): Ограничения длительности и числа сообщений.
-# -> test_journal_bound(): Учёт переполнения диагностического буфера.
-# -> test_cli_credentials_cleanup(): Очистка временного токена после ошибки настройки.
-# -> test_report_is_exclusive(): Запрет перезаписи существующего отчёта.
+# -> test_field_run(): Полный полевой сценарий через два подставных канала
+#
+# -> test_field_failure_and_interrupt(): Отчёт при отказе сервиса и прерывании пользователем
+#
+# -> test_field_bounds(): Ограничения длительности и числа сообщений
+#
+# -> test_journal_bound(): Учёт переполнения диагностического буфера
+#
+# -> test_cli_credentials_cleanup(): Очистка временного токена после ошибки настройки
+#    Вложенные объявления:
+#    -> destination(): Ленивое назначение с заданным способом доставки
+#
+# -> test_report_is_exclusive(): Запрет перезаписи существующего отчёта
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import io
@@ -53,19 +61,31 @@ from remote_watch import (
 )
 from remote_watch.diagnostics import field_smoke as field_smoke
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подставной канал для полевой проверки
 #------------------------------------------------------------------------------------------------------------------
 class RecordingChannel:
-    """Record the field workload without external network calls."""
+    """
+    Record the field workload without external network calls.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Prepare observation state and an optional first-attempt failure."""
+        """
+        Prepare observation state and an optional first-attempt failure.
+        """
 
         self.deliveries: list[Delivery] = []
         self.closed = False
@@ -75,9 +95,13 @@ class RecordingChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие канала в принадлежащем ему цикле событий
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Keep the fake channel network-free."""
+        """
+        Keep the fake channel network-free.
+        """
 
         pass
     #--------------------------------------------------------------------------------------------------------------
@@ -88,9 +112,10 @@ class RecordingChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Return a configured safe provider result.
+        """
+        Return a configured safe provider result.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -108,27 +133,36 @@ class RecordingChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие канала и освобождение временных данных
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record cleanup at the end of the finite run."""
+        """
+        Record cleanup at the end of the finite run.
+        """
 
         self.closed = True
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ускоренные часы расписания тестовых сообщений
 #------------------------------------------------------------------------------------------------------------------
 class FastClock:
-    """Advance sample scheduling deterministically while using a real runtime thread."""
+    """
+    Advance sample scheduling deterministically while using a real runtime thread.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Start an independent application clock."""
+        """
+        Start an independent application clock.
+        """
 
         self.value = 0.0
         self.interrupt = False
@@ -137,9 +171,12 @@ class FastClock:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение управляемого времени расписания
     #--------------------------------------------------------------------------------------------------------------
-    def monotonic(self) -> float:
+    def monotonic(
+        self,
+        ) -> float:
 
-        """Read the current synthetic sample time.
+        """
+        Read the current synthetic sample time.
 
         :return: Current virtual monotonic time in seconds.
         :rtype: float
@@ -154,9 +191,10 @@ class FastClock:
     def sleep(
         self,
         delay: float,
-    ) -> None:
+        ) -> None:
 
-        """Advance the sample timer without simulating provider or retry time.
+        """
+        Advance the sample timer without simulating provider or retry time.
 
         :param delay: Validated minimum retry delay.
         :type delay: float
@@ -171,15 +209,20 @@ class FastClock:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полный полевой сценарий через два подставных канала
 #------------------------------------------------------------------------------------------------------------------
 def test_field_run(
     identity: Identity,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Exercise all four sample types through two channels, logging and shutdown.
+    """
+    Exercise all four sample types through two channels, logging and shutdown.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -216,7 +259,6 @@ def test_field_run(
     assert "LOCAL_ONLY" in output.with_suffix(".log").read_text(encoding="utf-8")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отчёт при отказе сервиса и прерывании пользователем
 #------------------------------------------------------------------------------------------------------------------
@@ -225,9 +267,10 @@ def test_field_failure_and_interrupt(
     identity: Identity,
     tmp_path: Path,
     interrupted: bool,
-) -> None:
+    ) -> None:
 
-    """Preserve a summary and distinguish unavailable providers from user interruption.
+    """
+    Preserve a summary and distinguish unavailable providers from user interruption.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -258,7 +301,6 @@ def test_field_failure_and_interrupt(
     assert channel.closed
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничения длительности и числа сообщений
 #------------------------------------------------------------------------------------------------------------------
@@ -267,9 +309,10 @@ def test_field_bounds(
     identity: Identity,
     duration: float,
     interval: float,
-) -> None:
+    ) -> None:
 
-    """Reject unbounded or overly frequent workloads before reading credentials.
+    """
+    Reject unbounded or overly frequent workloads before reading credentials.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -289,13 +332,14 @@ def test_field_bounds(
         field_smoke.FieldConfig(identity=identity, duration=duration, interval=interval)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Учёт переполнения диагностического буфера
 #------------------------------------------------------------------------------------------------------------------
 def test_journal_bound() -> None:
 
-    """Account for diagnostic overflow without blocking the worker on local disk."""
+    """
+    Account for diagnostic overflow without blocking the worker on local disk.
+    """
 
     journal = field_smoke._Journal()
     for index in range(1025):
@@ -305,7 +349,6 @@ def test_journal_bound() -> None:
     assert len(output.getvalue().splitlines()) == 1024 and journal.dropped == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Очистка временного токена после ошибки настройки
 #------------------------------------------------------------------------------------------------------------------
@@ -313,9 +356,10 @@ def test_cli_credentials_cleanup(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Resolve both local credential sections and erase temporary environment entries on failure.
+    """
+    Resolve both local credential sections and erase temporary environment entries on failure.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -343,9 +387,10 @@ def test_cli_credentials_cleanup(
         provider: str,
         settings: dict[str, object],
         token_env: str,
-    ) -> Destination:
+        ) -> Destination:
 
-        """Verify temporary ownership before simulating a configuration failure.
+        """
+        Verify temporary ownership before simulating a configuration failure.
 
         :param provider: Provider selected by the test.
         :type provider: str
@@ -376,16 +421,16 @@ def test_cli_credentials_cleanup(
     assert secret not in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет перезаписи существующего отчёта
 #------------------------------------------------------------------------------------------------------------------
 def test_report_is_exclusive(
     identity: Identity,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Never replace an earlier report when a path is reused.
+    """
+    Never replace an earlier report when a path is reused.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -406,8 +451,6 @@ def test_report_is_exclusive(
     assert output.read_text() == "previous report" and not channel.closed
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

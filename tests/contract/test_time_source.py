@@ -1,21 +1,25 @@
 ﻿# Проверки источника времени через настоящий локальный HTTPS без внешней сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_verified_https_time(): Настоящий TLS и недопустимые ответы источника времени.
+# -> test_verified_https_time(): Настоящий TLS и недопустимые ответы источника времени
+#    Вложенные объявления:
+#    -> scenario(): Локальный TLS-сценарий проверки источника времени
+#       Вложенные объявления:
+#       -> handler(): Подставной HTTP-ответ времени
 #
-# -> test_time_source_configuration(): Проверка адреса до открытия сетевого клиента.
-#
+# -> test_time_source_configuration(): Проверка адреса до открытия сетевого клиента
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -31,6 +35,12 @@ from test_gateway_tls import certificates
 from remote_watch.adapters.time_source import HttpsDateTimeSource
 from remote_watch.commands.time import TimeUnavailable, TrustedClock
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий TLS и недопустимые ответы источника времени
@@ -40,9 +50,10 @@ from remote_watch.commands.time import TimeUnavailable, TrustedClock
 def test_verified_https_time(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Use real local TLS and reject cached, redirected, malformed or unauthenticated time.
+    """
+    Use real local TLS and reject cached, redirected, malformed or unauthenticated time.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -66,16 +77,21 @@ def test_verified_https_time(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Serve a controlled Date header over a temporary trusted certificate."""
+        """
+        Serve a controlled Date header over a temporary trusted certificate.
+        """
 
         seen = []
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Подставной HTTP-ответ времени
         #----------------------------------------------------------------------------------------------------------
-        async def handler(request: web.Request) -> web.Response:
+        async def handler(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Return the selected protocol failure without forwarding to another server.
+            """
+            Return the selected protocol failure without forwarding to another server.
 
             :param request: Incoming request to the local HTTPS test server.
             :type request: web.Request
@@ -137,16 +153,18 @@ def test_verified_https_time(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка адреса до открытия сетевого клиента
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("url", [
     "http://host/time", "https://user:pass@host/time", "https://host/time#x", "https://host/time?q=secret",
 ])
-def test_time_source_configuration(url: str) -> None:
+def test_time_source_configuration(
+    url: str,
+    ) -> None:
 
-    """Reject unsafe endpoints before creating a network client.
+    """
+    Reject unsafe endpoints before creating a network client.
 
     :param url: Explicit trusted HTTPS origin without credentials or query.
     :type url: str
@@ -158,8 +176,6 @@ def test_time_source_configuration(url: str) -> None:
         HttpsDateTimeSource(url, accuracy=1)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

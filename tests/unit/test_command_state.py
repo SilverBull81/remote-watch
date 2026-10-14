@@ -1,27 +1,40 @@
 ﻿# Проверки повторов, рестартов, сроков и свежести команд без сети.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> scenario(): Данные сценария с фиксированными сроками
 #
 # Тесты:
-# -> scenario(): Данные сценария с фиксированными сроками.
-# -> test_single_start_and_result_replay(): Одно начало исполнения при повторных запросах.
-# -> test_fencing_before_execution(): Защита от чужой цели и подмены аргументов.
-# -> test_expiry_and_restart(): Запрет восстановления срока после истечения или рестарта.
-# -> test_relative_clock_budget(): Независимость от начала отсчёта часов клиента.
-# -> test_no_wall_clock_dependency(): Отсутствие зависимости от UTC машин.
-# -> test_invalid_transitions(): Отклонение невозможных переходов и записей.
-# -> test_confirmation_freshness(): Связь свежего подтверждения с actor и точным намерением.
-# -> test_deadline_validation(): Отказ при неверных показаниях монотонных часов.
-# -> test_rejection_and_late_result(): Различение отказа до исполнения и позднего результата.
+# -> test_single_start_and_result_replay(): Одно начало исполнения при повторных запросах
+#
+# -> test_fencing_before_execution(): Защита от чужой цели и подмены аргументов
+#
+# -> test_expiry_and_restart(): Запрет восстановления срока после истечения или рестарта
+#
+# -> test_relative_clock_budget(): Независимость от начала отсчёта часов клиента
+#
+# -> test_no_wall_clock_dependency(): Отсутствие зависимости от UTC машин
+#    Вложенные объявления:
+#    -> wall_clock(): Запрет обращения к UTC в проверке временного контракта
+#
+# -> test_invalid_transitions(): Отклонение невозможных переходов и записей
+#
+# -> test_confirmation_freshness(): Связь свежего подтверждения с actor и точным намерением
+#
+# -> test_deadline_validation(): Отказ при неверных показаниях монотонных часов
+#
+# -> test_rejection_and_late_result(): Различение отказа до исполнения и позднего результата
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import time
@@ -52,13 +65,22 @@ from remote_watch.commands.state import (
     recover_command,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Данные сценария с фиксированными сроками
 #------------------------------------------------------------------------------------------------------------------
-def scenario(identity: Identity) -> tuple[CommandRecord, dict[str, Any]]:
+def scenario(
+    identity: Identity,
+    ) -> tuple[CommandRecord, dict[str, Any]]:
 
-    """Prepare an immutable intent and deterministic relative deadlines.
+    """
+    Prepare an immutable intent and deterministic relative deadlines.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -87,12 +109,19 @@ def scenario(identity: Identity) -> tuple[CommandRecord, dict[str, Any]]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Одно начало исполнения при повторных запросах
 #------------------------------------------------------------------------------------------------------------------
-def test_single_start_and_result_replay(identity: Identity) -> None:
+def test_single_start_and_result_replay(
+    identity: Identity,
+    ) -> None:
 
-    """Exercise resume and suspend semantics with persist-before-effect ordering.
+    """
+    Exercise resume and suspend semantics with persist-before-effect ordering.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -119,7 +148,6 @@ def test_single_start_and_result_replay(identity: Identity) -> None:
         advance_command(current, CommandAction.FINISH, result=replace(result, text="changed"), **options)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Защита от чужой цели и подмены аргументов
 #------------------------------------------------------------------------------------------------------------------
@@ -128,9 +156,10 @@ def test_single_start_and_result_replay(identity: Identity) -> None:
 def test_fencing_before_execution(
     identity: Identity,
     field: str,
-) -> None:
+    ) -> None:
 
-    """Reject all forms of cross-application, stale-session and payload substitution.
+    """
+    Reject all forms of cross-application, stale-session and payload substitution.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -160,7 +189,6 @@ def test_fencing_before_execution(
         advance_command(record, CommandAction.START, **options)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет восстановления срока после истечения или рестарта
 #------------------------------------------------------------------------------------------------------------------
@@ -170,9 +198,10 @@ def test_expiry_and_restart(
     identity: Identity,
     phase: CommandPhase,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Never revive a command after an expired budget, clock reset or restart.
+    """
+    Never revive a command after an expired budget, clock reset or restart.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -210,7 +239,6 @@ def test_expiry_and_restart(
     assert not advance_command(terminal, CommandAction.START, **fresh).start_callback
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимость от начала отсчёта часов клиента
 #------------------------------------------------------------------------------------------------------------------
@@ -219,9 +247,10 @@ def test_expiry_and_restart(
 def test_relative_clock_budget(
     origin: float,
     rtt: float,
-) -> None:
+    ) -> None:
 
-    """Conserve a remote ten-second budget regardless of local monotonic origin.
+    """
+    Conserve a remote ten-second budget regardless of local monotonic origin.
 
     :param origin: Arbitrary local monotonic clock origin.
     :type origin: float
@@ -239,16 +268,16 @@ def test_relative_clock_budget(
     assert deadline.remaining(origin + rtt, "9" * 32) == 0
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие зависимости от UTC машин
 #------------------------------------------------------------------------------------------------------------------
 def test_no_wall_clock_dependency(
     identity: Identity,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Exclude local UTC from the command state and deadline contract.
+    """
+    Exclude local UTC from the command state and deadline contract.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -257,12 +286,16 @@ def test_no_wall_clock_dependency(
     :type monkeypatch: pytest.MonkeyPatch
     """
 
+    # identity — явные сведения о приложении и его экземпляре.
+    # monkeypatch — временная подмена окружения или зависимостей только на время теста.
+
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Запрет обращения к UTC в проверке временного контракта
     #--------------------------------------------------------------------------------------------------------------
     def wall_clock() -> float:
 
-        """Fail if command processing tries to consult either machine's UTC.
+        """
+        Fail if command processing tries to consult either machine's UTC.
 
         :return: Synthetic wall-clock value; this path must not authorize a command.
         :rtype: float
@@ -277,7 +310,6 @@ def test_no_wall_clock_dependency(
     assert advance_command(claimed, CommandAction.START, **options).start_callback
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение невозможных переходов и записей
 #------------------------------------------------------------------------------------------------------------------
@@ -287,9 +319,10 @@ def test_no_wall_clock_dependency(
 def test_invalid_transitions(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject illegal transitions and inconsistent journal snapshots.
+    """
+    Reject illegal transitions and inconsistent journal snapshots.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -328,7 +361,6 @@ def test_invalid_transitions(
             replace(record, phase=CommandPhase.COMPLETED, claim_id="5" * 32, result=result)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Связь свежего подтверждения с actor и точным намерением
 #------------------------------------------------------------------------------------------------------------------
@@ -337,9 +369,10 @@ def test_invalid_transitions(
 def test_confirmation_freshness(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Require fresh actor-bound intent after arbitrary initial message delay.
+    """
+    Require fresh actor-bound intent after arbitrary initial message delay.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -378,14 +411,16 @@ def test_confirmation_freshness(
     assert "a" * 32 not in repr(challenge)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ при неверных показаниях монотонных часов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("case", ["interval", "backwards", "infinity", "negative", "zero", "bool"])
-def test_deadline_validation(case: str) -> None:
+def test_deadline_validation(
+    case: str,
+    ) -> None:
 
-    """Reject clock observations that cannot define a finite local deadline.
+    """
+    Reject clock observations that cannot define a finite local deadline.
 
     :param case: Selected boundary or failure scenario.
     :type case: str
@@ -399,13 +434,15 @@ def test_deadline_validation(case: str) -> None:
         CommandDeadline.from_response(*values[case], "2" * 32)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Различение отказа до исполнения и позднего результата
 #------------------------------------------------------------------------------------------------------------------
-def test_rejection_and_late_result(identity: Identity) -> None:
+def test_rejection_and_late_result(
+    identity: Identity,
+    ) -> None:
 
-    """Distinguish rejection before execution from a late known callback result.
+    """
+    Distinguish rejection before execution from a late known callback result.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -430,8 +467,6 @@ def test_rejection_and_late_result(identity: Identity) -> None:
         advance_command(unknown, CommandAction.FINISH, result=result, **options)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

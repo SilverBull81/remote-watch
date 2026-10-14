@@ -1,23 +1,31 @@
 ﻿# Понятные ошибки командного CLI без раскрытия секретов и приватных путей.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-144006
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_shape_errors(): Точное поле при ошибке структуры связанного JSON.
-# -> test_startup_errors(): Полезные причины отказа без исходного текста исключения.
-# -> test_unexpected_config_error(): Категория неожиданного сбоя на этапе загрузки.
-# -> test_cli_version_and_tls_pair(): Версия и неполная пара аргументов TLS без запуска.
-# -> test_real_port_conflict(): Занятый loopback-порт и штатное закрытие ресурсов.
-# -> test_json_location(): Причина и координаты синтаксической ошибки без фрагмента JSON.
+# -> test_shape_errors(): Точное поле при ошибке структуры связанного JSON
+#
+# -> test_startup_errors(): Полезные причины отказа без исходного текста исключения
+#
+# -> test_unexpected_config_error(): Категория неожиданного сбоя на этапе загрузки
+#
+# -> test_cli_version_and_tls_pair(): Версия и неполная пара аргументов TLS без запуска
+#
+# -> test_real_port_conflict(): Занятый loopback-порт и штатное закрытие ресурсов
+#    Вложенные объявления:
+#    -> scenario(): Занятый порт до открытия источников
+#
+# -> test_json_location(): Причина и координаты синтаксической ошибки без фрагмента JSON
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +43,12 @@ from remote_watch.gateway import commands as cli
 from remote_watch.gateway.command_config import CommandConfigError, load_command_gateway
 from remote_watch.gateway.command_service import CommandGateway
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Точное поле при ошибке структуры связанного JSON
@@ -59,9 +73,10 @@ def test_shape_errors(
     case: str,
     code: str,
     field: str,
-) -> None:
+    ) -> None:
 
-    """Report only declared schema names, never target aliases or unknown JSON keys.
+    """
+    Report only declared schema names, never target aliases or unknown JSON keys.
 
     :param tmp_path: Isolated synthetic configuration directory.
     :type tmp_path: Path
@@ -123,7 +138,6 @@ def test_shape_errors(
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полезные причины отказа без исходного текста исключения
 #------------------------------------------------------------------------------------------------------------------
@@ -146,9 +160,10 @@ def test_startup_errors(
     capsys: pytest.CaptureFixture[str],
     error: Exception,
     code: str,
-) -> None:
+    ) -> None:
 
-    """Exercise the CLI boundary with typed failures without starting provider traffic.
+    """
+    Exercise the CLI boundary with typed failures without starting provider traffic.
 
     :param tmp_path: Isolated synthetic configuration directory.
     :type tmp_path: Path
@@ -181,16 +196,16 @@ def test_startup_errors(
     assert "private-" not in output and "a" * 40 not in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Категория неожиданного сбоя на этапе загрузки
 #------------------------------------------------------------------------------------------------------------------
 def test_unexpected_config_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Keep an unexpected loader bug distinguishable without printing its secret payload.
+    """
+    Keep an unexpected loader bug distinguishable without printing its secret payload.
 
     :param monkeypatch: Scoped replacement of the loader.
     :type monkeypatch: pytest.MonkeyPatch
@@ -210,16 +225,16 @@ def test_unexpected_config_error(
     assert "private-" not in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Версия и неполная пара аргументов TLS без запуска
 #------------------------------------------------------------------------------------------------------------------
 def test_cli_version_and_tls_pair(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Allow version inspection without a config and reject an incomplete TLS pair early.
+    """
+    Allow version inspection without a config and reject an incomplete TLS pair early.
 
     :param tmp_path: Synthetic configuration directory.
     :type tmp_path: Path
@@ -244,13 +259,15 @@ def test_cli_version_and_tls_pair(
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Занятый loopback-порт и штатное закрытие ресурсов
 #------------------------------------------------------------------------------------------------------------------
-def test_real_port_conflict(tmp_path: Path) -> None:
+def test_real_port_conflict(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep a real local bind failure recognizable after gateway startup rollback.
+    """
+    Keep a real local bind failure recognizable after gateway startup rollback.
 
     :param tmp_path: Isolated directory for synthetic journals.
     :type tmp_path: Path
@@ -264,7 +281,9 @@ def test_real_port_conflict(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Occupy a loopback port and verify both the error classification and cleanup."""
+        """
+        Occupy a loopback port and verify both the error classification and cleanup.
+        """
 
         config = load_command_gateway(write_config(tmp_path / "config.json", settings()))
         gateway = CommandGateway(config, time_source=FakeTime())
@@ -279,7 +298,6 @@ def test_real_port_conflict(tmp_path: Path) -> None:
 
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Причина и координаты синтаксической ошибки без фрагмента JSON
@@ -300,9 +318,10 @@ def test_json_location(
     content: str,
     hint: str,
     located: bool,
-) -> None:
+    ) -> None:
 
-    """Expose fixed parser explanations and coordinates, never the source line or unknown key.
+    """
+    Expose fixed parser explanations and coordinates, never the source line or unknown key.
 
     :param tmp_path: Isolated directory for synthetic invalid JSON.
     :type tmp_path: Path
@@ -337,8 +356,6 @@ def test_json_location(
         assert "Строка 2, столбец 1" in output
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,27 +1,38 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-184704
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> deployment(): Создание только подставных конфигов в отдельной папке
 #
 # Тесты:
-# -> deployment(): Создание только подставных конфигов в отдельной папке.
-# -> test_modes_are_read_only(): Три режима без сети, секретов окружения и новых файлов.
-# -> test_invalid_deployment(): Отказ при противоречиях и неверных типах.
-# -> test_json_failures(): Строгий ограниченный JSON и приватные сообщения.
-# -> test_managed_caddy(): Явные пути собственного Caddy без исполнения binary.
-# -> test_component_failure(): Проверка вложенного конфига и безопасная подсказка.
-# -> test_component_diagnostics(): Причина отказа связанного JSON без раскрытия его содержимого.
-# -> test_cli(): Успех, отказ и обязательность явного режима проверки.
-# -> test_typed_models(): Ограничения Python API и приватность repr.
-# -> test_icon_path(): Путь иконки относится к конфигу и проверяется без GUI.
+# -> test_modes_are_read_only(): Три режима без сети, секретов окружения и новых файлов
+#
+# -> test_invalid_deployment(): Отказ при противоречиях и неверных типах
+#
+# -> test_icon_path(): Путь иконки относится к конфигу и проверяется без GUI
+#
+# -> test_json_failures(): Строгий ограниченный JSON и приватные сообщения
+#
+# -> test_managed_caddy(): Явные пути собственного Caddy без исполнения binary
+#
+# -> test_component_failure(): Проверка вложенного конфига и безопасная подсказка
+#
+# -> test_component_diagnostics(): Причина отказа связанного JSON без раскрытия его содержимого
+#
+# -> test_cli(): Успех, отказ и обязательность явного режима проверки
+#
+# -> test_typed_models(): Ограничения Python API и приватность repr
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -45,14 +56,23 @@ from remote_watch.gateway_server import (
 )
 from remote_watch.gateway_server.__main__ import main
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Создание только подставных конфигов в отдельной папке
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
-def deployment(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
+def deployment(
+    tmp_path: Path,
+    ) -> tuple[Path, dict[str, Any]]:
 
-    """Copy public synthetic examples into a deployment with nested Unicode paths.
+    """
+    Copy public synthetic examples into a deployment with nested Unicode paths.
 
     :param tmp_path: Isolated temporary directory.
     :type tmp_path: Path
@@ -78,6 +98,10 @@ def deployment(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Три режима без сети, секретов окружения и новых файлов
 #------------------------------------------------------------------------------------------------------------------
@@ -86,9 +110,10 @@ def test_modes_are_read_only(
     deployment: tuple[Path, dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Validate enabled components from another cwd without opening runtime resources.
+    """
+    Validate enabled components from another cwd without opening runtime resources.
 
     :param deployment: Synthetic file locations and JSON settings.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -135,7 +160,6 @@ def test_modes_are_read_only(
     assert not list(path.parent.rglob("data"))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ при противоречиях и неверных типах
 #------------------------------------------------------------------------------------------------------------------
@@ -166,9 +190,10 @@ def test_invalid_deployment(
     deployment: tuple[Path, dict[str, Any]],
     section: str,
     replacement: object,
-) -> None:
+    ) -> None:
 
-    """Reject conflicting settings without revealing private values in diagnostics.
+    """
+    Reject conflicting settings without revealing private values in diagnostics.
 
     :param deployment: Synthetic deployment fixture.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -194,7 +219,6 @@ def test_invalid_deployment(
     assert str(path) not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Путь иконки относится к конфигу и проверяется без GUI
 #------------------------------------------------------------------------------------------------------------------
@@ -203,9 +227,10 @@ def test_icon_path(
     deployment: tuple[Path, dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Resolve an optional icon from the deployment directory without loading optional GUI libraries.
+    """
+    Resolve an optional icon from the deployment directory without loading optional GUI libraries.
 
     :param deployment: Synthetic deployment location and configuration.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -242,7 +267,6 @@ def test_icon_path(
     assert not config.control_dir.exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Строгий ограниченный JSON и приватные сообщения
 #------------------------------------------------------------------------------------------------------------------
@@ -256,9 +280,10 @@ def test_json_failures(
     tmp_path: Path,
     content: bytes | None,
     code: str,
-) -> None:
+    ) -> None:
 
-    """Bound the read and reject malformed JSON with fixed diagnostic codes.
+    """
+    Bound the read and reject malformed JSON with fixed diagnostic codes.
 
     :param tmp_path: Isolated file directory.
     :type tmp_path: Path
@@ -283,13 +308,15 @@ def test_json_failures(
     assert "secret-path" not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явные пути собственного Caddy без исполнения binary
 #------------------------------------------------------------------------------------------------------------------
-def test_managed_caddy(deployment: tuple[Path, dict[str, Any]]) -> None:
+def test_managed_caddy(
+    deployment: tuple[Path, dict[str, Any]],
+    ) -> None:
 
-    """Check managed paths without executing Caddy or replacing existing CA data.
+    """
+    Check managed paths without executing Caddy or replacing existing CA data.
 
     :param deployment: Synthetic deployment fixture.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -318,7 +345,6 @@ def test_managed_caddy(deployment: tuple[Path, dict[str, Any]]) -> None:
     assert (caught.value.code, caught.value.field) == ("path_unavailable", "caddy")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка вложенного конфига и безопасная подсказка
 #------------------------------------------------------------------------------------------------------------------
@@ -326,9 +352,10 @@ def test_managed_caddy(deployment: tuple[Path, dict[str, Any]]) -> None:
 def test_component_failure(
     deployment: tuple[Path, dict[str, Any]],
     component: str,
-) -> None:
+    ) -> None:
 
-    """Report which existing component configuration needs its dedicated validator.
+    """
+    Report which existing component configuration needs its dedicated validator.
 
     :param deployment: Synthetic deployment fixture.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -348,7 +375,6 @@ def test_component_failure(
     assert (caught.value.code, caught.value.field) == ("component_config", component)
     assert "secret-value" not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Причина отказа связанного JSON без раскрытия его содержимого
@@ -370,9 +396,10 @@ def test_component_diagnostics(
     code: str,
     field_name: str,
     hint: str,
-) -> None:
+    ) -> None:
 
-    """Preserve actionable component diagnostics without exposing paths, keys or values.
+    """
+    Preserve actionable component diagnostics without exposing paths, keys or values.
 
     :param deployment: Synthetic linked configuration files.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -434,16 +461,16 @@ def test_component_diagnostics(
     assert sanitized.component_code is None and sanitized.hint is None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Успех, отказ и обязательность явного режима проверки
 #------------------------------------------------------------------------------------------------------------------
 def test_cli(
     deployment: tuple[Path, dict[str, Any]],
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Check honest CLI outcomes and private parse errors without process startup.
+    """
+    Check honest CLI outcomes and private parse errors without process startup.
 
     :param deployment: Synthetic deployment fixture.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -473,13 +500,15 @@ def test_cli(
     assert "code=config_read field=config" in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничения Python API и приватность repr
 #------------------------------------------------------------------------------------------------------------------
-def test_typed_models(deployment: tuple[Path, dict[str, Any]]) -> None:
+def test_typed_models(
+    deployment: tuple[Path, dict[str, Any]],
+    ) -> None:
 
-    """Apply essential invariants to Python construction as well as JSON parsing.
+    """
+    Apply essential invariants to Python construction as well as JSON parsing.
 
     :param deployment: Synthetic deployment fixture.
     :type deployment: tuple[Path, dict[str, Any]]
@@ -508,8 +537,6 @@ def test_typed_models(deployment: tuple[Path, dict[str, Any]]) -> None:
     assert (error.code, error.field) == ("config_value", "config")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

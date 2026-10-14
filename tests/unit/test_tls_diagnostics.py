@@ -1,20 +1,23 @@
 ﻿# Безопасные поля TLS и их восстановление без исходных сетевых исключений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-163320
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_tls_classification(): Коды проверки и запрет произвольного текста.
-# -> test_tls_field_validation(): Отсечение непроверенных типов и значений.
-# -> test_tls_health_recovery(): Ошибка heartbeat не скрывается успехом другого этапа.
+# -> test_tls_classification(): Коды проверки и запрет произвольного текста
+#
+# -> test_tls_field_validation(): Отсечение непроверенных типов и значений
+#
+# -> test_tls_health_recovery(): Ошибка heartbeat не скрывается успехом другого этапа
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 import ssl
 
 import pytest
@@ -24,6 +27,12 @@ from remote_watch._tls import tls_diagnostics
 from remote_watch.commands.health import HealthState
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Коды проверки и запрет произвольного текста
@@ -34,9 +43,10 @@ from remote_watch.commands.transport import CommandError
 def test_tls_classification(
     code: int | None,
     reason: str,
-) -> None:
+    ) -> None:
 
-    """Retain numeric verification evidence without interpreting arbitrary exception messages.
+    """
+    Retain numeric verification evidence without interpreting arbitrary exception messages.
 
     :param code: Synthetic OpenSSL number, including an unknown valid number.
     :type code: int | None
@@ -63,14 +73,16 @@ def test_tls_classification(
     assert handshake.tls_reason == "handshake_failed"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсечение непроверенных типов и значений
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("value", [True, -1, 1000000, "PRIVATE", ["PRIVATE"]])
-def test_tls_field_validation(value: object) -> None:
+def test_tls_field_validation(
+    value: object,
+    ) -> None:
 
-    """Reject unbounded verification codes and sanitize mutable public exception attributes.
+    """
+    Reject unbounded verification codes and sanitize mutable public exception attributes.
 
     :param value: Unsupported primitive or container supplied by custom application code.
     :type value: object
@@ -88,13 +100,14 @@ def test_tls_field_validation(value: object) -> None:
         DeliveryResult(status=DeliveryStatus.PERMANENT_FAILURE, verify_code=10)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибка heartbeat не скрывается успехом другого этапа
 #------------------------------------------------------------------------------------------------------------------
 def test_tls_health_recovery() -> None:
 
-    """Keep TLS failure active until the failing stage itself recovers."""
+    """
+    Keep TLS failure active until the failing stage itself recovers.
+    """
 
     health = HealthState()
     health.lease(100.0)
@@ -114,8 +127,6 @@ def test_tls_health_recovery() -> None:
     assert recovered.heartbeat.recoveries == recovered.heartbeat.failures == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

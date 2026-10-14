@@ -1,38 +1,39 @@
 ﻿# Настройки приложения; их проверка не запускает потоки, обработчики команд или сетевые клиенты.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DeliveryMode: Отправка напрямую или через шлюз уведомлений.
+# -> DeliveryMode: Способ отправки выбранному получателю
 #
-# -> RetryPolicy: Число попыток и время на отправку уведомления.
+# -> RetryPolicy: Политика повторов и таймаутов
 #    Специальные методы:
-#    -> __post_init__(): Проверка ограничений времени.
+#    -> __post_init__(): Проверка ограничений времени
 #
-# -> RuntimeConfig: Размеры очередей и время на запуск и остановку.
+# -> RuntimeConfig: Размеры очередей и время на запуск и остановку
 #    Специальные методы:
-#    -> __post_init__(): Проверка ограничений runtime.
+#    -> __post_init__(): Проверка ограничений runtime
 #
-# -> Destination: Получатель и функция создания канала.
+# -> Destination: Получатель и настройки его канала
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек получателя без создания клиента.
+#    -> __post_init__(): Проверка настроек получателя без создания клиента
 #
-# -> Route: Условия выбора получателей.
+# -> Route: Условия выбора получателей уведомления
 #    Специальные методы:
-#    -> __post_init__(): Проверка и копирование условий отправки.
+#    -> __post_init__(): Проверка и копирование условий отправки
 #
-# -> WatcherConfig: Общие настройки приложения.
+# -> WatcherConfig: Проверенная конфигурация приложения
 #    Специальные методы:
-#    -> __post_init__(): Проверка связей и защитное копирование.
+#    -> __post_init__(): Проверка связей и защитное копирование
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import inspect
@@ -52,32 +53,54 @@ from remote_watch.commands.registry import CommandCallback, CommandRegistry
 from remote_watch.events import Identity, SnapshotLimits
 from remote_watch.notifications.channels import NotificationChannel
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Способ отправки выбранному получателю
 #------------------------------------------------------------------------------------------------------------------
 class DeliveryMode(str, Enum):
-    """Select direct delivery or delivery through a notification gateway."""
+    """
+    Select direct delivery or delivery through a notification gateway.
+    """
 
     DIRECT = "direct"
     GATEWAY = "gateway"
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Политика повторов и таймаутов
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RetryPolicy:
-    """Declare bounded delivery policies without scheduling any attempts.
+    """
+    Declare bounded delivery policies without scheduling any attempts.
 
     max_attempts includes the first send; connect_timeout is within attempt_timeout.
     backoff_base/backoff_cap define future exponential full-jitter limits. ttl bounds
     event lifetime. Time values are finite positive seconds.
+
+    :param max_attempts: Maximum delivery attempts including the first attempt.
+    :type max_attempts: int
+
+    :param connect_timeout: Maximum connection establishment duration, in seconds.
+    :type connect_timeout: float
+
+    :param attempt_timeout: Maximum duration of one delivery attempt, in seconds.
+    :type attempt_timeout: float
+
+    :param backoff_base: Initial retry backoff, in seconds.
+    :type backoff_base: float
+
+    :param backoff_cap: Maximum retry backoff, in seconds.
+    :type backoff_cap: float
+
+    :param ttl: Maximum notification lifetime, in seconds.
+    :type ttl: float
     """
 
     max_attempts: int = 3           # Число попыток вместе с первой отправкой.
@@ -90,9 +113,13 @@ class RetryPolicy:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка ограничений времени
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite budgets and timeout/backoff relationships."""
+        """
+        Validate finite budgets and timeout/backoff relationships.
+        """
 
         # Число попыток включает первую отправку; все интервалы задаются положительным числом секунд.
         require_int(self.max_attempts, "max_attempts")
@@ -109,31 +136,50 @@ class RetryPolicy:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Размеры очередей и время на запуск и остановку
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RuntimeConfig:
-    """Declare runtime bounds without allocating queues or starting workers.
+    """
+    Declare runtime bounds without allocating queues or starting workers.
 
     ingress_capacity bounds incoming snapshots; max_destinations bounds fan-out.
     startup_timeout/shutdown_timeout are total lifecycle deadlines in seconds.
     snapshot_limits defines byte budgets for notification validation.
+
+    :param ingress_capacity: Maximum notifications awaiting routing.
+    :type ingress_capacity: int
+
+    :param max_destinations: Maximum destinations admitted by the runtime.
+    :type max_destinations: int
+
+    :param startup_timeout: Maximum startup wait, in seconds.
+    :type startup_timeout: float
+
+    :param shutdown_timeout: Maximum graceful shutdown wait, in seconds.
+    :type shutdown_timeout: float
+
+    :param snapshot_limits: Immutable notification size limits.
+    :type snapshot_limits: SnapshotLimits
     """
 
     ingress_capacity: int = 1024        # Число мест во входной очереди.
     max_destinations: int = 16          # Наибольшее число настроенных получателей.
     startup_timeout: float = 5.0        # Время на запуск, секунды.
     shutdown_timeout: float = 5.0       # Время на завершение работы, секунды.
-    snapshot_limits: SnapshotLimits = field(default_factory=SnapshotLimits)     # Ограничения размера уведомления.
+    snapshot_limits: SnapshotLimits = field(default_factory=SnapshotLimits)  # Ограничения размера уведомления.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка ограничений runtime
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject invalid capacities, deadlines and snapshot policies."""
+        """
+        Reject invalid capacities, deadlines and snapshot policies.
+        """
 
         # Настройки только описывают ограничения: очереди и рабочие потоки здесь не создаются.
         require_int(self.ingress_capacity, "ingress_capacity")
@@ -146,36 +192,58 @@ class RuntimeConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Получатель и настройки его канала
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Destination:
-    """Bind a logical destination to a lazy synchronous channel factory.
+    """
+    Bind a logical destination to a lazy synchronous channel factory.
 
     destination_id is a unique routing name; provider is descriptive, not an import.
     channel_factory takes no arguments and creates a NotificationChannel when the
     runtime starts. The factory owns provider configuration/secret references
     and is excluded from repr. mode describes the selected DIRECT or GATEWAY factory. outstanding_capacity
     covers queued, active and retrying deliveries. retry is the delivery policy.
+
+    :param destination_id: Unique destination name within the runtime configuration.
+    :type destination_id: str
+
+    :param channel_factory: Zero-argument factory creating a transport in its owning worker.
+    :type channel_factory: Callable[[], NotificationChannel]
+
+    :param provider: Notification provider or transport name.
+    :type provider: str
+
+    :param mode: Explicit delivery or process ownership mode.
+    :type mode: DeliveryMode
+
+    :param outstanding_capacity: Maximum queued and active deliveries for one destination.
+    :type outstanding_capacity: int
+
+    :param retry: Independent destination delivery retry policy.
+    :type retry: RetryPolicy
     """
 
     destination_id: str                         # Уникальное имя получателя в настройках.
-    channel_factory: Callable[[], NotificationChannel] = field(     # Функция создания канала без аргументов.
+    channel_factory: Callable[[], NotificationChannel] = field(  # Функция создания канала без аргументов.
         repr=False,
         )
     provider: str = "custom"                    # Название сервиса или типа канала.
     mode: DeliveryMode = DeliveryMode.DIRECT    # Способ отправки: напрямую или через шлюз.
     outstanding_capacity: int = 256             # Предел всех незавершённых доставок.
-    retry: RetryPolicy = field(default_factory=RetryPolicy)         # Настройки попыток отправки.
+    retry: RetryPolicy = field(default_factory=RetryPolicy)  # Настройки попыток отправки.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек получателя без создания клиента
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate identifiers, lazy factory and currently supported transport."""
+        """
+        Validate identifiers, lazy factory and currently supported transport.
+        """
 
         # Сначала проверяем имена и способ отправки; название сервиса не используется для импорта кода.
         require_text(self.destination_id, "destination_id")
@@ -205,18 +273,45 @@ class Destination:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Условия выбора получателей уведомления
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Route:
-    """Declare an AND predicate selecting one or more destinations.
+    """
+    Declare an AND predicate selecting one or more destinations.
 
     destination_ids contains unique names. min_level defaults to ERROR;
     notify=True bypasses only this threshold. topic/identity fields require exact
     matches when supplied. All required_tags must occur in the event. Rules are
     combined by union; this class validates data but does not route events.
+
+    :param destination_ids: Destination names selected by this routing rule.
+    :type destination_ids: tuple[str, ...]
+
+    :param min_level: Minimum logging severity matched by this route.
+    :type min_level: int
+
+    :param topic: Notification topic or routing topic selector. None matches any value.
+    :type topic: str | None
+
+    :param required_tags: Tags that must all be present for the route to match.
+    :type required_tags: tuple[str, ...]
+
+    :param service: Explicit application service name. None matches any value.
+    :type service: str | None
+
+    :param environment: Explicit application deployment environment. None matches any value.
+    :type environment: str | None
+
+    :param region: Explicit application region. None matches any value.
+    :type region: str | None
+
+    :param host: Explicit application host or component listener address. None matches any value.
+    :type host: str | None
+
+    :param instance_id: Explicit logical application instance identifier. None matches any value.
+    :type instance_id: str | None
     """
 
     destination_ids: tuple[str, ...]        # Имена получателей для этого правила.
@@ -232,9 +327,13 @@ class Route:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и копирование условий отправки
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy immutable predicates and reject empty destination lists."""
+        """
+        Copy immutable predicates and reject empty destination lists.
+        """
 
         # Копируем списки условий, чтобы последующие изменения настроек вызывающим кодом не меняли правило.
         object.__setattr__(self, "destination_ids", text_tuple(self.destination_ids, "destination_ids"))
@@ -254,24 +353,39 @@ class Route:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Проверенная конфигурация приложения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WatcherConfig:
-    """Collect validated configuration without starting a watcher or command source.
+    """
+    Collect validated configuration without starting a watcher or command source.
 
     identity binds the application. destinations/routes are defensively copied.
     runtime sets queue/lifecycle limits. commands accepts a CommandRegistry or a
     name-to-zero-argument-callback mapping, normalized to a registry on construction.
     No commands are built in or automatically enabled. Empty routes select nothing.
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param destinations: Notification destinations or their observed health snapshots.
+    :type destinations: tuple[Destination, ...]
+
+    :param routes: Explicit notification destination selection rules.
+    :type routes: tuple[Route, ...]
+
+    :param runtime: Runtime queue and lifecycle settings.
+    :type runtime: RuntimeConfig
+
+    :param commands: Command component settings or application command definitions.
+    :type commands: CommandRegistry | Mapping[str, CommandCallback]
     """
 
     identity: Identity                          # Сведения о текущем приложении.
     destinations: tuple[Destination, ...] = ()  # Настроенные получатели уведомлений.
     routes: tuple[Route, ...] = ()              # Правила выбора получателей.
-    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)       # Настройки очередей и времени работы.
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)  # Настройки очередей и времени работы.
     commands: CommandRegistry | Mapping[str, CommandCallback] = field(  # Пользовательские команды.
         default_factory=CommandRegistry,
         )
@@ -279,9 +393,13 @@ class WatcherConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка связей и защитное копирование
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate references and copy local command registrations without execution."""
+        """
+        Validate references and copy local command registrations without execution.
+        """
 
         # Проверяем вложенные объекты до обращения к их ограничениям и спискам.
         if not isinstance(self.identity, Identity):
@@ -322,8 +440,6 @@ class WatcherConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

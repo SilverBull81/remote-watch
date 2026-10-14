@@ -1,25 +1,32 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationGatewayConfigError: Ошибка с фиксированной категорией и разделом схемы.
+# -> NotificationGatewayConfigError: Ошибка с фиксированной категорией и разделом схемы
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #
 # Функции:
-# -> load_notification_gateway_config(): Чтение и проверка локального JSON-файла.
-# -> _object(): Проверка допустимых и обязательных полей.
-# -> _items(): Проверка размера списка настроек.
-# -> _unique_object(): Запрет повторяющихся ключей JSON.
-# -> _invalid_constant(): Отклонение нестандартных чисел JSON.
-# -> _principal(): Создание точных прав одного приложения.
-# -> _destination(): Создание настроек выбранного адаптера без сети.
-# -> _credential_source(): Проверка явного выбора token либо token_env в JSON.
+# -> load_notification_gateway_config(): Чтение и проверка локального JSON-файла
+#
+# -> _object(): Проверка допустимых и обязательных полей
+#
+# -> _items(): Проверка размера списка настроек
+#
+# -> _unique_object(): Запрет повторяющихся ключей JSON
+#
+# -> _invalid_constant(): Отклонение нестандартных чисел JSON
+#
+# -> _principal(): Создание точных прав одного приложения
+#
+# -> _destination(): Создание настроек выбранного адаптера без сети
+#
+# -> _credential_source(): Проверка явного выбора token либо token_env в JSON
 #
 # Константы:
 # -> MAX_CONFIG_BYTES: Наибольший размер файла настроек, байт.
@@ -28,6 +35,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -40,17 +48,29 @@ from remote_watch.config import Destination, RetryPolicy
 from remote_watch.events import Identity
 from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КОНСТАНТЫ
 #******************************************************************************************************************
+
 MAX_CONFIG_BYTES = 1024 * 1024
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ошибка с фиксированной категорией и разделом схемы
 #------------------------------------------------------------------------------------------------------------------
 class NotificationGatewayConfigError(ValueError):
-    """Expose only fixed validation categories and schema field names."""
+    """
+    Expose only fixed validation categories and schema field names.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -60,9 +80,10 @@ class NotificationGatewayConfigError(ValueError):
         code: str,
         field: str,
         reason: str | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Keep safe diagnostic labels without the source exception.
+        """
+        Keep safe diagnostic labels without the source exception.
 
         :param code: Fixed error category selected by the loader.
         :type code: str
@@ -93,12 +114,19 @@ class NotificationGatewayConfigError(ValueError):
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение и проверка локального JSON-файла
 #------------------------------------------------------------------------------------------------------------------
-def load_notification_gateway_config(path: str | Path) -> NotificationGatewayServerConfig:
+def load_notification_gateway_config(
+    path: str | Path,
+    ) -> NotificationGatewayServerConfig:
 
-    """Read schema version 1 without resolving secrets or opening network clients.
+    """
+    Read schema version 1 without resolving secrets or opening network clients.
 
     :param path: Local configuration file.
     :type path: str | Path
@@ -164,17 +192,17 @@ def load_notification_gateway_config(path: str | Path) -> NotificationGatewaySer
         raise NotificationGatewayConfigError(code, field) from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка допустимых и обязательных полей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка допустимых и обязательных полей
 #------------------------------------------------------------------------------------------------------------------
 def _object(
     value: Any,
     allowed: set[str],
     required: set[str] | None = None,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
 
-    """Reject unknown fields and missing required fields in a JSON object.
+    """
+    Reject unknown fields and missing required fields in a JSON object.
 
     :param value: Decoded JSON value.
     :type value: Any
@@ -200,16 +228,16 @@ def _object(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка размера списка настроек
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка размера списка настроек
 #------------------------------------------------------------------------------------------------------------------
 def _items(
     value: Any,
     maximum: int,
-) -> list[Any]:
+    ) -> list[Any]:
 
-    """Accept only a nonempty bounded JSON array.
+    """
+    Accept only a nonempty bounded JSON array.
 
     :param value: Decoded JSON value.
     :type value: Any
@@ -229,13 +257,15 @@ def _items(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+def _unique_object(
+    pairs: list[tuple[str, Any]],
+    ) -> dict[str, Any]:
 
-    """Prevent later duplicate keys from silently replacing access rules.
+    """
+    Prevent later duplicate keys from silently replacing access rules.
 
     :param pairs: Ordered JSON key-value pairs.
     :type pairs: list[tuple[str, Any]]
@@ -254,13 +284,15 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отклонение нестандартных чисел JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отклонение нестандартных чисел JSON
 #------------------------------------------------------------------------------------------------------------------
-def _invalid_constant(value: str) -> None:
+def _invalid_constant(
+    value: str,
+    ) -> None:
 
-    """Reject nonstandard JSON numeric constants.
+    """
+    Reject nonstandard JSON numeric constants.
 
     :param value: Decoded JSON value.
     :type value: str
@@ -271,13 +303,15 @@ def _invalid_constant(value: str) -> None:
     raise ValueError("nonstandard JSON constant")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Создание точных прав одного приложения
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Создание точных прав одного приложения
 #------------------------------------------------------------------------------------------------------------------
-def _principal(value: Any) -> NotificationGatewayPrincipal:
+def _principal(
+    value: Any,
+    ) -> NotificationGatewayPrincipal:
 
-    """Construct one explicitly authorized application identity.
+    """
+    Construct one explicitly authorized application identity.
 
     :param value: Decoded JSON value.
     :type value: Any
@@ -296,13 +330,15 @@ def _principal(value: Any) -> NotificationGatewayPrincipal:
     return NotificationGatewayPrincipal(**settings)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Создание настроек выбранного адаптера без сети
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Создание настроек выбранного адаптера без сети
 #------------------------------------------------------------------------------------------------------------------
-def _destination(value: Any) -> Destination:
+def _destination(
+    value: Any,
+    ) -> Destination:
 
-    """Build a lazy direct destination from the fixed list of supported providers.
+    """
+    Build a lazy direct destination from the fixed list of supported providers.
 
     :param value: Decoded JSON value.
     :type value: Any
@@ -343,13 +379,15 @@ def _destination(value: Any) -> Destination:
     return provider.destination(settings["alias"], retry=retry)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка явного выбора token либо token_env в JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка явного выбора token либо token_env в JSON
 #------------------------------------------------------------------------------------------------------------------
-def _credential_source(settings: dict[str, Any]) -> None:
+def _credential_source(
+    settings: dict[str, Any],
+    ) -> None:
 
-    """Require one explicit credential key, preserving anonymous token_env=null.
+    """
+    Require one explicit credential key, preserving anonymous token_env=null.
 
     :param settings: Validated settings object with known keys.
     :type settings: dict[str, Any]
@@ -365,8 +403,6 @@ def _credential_source(settings: dict[str, Any]) -> None:
         raise CredentialError("token", "value")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

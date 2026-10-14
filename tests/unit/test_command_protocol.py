@@ -1,27 +1,42 @@
 ﻿# Проверки моделей, сериализации и результатов команд без сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> request(): Детерминированный запрос с вымышленными аргументами
 #
 # Тесты:
-# -> request(): Детерминированный запрос с вымышленными аргументами.
-# -> test_command_wire_roundtrip(): Передача всех моделей через строгий JSON.
-# -> test_command_wire_rejects(): Отказ на неоднозначных и слишком больших данных.
-# -> test_command_interval_bounds(): Пределы относительных сроков команд.
-# -> test_command_snapshots_and_metadata(): Копирование данных и сохранение callbacks только в приложении.
-# -> test_registration_bounds(): Границы и однозначность списка команд.
-# -> test_command_correlation(): Связь разрешения и квитанции со всем содержимым запроса.
-# -> test_callback_result_contract(): Различение завершения callback и неверного результата.
-# -> test_callback_result_never_stringifies(): Запрет неявного исполнения __str__.
-# -> test_semantic_rejection(): Отклонение противоречивых описаний и результатов.
+# -> test_command_wire_roundtrip(): Передача всех моделей через строгий JSON
+#
+# -> test_command_wire_rejects(): Отказ на неоднозначных и слишком больших данных
+#
+# -> test_command_interval_bounds(): Пределы относительных сроков команд
+#
+# -> test_command_snapshots_and_metadata(): Копирование данных и сохранение callbacks только в приложении
+#
+# -> test_registration_bounds(): Границы и однозначность списка команд
+#
+# -> test_command_correlation(): Связь разрешения и квитанции со всем содержимым запроса
+#
+# -> test_callback_result_contract(): Различение завершения callback и неверного результата
+#
+# -> test_callback_result_never_stringifies(): Запрет неявного исполнения __str__
+#    Вложенные объявления:
+#    -> PrivateResult: Обнаружение нежелательного вызова пользовательского __str__
+#       Специальные методы:
+#       -> __str__(): Обнаружение неявного преобразования результата в строку
+#
+# -> test_semantic_rejection(): Отклонение противоречивых описаний и результатов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -51,13 +66,22 @@ from remote_watch.commands.protocol import (
     message_digest,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Детерминированный запрос с вымышленными аргументами
 #------------------------------------------------------------------------------------------------------------------
-def request(identity: Identity) -> CommandRequest:
+def request(
+    identity: Identity,
+    ) -> CommandRequest:
 
-    """Build a deterministic command with synthetic private arguments.
+    """
+    Build a deterministic command with synthetic private arguments.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -74,6 +98,10 @@ def request(identity: Identity) -> CommandRequest:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Передача всех моделей через строгий JSON
 #------------------------------------------------------------------------------------------------------------------
@@ -83,9 +111,10 @@ def test_command_wire_roundtrip(
     identity: Identity,
     kind: str,
     display: str | None,
-) -> None:
+    ) -> None:
 
-    """Round-trip each closed wire shape without optional network dependencies.
+    """
+    Round-trip each closed wire shape without optional network dependencies.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -96,6 +125,9 @@ def test_command_wire_roundtrip(
     :param display: Optional presentation mode belonging to the original session.
     :type display: str | None
     """
+
+    # display — вариант оформления ответа команды.
+
 
     # identity — явно заданные сведения о тестовом приложении.
     # kind — проверяемый вид сообщения.
@@ -125,7 +157,6 @@ def test_command_wire_roundtrip(
     assert len(encoded) <= MAX_COMMAND_BYTES
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ на неоднозначных и слишком больших данных
 #------------------------------------------------------------------------------------------------------------------
@@ -136,9 +167,10 @@ def test_command_wire_roundtrip(
 def test_command_wire_rejects(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous and oversized wire data without revealing its contents.
+    """
+    Reject ambiguous and oversized wire data without revealing its contents.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -198,7 +230,6 @@ def test_command_wire_rejects(
         decode_command(raw)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Пределы относительных сроков команд
 #------------------------------------------------------------------------------------------------------------------
@@ -206,9 +237,10 @@ def test_command_wire_rejects(
 def test_command_interval_bounds(
     identity: Identity,
     value: object,
-) -> None:
+    ) -> None:
 
-    """Reject unsafe remotely supplied time budgets.
+    """
+    Reject unsafe remotely supplied time budgets.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -226,13 +258,15 @@ def test_command_interval_bounds(
         CommandCapability(name="status", required_scope="load:read", timeout=value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Копирование данных и сохранение callbacks только в приложении
 #------------------------------------------------------------------------------------------------------------------
-def test_command_snapshots_and_metadata(identity: Identity) -> None:
+def test_command_snapshots_and_metadata(
+    identity: Identity,
+    ) -> None:
 
-    """Preserve partial callbacks locally and export detached capability metadata.
+    """
+    Preserve partial callbacks locally and export detached capability metadata.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -260,7 +294,6 @@ def test_command_snapshots_and_metadata(identity: Identity) -> None:
     assert "synthetic_private_value" not in repr(request(identity))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Границы и однозначность списка команд
 #------------------------------------------------------------------------------------------------------------------
@@ -268,9 +301,10 @@ def test_command_snapshots_and_metadata(identity: Identity) -> None:
 def test_registration_bounds(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Keep command registration finite and unambiguous.
+    """
+    Keep command registration finite and unambiguous.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -289,13 +323,15 @@ def test_registration_bounds(
         CommandRegistration(identity=identity, session_id="1" * 32, capabilities=values[case])
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Связь разрешения и квитанции со всем содержимым запроса
 #------------------------------------------------------------------------------------------------------------------
-def test_command_correlation(identity: Identity) -> None:
+def test_command_correlation(
+    identity: Identity,
+    ) -> None:
 
-    """Bind grants and receipts to complete canonical payloads, including arguments.
+    """
+    Bind grants and receipts to complete canonical payloads, including arguments.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -317,7 +353,6 @@ def test_command_correlation(identity: Identity) -> None:
     assert not receipt.matches(replace(result, text="another result"))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Различение завершения callback и неверного результата
 #------------------------------------------------------------------------------------------------------------------
@@ -325,9 +360,10 @@ def test_command_correlation(identity: Identity) -> None:
 def test_callback_result_contract(
     identity: Identity,
     value: object,
-) -> None:
+    ) -> None:
 
-    """Distinguish valid completion text from an unknown post-callback outcome.
+    """
+    Distinguish valid completion text from an unknown post-callback outcome.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -348,30 +384,39 @@ def test_callback_result_contract(
         assert result.text is None and result.reason is CommandReason.INVALID_RESULT
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет неявного исполнения __str__
 #------------------------------------------------------------------------------------------------------------------
-def test_callback_result_never_stringifies(identity: Identity) -> None:
+def test_callback_result_never_stringifies(
+    identity: Identity,
+    ) -> None:
 
-    """Do not invoke arbitrary user code while formatting a callback result.
+    """
+    Do not invoke arbitrary user code while formatting a callback result.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
     """
 
+    # identity — явные сведения о приложении и его экземпляре.
+
     #--------------------------------------------------------------------------------------------------------------
     # КЛАСС : Обнаружение нежелательного вызова пользовательского __str__
     #--------------------------------------------------------------------------------------------------------------
     class PrivateResult:
-        """Detect accidental implicit conversion of an application-owned object."""
+        """
+        Detect accidental implicit conversion of an application-owned object.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # СПЕЦИАЛЬНЫЙ МЕТОД : Обнаружение неявного преобразования результата в строку
         #----------------------------------------------------------------------------------------------------------
-        def __str__(self) -> str:
+        def __str__(
+            self,
+            ) -> str:
 
-            """Fail if normalization attempts user-defined string conversion.
+            """
+            Fail if normalization attempts user-defined string conversion.
 
             :return: String representation used to exercise result validation.
             :rtype: str
@@ -385,7 +430,6 @@ def test_callback_result_never_stringifies(identity: Identity) -> None:
     assert result.outcome is CommandOutcome.UNKNOWN
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение противоречивых описаний и результатов
 #------------------------------------------------------------------------------------------------------------------
@@ -394,9 +438,10 @@ def test_callback_result_never_stringifies(identity: Identity) -> None:
 def test_semantic_rejection(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject contradictory policies and impossible execution results.
+    """
+    Reject contradictory policies and impossible execution results.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -431,8 +476,6 @@ def test_semantic_rejection(
                                                                 timeout=301),)))
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

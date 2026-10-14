@@ -1,33 +1,34 @@
 ﻿# Правила ограниченного перезапуска компонентов общего сервера.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-184007
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> FailureKind: Причина остановки компонента.
+# -> FailureKind: Причина остановки компонента
 #
-# -> RestartPolicy: Пределы повторных запусков.
+# -> RestartPolicy: Пределы повторных запусков
 #    Специальные методы:
-#    -> __post_init__(): Проверка чисел и взаимных ограничений.
+#    -> __post_init__(): Проверка чисел и взаимных ограничений
 #
-# -> RestartDecision: Разрешение перезапуска либо окончательный отказ.
+# -> RestartDecision: Разрешение перезапуска либо окончательный отказ
 #
-# -> RestartBudget: Учёт перезапусков одного компонента в памяти manager.
+# -> RestartBudget: Учёт перезапусков одного компонента в памяти управляющего процесса
 #    Конструктор:
-#    -> __init__(): Создание пустого счётчика.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> record_failure(): Учёт очередного завершившегося запуска.
+#    -> record_failure(): Учёт очередного завершившегося запуска
 #
 # Функции:
-# -> _bounded_seconds(): Проверка конечного срока с верхней границей.
+# -> _bounded_seconds(): Проверка конечного срока с верхней границей
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from collections import deque
@@ -36,13 +37,20 @@ from enum import Enum
 
 from .._validation import require_int, require_number
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Причина остановки компонента
 #------------------------------------------------------------------------------------------------------------------
 class FailureKind(str, Enum):
-
-    """Fixed failure categories; remote exception text never selects a restart."""
+    """
+    Fixed failure categories; remote exception text never selects a restart.
+    """
 
     CRASH = "crash"
     HANG = "hang"
@@ -53,14 +61,26 @@ class FailureKind(str, Enum):
     SHUTDOWN = "shutdown"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Пределы повторных запусков
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class RestartPolicy:
+    """
+    Finite per-component restart limits within one manager lifetime.
 
-    """Finite per-component restart limits within one manager lifetime."""
+    :param max_restarts: Maximum restarts within the configured window.
+    :type max_restarts: int
+
+    :param window: Monotonic restart accounting window, in seconds.
+    :type window: float
+
+    :param initial_delay: Initial component restart delay, in seconds.
+    :type initial_delay: float
+
+    :param max_delay: Maximum component restart delay, in seconds.
+    :type max_delay: float
+    """
 
     max_restarts: int = 3        # Число повторных запусков в скользящем окне; 0 запрещает их.
     window: float = 300.0        # Длина окна учёта, секунды монотонного времени.
@@ -70,9 +90,13 @@ class RestartPolicy:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка чисел и взаимных ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject unbounded histories and invalid backoff intervals."""
+        """
+        Reject unbounded histories and invalid backoff intervals.
+        """
 
         require_int(self.max_restarts, "max_restarts", minimum=0)
         if self.max_restarts > 100:
@@ -86,26 +110,32 @@ class RestartPolicy:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Разрешение перезапуска либо окончательный отказ
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class RestartDecision:
+    """
+    A restart reservation; None requires operator intervention or shutdown.
 
-    """A restart reservation; None requires operator intervention or shutdown."""
+    :param delay: Restart delay in seconds, or None when restarting is forbidden.
+    :type delay: float | None
+
+    :param reason: Fixed decision or failure reason without private exception text.
+    :type reason: str
+    """
 
     delay: float | None     # Задержка в секундах; None означает запрет нового запуска.
     reason: str             # Фиксированный код решения, без текста исключения.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Учёт перезапусков одного компонента в памяти manager
+# КЛАСС : Учёт перезапусков одного компонента в памяти управляющего процесса
 #------------------------------------------------------------------------------------------------------------------
 class RestartBudget:
-
-    """Reserve retries for terminated children, without clocks, sleeping or process I/O."""
+    """
+    Reserve retries for terminated children, without clocks, sleeping or process I/O.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -113,9 +143,10 @@ class RestartBudget:
     def __init__(
         self,
         policy: RestartPolicy,
-    ) -> None:
+        ) -> None:
 
-        """Create a budget owned by one manager and one component.
+        """
+        Create a budget owned by one manager and one component.
 
         :param policy: Validated finite restart limits.
         :type policy: RestartPolicy
@@ -140,9 +171,10 @@ class RestartBudget:
         now: float,
         failure: FailureKind,
         jitter: float = 0.5,
-    ) -> RestartDecision:
+        ) -> RestartDecision:
 
-        """Reserve at most one retry for a child that has already terminated.
+        """
+        Reserve at most one retry for a child that has already terminated.
 
         :param now: Nondecreasing monotonic failure-observation time in seconds.
         :type now: float
@@ -158,7 +190,7 @@ class RestartBudget:
         """
 
         # now — монотонное время, не UTC: перестановка часов VM не влияет на лимит.
-        # failure — причина завершения, выбранная manager из известного перечня.
+        # failure — причина завершения, выбранная управляющим процессом из известного перечня.
         # jitter — подставляемая случайная поправка; тесты не используют генератор случайных чисел.
 
         require_number(now, "now", allow_zero=True)
@@ -196,15 +228,20 @@ class RestartBudget:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка конечного срока с верхней границей
 #------------------------------------------------------------------------------------------------------------------
 def _bounded_seconds(
     value: object,
     name: str,
-) -> None:
+    ) -> None:
 
-    """Require a finite positive duration no longer than one day.
+    """
+    Require a finite positive duration no longer than one day.
 
     :param value: Duration being checked.
     :type value: object
@@ -221,8 +258,6 @@ def _bounded_seconds(
         raise ValueError("duration exceeds limit")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,28 +1,32 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору.
+# -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
 #    Интерфейс:
-#    -> arguments(): Аргументы отдельного процесса без shell.
+#    -> arguments(): Аргументы отдельного процесса без shell
 #    Специальные методы:
-#    -> __post_init__(): Проверка точной привязки службы.
-# -> ServicePlan: Файлы чтения и каталоги записи для отдельного аккаунта службы.
+#    -> __post_init__(): Проверка точной привязки службы
+#
+# -> ServicePlan: Файлы чтения и каталоги записи для отдельного аккаунта службы
 #
 # Функции:
-# -> current_sid(): SID текущего пользователя без имени и пароля.
-# -> make_plan(): Проверка путей до регистрации службы и изменения ACL.
-# -> main(): Явный выбор установки, удаления, управления или пользовательского UI.
+# -> current_sid(): SID текущего пользователя без имени и пароля
+#
+# -> make_plan(): Проверка путей до регистрации службы и изменения ACL
+#
+# -> main(): Явный выбор установки, удаления, управления или пользовательского UI
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -38,17 +42,37 @@ from .__main__ import DeploymentParser
 from .config import DeploymentConfig, load_deployment_config
 from .deployment import _path
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Неизменяемая привязка службы к Python, конфигу и оператору
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class ServiceSpec:
-    """Bind SCM operations to one exact command and passwordless virtual account."""
+    """
+    Bind SCM operations to one exact command and passwordless virtual account.
+
+    :param config: Configuration file bound to this component or service.
+    :type config: Path
+
+    :param python: Explicit Python interpreter used by the deployment.
+    :type python: Path
+
+    :param operator_sid: Windows SID of the explicitly delegated operator.
+    :type operator_sid: str
+
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
+    """
 
     config: Path = field(repr=False)      # Прежний общий JSON, не копия рабочих настроек.
     python: Path = field(repr=False)      # python.exe выбранного установленного venv.
-    operator_sid: str = field(repr=False) # Пользователь, которому делегировано управление.
+    operator_sid: str = field(repr=False)  # Пользователь, которому делегировано управление.
     name: str = "RemoteWatchGateway"      # Отдельное имя, не имя службы Caddy.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -57,12 +81,14 @@ class ServiceSpec:
     def arguments(
         self,
         action: str,
-    ) -> list[str]:
+        ) -> list[str]:
 
-        """Build a fixed module invocation with separately quoted arguments.
+        """
+        Build a fixed module invocation with separately quoted arguments.
 
         :param action: Fixed service CLI action.
         :type action: str
+
         :return: Argument vector, never executable JSON text.
         :rtype: list[str]
         """
@@ -79,9 +105,13 @@ class ServiceSpec:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка точной привязки службы
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject malformed names, SIDs and nonabsolute paths before calling SCM."""
+        """
+        Reject malformed names, SIDs and nonabsolute paths before calling SCM.
+        """
 
         if not re.fullmatch(r"RemoteWatch[A-Za-z0-9_-]{0,48}", self.name):
             raise ValueError("service_name")
@@ -101,28 +131,49 @@ class ServiceSpec:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Файлы чтения и каталоги записи для отдельного аккаунта службы
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class ServicePlan:
-    """Describe bounded ACL targets without opening journals or resolving environment secrets."""
+    """
+    Describe bounded ACL targets without opening journals or resolving environment secrets.
+
+    :param spec: Exact configured service invocation and operator binding.
+    :type spec: ServiceSpec
+
+    :param deployment: Validated deployment configuration.
+    :type deployment: DeploymentConfig
+
+    :param read_files: Files requiring service read or execute access.
+    :type read_files: tuple[Path, ...]
+
+    :param write_dirs: Dedicated control, log, command-state and managed-CA directories requiring write access.
+    :type write_dirs: tuple[Path, ...]
+
+    :param environment: Fixed environment variables passed to the owned service process.
+    :type environment: Path
+    """
 
     spec: ServiceSpec                       # Точная зарегистрированная команда службы.
-    deployment: DeploymentConfig = field(repr=False) # Проверенная структура прежнего deployment.
+    deployment: DeploymentConfig = field(repr=False)  # Проверенная структура прежнего deployment.
     read_files: tuple[Path, ...] = field(repr=False)  # Конфиги и binary только для чтения/запуска.
     write_dirs: tuple[Path, ...] = field(repr=False)  # Control, logs, command state и managed CA.
     environment: Path = field(repr=False)   # Только выбранный venv, не глобальный Python.
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : SID текущего пользователя без имени и пароля
 #------------------------------------------------------------------------------------------------------------------
 def current_sid() -> str:
 
-    """Read the current process user's SID through optional Windows APIs.
+    """
+    Read the current process user's SID through optional Windows APIs.
 
     :return: SID used for operator delegation and that user's logon entry.
     :rtype: str
@@ -138,16 +189,19 @@ def current_sid() -> str:
         token.Close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка путей до регистрации службы и изменения ACL
 #------------------------------------------------------------------------------------------------------------------
-def make_plan(spec: ServiceSpec) -> ServicePlan:
+def make_plan(
+    spec: ServiceSpec,
+    ) -> ServicePlan:
 
-    """Validate explicit local ACL targets without writing files or reading environment tokens.
+    """
+    Validate explicit local ACL targets without writing files or reading environment tokens.
 
     :param spec: Exact service binding chosen by the operator.
     :type spec: ServiceSpec
+
     :return: Immutable installation plan, with original journal and CA locations.
     :rtype: ServicePlan
     """
@@ -155,8 +209,8 @@ def make_plan(spec: ServiceSpec) -> ServicePlan:
     # spec — сначала проверяем весь план. Смена аккаунта не должна сопровождаться
     # переносом БД или регистрацией службы, ссылающейся на другой пустой state_dir.
     config = load_deployment_config(spec.config)
-    # В существующем LV deployment logs также используется внешним Caddy.
-    # private_directory manager меняет DACL целиком: ему нужна своя папка,
+    # В существующей установке на LV папку logs также использует внешний Caddy.
+    # Управляющий процесс целиком заменяет права своей папки: её нельзя делить с Caddy,
     # иначе смена service account отрежет внешнего writer при ротации его файла.
     if config.log_dir == spec.config.parent / "logs":
         raise ValueError("service_shared_logs")
@@ -209,16 +263,19 @@ def make_plan(spec: ServiceSpec) -> ServicePlan:
     return ServicePlan(spec, config, tuple(dict.fromkeys(files)), tuple(dict.fromkeys(directories)), environment)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Явный выбор установки, удаления, управления или пользовательского UI
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Keep service registration separate from deploy and normal foreground startup.
+    """
+    Keep service registration separate from deploy and normal foreground startup.
 
     :param argv: Explicit arguments, or None for the process command line.
     :type argv: Sequence[str] | None
+
     :return: Zero on success, one on a safely classified failure.
     :rtype: int
     """
@@ -305,8 +362,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явные операции службы
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

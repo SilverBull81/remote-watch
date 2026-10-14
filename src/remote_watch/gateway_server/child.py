@@ -1,20 +1,23 @@
 ﻿# Закрытый bootstrap серверного компонента с heartbeat его рабочего event loop.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
 # -> failure_kind(): Классификация известных ошибок без их текста.
+#
 # -> run_child(): Запуск компонента и heartbeat без вывода приватных исключений.
+#
 # -> main(): Привязка к родителю и чтение одноразового стартового сообщения.
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -32,13 +35,22 @@ from remote_watch.gateway.notification_server import NotificationGateway, Notifi
 from remote_watch.gateway_server.messages import REASONS, read_limited, status_message
 from remote_watch.gateway_server.processes import parent_guard
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Классификация известных ошибок без их текста.
 #------------------------------------------------------------------------------------------------------------------
-def failure_kind(error: BaseException) -> str:
+def failure_kind(
+    error: BaseException,
+    ) -> str:
 
-    """Classify known operational failures without inspecting private exception messages.
+    """
+    Classify known operational failures without inspecting private exception messages.
 
     :param error: Failure local to this child; never serialized or chained across IPC.
     :type error: BaseException
@@ -61,13 +73,15 @@ def failure_kind(error: BaseException) -> str:
     return "crash"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запуск компонента и heartbeat без вывода приватных исключений.
 #------------------------------------------------------------------------------------------------------------------
-async def run_child(settings: dict) -> None:
+async def run_child(
+    settings: dict,
+    ) -> None:
 
-    """Run one component and publish loop-owned state within bounded private HTTP requests.
+    """
+    Run one component and publish loop-owned state within bounded private HTTP requests.
 
     :param settings: Parent-provided startup record read only after ownership was established.
     :type settings: dict
@@ -168,13 +182,13 @@ async def run_child(settings: dict) -> None:
                 lock.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Привязка к родителю и чтение одноразового стартового сообщения.
 #------------------------------------------------------------------------------------------------------------------
 def main() -> int:
 
-    """Read a bounded startup gate before any component configuration or provider activity.
+    """
+    Read a bounded startup gate before any component configuration or provider activity.
 
     :return: Fixed exit status; private exception details are never printed.
     :rtype: int
@@ -192,8 +206,6 @@ def main() -> int:
         return 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

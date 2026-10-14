@@ -1,35 +1,36 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> SourceStats: Счётчики источника без приватных данных.
+# -> SourceStats: Счётчики источника без приватных данных
 #
-# -> CommandSourceRunner: Связь одного провайдера с постоянным журналом и hub.
+# -> CommandSourceRunner: Связь одного провайдера с постоянным журналом и hub
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> stats(): Чтение счётчиков и состояния источника.
-#    -> journal_status(): Кэш сводки журнала источника.
-#    -> start(): Открытие ресурсов до начала приёма команд.
-#    -> activate(): Начало приёма после проверки всех источников.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
-#    -> step(): Обработка сохранённого решения либо одной порции событий.
+#    -> stats(): Чтение счётчиков и состояния источника
+#    -> journal_status(): Кэш сводки журнала источника
+#    -> start(): Открытие ресурсов до начала приёма команд
+#    -> activate(): Начало приёма после проверки всех источников
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
+#    -> step(): Обработка сохранённого решения либо одной порции событий
 #    Служебные методы:
-#    -> _prepare(): Проверка прав и выбор точной живой сессии.
-#    -> _commit(): Завершение сохранённого решения без выбора новой сессии.
-#    -> _receive(): Получение событий с конечными паузами после отказа.
-#    -> _respond(): Доставка сохранённых ответов без повторного callback.
-#    -> _finished(): Учёт неожиданного завершения фоновой задачи.
+#    -> _prepare(): Проверка прав и выбор точной живой сессии
+#    -> _commit(): Завершение сохранённого решения без выбора новой сессии
+#    -> _receive(): Получение событий с конечными паузами после отказа
+#    -> _respond(): Доставка сохранённых ответов без повторного callback
+#    -> _finished(): Учёт неожиданного завершения фоновой задачи
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -55,31 +56,63 @@ from remote_watch.commands.source_protocol import (
 from remote_watch.commands.source_store import SourceJournal
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Счётчики источника без приватных данных
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceStats:
-    """Expose operational health without incoming text, targets or credentials."""
+    """
+    Expose operational health without incoming text, targets or credentials.
+
+    :param accepted: Number of accepted commands.
+    :type accepted: int
+
+    :param ignored: Number of source events ignored or rejected before submission.
+    :type ignored: int
+
+    :param replies: Number of replies accepted by the provider, not confirmed phone displays.
+    :type replies: int
+
+    :param closed: Whether this component has stopped admitting new work.
+    :type closed: bool
+
+    :param last_error: Last historical error; successful recovery does not erase it.
+    :type last_error: str | None
+
+    :param ready: Current observed readiness, independently of historical failures.
+    :type ready: bool
+
+    :param receive_error: Current command-source receive failure, or None.
+    :type receive_error: str | None
+
+    :param reply_error: Current persisted-result reply failure, or None.
+    :type reply_error: str | None
+    """
 
     accepted: int           # Команды, впервые принятые hub в текущем запуске.
     ignored: int            # События без принятой команды, включая повторы и отказы.
     replies: int            # Ответы, принятые провайдером; не подтверждение показа на телефоне.
     closed: bool            # Получатель больше не принимает события.
     last_error: str | None  # Последний фиксированный код отказа без его приватных деталей.
-    ready: bool = True     # Текущая работа обоих циклов; история ошибок не мешает восстановлению.
+    ready: bool = True      # Текущая работа обоих циклов; история ошибок не мешает восстановлению.
     receive_error: str | None = None  # Текущий отказ приёма, отдельно от доставки ответов.
-    reply_error: str | None = None    # Текущий отказ цикла доставки сохранённых результатов.
+    reply_error: str | None = None  # Текущий отказ цикла доставки сохранённых результатов.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Связь одного провайдера с постоянным журналом и hub
 #------------------------------------------------------------------------------------------------------------------
 class CommandSourceRunner:
-    """Bridge one provider to the hub using a durable checkpoint and separate bounded reply loop."""
-
+    """
+    Bridge one provider to the hub using a durable checkpoint and separate bounded reply loop.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -95,9 +128,10 @@ class CommandSourceRunner:
         retry_interval: float = 2.0,
         short_commands: bool = False,
         command_display_mode: str = "full",
-    ) -> None:
+        ) -> None:
 
-        """Bind explicit source ownership without opening journals or contacting the provider.
+        """
+        Bind explicit source ownership without opening journals or contacting the provider.
 
         :param hub: Independently configured command hub.
         :type hub: CommandHub
@@ -164,14 +198,16 @@ class CommandSourceRunner:
         self._reply_position = 0
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение счётчиков и состояния источника
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def stats(self) -> SourceStats:
+    def stats(
+        self,
+        ) -> SourceStats:
 
-        """Read bounded process counters and whether the source has stopped.
+        """
+        Read bounded process counters and whether the source has stopped.
 
         :return: Counters and source health without private message content.
         :rtype: SourceStats
@@ -187,14 +223,16 @@ class CommandSourceRunner:
                            receive_error=self._receive_error, reply_error=self._reply_error)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Кэш сводки журнала источника
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def journal_status(self) -> dict:
+    def journal_status(
+        self,
+        ) -> dict:
 
-        """Read cached replay and pending counts without provider or storage operations.
+        """
+        Read cached replay and pending counts without provider or storage operations.
 
         :return: Safe observation of this source's journal.
         :rtype: dict
@@ -210,9 +248,10 @@ class CommandSourceRunner:
         self,
         *,
         activate: bool = True,
-    ) -> None:
+        ) -> None:
 
-        """Open the exclusive journal before contacting or acknowledging the provider.
+        """
+        Open the exclusive journal before contacting or acknowledging the provider.
 
         :param activate: Whether to begin consuming after startup validation.
         :type activate: bool
@@ -241,13 +280,16 @@ class CommandSourceRunner:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Начало приёма после проверки всех источников
     #--------------------------------------------------------------------------------------------------------------
-    def activate(self) -> None:
+    def activate(
+        self,
+        ) -> None:
 
-        """Begin consuming only after all gateway sources have passed startup validation."""
+        """
+        Begin consuming only after all gateway sources have passed startup validation.
+        """
 
         if self._loop is None or self._stopping or self._tasks:
             raise CommandError("closed")
@@ -257,13 +299,16 @@ class CommandSourceRunner:
             task.add_done_callback(self._finished)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Stop both loops before closing the provider and its durable source journal."""
+        """
+        Stop both loops before closing the provider and its durable source journal.
+        """
 
         self._stopping = True
 
@@ -279,13 +324,16 @@ class CommandSourceRunner:
             await self._worker.close(5)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Обработка сохранённого решения либо одной порции событий
     #--------------------------------------------------------------------------------------------------------------
-    async def step(self) -> None:
+    async def step(
+        self,
+        ) -> None:
 
-        """Process one bounded provider batch, always completing a previously persisted decision first."""
+        """
+        Process one bounded provider batch, always completing a previously persisted decision first.
+        """
 
         journal = self._worker.store
         cutoff = self.hub.source_cutoff(self.policy.token)
@@ -320,7 +368,6 @@ class CommandSourceRunner:
             await self._commit(pending)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка прав и выбор точной живой сессии
     #--------------------------------------------------------------------------------------------------------------
@@ -328,9 +375,10 @@ class CommandSourceRunner:
         self,
         event: SourceEvent,
         position: int,
-    ) -> SourcePending:
+        ) -> SourcePending:
 
-        """Authenticate routing fields and bind one live session before persisting the decision.
+        """
+        Authenticate routing fields and bind one live session before persisting the decision.
 
         :param event: Bounded provider event with authenticated routing fields.
         :type event: SourceEvent
@@ -397,16 +445,16 @@ class CommandSourceRunner:
                              notice=notice if notice is None or short_help else bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Завершение сохранённого решения без выбора новой сессии
     #--------------------------------------------------------------------------------------------------------------
     async def _commit(
         self,
         pending: SourcePending,
-    ) -> None:
+        ) -> None:
 
-        """Finish the same journalled decision across response loss without choosing a new session.
+        """
+        Finish the same journalled decision across response loss without choosing a new session.
 
         :param pending: Previously selected request and its original provider event.
         :type pending: SourcePending
@@ -457,13 +505,16 @@ class CommandSourceRunner:
                 await self.provider.reply(pending.event.conversation_id, bound_source_text(notice))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Получение событий с конечными паузами после отказа
     #--------------------------------------------------------------------------------------------------------------
-    async def _receive(self) -> None:
+    async def _receive(
+        self,
+        ) -> None:
 
-        """Poll with a finite pause and close admission on permanent source failures."""
+        """
+        Poll with a finite pause and close admission on permanent source failures.
+        """
 
         while not self._stopping:
             try:
@@ -479,13 +530,16 @@ class CommandSourceRunner:
                 await asyncio.sleep(self._retry)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Доставка сохранённых ответов без повторного callback
     #--------------------------------------------------------------------------------------------------------------
-    async def _respond(self) -> None:
+    async def _respond(
+        self,
+        ) -> None:
 
-        """Retry retained results without rerunning callbacks or starving unrelated chats."""
+        """
+        Retry retained results without rerunning callbacks or starving unrelated chats.
+        """
 
         while not self._stopping:
             try:
@@ -523,16 +577,16 @@ class CommandSourceRunner:
                 await asyncio.sleep(self._retry)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Учёт неожиданного завершения фоновой задачи
     #--------------------------------------------------------------------------------------------------------------
     def _finished(
         self,
         task: asyncio.Task,
-    ) -> None:
+        ) -> None:
 
-        """Consume task failures and make unexpected source termination visible to the owner.
+        """
+        Consume task failures and make unexpected source termination visible to the owner.
 
         :param task: Completed owned asynchronous task.
         :type task: asyncio.Task
@@ -551,7 +605,6 @@ class CommandSourceRunner:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

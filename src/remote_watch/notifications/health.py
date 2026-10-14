@@ -1,39 +1,74 @@
 ﻿# Наблюдаемое состояние доставки отдельно от накопительной статистики потерь.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-095557
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationFailure: Безопасная причина одной неудачной попытки.
-# -> DestinationHealth: Последние наблюдения отдельного назначения.
-# -> NotificationHealth: Согласованный снимок runtime и выбранных назначений.
+# -> NotificationFailure: Безопасная причина одной неудачной попытки
+#
+# -> DestinationHealth: Последние наблюдения отдельного назначения
+#
+# -> NotificationHealth: Согласованный снимок runtime и выбранных назначений
 #
 # Функции:
-# -> observe_result(): Обновление наблюдения без потери истории и без сетевых проверок.
+# -> observe_result(): Обновление наблюдения без потери истории и без сетевых проверок
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
 from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная причина одной неудачной попытки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class NotificationFailure:
-    """Retain bounded adapter diagnostics without payloads or provider message identifiers."""
+    """
+    Retain bounded adapter diagnostics without payloads or provider message identifiers.
 
-    status: str                    # Категория исхода: transient_failure/rate_limited/permanent_failure/unknown.
-    source: str                    # Ответ провайдера либо gateway.
+    :param status: Fixed delivery attempt outcome.
+    :type status: str
+
+    :param source: Authority that produced the delivery outcome.
+    :type source: str
+
+    :param reason_code: Safe bounded delivery failure code, or None.
+    :type reason_code: str | None
+
+    :param http_status: Observed HTTP status, or None when no valid status was received.
+    :type http_status: int | None
+
+    :param provider_code: Allowlisted numeric provider error code, or None.
+    :type provider_code: int | None
+
+    :param error_kind: Safe local transport error category, or None.
+    :type error_kind: str | None
+
+    :param verify_code: OpenSSL certificate verification code, or None.
+    :type verify_code: int | None
+
+    :param tls_reason: Allowlisted TLS failure reason without server addresses or exception text.
+    :type tls_reason: str | None
+    """
+
+    status: str                     # Категория исхода: transient_failure/rate_limited/permanent_failure/unknown.
+    source: str                     # Ответ провайдера либо gateway.
     reason_code: str | None         # Машинный код из проверенного DeliveryResult.
     http_status: int | None         # HTTP-статус; None при отсутствии ответа.
     provider_code: int | None       # Числовой код API, если он известен.
@@ -42,38 +77,80 @@ class NotificationFailure:
     tls_reason: str | None          # Фиксированное пояснение к отказу TLS.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Последние наблюдения отдельного назначения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class DestinationHealth:
-    """Describe last observed delivery health, not a live connectivity or phone receipt guarantee."""
+    """
+    Describe last observed delivery health, not a live connectivity or phone receipt guarantee.
 
-    destination_id: str                       # Имя из конфигурации; число записей ограничено назначениями.
+    :param destination_id: Unique destination name within the runtime configuration.
+    :type destination_id: str
+
+    :param delivery_state: Unobserved before an attempt, then healthy or degraded.
+    :type delivery_state: str
+
+    :param last_attempt_at: Monotonic time of the last attempt, or None before any attempt.
+    :type last_attempt_at: float | None
+
+    :param last_success_at: Monotonic time of the last provider acceptance, or None.
+    :type last_success_at: float | None
+
+    :param last_failure_at: Monotonic time of the last failure, or None.
+    :type last_failure_at: float | None
+
+    :param current_error: Current failure, or None after recovery.
+    :type current_error: NotificationFailure | None
+
+    :param last_error: Last historical error; successful recovery does not erase it.
+    :type last_error: NotificationFailure | None
+
+    :param consecutive_failures: Number of consecutive failed attempts for this destination.
+    :type consecutive_failures: int
+
+    :param recoveries: Number of observed transitions from failure to successful operation.
+    :type recoveries: int
+    """
+
+    destination_id: str                        # Имя из конфигурации; число записей ограничено назначениями.
     delivery_state: str = "unobserved"         # unobserved до первой попытки, затем healthy/degraded.
     last_attempt_at: float | None = None       # Момент завершения последней попытки по time.monotonic().
     last_success_at: float | None = None       # Последнее подтверждение сервиса; не время показа на телефоне.
     last_failure_at: float | None = None       # Последний отказ; сохраняется после восстановления.
     current_error: NotificationFailure | None = None  # Последний отказ до следующего успешного принятия.
-    last_error: NotificationFailure | None = None     # История последнего отказа, включая уже устранённый.
-    consecutive_failures: int = 0             # Число неудачных попыток подряд для этого назначения.
-    recoveries: int = 0                       # Переходы degraded → healthy, включая успешный повтор.
+    last_error: NotificationFailure | None = None  # История последнего отказа, включая уже устранённый.
+    consecutive_failures: int = 0              # Число неудачных попыток подряд для этого назначения.
+    recoveries: int = 0                        # Переходы degraded → healthy, включая успешный повтор.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Согласованный снимок runtime и выбранных назначений
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class NotificationHealth:
-    """Separate local lifecycle from passive observations of destination attempts."""
+    """
+    Separate local lifecycle from passive observations of destination attempts.
+
+    :param runtime_state: Created, running, stopping, closed or failed independently of delivery health.
+    :type runtime_state: str
+
+    :param delivery_state: Unobserved before an attempt, then healthy or degraded.
+    :type delivery_state: str
+
+    :param destinations: Notification destinations or their observed health snapshots.
+    :type destinations: tuple[DestinationHealth, ...]
+    """
 
     runtime_state: str                         # created/running/stopping/closed/failed независимо от доставки.
     delivery_state: str                        # degraded при любом отказе; иначе unobserved либо healthy.
-    destinations: tuple[DestinationHealth, ...] # Наблюдения всех либо одного выбранного назначения.
+    destinations: tuple[DestinationHealth, ...]  # Наблюдения всех либо одного выбранного назначения.
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Обновление наблюдения без потери истории и без сетевых проверок
@@ -82,9 +159,10 @@ def observe_result(
     previous: DestinationHealth,
     result: DeliveryResult,
     observed_at: float,
-) -> DestinationHealth:
+    ) -> DestinationHealth:
 
-    """Apply a completed attempt while retaining historical failure information.
+    """
+    Apply a completed attempt while retaining historical failure information.
 
     :param previous: Immutable previous observation for one configured destination.
     :type previous: DestinationHealth
@@ -117,8 +195,6 @@ def observe_result(
                    consecutive_failures=previous.consecutive_failures + 1)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

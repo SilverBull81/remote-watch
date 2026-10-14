@@ -1,25 +1,25 @@
 ﻿# Типизированные настройки исходящего gateway и разрешений приложений.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationGatewayPrincipal: Разрешённая принадлежность и назначения одного приложения.
+# -> NotificationGatewayPrincipal: Разрешённая принадлежность и назначения одного приложения
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек и защитное копирование.
+#    -> __post_init__(): Проверка настроек и защитное копирование
 #
-# -> NotificationGatewayServerConfig: Общие ограничения и закрытые разрешения gateway.
+# -> NotificationGatewayServerConfig: Общие ограничения и закрытые разрешения gateway
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек и защитное копирование.
-#
+#    -> __post_init__(): Проверка настроек и защитное копирование
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,17 +30,46 @@ from remote_watch.config import DeliveryMode, Destination
 from remote_watch.events import Identity
 from remote_watch.notifications.gateway_protocol import validate_alias
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Разрешённая принадлежность и назначения одного приложения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NotificationGatewayPrincipal:
-    """Bind a service credential to one exact identity and a finite alias allowlist."""
+    """
+    Bind a service credential to one exact identity and a finite alias allowlist.
+
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param aliases: Explicitly configured destination aliases.
+    :type aliases: tuple[str, ...]
+
+    :param capacity: Maximum concurrent admitted notification requests for this principal.
+    :type capacity: int
+
+    :param min_interval: Minimum interval between admitted requests, in seconds.
+    :type min_interval: float
+    """
 
     name: str                           # Локальное имя приложения для учёта доступа.
-    token_env: str | None = field(default=None, repr=False)     # Имя переменной; альтернатива token.
-    token: str | None = field(default=None, repr=False)         # Отдельный сервисный токен приложения.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной; альтернатива token.
+    token: str | None = field(default=None, repr=False)  # Отдельный сервисный токен приложения.
     identity: Identity                  # Единственная разрешённая принадлежность отправителя.
     aliases: tuple[str, ...]            # Разрешённые имена назначений на gateway.
     capacity: int = 4                   # Максимум одновременно принятых запросов приложения.
@@ -49,9 +78,13 @@ class NotificationGatewayPrincipal:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и защитное копирование
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite permissions without reading credentials."""
+        """
+        Validate finite permissions without reading credentials.
+        """
 
         validate_alias(self.name)
 
@@ -77,16 +110,47 @@ class NotificationGatewayPrincipal:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Общие ограничения и закрытые разрешения gateway
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NotificationGatewayServerConfig:
-    """Configure a finite gateway with one active attempt per direct destination."""
+    """
+    Configure a finite gateway with one active attempt per direct destination.
 
-    destinations: tuple[Destination, ...]   # Прямые назначения; destination_id служит alias.
-    principals: tuple[NotificationGatewayPrincipal, ...]    # Приложения с отдельными токенами и точными правами.
+    :param destinations: Notification destinations or their observed health snapshots.
+    :type destinations: tuple[Destination, ...]
+
+    :param principals: Explicitly configured authenticated application principals.
+    :type principals: tuple[NotificationGatewayPrincipal, ...]
+
+    :param capacity: Maximum concurrent admitted notification requests across all principals.
+    :type capacity: int
+
+    :param body_timeout: Maximum request-body read duration, in seconds.
+    :type body_timeout: float
+
+    :param attempt_timeout: Maximum duration of one delivery attempt, in seconds.
+    :type attempt_timeout: float
+
+    :param startup_timeout: Maximum startup wait, in seconds.
+    :type startup_timeout: float
+
+    :param shutdown_timeout: Maximum graceful shutdown wait, in seconds.
+    :type shutdown_timeout: float
+
+    :param future_tolerance: Allowed provider timestamp uncertainty in the future, in seconds.
+    :type future_tolerance: float
+
+    :param clock_skew_tolerance: Allowed UTC clock difference in either direction, in seconds.
+    :type clock_skew_tolerance: float
+
+    :param destination_interval: Minimum interval between attempts for one alias, in seconds.
+    :type destination_interval: float
+    """
+
+    destinations: tuple[Destination, ...]  # Прямые назначения; destination_id служит alias.
+    principals: tuple[NotificationGatewayPrincipal, ...]  # Приложения с отдельными токенами и точными правами.
     capacity: int = 32                  # Общий предел чтения тел и выполняемых запросов.
     body_timeout: float = 2.0           # Максимальное время чтения одного тела, секунды.
     attempt_timeout: float = 8.0        # Верхний предел одной provider attempt, секунды.
@@ -99,9 +163,13 @@ class NotificationGatewayServerConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и защитное копирование
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy finite collections and reject gateway cascades or ambiguous grants."""
+        """
+        Copy finite collections and reject gateway cascades or ambiguous grants.
+        """
 
         # Ограничиваем коллекции до копирования и проверки ссылок. Произвольные итераторы не принимаем.
         for name, item_type, maximum in (("destinations", Destination, 64),
@@ -144,8 +212,6 @@ class NotificationGatewayServerConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

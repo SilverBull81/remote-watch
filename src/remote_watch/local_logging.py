@@ -1,37 +1,38 @@
 ﻿# Локальные журналы по дням с автоматическим выбором папки года и месяца.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-112702
+# Дата и время последнего изменения: 261014-142149
+#
+# Классы:
+# -> DailyFileConfig: Настройки ежедневного UTF-8 журнала
+#    Интерфейс:
+#    -> path_for(): Путь для времени создания записи без обращения к диску
+#    Специальные методы:
+#    -> __post_init__(): Проверка настроек и фиксация корневой папки
+#
+# -> _DailyFormatter: Время строки в том же часовом поясе, что и папка журнала
+#    Конструктор:
+#    -> __init__(): Подготовка состояния объекта.
+#    Интерфейс:
+#    -> formatTime(): Форматирование времени записи
+#
+# -> DailyFileHandler: Автоматическое переключение ежедневных файлов
+#    Конструктор:
+#    -> __init__(): Подготовка состояния объекта.
+#    Интерфейс:
+#    -> emit(): Запись в файл дня без повторного открытия после close
 #
 # Константы:
 # -> _MONTHS: Английские названия месяцев независимо от системной локали.
-#
-# Классы:
-# -> DailyFileConfig: Настройки ежедневного UTF-8 журнала.
-#    Интерфейс:
-#    -> path_for(): Путь для времени создания записи без обращения к диску.
-#    Специальные методы:
-#    -> __post_init__(): Проверка настроек и фиксация корневой папки.
-#
-# -> _DailyFormatter: Время строки в том же часовом поясе, что и папка журнала.
-#    Конструктор:
-#    -> __init__(): Подготовка стандартного формата и часового пояса.
-#    Интерфейс:
-#    -> formatTime(): Форматирование времени записи.
-#
-# -> DailyFileHandler: Автоматическое переключение ежедневных файлов.
-#    Конструктор:
-#    -> __init__(): Открытие текущего журнала и настройка logging.
-#    Интерфейс:
-#    -> emit(): Запись в файл соответствующего дня без повторного открытия после close.
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import logging
@@ -41,24 +42,51 @@ from pathlib import Path
 
 from remote_watch._validation import require_int, require_text
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КОНСТАНТЫ
 #******************************************************************************************************************
+
 _MONTHS = ("January", "February", "March", "April", "May", "June",
            "July", "August", "September", "October", "November", "December")
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки ежедневного UTF-8 журнала
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DailyFileConfig:
-    """Describe per-day append-only files without creating directories or changing a logger."""
+    """
+    Describe per-day append-only files without creating directories or changing a logger.
+
+    :param directory: Root directory resolved when configuration is created.
+    :type directory: str | Path
+
+    :param prefix: Daily log filename prefix.
+    :type prefix: str
+
+    :param timezone: Calendar and formatter timezone, or None for operating-system local time.
+    :type timezone: tzinfo | None
+
+    :param level: Minimum standard logging severity.
+    :type level: int
+
+    :param format: Standard logging formatter pattern.
+    :type format: str
+    """
 
     directory: str | Path                           # Корневая папка; закрепляется при создании настроек.
     prefix: str = "application"                     # Начало имени перед _log_YYMMDD.txt.
     timezone: tzinfo | None = None                  # Часовой пояс даты и строки; None — местное время ОС.
-    level: int = logging.DEBUG                     # Минимальный уровень для файла.
+    level: int = logging.DEBUG                      # Минимальный уровень для файла.
     format: str = "%(asctime)s %(levelname)s %(name)s: %(message)s"  # Шаблон стандартной строки logging.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -67,9 +95,10 @@ class DailyFileConfig:
     def path_for(
         self,
         timestamp: float,
-    ) -> Path:
+        ) -> Path:
 
-        """Build a deterministic calendar path using the configured timezone.
+        """
+        Build a deterministic calendar path using the configured timezone.
 
         :param timestamp: POSIX creation timestamp, normally LogRecord.created.
         :type timestamp: float
@@ -87,9 +116,13 @@ class DailyFileConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек и фиксация корневой папки
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate portable filenames and freeze the root without filesystem mutations."""
+        """
+        Validate portable filenames and freeze the root without filesystem mutations.
+        """
 
         if not isinstance(self.directory, (str, Path)) or not str(self.directory).strip():
             raise ValueError("directory must be a nonempty string or Path")
@@ -110,12 +143,13 @@ class DailyFileConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Время строки в том же часовом поясе, что и папка журнала
 #------------------------------------------------------------------------------------------------------------------
 class _DailyFormatter(logging.Formatter):
-    """Keep default line timestamps consistent with the file's calendar date."""
+    """
+    Keep default line timestamps consistent with the file's calendar date.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -123,9 +157,10 @@ class _DailyFormatter(logging.Formatter):
     def __init__(
         self,
         config: DailyFileConfig,
-    ) -> None:
+        ) -> None:
 
-        """Retain the configured format and timezone.
+        """
+        Retain the configured format and timezone.
 
         :param config: Validated local log configuration.
         :type config: DailyFileConfig
@@ -143,9 +178,10 @@ class _DailyFormatter(logging.Formatter):
         self,
         record: logging.LogRecord,
         datefmt: str | None = None,
-    ) -> str:
+        ) -> str:
 
-        """Format the creation timestamp without depending on Formatter.converter.
+        """
+        Format the creation timestamp without depending on Formatter.converter.
 
         :param record: Original logging record, left unchanged.
         :type record: logging.LogRecord
@@ -165,12 +201,13 @@ class _DailyFormatter(logging.Formatter):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Автоматическое переключение ежедневных файлов
 #------------------------------------------------------------------------------------------------------------------
 class DailyFileHandler(logging.FileHandler):
-    """Append each record to its calendar day; own one stream and never reopen after close."""
+    """
+    Append each record to its calendar day; own one stream and never reopen after close.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -178,9 +215,10 @@ class DailyFileHandler(logging.FileHandler):
     def __init__(
         self,
         config: DailyFileConfig,
-    ) -> None:
+        ) -> None:
 
-        """Open today's file, creating calendar directories, and apply level and formatter.
+        """
+        Open today's file, creating calendar directories, and apply level and formatter.
 
         :param config: Validated per-process daily file configuration.
         :type config: DailyFileConfig
@@ -203,9 +241,10 @@ class DailyFileHandler(logging.FileHandler):
     def emit(
         self,
         record: logging.LogRecord,
-    ) -> None:
+        ) -> None:
 
-        """Switch streams atomically under the handler lock before writing a dated record.
+        """
+        Switch streams atomically under the handler lock before writing a dated record.
 
         :param record: Standard log record; its creation timestamp selects the destination file.
         :type record: logging.LogRecord
@@ -247,8 +286,6 @@ class DailyFileHandler(logging.FileHandler):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

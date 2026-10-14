@@ -1,51 +1,55 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> _GatewayParser: Безопасные ошибки командной строки.
+# -> _GatewayParser: Безопасные ошибки командной строки
 #    Интерфейс:
-#    -> error(): Отказ без вывода значений аргументов.
+#    -> error(): Отказ без вывода значений аргументов
 #
-# -> NotificationGatewayStartupError: Безопасный этап ошибки запуска.
+# -> NotificationGatewayStartupError: Безопасный этап ошибки запуска
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #
-# -> NotificationGateway: Исходящий HTTP-сервер с управляемым временем работы.
+# -> NotificationGateway: Исходящий HTTP-сервер с управляемым временем работы
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> port(): Чтение назначенного TCP-порта.
-#    -> stats(): Копия счётчиков без приватных данных.
-#    -> start(): Подготовка каналов и запуск HTTP-сервера.
-#    -> close(): Ограниченное завершение и очистка.
+#    -> port(): Чтение назначенного TCP-порта
+#    -> stats(): Копия счётчиков без приватных данных
+#    -> start(): Подготовка каналов и запуск HTTP-сервера
+#    -> close(): Ограниченное завершение и очистка
 #    Служебные методы:
-#    -> _check_loop(): Проверка принадлежности циклу событий.
-#    -> _open_channels(): Подготовка прямых каналов.
-#    -> _expect(): Отказ от неподдерживаемого Expect до чтения тела.
-#    -> _reject(): Безопасный отказ с закрытием соединения.
-#    -> _authenticate(): Проверка отдельного сервисного токена.
-#    -> _probe_status(): Готовность исходящего канала без попытки доставки.
-#    -> _handle(): Проверка доступа и приём ограниченного запроса.
-#    -> _read_body(): Чтение тела с ограничением размера.
-#    -> _dispatch(): Одна попытка с проверкой alias и сроков.
-#    -> _shutdown(): Завершение запросов и каналов в пределах общего срока.
-#    -> _close_channel(): Закрытие одного канала без раскрытия ошибки.
+#    -> _check_loop(): Проверка принадлежности циклу событий
+#    -> _open_channels(): Подготовка прямых каналов
+#    -> _expect(): Отказ от неподдерживаемого Expect до чтения тела
+#    -> _reject(): Безопасный отказ с закрытием соединения
+#    -> _authenticate(): Проверка отдельного сервисного токена
+#    -> _probe_status(): Готовность исходящего канала без попытки доставки
+#    -> _handle(): Проверка доступа и приём ограниченного запроса
+#    -> _read_body(): Чтение тела с ограничением размера
+#    -> _dispatch(): Одна попытка с проверкой alias и сроков
+#    -> _shutdown(): Завершение запросов и каналов в пределах общего срока
+#    -> _close_channel(): Закрытие одного канала без раскрытия ошибки
 #
 # Функции:
-# -> _utc_now(): Текущее время UTC.
-# -> _consume_task(): Чтение результата поздней очистки.
-# -> _serve(): Работа отдельного процесса до сигнала остановки.
-# -> main(): Запуск gateway с JSON или доверенной Python-фабрикой.
+# -> _utc_now(): Текущее время UTC
+#
+# -> _consume_task(): Чтение результата поздней очистки
+#
+# -> _serve(): Работа отдельного процесса до сигнала остановки
+#
+# -> main(): Запуск gateway с JSON или доверенной Python-фабрикой
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import argparse
@@ -80,16 +84,24 @@ from remote_watch.notifications.gateway_protocol import (
     encode_response,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 if TYPE_CHECKING:
     from aiohttp import web
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Текущее время UTC
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Текущее время UTC
 #------------------------------------------------------------------------------------------------------------------
 def _utc_now() -> datetime:
 
-    """Read aware UTC time for expiry validation.
+    """
+    Read aware UTC time for expiry validation.
 
     :return: Current timezone-aware UTC datetime.
     :rtype: datetime
@@ -99,11 +111,17 @@ def _utc_now() -> datetime:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасные ошибки командной строки
 #------------------------------------------------------------------------------------------------------------------
 class _GatewayParser(argparse.ArgumentParser):
-    """Reject command arguments without echoing private values."""
+    """
+    Reject command arguments without echoing private values.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Отказ без вывода значений аргументов
@@ -111,9 +129,10 @@ class _GatewayParser(argparse.ArgumentParser):
     def error(
         self,
         message: str,
-    ) -> None:
+        ) -> None:
 
-        """Replace argparse details with a fixed safe category.
+        """
+        Replace argparse details with a fixed safe category.
 
         :param message: Original parser error; never displayed.
         :type message: str
@@ -125,12 +144,13 @@ class _GatewayParser(argparse.ArgumentParser):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасный этап ошибки запуска
 #------------------------------------------------------------------------------------------------------------------
 class NotificationGatewayStartupError(RuntimeError):
-    """Describe a startup stage without copying transport exceptions."""
+    """
+    Describe a startup stage without copying transport exceptions.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -138,9 +158,10 @@ class NotificationGatewayStartupError(RuntimeError):
     def __init__(
         self,
         stage: str,
-    ) -> None:
+        ) -> None:
 
-        """Keep the fixed startup stage for local diagnostics.
+        """
+        Keep the fixed startup stage for local diagnostics.
 
         :param stage: Fixed startup stage selected by the gateway.
         :type stage: str
@@ -153,12 +174,13 @@ class NotificationGatewayStartupError(RuntimeError):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Исходящий HTTP-сервер с управляемым временем работы
 #------------------------------------------------------------------------------------------------------------------
 class NotificationGateway:
-    """Own a single-loop outbound server; construction has no network side effects."""
+    """
+    Own a single-loop outbound server; construction has no network side effects.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -168,9 +190,10 @@ class NotificationGateway:
         config: NotificationGatewayServerConfig,
         *,
         utc_now: Callable[[], datetime] = _utc_now,
-    ) -> None:
+        ) -> None:
 
-        """Store validated configuration without reading tokens or starting channels.
+        """
+        Store validated configuration without reading tokens or starting channels.
 
         :param config: Validated server configuration.
         :type config: NotificationGatewayServerConfig
@@ -207,9 +230,12 @@ class NotificationGateway:
     # ИНТЕРФЕЙС : Чтение назначенного TCP-порта
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def port(self) -> int:
+    def port(
+        self,
+        ) -> int:
 
-        """Return the listening TCP port after a successful start.
+        """
+        Return the listening TCP port after a successful start.
 
         :return: Actual port assigned to the running listener.
         :rtype: int
@@ -223,9 +249,12 @@ class NotificationGateway:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Копия счётчиков без приватных данных
     #--------------------------------------------------------------------------------------------------------------
-    def stats(self) -> dict[str, int]:
+    def stats(
+        self,
+        ) -> dict[str, int]:
 
-        """Return aggregate counters without credentials, bodies or remote identifiers.
+        """
+        Return aggregate counters without credentials, bodies or remote identifiers.
 
         :return: Copy of aggregate counters without identities, tokens or message text.
         :rtype: dict[str, int]
@@ -244,9 +273,10 @@ class NotificationGateway:
         host: str = '127.0.0.1',
         port: int = 8765,
         ssl_context: ssl.SSLContext | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Open providers, then listen; plaintext is restricted to numeric loopback addresses.
+        """
+        Open providers, then listen; plaintext is restricted to numeric loopback addresses.
 
         :param host: Explicit bind address.
         :type host: str
@@ -329,9 +359,13 @@ class NotificationGateway:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ограниченное завершение и очистка
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Reject new work and share one bounded cleanup task across callers."""
+        """
+        Reject new work and share one bounded cleanup task across callers.
+        """
 
         self._check_loop()
         if self._state == "starting" and asyncio.current_task() is not self._start_task:
@@ -346,9 +380,13 @@ class NotificationGateway:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка принадлежности циклу событий
     #--------------------------------------------------------------------------------------------------------------
-    def _check_loop(self) -> None:
+    def _check_loop(
+        self,
+        ) -> None:
 
-        """Reject calls from a different event loop."""
+        """
+        Reject calls from a different event loop.
+        """
 
         if self._loop is not None and self._loop is not asyncio.get_running_loop():
             raise RuntimeError("gateway must be used in its owning loop")
@@ -357,9 +395,13 @@ class NotificationGateway:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Подготовка прямых каналов
     #--------------------------------------------------------------------------------------------------------------
-    async def _open_channels(self) -> None:
+    async def _open_channels(
+        self,
+        ) -> None:
 
-        """Open each owned direct channel under diagnostic recursion protection."""
+        """
+        Open each owned direct channel under diagnostic recursion protection.
+        """
 
         context = delivery_context.set(True)
         try:
@@ -379,9 +421,10 @@ class NotificationGateway:
     async def _expect(
         self,
         request: web.Request,
-    ) -> web.StreamResponse:
+        ) -> web.StreamResponse:
 
-        """Reject Expect before reading a body or acknowledging an unauthenticated request.
+        """
+        Reject Expect before reading a body or acknowledging an unauthenticated request.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
@@ -403,9 +446,10 @@ class NotificationGateway:
         status: int,
         reason: str,
         retry_after: float = 1.0,
-    ) -> web.Response:
+        ) -> web.Response:
 
-        """Return a fixed safe error and close rather than drain an untrusted body.
+        """
+        Return a fixed safe error and close rather than drain an untrusted body.
 
         :param status: Fixed HTTP status.
         :type status: int
@@ -438,9 +482,10 @@ class NotificationGateway:
     def _authenticate(
         self,
         request: web.Request,
-    ) -> NotificationGatewayPrincipal | None:
+        ) -> NotificationGatewayPrincipal | None:
 
-        """Compare bounded bearer hashes without accepting alternate credential locations.
+        """
+        Compare bounded bearer hashes without accepting alternate credential locations.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
@@ -468,9 +513,10 @@ class NotificationGateway:
     def _probe_status(
         self,
         identity: Identity,
-    ) -> dict[str, object]:
+        ) -> dict[str, object]:
 
-        """Observe lifecycle only, without consuming delivery capacity or provider rate limits.
+        """
+        Observe lifecycle only, without consuming delivery capacity or provider rate limits.
 
         :param identity: Already authorized identity, never returned in the response.
         :type identity: Identity
@@ -489,9 +535,10 @@ class NotificationGateway:
     async def _handle(
         self,
         request: web.Request,
-    ) -> web.Response:
+        ) -> web.Response:
 
-        """Authenticate and reserve capacity before bounded body reading and dispatch.
+        """
+        Authenticate and reserve capacity before bounded body reading and dispatch.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
@@ -569,9 +616,10 @@ class NotificationGateway:
     async def _read_body(
         self,
         request: web.Request,
-    ) -> bytes | None:
+        ) -> bytes | None:
 
-        """Read at most the wire limit plus one small chunk without decompression.
+        """
+        Read at most the wire limit plus one small chunk without decompression.
 
         :param request: Incoming HTTP request.
         :type request: web.Request
@@ -597,9 +645,10 @@ class NotificationGateway:
         self,
         envelope: NotificationGatewayRequest,
         started: float,
-    ) -> web.Response:
+        ) -> web.Response:
 
-        """Authorize one direct attempt with server, expiry and elapsed-time budgets.
+        """
+        Authorize one direct attempt with server, expiry and elapsed-time budgets.
 
         :param envelope: Validated gateway request.
         :type envelope: NotificationGatewayRequest
@@ -678,9 +727,13 @@ class NotificationGateway:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Завершение запросов и каналов в пределах общего срока
     #--------------------------------------------------------------------------------------------------------------
-    async def _shutdown(self) -> None:
+    async def _shutdown(
+        self,
+        ) -> None:
 
-        """Drain requests, cancel the remainder and close providers within one shared deadline."""
+        """
+        Drain requests, cancel the remainder and close providers within one shared deadline.
+        """
 
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._config.shutdown_timeout
@@ -722,9 +775,10 @@ class NotificationGateway:
     async def _close_channel(
         self,
         channel: NotificationChannel,
-    ) -> None:
+        ) -> None:
 
-        """Close one channel without exposing transport exception details.
+        """
+        Close one channel without exposing transport exception details.
 
         :param channel: Owned provider channel.
         :type channel: NotificationChannel
@@ -740,12 +794,19 @@ class NotificationGateway:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Чтение результата поздней очистки
-#------------------------------------------------------------------------------------------------------------------
-def _consume_task(task: asyncio.Task[object]) -> None:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Retrieve a late cleanup exception without logging provider data.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Чтение результата поздней очистки
+#------------------------------------------------------------------------------------------------------------------
+def _consume_task(
+    task: asyncio.Task[object],
+    ) -> None:
+
+    """
+    Retrieve a late cleanup exception without logging provider data.
 
     :param task: Tracked asynchronous operation.
     :type task: asyncio.Task[object]
@@ -757,9 +818,8 @@ def _consume_task(task: asyncio.Task[object]) -> None:
         task.exception()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Работа отдельного процесса до сигнала остановки
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Работа отдельного процесса до сигнала остановки
 #------------------------------------------------------------------------------------------------------------------
 async def _serve(
     config: NotificationGatewayServerConfig,
@@ -767,9 +827,10 @@ async def _serve(
     port: int,
     context: ssl.SSLContext | None,
     stop_file: Path | None = None,
-) -> None:
+    ) -> None:
 
-    """Run the configured gateway until the process is interrupted.
+    """
+    Run the configured gateway until the process is interrupted.
 
     :param config: Validated server configuration.
     :type config: NotificationGatewayServerConfig
@@ -827,13 +888,15 @@ async def _serve(
             print(json.dumps({"kind": "gateway_summary", "stats": gateway.stats()}, sort_keys=True), flush=True)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запуск gateway с JSON или доверенной Python-фабрикой
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Load local JSON or a trusted Python factory and run a separate gateway process.
+    """
+    Load local JSON or a trusted Python factory and run a separate gateway process.
 
     :param argv: Explicit CLI arguments or None.
     :type argv: Sequence[str] | None
@@ -911,8 +974,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

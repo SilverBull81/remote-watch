@@ -1,43 +1,45 @@
 ﻿# Постоянная позиция источника и защита от повторов после сбоев.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> ProcessLock: Исключительная блокировка владельца на уровне ОС.
+# -> ProcessLock: Исключительная блокировка владельца на уровне ОС
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 #
-# -> SourceJournal: Журнал позиции, незавершённого решения и защиты от повторов.
+# -> SourceJournal: Журнал позиции, незавершённого решения и защиты от повторов
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> journal_stats(): Сводка replay-ID и незавершённого решения.
-#    -> bind(): Закрепление владельца журнала и провайдера.
-#    -> state(): Чтение позиции и одного незавершённого решения.
-#    -> contains(): Проверка уже обработанного ID события.
-#    -> reserve(): Сохранение решения до передачи команды в hub.
-#    -> commit(): Сохранение позиции после решения hub.
-#    -> skip_duplicate(): Проход через уже обработанное событие.
-#    -> prune(): Удаление только устаревшей защиты от повторов.
-#    -> retired(): Проверка необратимой границы удалённых событий.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> journal_stats(): Сводка replay-ID и незавершённого решения
+#    -> bind(): Закрепление владельца журнала и провайдера
+#    -> state(): Чтение позиции и одного незавершённого решения
+#    -> contains(): Проверка уже обработанного ID события
+#    -> reserve(): Сохранение решения до передачи команды в hub
+#    -> commit(): Сохранение позиции после решения hub
+#    -> skip_duplicate(): Проход через уже обработанное событие
+#    -> prune(): Удаление только устаревшей защиты от повторов
+#    -> retired(): Проверка необратимой границы удалённых событий
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 #
 # Функции:
-# -> _encode_pending(): Запись ограниченного решения без секретов.
-# -> _decode_pending(): Восстановление решения с прежней сессией.
+# -> _encode_pending(): Запись ограниченного решения без секретов
+#
+# -> _decode_pending(): Восстановление решения с прежней сессией
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -53,13 +55,20 @@ from remote_watch.commands.protocol import CommandRequest, decode_command, encod
 from remote_watch.commands.source_protocol import SourceEvent, SourcePending
 from remote_watch.commands.storage import StoreConflict, StoreFull
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Исключительная блокировка владельца на уровне ОС
 #------------------------------------------------------------------------------------------------------------------
 class ProcessLock:
-    """Hold one nonblocking operating-system lock until explicit close or process death."""
-
+    """
+    Hold one nonblocking operating-system lock until explicit close or process death.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -67,9 +76,10 @@ class ProcessLock:
     def __init__(
         self,
         path: Path,
-    ) -> None:
+        ) -> None:
 
-        """Retain the explicit lock path without touching the filesystem.
+        """
+        Retain the explicit lock path without touching the filesystem.
 
         :param path: Explicit local data path or fixed HTTP operation path.
         :type path: Path
@@ -81,13 +91,16 @@ class ProcessLock:
         self._handle: BinaryIO | None = None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    def open(self) -> None:
+    def open(
+        self,
+        ) -> None:
 
-        """Refuse a second process before either owner can consume provider events."""
+        """
+        Refuse a second process before either owner can consume provider events.
+        """
 
         if self._handle is not None:
             raise StoreConflict("process lock already open")
@@ -112,13 +125,16 @@ class ProcessLock:
             raise StoreConflict("another command owner is active") from None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Release the lock without deleting another process's lock pathname."""
+        """
+        Release the lock without deleting another process's lock pathname.
+        """
 
         if self._handle is not None:
             self._handle.close()
@@ -127,13 +143,13 @@ class ProcessLock:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Журнал позиции, незавершённого решения и защиты от повторов
 #------------------------------------------------------------------------------------------------------------------
 class SourceJournal:
-    """Retain one in-flight decision, an opaque cursor and bounded provider deduplication records."""
-
+    """
+    Retain one in-flight decision, an opaque cursor and bounded provider deduplication records.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -143,9 +159,10 @@ class SourceJournal:
         path: Path,
         *,
         seen_limit: int = 1000,
-    ) -> None:
+        ) -> None:
 
-        """Prepare an exclusively owned source journal without filesystem access.
+        """
+        Prepare an exclusively owned source journal without filesystem access.
 
         :param path: Explicit local data path or fixed HTTP operation path.
         :type path: Path
@@ -167,13 +184,16 @@ class SourceJournal:
         self._closed = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    def open(self) -> None:
+    def open(
+        self,
+        ) -> None:
 
-        """Acquire a lifetime process lock and open a size-bounded synchronous SQLite journal."""
+        """
+        Acquire a lifetime process lock and open a size-bounded synchronous SQLite journal.
+        """
 
         if self._closed or self._db is not None:
             raise StoreConflict("source journal closed")
@@ -207,13 +227,15 @@ class SourceJournal:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сводка replay-ID и незавершённого решения
     #--------------------------------------------------------------------------------------------------------------
-    def journal_stats(self) -> JournalStats:
+    def journal_stats(
+        self,
+        ) -> JournalStats:
 
-        """Read source aggregates only through its serialized owner thread.
+        """
+        Read source aggregates only through its serialized owner thread.
 
         :return: Replay capacity and pending presence without provider identifiers.
         :rtype: JournalStats
@@ -231,9 +253,10 @@ class SourceJournal:
         self,
         fingerprint: str,
         reader_key: str | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Prevent reuse of another provider's cursor or unfinished command.
+        """
+        Prevent reuse of another provider's cursor or unfinished command.
 
         :param fingerprint: Stable nonsecret identity of this provider and source owner.
         :type fingerprint: str
@@ -259,13 +282,15 @@ class SourceJournal:
             self._db.execute("UPDATE state SET fingerprint=? WHERE id=1", (fingerprint,))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение позиции и одного незавершённого решения
     #--------------------------------------------------------------------------------------------------------------
-    def state(self) -> tuple[int, str, SourcePending | None]:
+    def state(
+        self,
+        ) -> tuple[int, str, SourcePending | None]:
 
-        """Read the checkpoint and at most one previously bound pending decision.
+        """
+        Read the checkpoint and at most one previously bound pending decision.
 
         :return: Committed local position, opaque cursor and optional pending decision.
         :rtype: tuple[int, str, SourcePending | None]
@@ -276,16 +301,16 @@ class SourceJournal:
         return position, cursor, None if payload is None else _decode_pending(payload)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка уже обработанного ID события
     #--------------------------------------------------------------------------------------------------------------
     def contains(
         self,
         event_id: str,
-    ) -> bool:
+        ) -> bool:
 
-        """Identify a provider redelivery even when its opaque cursor disappeared from the cache.
+        """
+        Identify a provider redelivery even when its opaque cursor disappeared from the cache.
 
         :param event_id: Opaque provider message identifier.
         :type event_id: str
@@ -299,16 +324,16 @@ class SourceJournal:
         return self._db.execute("SELECT 1 FROM seen WHERE event=?", (event_id,)).fetchone() is not None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сохранение решения до передачи команды в hub
     #--------------------------------------------------------------------------------------------------------------
     def reserve(
         self,
         pending: SourcePending,
-    ) -> None:
+        ) -> None:
 
-        """Persist the exact request before hub submission, reserving space for the replay guard.
+        """
+        Persist the exact request before hub submission, reserving space for the replay guard.
 
         :param pending: Previously selected request and its original provider event.
         :type pending: SourcePending
@@ -332,16 +357,16 @@ class SourceJournal:
             self._db.execute("UPDATE state SET pending=? WHERE id=1", (payload,))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сохранение позиции после решения hub
     #--------------------------------------------------------------------------------------------------------------
     def commit(
         self,
         pending: SourcePending,
-    ) -> None:
+        ) -> None:
 
-        """Advance provider position only after the hub committed the same logical position.
+        """
+        Advance provider position only after the hub committed the same logical position.
 
         :param pending: Previously selected request and its original provider event.
         :type pending: SourcePending
@@ -361,16 +386,16 @@ class SourceJournal:
                              (pending.position, pending.event.event_id))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проход через уже обработанное событие
     #--------------------------------------------------------------------------------------------------------------
     def skip_duplicate(
         self,
         event_id: str,
-    ) -> None:
+        ) -> None:
 
-        """Move through already processed provider history without creating a new logical command.
+        """
+        Move through already processed provider history without creating a new logical command.
 
         :param event_id: Opaque provider message identifier.
         :type event_id: str
@@ -384,22 +409,22 @@ class SourceJournal:
             self._db.execute("UPDATE state SET cursor=? WHERE id=1", (event_id,))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Удаление только устаревшей защиты от повторов
     #--------------------------------------------------------------------------------------------------------------
     def prune(
         self,
         cutoff: int | None,
-    ) -> None:
+        ) -> None:
 
-        """Remove replay guards only when trusted UTC proves their messages can no longer be accepted.
+        """
+        Remove replay guards only when trusted UTC proves their messages can no longer be accepted.
 
         :param cutoff: Exclusive Unix-second pruning boundary, or None without trusted time.
         :type cutoff: int | None
         """
 
-        # cutoff — граница очистки в Unix seconds; None запрещает очистку.
+        # cutoff — граница очистки в секундах Unix; None запрещает очистку.
 
         if cutoff is not None:
             with self._db:
@@ -409,16 +434,16 @@ class SourceJournal:
                 self._db.execute("DELETE FROM seen WHERE date<?", (cutoff,))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка необратимой границы удалённых событий
     #--------------------------------------------------------------------------------------------------------------
     def retired(
         self,
         message_date: int,
-    ) -> bool:
+        ) -> bool:
 
-        """Reject dates whose replay evidence was pruned, even after a trusted-clock rollback.
+        """
+        Reject dates whose replay evidence was pruned, even after a trusted-clock rollback.
 
         :param message_date: Integer provider timestamp, never the VM wall clock.
         :type message_date: int
@@ -433,13 +458,16 @@ class SourceJournal:
         return message_date < cutoff
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Release SQLite and the process lock without deleting durable replay evidence."""
+        """
+        Release SQLite and the process lock without deleting durable replay evidence.
+        """
 
         self._closed = True
 
@@ -459,12 +487,19 @@ class SourceJournal:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запись ограниченного решения без секретов
-#------------------------------------------------------------------------------------------------------------------
-def _encode_pending(pending: SourcePending) -> str:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Encode a bounded pending decision without credentials or provider-specific payloads.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запись ограниченного решения без секретов
+#------------------------------------------------------------------------------------------------------------------
+def _encode_pending(
+    pending: SourcePending,
+    ) -> str:
+
+    """
+    Encode a bounded pending decision without credentials or provider-specific payloads.
 
     :param pending: Previously selected request and its original provider event.
     :type pending: SourcePending
@@ -484,13 +519,15 @@ def _encode_pending(pending: SourcePending) -> str:
     return payload
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Восстановление решения с прежней сессией
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Восстановление решения с прежней сессией
 #------------------------------------------------------------------------------------------------------------------
-def _decode_pending(payload: str) -> SourcePending:
+def _decode_pending(
+    payload: str,
+    ) -> SourcePending:
 
-    """Recover the previously bound session rather than retargeting a command after restart.
+    """
+    Recover the previously bound session rather than retargeting a command after restart.
 
     :param payload: Bounded JSON body or a serialized pending decision.
     :type payload: str
@@ -512,7 +549,6 @@ def _decode_pending(payload: str) -> SourcePending:
                          request=request, notice=value["notice"])
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

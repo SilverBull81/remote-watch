@@ -1,62 +1,63 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-095557
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> RuntimeState: Состояния фоновой отправки.
+# -> RuntimeState: Состояния фоновой отправки
 #
-# -> RuntimeStats: Счётчики уведомлений, доставок и ошибок.
+# -> RuntimeStats: Счётчики уведомлений, доставок и ошибок
 #
-# -> _DestinationState: Рабочая очередь и клиент одного получателя.
+# -> _DestinationState: Рабочая очередь и клиент одного получателя
 #
-# -> NotificationRuntime: Владелец фонового потока и каналов отправки.
+# -> NotificationRuntime: Владелец фонового потока и каналов отправки
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> state(): Чтение текущего состояния runtime.
-#    -> stats(): Независимая копия счётчиков.
-#    -> health(): Последнее состояние доставки отдельно от истории ошибок.
-#    -> start(): Запуск фонового потока и подготовка клиентов.
-#    -> astart(): Асинхронный запуск без блокировки loop приложения.
-#    -> stop(): Ожидание завершения в пределах общего срока.
-#    -> astop(): Асинхронная остановка без блокировки loop приложения.
+#    -> state(): Чтение текущего состояния runtime
+#    -> stats(): Независимая копия счётчиков
+#    -> health(): Последнее состояние доставки отдельно от истории ошибок
+#    -> start(): Запуск фонового потока и подготовка клиентов
+#    -> astart(): Асинхронный запуск без блокировки loop приложения
+#    -> stop(): Ожидание завершения в пределах общего срока
+#    -> astop(): Асинхронная остановка без блокировки loop приложения
 #    Специальные методы:
-#    -> __enter__(): Запуск при входе в контекст.
-#    -> __exit__(): Остановка при выходе из контекста.
-#    -> __aenter__(): Вход в асинхронный контекст.
-#    -> __aexit__(): Выход из асинхронного контекста.
+#    -> __enter__(): Запуск при входе в контекст
+#    -> __exit__(): Остановка при выходе из контекста
+#    -> __aenter__(): Вход в асинхронный контекст
+#    -> __aexit__(): Выход из асинхронного контекста
 #    Служебные методы:
-#    -> _finish_lifecycle(): Завершение уже запущенного lifecycle при отмене вызывающей задачи.
-#    -> _lifecycle_call(): Ожидание синхронного lifecycle вне loop приложения.
-#    -> _count(): Изменение счётчика под блокировкой.
-#    -> _accepting(): Проверка возможности приёма новых записей.
-#    -> _submit(): Приём уведомления без ожидания свободного места.
-#    -> _schedule_wake_locked(): Объединение пробуждений рабочего потока.
-#    -> _wake(): Передача сигнала consumer в рабочем loop.
-#    -> _request_stop(): Закрытие приёма и запрос на остановку.
-#    -> _thread_main(): Владение рабочим loop и изоляция внутренних записей logging.
-#    -> _open_channels(): Создание и подготовка клиентов в рабочем потоке.
-#    -> _run(): Полный цикл фоновой отправки и освобождения ресурсов.
-#    -> _drain_deadline(): Срок обработки очереди с резервом на закрытие клиентов.
-#    -> _dispatch(): Передача уведомлений в ограниченные очереди получателей.
-#    -> _send_loop(): Последовательные попытки отправки одному получателю.
-#    -> _attempt(): Одна ограниченная попытка с безопасной классификацией ошибок.
-#    -> _deliver(): Повторы одной доставки без освобождения её слота.
-#    -> _delivery_now(): Проверенное показание монотонных часов доставки.
-#    -> _cleanup(): Отмена остатка работы и закрытие клиентов.
-#    -> _close_channel(): Закрытие одного клиента в пределах общего срока.
+#    -> _finish_lifecycle(): Завершение начатого запуска или остановки при отмене вызывающей задачи
+#    -> _lifecycle_call(): Ожидание синхронного запуска или остановки вне цикла приложения
+#    -> _count(): Изменение счётчика под блокировкой
+#    -> _accepting(): Проверка возможности приёма новых записей
+#    -> _submit(): Приём уведомления без ожидания свободного места
+#    -> _schedule_wake_locked(): Объединение пробуждений рабочего потока
+#    -> _wake(): Передача сигнала consumer в рабочем loop
+#    -> _request_stop(): Закрытие приёма и запрос на остановку
+#    -> _thread_main(): Владение рабочим loop и изоляция внутренних записей logging
+#    -> _open_channels(): Создание и подготовка клиентов в рабочем потоке
+#    -> _run(): Полный цикл фоновой отправки и освобождения ресурсов
+#    -> _drain_deadline(): Срок обработки очереди с резервом на закрытие клиентов
+#    -> _dispatch(): Передача уведомлений в ограниченные очереди получателей
+#    -> _send_loop(): Последовательные попытки отправки одному получателю
+#    -> _attempt(): Одна ограниченная попытка с безопасной классификацией ошибок
+#    -> _deliver(): Повторы одной доставки без освобождения её слота
+#    -> _delivery_now(): Проверенное показание монотонных часов доставки
+#    -> _cleanup(): Отмена остатка работы и закрытие клиентов
+#    -> _close_channel(): Закрытие одного клиента в пределах общего срока
 #
 # Функции:
-# -> utc_now(): Текущее время UTC с часовым поясом.
+# -> utc_now(): Текущее время UTC с часовым поясом
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -91,16 +92,20 @@ from remote_watch.notifications.health import DestinationHealth, NotificationHea
 from remote_watch.notifications.routing import PolicyRouter
 from remote_watch.notifications.timing import DeliveryClock, SystemDeliveryClock
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Состояния фоновой отправки
 #------------------------------------------------------------------------------------------------------------------
 class RuntimeState(str, Enum):
-    """Expose the lifecycle of a single-use notification runtime."""
+    """
+    Expose the lifecycle of a single-use notification runtime.
+    """
 
     CREATED = "created"
     RUNNING = "running"
@@ -109,13 +114,87 @@ class RuntimeState(str, Enum):
     FAILED = "failed"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Счётчики уведомлений, доставок и ошибок
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class RuntimeStats:
-    """Snapshot cumulative counters; event and delivery units are documented separately."""
+    """
+    Snapshot cumulative counters; event and delivery units are documented separately.
+
+    :param attempts: Number of started delivery attempts, including first attempts.
+    :type attempts: int
+
+    :param retries: Number of started delivery retries.
+    :type retries: int
+
+    :param retry_waits: Number of scheduled retry waits.
+    :type retry_waits: int
+
+    :param permanent_failure: Number of deliveries rejected without retry.
+    :type permanent_failure: int
+
+    :param exhausted: Number of deliveries that exhausted their attempt limit.
+    :type exhausted: int
+
+    :param scheduler_errors: Number of clock or retry-scheduler failures.
+    :type scheduler_errors: int
+
+    :param shutdown_discarded_retries: Number of retries discarded during shutdown.
+    :type shutdown_discarded_retries: int
+
+    :param admitted: Number of notifications admitted to the ingress queue.
+    :type admitted: int
+
+    :param suppressed: Number of records excluded by flags, context or routing.
+    :type suppressed: int
+
+    :param normalization_failed: Number of records that could not become valid notifications.
+    :type normalization_failed: int
+
+    :param not_running: Number of records rejected outside the running lifecycle.
+    :type not_running: int
+
+    :param ingress_overflow: Number of notifications rejected by ingress capacity.
+    :type ingress_overflow: int
+
+    :param routed: Number of deliveries admitted to destination queues.
+    :type routed: int
+
+    :param destination_overflow: Number of deliveries rejected by destination capacity.
+    :type destination_overflow: int
+
+    :param accepted: Number of provider-accepted deliveries.
+    :type accepted: int
+
+    :param failed_attempts: Number of attempts with a known provider failure.
+    :type failed_attempts: int
+
+    :param unknown_attempts: Number of attempts with unknown outcomes, including timeouts.
+    :type unknown_attempts: int
+
+    :param adapter_errors: Number of adapter exceptions or invalid adapter responses.
+    :type adapter_errors: int
+
+    :param expired: Number of deliveries whose remaining lifetime was insufficient.
+    :type expired: int
+
+    :param shutdown_discarded_events: Number of ingress events discarded during shutdown.
+    :type shutdown_discarded_events: int
+
+    :param shutdown_discarded_deliveries: Number of deliveries discarded before their first attempt during
+        shutdown.
+    :type shutdown_discarded_deliveries: int
+
+    :param shutdown_unknown: Number of active attempts whose shutdown outcome remains unknown.
+    :type shutdown_unknown: int
+
+    :param startup_failed: Number of runtime startup failures.
+    :type startup_failed: int
+
+    :param close_failed: Number of channels that failed to close cleanly.
+    :type close_failed: int
+    """
 
     attempts: int = 0                       # Начатые попытки отправки, включая первую.
     retries: int = 0                        # Начатые повторные попытки.
@@ -143,13 +222,29 @@ class RuntimeStats:
     close_failed: int = 0                   # Каналы, которые не удалось штатно закрыть.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Рабочая очередь и клиент одного получателя
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(slots=True)
 class _DestinationState:
-    """Keep bounded delivery state owned exclusively by the worker loop."""
+    """
+    Keep bounded delivery state owned exclusively by the worker loop.
+
+    :param destination: Configured notification destination.
+    :type destination: Destination
+
+    :param channel: Destination transport owned by the runtime worker.
+    :type channel: NotificationChannel
+
+    :param queue: Queued deliveries with monotonic deadlines.
+    :type queue: asyncio.Queue[tuple[Delivery, float]]
+
+    :param outstanding: Number of queued and active deliveries for this destination.
+    :type outstanding: int
+
+    :param task: Single delivery worker task owned by this destination.
+    :type task: asyncio.Task[None] | None
+    """
 
     destination: Destination                        # Настройки получателя.
     channel: NotificationChannel                    # Клиент, созданный в рабочем потоке.
@@ -163,13 +258,13 @@ class _DestinationState:
 # ФУНКЦИИ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Текущее время UTC с часовым поясом
 #------------------------------------------------------------------------------------------------------------------
 def utc_now() -> datetime:
 
-    """Read an aware UTC timestamp.
+    """
+    Read an aware UTC timestamp.
 
     :return: Current UTC time.
     :rtype: datetime
@@ -183,12 +278,12 @@ def utc_now() -> datetime:
 # КЛАССЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Владелец фонового потока и каналов отправки
 #------------------------------------------------------------------------------------------------------------------
 class NotificationRuntime:
-    """Own one thread, one loop and bounded delivery queues including retries.
+    """
+    Own one thread, one loop and bounded delivery queues including retries.
 
     Channel factories must be quick and synchronous;
     channel methods must be asynchronous and cooperate with cancellation.
@@ -205,9 +300,10 @@ class NotificationRuntime:
         clock: Callable[[], datetime] = utc_now,
         delivery_clock: DeliveryClock | None = None,
         random_source: Callable[[], float] = random.random,
-    ) -> None:
+        ) -> None:
 
-        """Prepare local state without starting threads or constructing channels.
+        """
+        Prepare local state without starting threads or constructing channels.
 
         :param config: Validated application configuration.
         :type config: WatcherConfig
@@ -276,9 +372,12 @@ class NotificationRuntime:
     # ИНТЕРФЕЙС : Чтение текущего состояния runtime
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def state(self) -> RuntimeState:
+    def state(
+        self,
+        ) -> RuntimeState:
 
-        """Read the current lifecycle state.
+        """
+        Read the current lifecycle state.
 
         :return: Current state.
         :rtype: RuntimeState
@@ -294,9 +393,10 @@ class NotificationRuntime:
     def stats(
         self,
         destination_id: str | None = None,
-    ) -> RuntimeStats:
+        ) -> RuntimeStats:
 
-        """Read independent cumulative counters safely from any thread.
+        """
+        Read independent cumulative counters safely from any thread.
 
         :param destination_id: Destination identifier, or None for aggregate counters.
         :type destination_id: str | None
@@ -318,9 +418,10 @@ class NotificationRuntime:
     def health(
         self,
         destination_id: str | None = None,
-    ) -> NotificationHealth:
+        ) -> NotificationHealth:
 
-        """Read immutable passive observations without network I/O or resetting counters.
+        """
+        Read immutable passive observations without network I/O or resetting counters.
 
         :param destination_id: Configured destination, or None for all destinations.
         :type destination_id: str | None
@@ -343,9 +444,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск фонового потока и подготовка клиентов
     #--------------------------------------------------------------------------------------------------------------
-    def start(self) -> None:
+    def start(
+        self,
+        ) -> None:
 
-        """Start the worker and wait for channel initialization within startup_timeout."""
+        """
+        Start the worker and wait for channel initialization within startup_timeout.
+        """
 
         if threading.current_thread() is self._thread:
             raise RuntimeError("start cannot be called from a channel")
@@ -390,9 +495,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронный запуск без блокировки loop приложения
     #--------------------------------------------------------------------------------------------------------------
-    async def astart(self) -> None:
+    async def astart(
+        self,
+        ) -> None:
 
-        """Start without blocking the application loop; cancellation also stops the runtime."""
+        """
+        Start without blocking the application loop; cancellation also stops the runtime.
+        """
 
         if threading.current_thread() is self._thread:
             raise RuntimeError("astart cannot be called from a channel")
@@ -403,9 +512,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ожидание завершения в пределах общего срока
     #--------------------------------------------------------------------------------------------------------------
-    def stop(self) -> None:
+    def stop(
+        self,
+        ) -> None:
 
-        """Drain and close within shutdown_timeout, raising if the worker cannot finish."""
+        """
+        Drain and close within shutdown_timeout, raising if the worker cannot finish.
+        """
 
         # Адаптер может запросить остановку из send(). Он не должен ожидать завершения самого себя.
         if threading.current_thread() is self._thread:
@@ -431,9 +544,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронная остановка без блокировки loop приложения
     #--------------------------------------------------------------------------------------------------------------
-    async def astop(self) -> None:
+    async def astop(
+        self,
+        ) -> None:
 
-        """Stop without blocking the application loop, finishing cleanup even if cancelled."""
+        """
+        Stop without blocking the application loop, finishing cleanup even if cancelled.
+        """
 
         if threading.current_thread() is self._thread:
             self._request_stop()
@@ -445,9 +562,12 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Запуск при входе в контекст
     #--------------------------------------------------------------------------------------------------------------
-    def __enter__(self) -> NotificationRuntime:
+    def __enter__(
+        self,
+        ) -> NotificationRuntime:
 
-        """Start a runtime context.
+        """
+        Start a runtime context.
 
         :return: This runtime.
         :rtype: NotificationRuntime
@@ -465,9 +585,10 @@ class NotificationRuntime:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> None:
+        ) -> None:
 
-        """Stop the context without suppressing application exceptions.
+        """
+        Stop the context without suppressing application exceptions.
 
         :param exc_type: Active exception type, if any.
         :type exc_type: type[BaseException] | None
@@ -487,9 +608,12 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Вход в асинхронный контекст
     #--------------------------------------------------------------------------------------------------------------
-    async def __aenter__(self) -> NotificationRuntime:
+    async def __aenter__(
+        self,
+        ) -> NotificationRuntime:
 
-        """Start an asynchronous runtime context.
+        """
+        Start an asynchronous runtime context.
 
         :return: This runtime.
         :rtype: NotificationRuntime
@@ -507,9 +631,10 @@ class NotificationRuntime:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> None:
+        ) -> None:
 
-        """Stop without suppressing application exceptions.
+        """
+        Stop without suppressing application exceptions.
 
         :param exc_type: Active exception type, if any.
         :type exc_type: type[BaseException] | None
@@ -527,14 +652,15 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Завершение уже запущенного lifecycle при отмене вызывающей задачи
+    # СЛУЖЕБНЫЙ МЕТОД : Завершение начатого запуска или остановки при отмене вызывающей задачи
     #--------------------------------------------------------------------------------------------------------------
     async def _finish_lifecycle(
         self,
         task: asyncio.Task[None],
-    ) -> None:
+        ) -> None:
 
-        """Wait for an owned lifecycle operation despite repeated caller cancellation.
+        """
+        Wait for an owned lifecycle operation despite repeated caller cancellation.
 
         :param task: Shielded start/stop task that must be observed to completion.
         :type task: asyncio.Task[None]
@@ -552,16 +678,17 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Ожидание синхронного lifecycle вне loop приложения
+    # СЛУЖЕБНЫЙ МЕТОД : Ожидание синхронного запуска или остановки вне цикла приложения
     #--------------------------------------------------------------------------------------------------------------
     async def _lifecycle_call(
         self,
         operation: Callable[[], None],
         *,
         stop_on_cancel: bool,
-    ) -> None:
+        ) -> None:
 
-        """Offload a bounded blocking operation and preserve ownership on cancellation.
+        """
+        Offload a bounded blocking operation and preserve ownership on cancellation.
 
         :param operation: Synchronous start or stop.
         :type operation: Callable[[], None]
@@ -604,9 +731,10 @@ class NotificationRuntime:
         amount: int = 1,
         *,
         destination_id: str | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Increment a fixed internal counter.
+        """
+        Increment a fixed internal counter.
 
         :param name: Declared RuntimeStats field name.
         :type name: str
@@ -631,9 +759,12 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка возможности приёма новых записей
     #--------------------------------------------------------------------------------------------------------------
-    def _accepting(self) -> bool:
+    def _accepting(
+        self,
+        ) -> bool:
 
-        """Check whether normalization may begin.
+        """
+        Check whether normalization may begin.
 
         :return: Whether the runtime currently accepts events.
         :rtype: bool
@@ -649,9 +780,10 @@ class NotificationRuntime:
         self,
         notification: Notification,
         received_at: float,
-    ) -> None:
+        ) -> None:
 
-        """Admit a prepared event or count a drop without waiting for space.
+        """
+        Admit a prepared event or count a drop without waiting for space.
 
         :param notification: Detached notification created by this runtime's handler.
         :type notification: Notification
@@ -681,9 +813,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Объединение пробуждений рабочего потока
     #--------------------------------------------------------------------------------------------------------------
-    def _schedule_wake_locked(self) -> None:
+    def _schedule_wake_locked(
+        self,
+        ) -> None:
 
-        """Schedule at most one outstanding cross-thread wakeup while holding the lock."""
+        """
+        Schedule at most one outstanding cross-thread wakeup while holding the lock.
+        """
 
         # Один callback будит consumer для всей накопленной порции, а не для каждого сообщения.
         if not self._wake_pending and self._loop is not None:
@@ -699,9 +835,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Передача сигнала consumer в рабочем loop
     #--------------------------------------------------------------------------------------------------------------
-    def _wake(self) -> None:
+    def _wake(
+        self,
+        ) -> None:
 
-        """Deliver a coalesced wakeup on the worker loop."""
+        """
+        Deliver a coalesced wakeup on the worker loop.
+        """
 
         with self._lock:
             self._wake_pending = False
@@ -717,9 +857,10 @@ class NotificationRuntime:
         self,
         *,
         deadline: float | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Close admission and wake the worker without joining it.
+        """
+        Close admission and wake the worker without joining it.
 
         :param deadline: Optional stricter real monotonic deadline for process exit.
         :type deadline: float | None
@@ -752,9 +893,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Владение рабочим loop и изоляция внутренних записей logging
     #--------------------------------------------------------------------------------------------------------------
-    def _thread_main(self) -> None:
+    def _thread_main(
+        self,
+        ) -> None:
 
-        """Own the worker loop and exclude all its logging from notification pipelines."""
+        """
+        Own the worker loop and exclude all its logging from notification pipelines.
+        """
 
         token = delivery_context.set(True)
 
@@ -784,9 +929,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Создание и подготовка клиентов в рабочем потоке
     #--------------------------------------------------------------------------------------------------------------
-    async def _open_channels(self) -> None:
+    async def _open_channels(
+        self,
+        ) -> None:
 
-        """Construct and open clients on the worker, retaining partial opens for cleanup."""
+        """
+        Construct and open clients on the worker, retaining partial opens for cleanup.
+        """
 
         for destination in self.config.destinations:
             channel = destination.channel_factory()
@@ -808,9 +957,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Полный цикл фоновой отправки и освобождения ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def _run(self) -> None:
+    async def _run(
+        self,
+        ) -> None:
 
-        """Open channels, route events and close all owned resources."""
+        """
+        Open channels, route events and close all owned resources.
+        """
 
         self._signal = asyncio.Event()
 
@@ -863,9 +1016,12 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Срок обработки очереди с резервом на закрытие клиентов
     #--------------------------------------------------------------------------------------------------------------
-    def _drain_deadline(self) -> float:
+    def _drain_deadline(
+        self,
+        ) -> float:
 
-        """Reserve a small part of the stop budget for cancellation and close.
+        """
+        Reserve a small part of the stop budget for cancellation and close.
 
         :return: Absolute monotonic drain deadline.
         :rtype: float
@@ -882,9 +1038,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Передача уведомлений в ограниченные очереди получателей
     #--------------------------------------------------------------------------------------------------------------
-    async def _dispatch(self) -> None:
+    async def _dispatch(
+        self,
+        ) -> None:
 
-        """Route bounded batches and yield to per-destination senders between batches."""
+        """
+        Route bounded batches and yield to per-destination senders between batches.
+        """
 
         while True:
             await self._signal.wait()
@@ -941,9 +1101,10 @@ class NotificationRuntime:
     async def _send_loop(
         self,
         state: _DestinationState,
-    ) -> None:
+        ) -> None:
 
-        """Send sequentially for one destination without blocking other destinations.
+        """
+        Send sequentially for one destination without blocking other destinations.
 
         :param state: Loop-owned channel and queue state.
         :type state: _DestinationState
@@ -973,9 +1134,10 @@ class NotificationRuntime:
         state: _DestinationState,
         delivery: Delivery,
         timeout: float,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Perform one attempt, converting adapter failures into an unknown outcome.
+        """
+        Perform one attempt, converting adapter failures into an unknown outcome.
 
         :param state: Destination channel state.
         :type state: _DestinationState
@@ -1034,9 +1196,10 @@ class NotificationRuntime:
         state: _DestinationState,
         delivery: Delivery,
         deadline: float,
-    ) -> None:
+        ) -> None:
 
-        """Keep a delivery at the queue head through bounded attempts and retry waits.
+        """
+        Keep a delivery at the queue head through bounded attempts and retry waits.
 
         :param state: Destination channel and retry policy.
         :type state: _DestinationState
@@ -1129,9 +1292,12 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверенное показание монотонных часов доставки
     #--------------------------------------------------------------------------------------------------------------
-    def _delivery_now(self) -> float:
+    def _delivery_now(
+        self,
+        ) -> float:
 
-        """Read a finite numeric delivery timestamp without accepting malformed clock values.
+        """
+        Read a finite numeric delivery timestamp without accepting malformed clock values.
 
         :return: Monotonic delivery time.
         :rtype: float
@@ -1148,9 +1314,13 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Отмена остатка работы и закрытие клиентов
     #--------------------------------------------------------------------------------------------------------------
-    async def _cleanup(self) -> None:
+    async def _cleanup(
+        self,
+        ) -> None:
 
-        """Cancel remaining attempts, count discarded work and close initialized channels."""
+        """
+        Cancel remaining attempts, count discarded work and close initialized channels.
+        """
 
         self._cancelling = True
         tasks = [state.task for state in self._destinations.values() if state.task is not None]
@@ -1168,7 +1338,7 @@ class NotificationRuntime:
                 state.outstanding -= 1
                 self._count("shutdown_discarded_deliveries", destination_id=state.destination.destination_id)
 
-        # При ошибке запуска используем остаток startup budget; при остановке — общий shutdown budget.
+        # При ошибке запуска используем остаток времени запуска; при остановке — общий срок завершения.
         deadline = self._stop_deadline if self._stop_deadline is not None else self._startup_deadline
 
         # Независимые клиенты закрываем параллельно: медленный close не должен лишать
@@ -1188,9 +1358,10 @@ class NotificationRuntime:
         self,
         state: _DestinationState,
         deadline: float,
-    ) -> None:
+        ) -> None:
 
-        """Close an independent channel without consuming another channel's opportunity to close.
+        """
+        Close an independent channel without consuming another channel's opportunity to close.
 
         :param state: Owned destination state.
         :type state: _DestinationState
@@ -1209,8 +1380,6 @@ class NotificationRuntime:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

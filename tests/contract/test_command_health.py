@@ -1,27 +1,54 @@
 ﻿# Проверки готовности командного gateway и безопасной диагностики отказов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261002-143102
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> make_gateway(): Подготовка gateway с подставными временем и провайдером
 #
 # Тесты:
-# -> make_gateway(): Подготовка gateway с подставными временем и провайдером.
-# -> test_maintenance_failure(): Закрытие работы после отказа, отмены или раннего выхода обслуживания.
-# -> test_time_readiness(): Потеря, истечение и восстановление доверия ко времени.
-# -> test_storage_readiness(): Отличие занятости журнала от временного отказа обслуживания.
-# -> test_source_cancellation(): Неожиданная отмена каждого из двух циклов источника.
-# -> test_gateway_cli_health(): Состояние готовности и завершение CLI при критическом отказе.
-# -> test_config_reasons(): Точные безопасные причины серверных ошибок.
-# -> test_client_config_reasons(): Причины клиентских ошибок без открытия журнала.
-# -> test_error_labels_are_private(): Запрет произвольных строк в диагностических полях.
-# -> test_resolved_duplicate_tokens(): Совпадение значений разных переменных обнаруживается при загрузке.
+# -> test_maintenance_failure(): Закрытие работы после отказа, отмены или раннего выхода обслуживания
+#    Вложенные объявления:
+#    -> scenario(): Отказ обслуживания после успешного запуска
+#       Вложенные объявления:
+#       -> maintenance(): Управляемое завершение фоновой задачи
+#
+# -> test_time_readiness(): Потеря, истечение и восстановление доверия ко времени
+#    Вложенные объявления:
+#    -> scenario(): Потеря показания и успешное обновление в том же запуске
+#
+# -> test_storage_readiness(): Отличие занятости журнала от временного отказа обслуживания
+#    Вложенные объявления:
+#    -> scenario(): Отказ одного прохода обслуживания и восстановление
+#       Вложенные объявления:
+#       -> sweep(): Подставной отказ только фоновой очистки
+#
+# -> test_source_cancellation(): Неожиданная отмена каждого из двух циклов источника
+#    Вложенные объявления:
+#    -> scenario(): Отмена активного источника
+#       Вложенные объявления:
+#       -> worker(): Завершение выбранного цикла после запуска
+#
+# -> test_gateway_cli_health(): Состояние готовности и завершение CLI при критическом отказе
+#    Вложенные объявления:
+#    -> scenario(): Наблюдение отказа через действующий цикл CLI
+#
+# -> test_config_reasons(): Точные безопасные причины серверных ошибок
+#
+# -> test_client_config_reasons(): Причины клиентских ошибок без открытия журнала
+#
+# -> test_error_labels_are_private(): Запрет произвольных строк в диагностических полях
+#
+# -> test_resolved_duplicate_tokens(): Совпадение значений разных переменных обнаруживается при загрузке
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -48,13 +75,22 @@ from remote_watch.gateway.command_config import (
 from remote_watch.gateway.command_service import CommandGateway
 from remote_watch.gateway.commands import main, serve
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка gateway с подставными временем и провайдером
 #------------------------------------------------------------------------------------------------------------------
-def make_gateway(path: Path) -> CommandGateway:
+def make_gateway(
+    path: Path,
+    ) -> CommandGateway:
 
-    """Build a local test deployment without real credentials or network time.
+    """
+    Build a local test deployment without real credentials or network time.
 
     :param path: Isolated test directory for synthetic configuration and journals.
     :type path: Path
@@ -71,6 +107,10 @@ def make_gateway(path: Path) -> CommandGateway:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Закрытие работы после отказа, отмены или раннего выхода обслуживания
 #------------------------------------------------------------------------------------------------------------------
@@ -78,9 +118,10 @@ def make_gateway(path: Path) -> CommandGateway:
 def test_maintenance_failure(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Fence a failed hub immediately and consume private task exceptions.
+    """
+    Fence a failed hub immediately and consume private task exceptions.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -98,7 +139,9 @@ def test_maintenance_failure(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Finish a gated maintenance task while the listener and source loops remain live."""
+        """
+        Finish a gated maintenance task while the listener and source loops remain live.
+        """
 
         gateway = make_gateway(tmp_path)
         gate = asyncio.Event()
@@ -111,7 +154,9 @@ def test_maintenance_failure(
         #----------------------------------------------------------------------------------------------------------
         async def maintenance() -> None:
 
-            """Wait for the test gate and then return or fail with a private marker."""
+            """
+            Wait for the test gate and then return or fail with a private marker.
+            """
 
             await gate.wait()
             if mode == "exception":
@@ -146,7 +191,6 @@ def test_maintenance_failure(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Потеря, истечение и восстановление доверия ко времени
 #------------------------------------------------------------------------------------------------------------------
@@ -154,9 +198,10 @@ def test_maintenance_failure(
 def test_time_readiness(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Keep a time outage visible and recover without restarting the hub or changing its epoch.
+    """
+    Keep a time outage visible and recover without restarting the hub or changing its epoch.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -174,7 +219,9 @@ def test_time_readiness(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Observe readiness transitions without touching VM clocks or real providers."""
+        """
+        Observe readiness transitions without touching VM clocks or real providers.
+        """
 
         gateway = make_gateway(tmp_path)
         source = gateway.hub._source
@@ -216,7 +263,6 @@ def test_time_readiness(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отличие занятости журнала от временного отказа обслуживания
 #------------------------------------------------------------------------------------------------------------------
@@ -224,9 +270,10 @@ def test_time_readiness(
 def test_storage_readiness(
     tmp_path: Path,
     code: str,
-) -> None:
+    ) -> None:
 
-    """Expose maintenance storage errors until a successful sweep without restarting the hub.
+    """
+    Expose maintenance storage errors until a successful sweep without restarting the hub.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -244,7 +291,9 @@ def test_storage_readiness(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Inject errors only in background sweeps and leave the source result path intact."""
+        """
+        Inject errors only in background sweeps and leave the source result path intact.
+        """
 
         gateway = make_gateway(tmp_path)
         gateway.hub.config = replace(gateway.hub.config, refresh_interval=0.1)
@@ -257,7 +306,9 @@ def test_storage_readiness(
         #----------------------------------------------------------------------------------------------------------
         async def sweep() -> None:
 
-            """Distinguish a timer sweep from the normal source result lookup."""
+            """
+            Distinguish a timer sweep from the normal source result lookup.
+            """
 
             if failed and asyncio.current_task() is gateway.hub._refresh:
                 observed.set()
@@ -281,7 +332,6 @@ def test_storage_readiness(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неожиданная отмена каждого из двух циклов источника
 #------------------------------------------------------------------------------------------------------------------
@@ -291,9 +341,10 @@ def test_source_cancellation(
     tmp_path: Path,
     index: int,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Report a cancelled receive or reply loop as fatal, while planned shutdown remains normal.
+    """
+    Report a cancelled receive or reply loop as fatal, while planned shutdown remains normal.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -315,7 +366,9 @@ def test_source_cancellation(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Cancel one source task and inspect aggregate readiness."""
+        """
+        Cancel one source task and inspect aggregate readiness.
+        """
 
         gateway = make_gateway(tmp_path)
         gate = asyncio.Event()
@@ -325,7 +378,9 @@ def test_source_cancellation(
         #----------------------------------------------------------------------------------------------------------
         async def worker() -> None:
 
-            """Wait for a deterministic failure trigger without accessing provider state."""
+            """
+            Wait for a deterministic failure trigger without accessing provider state.
+            """
 
             await gate.wait()
             if mode == "exception":
@@ -354,16 +409,16 @@ def test_source_cancellation(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Состояние готовности и завершение CLI при критическом отказе
 #------------------------------------------------------------------------------------------------------------------
 def test_gateway_cli_health(
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Publish readiness changes and terminate the command CLI after a critical task stops.
+    """
+    Publish readiness changes and terminate the command CLI after a critical task stops.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -381,7 +436,9 @@ def test_gateway_cli_health(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the real serve loop and its cleanup, rather than only calling stats."""
+        """
+        Exercise the real serve loop and its cleanup, rather than only calling stats.
+        """
 
         gateway = make_gateway(tmp_path)
         gateway.hub._source.sample = AsyncMock(side_effect=RuntimeError("private-time"))
@@ -409,7 +466,6 @@ def test_gateway_cli_health(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Точные безопасные причины серверных ошибок
 #------------------------------------------------------------------------------------------------------------------
@@ -431,9 +487,10 @@ def test_config_reasons(
     mode: str,
     code: str,
     field: str,
-) -> None:
+    ) -> None:
 
-    """Identify structural mistakes without reading environment secrets or echoing supplied values.
+    """
+    Identify structural mistakes without reading environment secrets or echoing supplied values.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -490,7 +547,6 @@ def test_config_reasons(
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Причины клиентских ошибок без открытия журнала
 #------------------------------------------------------------------------------------------------------------------
@@ -508,9 +564,10 @@ def test_client_config_reasons(
     mode: str,
     code: str,
     field: str,
-) -> None:
+    ) -> None:
 
-    """Keep file, CA and endpoint failures distinguishable in the public smoke CLI.
+    """
+    Keep file, CA and endpoint failures distinguishable in the public smoke CLI.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -559,19 +616,19 @@ def test_client_config_reasons(
     assert not (tmp_path / "client.sqlite").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет произвольных строк в диагностических полях
 #------------------------------------------------------------------------------------------------------------------
 def test_error_labels_are_private() -> None:
 
-    """Reject arbitrary error labels, including control characters and private key names."""
+    """
+    Reject arbitrary error labels, including control characters and private key names.
+    """
 
     error = CommandConfigError("sources[0].private-secret", "private-secret\n")
     assert error.field == "config" and error.code == "config_value"
     assert "private-secret" not in str(error) and "private-secret" not in repr(error)
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Совпадение значений разных переменных обнаруживается при загрузке
@@ -579,9 +636,10 @@ def test_error_labels_are_private() -> None:
 def test_resolved_duplicate_tokens(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Keep offline checking independent of environment while rejecting actual duplicate credentials at load.
+    """
+    Keep offline checking independent of environment while rejecting actual duplicate credentials at load.
 
     :param tmp_path: Isolated test directory.
     :type tmp_path: Path
@@ -608,8 +666,6 @@ def test_resolved_duplicate_tokens(
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

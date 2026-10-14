@@ -1,25 +1,24 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца.
+# Классы:
+# -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца
 #    Специальные методы:
-#    -> __post_init__(): Проверка типов и конечных пределов настроек.
+#    -> __post_init__(): Проверка типов и конечных пределов настроек
 #
-# Класс:
-# -> OperatorAlerts: Ограничение повторов и доставка служебных сообщений.
+# -> OperatorAlerts: Ограничение повторов и доставка служебных сообщений
 #    Конструктор:
-#    -> __init__(): Создание объекта без запуска рабочих ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Подготовка ресурсов и запуск фоновой работы.
-#    -> observe(): Учёт сбоя или восстановления с ограничением повторов.
-#    -> close(): Освобождение только собственных ресурсов.
-#    -> stats(): Счётчики попыток доставки служебных оповещений.
+#    -> start(): Подготовка ресурсов и запуск фоновой работы
+#    -> observe(): Учёт сбоя или восстановления с ограничением повторов
+#    -> close(): Освобождение только собственных ресурсов
+#    -> stats(): Счётчики попыток доставки служебных оповещений
 #
 # Функции:
 # -> application_config(): Разбор настроек без разрешения секретов или сетевых вызовов.
@@ -28,6 +27,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import logging
@@ -41,28 +41,57 @@ from remote_watch.gateway.notification_json_config import _destination
 from remote_watch.gateway_server.messages import REASONS, STATES
 from remote_watch.watcher import RemoteWatcher
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Трей, ротация журналов и прямые каналы владельца
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class ApplicationConfig:
+    """
+    Keep optional operator presentation separate from component credentials and routing.
 
-    """Keep optional operator presentation separate from component credentials and routing."""
+    :param ui: Headless or interactive Windows tray mode.
+    :type ui: str
+
+    :param log_max_bytes: Maximum server log file size before rotation, in bytes.
+    :type log_max_bytes: int
+
+    :param log_backups: Number of rotated server log files retained.
+    :type log_backups: int
+
+    :param cooldown: Minimum interval between owner notices for one component, in seconds.
+    :type cooldown: float
+
+    :param destinations: Notification destinations or their observed health snapshots.
+    :type destinations: tuple[Destination, ...]
+
+    :param icon_path: Configured tray icon path, or None for the packaged default.
+    :type icon_path: Path | None
+    """
 
     ui: str = "headless"                         # headless либо Windows tray.
     log_max_bytes: int = 1048576                 # Размер одного служебного журнала.
     log_backups: int = 5                         # Количество архивов журнала.
-    cooldown: float = 60.0                      # Минимальный интервал сообщений одного компонента.
+    cooldown: float = 60.0                       # Минимальный интервал сообщений одного компонента.
     destinations: tuple[Destination, ...] = field(default=(), repr=False)  # Прямые каналы владельца.
     icon_path: Path | None = field(default=None, repr=False)  # Своя иконка; None — встроенный логотип.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и конечных пределов настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite bounds and direct operator-only channels."""
+        """
+        Validate finite bounds and direct operator-only channels.
+        """
 
         if self.ui not in ("headless", "tray"):
             raise ValueError("invalid application UI")
@@ -88,15 +117,20 @@ class ApplicationConfig:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор настроек без разрешения секретов или сетевых вызовов.
 #------------------------------------------------------------------------------------------------------------------
 def application_config(
     value: object,
     base_dir: Path | None = None,
-) -> ApplicationConfig:
+    ) -> ApplicationConfig:
 
-    """Parse a small JSON section using the existing direct-provider configuration schema.
+    """
+    Parse a small JSON section using the existing direct-provider configuration schema.
 
     :param value: Untrusted application section from the deployment file.
     :type value: object
@@ -137,12 +171,17 @@ def application_config(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ограничение повторов и доставка служебных сообщений
 #------------------------------------------------------------------------------------------------------------------
 class OperatorAlerts:
-
-    """Coalesce component transitions and use an independent bounded notification runtime."""
+    """
+    Coalesce component transitions and use an independent bounded notification runtime.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -150,9 +189,10 @@ class OperatorAlerts:
     def __init__(
         self,
         config: ApplicationConfig,
-    ) -> None:
+        ) -> None:
 
-        """Retain lazy channels and fixed-size transition state without network access.
+        """
+        Retain lazy channels and fixed-size transition state without network access.
 
         :param config: Application settings with explicitly configured operator recipients.
         :type config: ApplicationConfig
@@ -173,9 +213,13 @@ class OperatorAlerts:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка ресурсов и запуск фоновой работы
     #--------------------------------------------------------------------------------------------------------------
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Start direct outbound-only channels when recipients are explicitly configured."""
+        """
+        Start direct outbound-only channels when recipients are explicitly configured.
+        """
 
         if not self.config.destinations:
             return
@@ -198,9 +242,10 @@ class OperatorAlerts:
         state: str,
         reason: str | None,
         now: float,
-    ) -> None:
+        ) -> None:
 
-        """Keep only the latest transition per fixed component and rate-limit sends.
+        """
+        Keep only the latest transition per fixed component and rate-limit sends.
 
         :param name: Fixed component label assigned by the supervisor.
         :type name: str
@@ -247,9 +292,13 @@ class OperatorAlerts:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение только собственных ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the bounded outbound runtime without depending on a child gateway."""
+        """
+        Close the bounded outbound runtime without depending on a child gateway.
+        """
 
         if self.watcher is not None:
             await self.watcher.astop()
@@ -258,9 +307,12 @@ class OperatorAlerts:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Счётчики попыток доставки служебных оповещений
     #--------------------------------------------------------------------------------------------------------------
-    def stats(self) -> dict[str, int]:
+    def stats(
+        self,
+        ) -> dict[str, int]:
 
-        """Expose cumulative direct-alert delivery counters without claiming phone receipt.
+        """
+        Expose cumulative direct-alert delivery counters without claiming phone receipt.
 
         :return: Fixed aggregate counters, empty when alerts are disabled.
         :rtype: dict[str, int]
@@ -274,8 +326,6 @@ class OperatorAlerts:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

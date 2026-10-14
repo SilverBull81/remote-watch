@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.6.0
+Version 1.6.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-131658
+Дата и время последнего изменения: 261014-142954
 
 ## Project Intent
 
@@ -13,7 +13,22 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.5.dev1.
+The package version is 0.4.5.dev2.
+Dev2 unifies Python formatting with SpamBot CODE_STYLE 1.0.8 by owner request.
+Read docs/CODE_STYLE.md: next-line docstrings, vertical single-argument signatures,
+closing parenthesis at argument indentation, per-field dataclass contracts,
+explicit sections/inventories and one blank line within a group; no package main guards.
+The AST checker now enforces these rules; negative regressions cover prior gaps.
+Russian comments receive a separate readability pass. No application, journal, wire,
+service registration, production configuration or SpamBot source is changed.
+Dev2 clean Windows CPython 3.12.2 wheel-from-sdist checks: core 1166 passed, 74 skipped, 2 deselected in 66.54s (0:01:06);
+extras 1598 passed, 2 deselected in 134.31s (0:02:14). Both without pytest warnings; Ruff/style: 160 files, zero issues.
+15 negative style regressions passed. All 93 modules of each final wheel match source bytes;
+12 installed CLIs passed. AST comparison preserved executable expressions in 158 prior files,
+apart from package guards; checker and new tests are separate changes. Reports:
+build/validation-0452-verified-core and build/validation-0452-verified-extras.
+No new CI/Linux/Python 3.10/live-provider or OS-service acceptance is claimed.
+Dev1 operational acceptance below remains separate from this formatting-only revision.
 Stage 0.4.5 adds explicit Windows service CLI (optional service/pywin32 extra),
 passwordless per-service virtual account, exact binary/config/operator ownership,
 bounded SCM crash recovery and separate user-session tray. application.ui controls

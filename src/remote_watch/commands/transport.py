@@ -1,30 +1,31 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandError: Ошибка с безопасным фиксированным кодом.
+# -> CommandError: Ошибка с безопасным фиксированным кодом
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #
-# -> CommandOffer: Команда из журнала с оставшимся сроком действия.
+# -> CommandOffer: Команда из журнала с оставшимся сроком действия
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и ограничений.
+#    -> __post_init__(): Проверка полей и ограничений
 #
-# -> CommandTransport: Контракт ограниченного обмена с hub.
+# -> CommandTransport: Контракт ограниченного обмена с hub
 #    Интерфейс:
-#    -> open(): Открытие принадлежащих объекту ресурсов.
-#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> open(): Открытие принадлежащих объекту ресурсов
+#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,13 +35,20 @@ from remote_watch._tls import tls_reason
 from remote_watch._validation import require_int, require_number
 from remote_watch.commands.protocol import CommandMessage, CommandRequest
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ошибка с безопасным фиксированным кодом
 #------------------------------------------------------------------------------------------------------------------
 class CommandError(RuntimeError):
-    """Expose fixed command failure codes without credentials or exception payloads."""
-
+    """
+    Expose fixed command failure codes without credentials or exception payloads.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -53,9 +61,10 @@ class CommandError(RuntimeError):
         error_kind: str | None = None,
         verify_code: int | None = None,
         busy_reason: str | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Retain only the supported public failure classification.
+        """
+        Retain only the supported public failure classification.
 
         :param code: Fixed public failure classification.
         :type code: str
@@ -72,6 +81,11 @@ class CommandError(RuntimeError):
         :param busy_reason: Fixed contention category, accepted only for busy errors.
         :type busy_reason: str | None
         """
+
+        # error_kind — безопасная категория ошибки транспорта.
+        # verify_code — числовой код проверки TLS-сертификата.
+        # busy_reason — уточнённая причина временной занятости, без текста исключения.
+
 
         # code — фиксированный код ошибки без приватных подробностей.
         # http_status — только проверенное число, без тела ответа gateway.
@@ -104,25 +118,38 @@ class CommandError(RuntimeError):
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Команда из журнала с оставшимся сроком действия
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandOffer:
-    """Deliver one journal position with a nonrenewable remaining command budget."""
+    """
+    Deliver one journal position with a nonrenewable remaining command budget.
+
+    :param sequence: Persistent increasing command or audit sequence number.
+    :type sequence: int
+
+    :param request: Exact command request bound to the original session.
+    :type request: CommandRequest
+
+    :param remaining_ttl: Remaining registration or request lifetime, in seconds.
+    :type remaining_ttl: float
+    """
 
     sequence: int               # Постоянная позиция команды в журнале hub.
     request: CommandRequest     # Команда с точной сессией приложения.
     remaining_ttl: float        # Остаток исходного срока, секунды.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate the bounded delivery offer before journal admission."""
+        """
+        Validate the bounded delivery offer before journal admission.
+        """
 
         require_int(self.sequence, "command sequence")
 
@@ -136,24 +163,27 @@ class CommandOffer:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контракт ограниченного обмена с hub
 #------------------------------------------------------------------------------------------------------------------
 class CommandTransport(Protocol):
-    """Keep client lifecycle and bounded exchanges independent of HTTP implementations."""
-
+    """
+    Keep client lifecycle and bounded exchanges independent of HTTP implementations.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Open local transport resources without registering an application."""
+        """
+        Open local transport resources without registering an application.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Один обмен с проверкой ответа и без скрытого retry
@@ -162,9 +192,10 @@ class CommandTransport(Protocol):
         self,
         operation: str,
         message: CommandMessage,
-    ) -> CommandMessage | CommandOffer | None:
+        ) -> CommandMessage | CommandOffer | None:
 
-        """Perform one authenticated exchange without a hidden retry queue.
+        """
+        Perform one authenticated exchange without a hidden retry queue.
 
         :param operation: Single operation executed within the documented limits.
         :type operation: str
@@ -182,20 +213,22 @@ class CommandTransport(Protocol):
         ...
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release bounded transport resources."""
+        """
+        Release bounded transport resources.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,21 +1,30 @@
 ﻿# Проверки Telegram и закрытых топиков ntfy через локальный HTTP.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> update(): Подставное исходное сообщение Telegram
 #
 # Тесты:
-# -> update(): Подставное исходное сообщение Telegram.
-# -> test_provider_http(): Локальный HTTP, подтверждения и ограничения провайдеров.
-# -> test_telegram_authenticated_fields(): Исходные сообщения людей без подмены отправителя.
-# -> test_ntfy_private_config(): Запрет публичного топика и неоднозначных настроек.
+# -> test_provider_http(): Локальный HTTP, подтверждения и ограничения провайдеров
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#       Вложенные объявления:
+#       -> handle(): Ответ подставного локального API
+#
+# -> test_telegram_authenticated_fields(): Исходные сообщения людей без подмены отправителя
+#
+# -> test_ntfy_private_config(): Запрет публичного топика и неоднозначных настроек
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -31,15 +40,31 @@ from remote_watch.adapters.ntfy_commands import NtfyCommandConfig, NtfyCommandPr
 from remote_watch.adapters.telegram_commands import TelegramCommandConfig, TelegramCommandProvider
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 TOKEN = "12345:" + "a" * 35
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подставное исходное сообщение Telegram
 #------------------------------------------------------------------------------------------------------------------
-def update(number: int = 17) -> dict[str, Any]:
+def update(
+    number: int = 17,
+    ) -> dict[str, Any]:
 
-    """Build one authentic-shaped human message without actual provider credentials.
+    """
+    Build one authentic-shaped human message without actual provider credentials.
 
     :param number: Synthetic command and provider event number.
     :type number: int
@@ -55,15 +80,22 @@ def update(number: int = 17) -> dict[str, Any]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Локальный HTTP, подтверждения и ограничения провайдеров
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", [
     "normal", "webhook", "week_reset", "rate_limit", "private_topic", "public_topic",
 ])
-def test_provider_http(kind: str) -> None:
+def test_provider_http(
+    kind: str,
+    ) -> None:
 
-    """Exercise real local HTTP framing, provider acknowledgement and private-topic refusal.
+    """
+    Exercise real local HTTP framing, provider acknowledgement and private-topic refusal.
 
     :param kind: Selected synthetic failure or provider scenario.
     :type kind: str
@@ -71,13 +103,14 @@ def test_provider_http(kind: str) -> None:
 
     # kind — выбранный подставной сценарий провайдера или отказа.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run a finite mock API with the actual optional HTTP transport."""
+        """
+        Run a finite mock API with the actual optional HTTP transport.
+        """
 
         calls = []
         queue = [update()]
@@ -86,9 +119,12 @@ def test_provider_http(kind: str) -> None:
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Ответ подставного локального API
         #----------------------------------------------------------------------------------------------------------
-        async def handle(request: web.Request) -> web.Response:
+        async def handle(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Record requests while returning only synthetic provider data.
+            """
+            Record requests while returning only synthetic provider data.
 
             :param request: Incoming request validated before dispatch.
             :type request: web.Request
@@ -180,16 +216,18 @@ def test_provider_http(kind: str) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Исходные сообщения людей без подмены отправителя
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["normal", "other_bot", "own_bot", "sender_chat", "forward_origin", "bot",
                                  "edited", "channel", "message_thread_id", "long", "help_mixed", "short_status",
                                  "short_own", "short_other", "short_forward", "short_edited"])
-def test_telegram_authenticated_fields(kind: str) -> None:
+def test_telegram_authenticated_fields(
+    kind: str,
+    ) -> None:
 
-    """Reject copied, edited, anonymous and foreign-bot messages without trusting displayed names.
+    """
+    Reject copied, edited, anonymous and foreign-bot messages without trusting displayed names.
 
     :param kind: Selected synthetic failure or provider scenario.
     :type kind: str
@@ -234,14 +272,16 @@ def test_telegram_authenticated_fields(kind: str) -> None:
         assert event.text == ("Help" if kind == "help_mixed" else "/status")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет публичного топика и неоднозначных настроек
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["no_confirmation", "same_topic", "no_token", "http_remote"])
-def test_ntfy_private_config(kind: str) -> None:
+def test_ntfy_private_config(
+    kind: str,
+    ) -> None:
 
-    """Require two protected streams and explicit TLS and credential configuration.
+    """
+    Require two protected streams and explicit TLS and credential configuration.
 
     :param kind: Selected synthetic failure or provider scenario.
     :type kind: str
@@ -264,7 +304,6 @@ def test_ntfy_private_config(kind: str) -> None:
         NtfyCommandConfig(**values)
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

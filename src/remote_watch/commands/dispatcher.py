@@ -1,39 +1,44 @@
 ﻿# Выполнение пользовательских команд с явным владением потоками и неизвестными исходами.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-151745
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DispatcherStats: Счётчики и состояние исполнителя без приватных данных.
+# -> DispatcherStats: Счётчики и состояние исполнителя без приватных данных
 #
-# -> CommandDispatcher: Последовательное выполнение команд приложения.
+# -> CommandDispatcher: Последовательное выполнение команд приложения
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> stats(): Чтение счётчиков и фактической занятости обработчика.
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> stats(): Чтение счётчиков и фактической занятости обработчика
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 #    Служебные методы:
-#    -> _run(): Последовательное получение команд без очереди пользовательских вызовов.
-#    -> _validate(): Проверка аргументов в отдельном потоке до выдачи grant.
-#    -> _execute(): Исполнение одной команды и удержание слота после timeout.
-#    -> _invoke_sync(): Последняя проверка срока и вызов обработчика в рабочем потоке.
-#    -> _invoke_async(): Вызов и ожидание async-обработчика в цикле приложения.
-#    -> _settle(): Повтор сохранения и доставки результата без повторного callback.
-#    -> _shutdown(): Ограниченная остановка с сохранением неизвестного исполнения.
+#    -> _run(): Последовательное получение команд без очереди пользовательских вызовов
+#    -> _validate(): Проверка аргументов в отдельном потоке до выдачи grant
+#       Вложенные объявления:
+#       -> validate(): Чистая проверка аргументов без запуска обработчика
+#    -> _execute(): Исполнение одной команды и удержание слота после timeout
+#    -> _invoke_sync(): Последняя проверка срока и вызов обработчика в рабочем потоке
+#    -> _invoke_async(): Вызов и ожидание async-обработчика в цикле приложения
+#    -> _settle(): Повтор сохранения и доставки результата без повторного callback
+#    -> _shutdown(): Ограниченная остановка с сохранением неизвестного исполнения
 #
 # Функции:
-# -> is_async(): Определение объявленного асинхронного обработчика.
-# -> _unknown(): Подготовка UNKNOWN без текста пользовательского исключения.
-# -> _consume(): Извлечение поздней ошибки без записи её деталей в лог.
+# -> is_async(): Определение объявленного асинхронного обработчика
+#
+# -> _unknown(): Подготовка UNKNOWN без текста пользовательского исключения
+#
+# -> _consume(): Извлечение поздней ошибки без записи её деталей в лог
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -58,19 +63,34 @@ from remote_watch.commands.protocol import (
 from remote_watch.commands.registry import CommandRegistry, CommandSpec
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+# Запрещает запуск и остановку из обработчика команды; обычное логирование остаётся доступно.
+
+
 #******************************************************************************************************************
 # КОНСТАНТЫ
 #******************************************************************************************************************
-# Запрещает рекурсивный lifecycle из обработчика; обычное логирование остаётся доступно.
+
 command_context: ContextVar[bool] = ContextVar("remote_watch_command", default=False)
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Определение объявленного асинхронного обработчика
 #------------------------------------------------------------------------------------------------------------------
-def is_async(callback: Any) -> bool:
+def is_async(
+    callback: Any,
+    ) -> bool:
 
-    """Recognize coroutine functions, partials and asynchronous callable objects.
+    """
+    Recognize coroutine functions, partials and asynchronous callable objects.
 
     :param callback: Application-defined callable, possibly partial or a callable object.
     :type callback: Any
@@ -86,30 +106,64 @@ def is_async(callback: Any) -> bool:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Счётчики и состояние исполнителя без приватных данных
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DispatcherStats:
-    """Expose bounded counters without command text, arguments or credentials."""
+    """
+    Expose bounded counters without command text, arguments or credentials.
+
+    :param completed: Number of callbacks that produced a valid completed result.
+    :type completed: int
+
+    :param unknown: Number of outcomes that remain unknown.
+    :type unknown: int
+
+    :param rejected: Number of commands rejected by local argument validation.
+    :type rejected: int
+
+    :param running: Whether application work is still executing.
+    :type running: bool
+
+    :param closed: Whether this component has stopped admitting new work.
+    :type closed: bool
+
+    :param last_error: Last historical error; successful recovery does not erase it.
+    :type last_error: str | None
+
+    :param ready: Current observed readiness, independently of historical failures.
+    :type ready: bool
+
+    :param last_error_stage: Stage that recorded the last historical error, or None.
+    :type last_error_stage: str | None
+
+    :param health: Current per-stage failures and cumulative recovery observations.
+    :type health: CommandHealth | None
+    """
 
     completed: int              # Обработчики, вернувшие допустимый результат.
     unknown: int                # Неизвестные исходы, включая timeout и исключения.
     rejected: int               # Запросы, не прошедшие локальную проверку аргументов.
     running: bool               # Пользовательская работа ещё фактически не закончилась.
     closed: bool                # Новые команды больше не принимаются.
-    last_error: str | None       # Фиксированный код последнего отказа; None при отсутствии.
-    ready: bool = False          # Наблюдаемая исправность всех этапов при действующей сессии.
-    last_error_stage: str | None = None      # Этап последнего отказа; история не стирается успехом.
-    health: CommandHealth | None = None     # Отдельные текущие ошибки, отказы и восстановления этапов.
+    last_error: str | None      # Фиксированный код последнего отказа; None при отсутствии.
+    ready: bool = False         # Наблюдаемая исправность всех этапов при действующей сессии.
+    last_error_stage: str | None = None  # Этап последнего отказа; история не стирается успехом.
+    health: CommandHealth | None = None  # Отдельные текущие ошибки, отказы и восстановления этапов.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Последовательное выполнение команд приложения
 #------------------------------------------------------------------------------------------------------------------
 class CommandDispatcher:
-    """Execute one registered callback at a time with explicit thread and event-loop ownership."""
+    """
+    Execute one registered callback at a time with explicit thread and event-loop ownership.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -122,9 +176,10 @@ class CommandDispatcher:
         poll_interval: float = 0.1,
         retry_interval: float = 0.5,
         shutdown_timeout: float = 5.0,
-    ) -> None:
+        ) -> None:
 
-        """Validate an exact registry-to-registration binding without starting resources.
+        """
+        Validate an exact registry-to-registration binding without starting resources.
 
         :param registry: Application-owned immutable command registry.
         :type registry: CommandRegistry
@@ -180,9 +235,12 @@ class CommandDispatcher:
     # ИНТЕРФЕЙС : Чтение счётчиков и фактической занятости обработчика
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def stats(self) -> DispatcherStats:
+    def stats(
+        self,
+        ) -> DispatcherStats:
 
-        """Read counters without formatting callback values or exception details.
+        """
+        Read counters without formatting callback values or exception details.
 
         :return: Snapshot of bounded counters and actual callback ownership.
         :rtype: DispatcherStats
@@ -198,9 +256,13 @@ class CommandDispatcher:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Bind asynchronous callbacks to this application loop and open the command client."""
+        """
+        Bind asynchronous callbacks to this application loop and open the command client.
+        """
 
         if command_context.get() or self._loop is not None or self._stopping.is_set():
             raise CommandError("closed")
@@ -219,9 +281,12 @@ class CommandDispatcher:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> bool:
+    async def close(
+        self,
+        ) -> bool:
 
-        """Stop admission within a finite wait without pretending a live callback terminated.
+        """
+        Stop admission within a finite wait without pretending a live callback terminated.
 
         :return: True only when user work and the dispatcher runner have both finished.
         :rtype: bool
@@ -250,9 +315,13 @@ class CommandDispatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Последовательное получение команд без очереди пользовательских вызовов
     #--------------------------------------------------------------------------------------------------------------
-    async def _run(self) -> None:
+    async def _run(
+        self,
+        ) -> None:
 
-        """Poll sequentially and never acquire another command while user work remains active."""
+        """
+        Poll sequentially and never acquire another command while user work remains active.
+        """
 
         try:
             while not self._stopping.is_set():
@@ -294,9 +363,10 @@ class CommandDispatcher:
         self,
         request: CommandRequest,
         remaining: float,
-    ) -> CommandReason | None:
+        ) -> CommandReason | None:
 
-        """Run a pure synchronous validator off-loop before the hub issues an execution grant.
+        """
+        Run a pure synchronous validator off-loop before the hub issues an execution grant.
 
         :param request: Incoming request validated before dispatch.
         :type request: CommandRequest
@@ -322,13 +392,13 @@ class CommandDispatcher:
         if remaining <= 0 or self._stopping.is_set():
             return CommandReason.INVALID_ARGUMENTS
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Чистая проверка аргументов без запуска обработчика
         #----------------------------------------------------------------------------------------------------------
         def validate() -> bool:
 
-            """Normalize validator failure without returning private exception messages.
+            """
+            Normalize validator failure without returning private exception messages.
 
             :return: True only when the validator returns None without raising.
             :rtype: bool
@@ -368,9 +438,10 @@ class CommandDispatcher:
     async def _execute(
         self,
         ticket: CommandTicket,
-    ) -> None:
+        ) -> None:
 
-        """Record timeout promptly while retaining the slot until actual callback completion.
+        """
+        Record timeout promptly while retaining the slot until actual callback completion.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -432,9 +503,10 @@ class CommandDispatcher:
         self,
         spec: CommandSpec,
         ticket: CommandTicket,
-    ) -> CommandResult:
+        ) -> CommandResult:
 
-        """Invoke a synchronous handler only after the worker checks its final start conditions.
+        """
+        Invoke a synchronous handler only after the worker checks its final start conditions.
 
         :param spec: Exact locally registered command specification.
         :type spec: CommandSpec
@@ -471,9 +543,10 @@ class CommandDispatcher:
         self,
         spec: CommandSpec,
         ticket: CommandTicket,
-    ) -> CommandResult:
+        ) -> CommandResult:
 
-        """Invoke and await an asynchronous handler on the explicitly owning application loop.
+        """
+        Invoke and await an asynchronous handler on the explicitly owning application loop.
 
         :param spec: Exact locally registered command specification.
         :type spec: CommandSpec
@@ -510,9 +583,10 @@ class CommandDispatcher:
         ticket: CommandTicket,
         result: CommandResult,
         finished: bool,
-    ) -> None:
+        ) -> None:
 
-        """Retry only persistence and result delivery, never the application callback.
+        """
+        Retry only persistence and result delivery, never the application callback.
 
         :param ticket: Exact ticket returned by this client, never a reconstructed copy.
         :type ticket: CommandTicket
@@ -556,9 +630,13 @@ class CommandDispatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Ограниченная остановка с сохранением неизвестного исполнения
     #--------------------------------------------------------------------------------------------------------------
-    async def _shutdown(self) -> None:
+    async def _shutdown(
+        self,
+        ) -> None:
 
-        """Persist an interrupted execution when possible and leave unresolved work pinned."""
+        """
+        Persist an interrupted execution when possible and leave unresolved work pinned.
+        """
 
         if self._job is not None and self._async_job and not self._job.done():
             self._job.cancel()
@@ -583,15 +661,20 @@ class CommandDispatcher:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Подготовка UNKNOWN без текста пользовательского исключения
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Подготовка UNKNOWN без текста пользовательского исключения
 #------------------------------------------------------------------------------------------------------------------
 def _unknown(
     ticket: CommandTicket,
     reason: CommandReason,
-) -> CommandResult:
+    ) -> CommandResult:
 
-    """Create a private-data-free outcome for the original execution attempt.
+    """
+    Create a private-data-free outcome for the original execution attempt.
 
     :param ticket: Exact ticket returned by this client, never a reconstructed copy.
     :type ticket: CommandTicket
@@ -610,13 +693,15 @@ def _unknown(
                          outcome=CommandOutcome.UNKNOWN, reason=reason)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Извлечение поздней ошибки без записи её деталей в лог
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Извлечение поздней ошибки без записи её деталей в лог
 #------------------------------------------------------------------------------------------------------------------
-def _consume(future: asyncio.Future) -> None:
+def _consume(
+    future: asyncio.Future,
+    ) -> None:
 
-    """Retrieve task failures without exposing callback exceptions through logging.
+    """
+    Retrieve task failures without exposing callback exceptions through logging.
 
     :param future: Completed callback or runner, possibly cancelled during shutdown.
     :type future: asyncio.Future
@@ -628,7 +713,6 @@ def _consume(future: asyncio.Future) -> None:
         future.exception()
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

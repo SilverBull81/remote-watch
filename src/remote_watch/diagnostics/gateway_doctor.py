@@ -1,26 +1,36 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110958
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DoctorTarget: Закрытые параметры проверки одного канала.
+# -> DoctorTarget: Закрытые параметры проверки одного канала
 #
 # Функции:
-# -> load_targets(): Проверка отдельного клиентского JSON без чтения окружения.
-# -> client_checks(): Проверка CA, credentials и явно разрешённой сети.
-# -> server_checks(): Проверка deployment и наблюдение работающего manager.
-# -> _journal_rows(): Строки безопасных агрегатов без данных приложения.
-# -> journal_checks(): Чтение явно выбранного остановленного журнала.
-# -> _server_online(): Чтение локального status и проверка loopback listeners.
-# -> _tls_context(): Подготовка проверяющего TLS context из выбранного CA.
-# -> _row(): Формирование безопасной строки отчёта.
-# -> _error_row(): Преобразование известных конфигурационных ошибок без их исходного текста.
-# -> _write_report(): Создание нового JSON-отчёта без перезаписи файлов.
-# -> main(): CLI с offline-проверкой по умолчанию и явным --online.
+# -> load_targets(): Проверка клиентского JSON без чтения окружения
+#
+# -> _row(): Формирование безопасной строки отчёта
+#
+# -> _error_row(): Преобразование известных ошибок конфигурации
+#
+# -> _tls_context(): Подготовка проверяющего TLS context
+#
+# -> client_checks(): Проверка доверенного CA, токенов и явно разрешённых сетевых соединений
+#
+# -> _server_online(): Чтение локального состояния и проверка внутренних TCP-портов
+#
+# -> _journal_rows(): Строки сводки без раскрытия владельцев, курсоров или запросов
+#
+# -> journal_checks(): Явное чтение остановленного локального журнала
+#
+# -> server_checks(): Проверка настроек и наблюдение работающего сервера
+#
+# -> _write_report(): Создание JSON-отчёта без перезаписи файлов
+#
+# -> main(): CLI с offline-проверкой по умолчанию
 #
 # Константы:
 # -> HINTS: Фиксированные пояснения и следующие действия оператора.
@@ -29,6 +39,7 @@
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -56,9 +67,13 @@ from remote_watch.gateway_server.config import DeploymentConfigError, _origin, l
 
 from ._doctor_network import network_checks
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КОНСТАНТЫ
 #******************************************************************************************************************
+
 HINTS = {
     "journal_ok": "Снимок содержит только числа; pending сам по себе не означает отказ gateway.",
     "journal_unavailable": "Сводка владельца недоступна; сохранённый снимок может быть устаревшим.",
@@ -115,16 +130,44 @@ HINTS = {
     "not_observed": "Данные не представлены владельцем; это не подтверждает отсутствие UNKNOWN.",
 }
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Закрытые параметры проверки одного канала
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class DoctorTarget:
+    """
+    Retain explicitly configured probe inputs without exposing secrets through repr.
 
-    """Retain explicitly configured probe inputs without exposing secrets through repr."""
+    :param component: Selected notification or command component.
+    :type component: str
 
-    component: str                              # notifications либо commands.
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param permissions: Explicit aliases or scopes requested by the diagnostic probe.
+    :type permissions: tuple[str, ...]
+
+    :param ca_file: Trusted root CA file, or None to use system trust.
+    :type ca_file: Path | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+    """
+
+    component: str                               # notifications либо commands.
     endpoint: str = field(repr=False)            # Явный HTTPS origin, без пути операции.
     identity: Identity = field(repr=False)       # Точное приложение, чьи права проверяются.
     permissions: tuple[str, ...] = field(repr=False)  # Aliases уведомлений либо scopes команд.
@@ -134,12 +177,19 @@ class DoctorTarget:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка клиентского JSON без чтения окружения
 #------------------------------------------------------------------------------------------------------------------
-def load_targets(path: Path) -> tuple[DoctorTarget, ...]:
+def load_targets(
+    path: Path,
+    ) -> tuple[DoctorTarget, ...]:
 
-    """Validate explicit doctor settings without opening client journals or creating registrations.
+    """
+    Validate explicit doctor settings without opening client journals or creating registrations.
 
     :param path: Local client diagnostic JSON, distinct from an application runtime configuration.
     :type path: Path
@@ -187,17 +237,17 @@ def load_targets(path: Path) -> tuple[DoctorTarget, ...]:
     return tuple(targets)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Формирование безопасной строки отчёта
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Формирование безопасной строки отчёта
 #------------------------------------------------------------------------------------------------------------------
 def _row(
     check: str,
     status: str,
     code: str,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
 
-    """Create a report row using only labels selected by diagnostic code.
+    """
+    Create a report row using only labels selected by diagnostic code.
 
     :param check: Fixed diagnostic stage.
     :type check: str
@@ -216,13 +266,15 @@ def _row(
     return {"check": check, "status": status, "code": code}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Преобразование известных ошибок конфигурации
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Преобразование известных ошибок конфигурации
 #------------------------------------------------------------------------------------------------------------------
-def _error_row(error: Exception) -> dict[str, Any]:
+def _error_row(
+    error: Exception,
+    ) -> dict[str, Any]:
 
-    """Preserve known safe configuration labels while dropping arbitrary exception details.
+    """
+    Preserve known safe configuration labels while dropping arbitrary exception details.
 
     :param error: Exception from a built-in validator or diagnostic operation.
     :type error: Exception
@@ -244,13 +296,15 @@ def _error_row(error: Exception) -> dict[str, Any]:
     return row
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Подготовка проверяющего TLS context
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Подготовка проверяющего TLS context
 #------------------------------------------------------------------------------------------------------------------
-def _tls_context(ca_file: Path | None) -> ssl.SSLContext:
+def _tls_context(
+    ca_file: Path | None,
+    ) -> ssl.SSLContext:
 
-    """Load an explicitly trusted CA without changing operating-system certificate stores.
+    """
+    Load an explicitly trusted CA without changing operating-system certificate stores.
 
     :param ca_file: Public CA PEM file, or None for default system trust.
     :type ca_file: Path | None
@@ -271,17 +325,17 @@ def _tls_context(ca_file: Path | None) -> ssl.SSLContext:
     return context
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка CA, credentials и явно разрешённой сети
+# ФУНКЦИЯ : Проверка доверенного CA, токенов и явно разрешённых сетевых соединений
 #------------------------------------------------------------------------------------------------------------------
 def client_checks(
     path: Path,
     online: bool,
     timeout: float,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Check explicit client access without creating a command client or sending a notification.
+    """
+    Check explicit client access without creating a command client or sending a notification.
 
     :param path: Doctor-specific client configuration.
     :type path: Path
@@ -296,7 +350,7 @@ def client_checks(
     :rtype: list[dict[str, Any]]
     """
 
-    # path/online/timeout — offline не читает environment credentials и не создаёт сокеты.
+    # path/online/timeout — проверка без сети не читает токены из окружения и не создаёт сокеты.
     targets = load_targets(path)
     rows = [_row("configuration", "ok", "config_ok")]
     context = _tls_context(targets[0].ca_file)
@@ -321,16 +375,16 @@ def client_checks(
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Чтение локального status и проверка loopback listeners
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Чтение локального состояния и проверка внутренних TCP-портов
 #------------------------------------------------------------------------------------------------------------------
 async def _server_online(
     config: Any,
     timeout: float,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Observe the existing manager through its status operation without acquiring deployment ownership.
+    """
+    Observe the existing manager through its status operation without acquiring deployment ownership.
 
     :param config: Validated deployment with numeric loopback component listeners.
     :type config: Any
@@ -399,21 +453,23 @@ async def _server_online(
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Строки сводки без раскрытия владельцев, курсоров или запросов
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Строки сводки без раскрытия владельцев, курсоров или запросов
 #------------------------------------------------------------------------------------------------------------------
 def _journal_rows(
     prefix: str,
     value: object,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Render only validated journal aggregates and separate attention from server readiness.
+    """
+    Render only validated journal aggregates and separate attention from server readiness.
 
     :param prefix: Library-selected diagnostic row label.
     :type prefix: str
+
     :param value: Cached owner status with optional safe counts.
     :type value: object
+
     :return: Safe observation and optional capacity/unknown warnings.
     :rtype: list[dict[str, Any]]
     """
@@ -439,21 +495,24 @@ def _journal_rows(
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Явное чтение остановленного локального журнала
 #------------------------------------------------------------------------------------------------------------------
-def journal_checks(path: Path) -> list[dict[str, Any]]:
+def journal_checks(
+    path: Path,
+    ) -> list[dict[str, Any]]:
 
-    """Inspect a stopped journal without migration, provider calls or acquiring its ownership.
+    """
+    Inspect a stopped journal without migration, provider calls or acquiring its ownership.
 
     :param path: Explicit existing local hub/client/source SQLite.
     :type path: Path
+
     :return: Shareable metrics or a fixed private failure category.
     :rtype: list[dict[str, Any]]
     """
 
-    # path — SQLite immutable не создаёт sidecar; работающая БД читается через manager.
+    # path — режим SQLite immutable не создаёт вспомогательных файлов; рабочий журнал читается через сервер.
     try:
         value = asdict(inspect_journal(path))
         return _journal_rows("journal", {"state": "available", "age_seconds": 0, "snapshot": value})
@@ -461,17 +520,17 @@ def journal_checks(path: Path) -> list[dict[str, Any]]:
         return [_row("journal", "failed", "journal_read_failed")]
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка deployment и наблюдение работающего manager
+# ФУНКЦИЯ : Проверка настроек и наблюдение работающего сервера
 #------------------------------------------------------------------------------------------------------------------
 def server_checks(
     path: Path,
     online: bool,
     timeout: float,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Validate deployment offline, then optionally observe only already running components.
+    """
+    Validate deployment offline, then optionally observe only already running components.
 
     :param path: Existing gateway server configuration.
     :type path: Path
@@ -486,7 +545,7 @@ def server_checks(
     :rtype: list[dict[str, Any]]
     """
 
-    # path/online/timeout — не запускаем manager/Caddy и не открываем SQLite/locks.
+    # path/online/timeout — не запускаем сервер или Caddy, не открываем SQLite и файлы блокировок.
     config = load_deployment_config(path)
     rows = [_row("configuration", "ok", "config_ok")]
     modules = ["aiohttp"] + (["pystray", "PIL"] if config.application.ui == "tray" else [])
@@ -502,16 +561,16 @@ def server_checks(
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Создание JSON-отчёта без перезаписи файлов
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Создание JSON-отчёта без перезаписи файлов
 #------------------------------------------------------------------------------------------------------------------
 def _write_report(
     path: Path,
     report: dict[str, Any],
-) -> None:
+    ) -> None:
 
-    """Create a new private report file without replacing an existing file or symlink.
+    """
+    Create a new private report file without replacing an existing file or symlink.
 
     :param path: Explicit new output path; its parent must already exist.
     :type path: Path
@@ -527,13 +586,15 @@ def _write_report(
         stream.write("\n")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : CLI с offline-проверкой по умолчанию
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    ) -> int:
 
-    """Run explicitly selected diagnostic scope with a shareable bounded report.
+    """
+    Run explicitly selected diagnostic scope with a shareable bounded report.
 
     :param argv: CLI arguments, or None for the process command line.
     :type argv: Sequence[str] | None
@@ -599,8 +660,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0 if report["passed"] else 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # ТОЧКА ВХОДА : Явная проверка сервера либо клиентского доступа
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

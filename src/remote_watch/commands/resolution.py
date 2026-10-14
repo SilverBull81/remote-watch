@@ -1,28 +1,36 @@
 ﻿# Явная сверка завершённой команды с неопределённым итогом на остановленном hub.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-235443
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> ResolutionError: Безопасная категория отказа без содержимого журналов.
+# -> ResolutionError: Безопасная категория отказа без содержимого журналов
 #
 # Функции:
-# -> journal(): Открытие существующей БД без восстановления поколения.
-# -> pending_summary(): Ограниченный список записей для локального разбора.
-# -> export_evidence(): Выгрузка точного завершённого результата клиента.
-# -> reconcile(): Предпросмотр либо атомарная фиксация решения владельца.
-# -> _evidence(): Строгая проверка ограниченного файла доказательства.
-# -> _match(): Проверка запроса, claim и неизменённого итога hub.
-# -> _fingerprint(): Отпечаток конкретного состояния перед применением.
-# -> _apply(): Отдельная запись решения без замены UNKNOWN.
+# -> journal(): Открытие существующей БД без восстановления поколения
+#
+# -> pending_summary(): Ограниченный список записей для локального разбора
+#
+# -> export_evidence(): Выгрузка точного завершённого результата клиента
+#
+# -> reconcile(): Предпросмотр либо атомарная фиксация решения владельца
+#
+# -> _evidence(): Строгая проверка ограниченного файла доказательства
+#
+# -> _match(): Проверка запроса, claim и неизменённого итога hub
+#
+# -> _fingerprint(): Отпечаток конкретного состояния перед применением
+#
+# -> _apply(): Отдельная запись решения без замены UNKNOWN
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import hashlib
@@ -43,14 +51,26 @@ from remote_watch.commands.protocol import (
     encode_command,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная категория отказа без содержимого журналов
 #------------------------------------------------------------------------------------------------------------------
 class ResolutionError(RuntimeError):
-    """Report only fixed local resolution failure codes."""
+    """
+    Report only fixed local resolution failure codes.
+    """
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Открытие существующей БД без восстановления поколения
@@ -60,14 +80,17 @@ def journal(
     path: Path,
     *,
     writable: bool = False,
-) -> Iterator[sqlite3.Connection]:
+    ) -> Iterator[sqlite3.Connection]:
 
-    """Open an existing journal without invoking runtime recovery or creating a file.
+    """
+    Open an existing journal without invoking runtime recovery or creating a file.
 
     :param path: Operator-selected local journal.
     :type path: Path
+
     :param writable: Explicit administrative transaction, otherwise read-only.
     :type writable: bool
+
     :return: Bounded SQLite connection closed on exit.
     :rtype: Iterator[sqlite3.Connection]
     """
@@ -94,16 +117,19 @@ def journal(
         db.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограниченный список записей для локального разбора
 #------------------------------------------------------------------------------------------------------------------
-def pending_summary(path: Path) -> dict[str, object]:
+def pending_summary(
+    path: Path,
+    ) -> dict[str, object]:
 
-    """List safe state categories and local sequence numbers without command payloads.
+    """
+    List safe state categories and local sequence numbers without command payloads.
 
     :param path: Existing journal to inspect read-only.
     :type path: Path
+
     :return: Bounded report without identities, arguments or result text.
     :rtype: dict[str, object]
     """
@@ -122,7 +148,6 @@ def pending_summary(path: Path) -> dict[str, object]:
             for row in rows[:1000]]}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Выгрузка точного завершённого результата клиента
 #------------------------------------------------------------------------------------------------------------------
@@ -130,19 +155,25 @@ def export_evidence(
     path: Path,
     sequence: int,
     output: Path,
-) -> None:
+    ) -> None:
 
-    """Export one completed nonrunning result into a new private evidence file.
+    """
+    Export one completed nonrunning result into a new private evidence file.
 
     :param path: Existing client journal, preferably from a stopped application.
     :type path: Path
+
     :param sequence: Explicit local record selected by the operator.
     :type sequence: int
+
     :param output: New file; existing files are never overwritten.
     :type output: Path
     """
 
-    # sequence/output — выбирается ровно одна запись; файл содержит частные payload.
+    # path — путь к проверяемому файлу; содержимое не выводится в диагностику.
+
+
+    # sequence/output — выбирается ровно одна запись; файл содержит приватные данные команд.
     with journal(path) as db:
         if db.execute("SELECT role FROM metadata WHERE id=1").fetchone()[0] != "client":
             raise ResolutionError("client_journal_required")
@@ -160,7 +191,6 @@ def export_evidence(
         json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Предпросмотр либо атомарная фиксация решения владельца
 #------------------------------------------------------------------------------------------------------------------
@@ -170,23 +200,33 @@ def reconcile(
     *,
     expected: str | None = None,
     owners_stopped: bool = False,
-) -> dict[str, object]:
+    ) -> dict[str, object]:
 
-    """Preview or explicitly accept one client result without rewriting the hub outcome.
+    """
+    Preview or explicitly accept one client result without rewriting the hub outcome.
 
     :param path: Actual local hub journal, never a client journal.
     :type path: Path
+
     :param evidence: Private evidence file copied from the owning application.
     :type evidence: Path
+
     :param expected: Preview fingerprint; absence selects read-only mode.
     :type expected: str | None
+
     :param owners_stopped: Operator attestation that hub and execution owner have stopped.
     :type owners_stopped: bool
+
     :return: Safe summary and fingerprint without payload values.
     :rtype: dict[str, object]
     """
 
-    # owners_stopped — осознанное подтверждение владельца, а не сетевой health check.
+    # path — путь к проверяемому файлу; содержимое не выводится в диагностику.
+    # evidence — данные результата клиента для сверки с записью сервера.
+    # expected — ожидаемые данные для точной проверки результата.
+
+
+    # owners_stopped — явное подтверждение оператора; сетевая проверка не доказывает остановку исполнения.
     # Окончание процесса приложения проверяется человеком до снятия execution_active.
     if expected is not None and not owners_stopped:
         raise ResolutionError("owners_stopped_confirmation_required")
@@ -217,16 +257,19 @@ def reconcile(
                 "original_outcome_preserved": True}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Строгая проверка ограниченного файла доказательства
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Строгая проверка ограниченного файла доказательства
 #------------------------------------------------------------------------------------------------------------------
-def _evidence(path: Path) -> tuple[CommandRequest, CommandResult]:
+def _evidence(
+    path: Path,
+    ) -> tuple[CommandRequest, CommandResult]:
 
-    """Decode bounded canonical command objects from an operator-supplied file.
+    """
+    Decode bounded canonical command objects from an operator-supplied file.
 
     :param path: Private evidence path, never printed.
     :type path: Path
+
     :return: Validated request and completed result.
     :rtype: tuple[CommandRequest, CommandResult]
     """
@@ -250,22 +293,24 @@ def _evidence(path: Path) -> tuple[CommandRequest, CommandResult]:
     return request, result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка запроса, claim и неизменённого итога hub
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка запроса, claim и неизменённого итога hub
 #------------------------------------------------------------------------------------------------------------------
 def _match(
     row: sqlite3.Row | None,
     request: CommandRequest,
     result: CommandResult,
-) -> None:
+    ) -> None:
 
-    """Reject absent, unrelated or non-unknown hub records.
+    """
+    Reject absent, unrelated or non-unknown hub records.
 
     :param row: Selected hub row.
     :type row: sqlite3.Row | None
+
     :param request: Original complete client request.
     :type request: CommandRequest
+
     :param result: Original completed client result.
     :type result: CommandResult
     """
@@ -280,27 +325,35 @@ def _match(
         raise ResolutionError("hub_unknown_required")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отпечаток конкретного состояния перед применением
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отпечаток конкретного состояния перед применением
 #------------------------------------------------------------------------------------------------------------------
 def _fingerprint(
     meta: sqlite3.Row,
     row: sqlite3.Row,
     result: CommandResult,
-) -> str:
+    ) -> str:
 
-    """Bind approval to owner, generation, revision and both exact outcomes.
+    """
+    Bind approval to owner, generation, revision and both exact outcomes.
 
     :param meta: Original owner metadata.
     :type meta: sqlite3.Row
+
     :param row: Exact record observed by the preview.
     :type row: sqlite3.Row
+
     :param result: Completed client evidence.
     :type result: CommandResult
+
     :return: SHA-256 preview identifier, not an authentication token.
     :rtype: str
     """
+
+    # meta — служебные сведения о поколении и формате журнала.
+    # row — прочитанная запись журнала для проверки её состояния.
+    # result — сохранённый результат исходного исполнения.
+
 
     # last_now не входит в отпечаток; ревизия и generation защищают от устаревшей сверки.
     values = [meta["owner"], meta["generation"], meta["settings"], row["revision"],
@@ -309,9 +362,8 @@ def _fingerprint(
     return hashlib.sha256(json.dumps(values, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отдельная запись решения без замены UNKNOWN
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отдельная запись решения без замены UNKNOWN
 #------------------------------------------------------------------------------------------------------------------
 def _apply(
     db: sqlite3.Connection,
@@ -319,21 +371,33 @@ def _apply(
     row: sqlite3.Row,
     result: CommandResult,
     fingerprint: str,
-) -> None:
+    ) -> None:
 
-    """Persist separate acceptance, release execution and fence old handles atomically.
+    """
+    Persist separate acceptance, release execution and fence old handles atomically.
 
     :param db: Exclusive administrative transaction.
     :type db: sqlite3.Connection
+
     :param meta: Original owner settings.
     :type meta: sqlite3.Row
+
     :param row: Original unknown command, preserved verbatim.
     :type row: sqlite3.Row
+
     :param result: Completed client result to accept for receipts only.
     :type result: CommandResult
+
     :param fingerprint: Exact approved preview.
     :type fingerprint: str
     """
+
+    # db — открытое соединение с журналом; владение остаётся у вызывающего кода.
+    # meta — служебные сведения о поколении и формате журнала.
+    # row — прочитанная запись журнала для проверки её состояния.
+    # result — сохранённый результат исходного исполнения.
+    # fingerprint — отпечаток ранее проверенных данных для защиты от их подмены.
+
 
     # Дополнительный результат учитывается в логическом и физическом лимите БД.
     accepted = encode_command(result)
@@ -363,8 +427,6 @@ def _apply(
     db.execute("UPDATE metadata SET generation=? WHERE id=1", (uuid4().hex,))
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

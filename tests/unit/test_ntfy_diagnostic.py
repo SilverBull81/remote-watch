@@ -1,20 +1,32 @@
 ﻿# Проверки конечного ntfy-сценария, безопасного отчёта и очистки при ошибках.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_diagnostic_run(): Серия точных размеров и очистка при отказах.
-# -> test_diagnostic_bounds(): Отказ от неверного расписания до сети.
-# -> test_diagnostic_exclusive(): Сохранение существующего отчёта.
+# -> test_diagnostic_run(): Серия точных размеров и очистка при отказах
+#    Вложенные объявления:
+#    -> Channel: Подставной канал короткого диагностического сценария
+#       Конструктор:
+#       -> __init__(): Подготовка состояния объекта.
+#       Интерфейс:
+#       -> open(): Подготовка клиента и данных авторизации
+#       -> send(): Одна попытка отправки и проверка ответа
+#       -> close(): Закрытие клиента и освобождение ресурсов
+#    -> sleep(): Учёт пауз без реального ожидания
+#
+# -> test_diagnostic_bounds(): Отказ от неверного расписания до сети
+#
+# -> test_diagnostic_exclusive(): Сохранение существующего отчёта
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -29,6 +41,12 @@ from remote_watch import Delivery, DeliveryResult, DeliveryStatus
 from remote_watch.adapters._common import render
 from remote_watch.diagnostics import ntfy_diagnostic as diagnostic
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Серия точных размеров и очистка при отказах
@@ -39,9 +57,10 @@ def test_diagnostic_run(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Check exact sizes, one attempt per sample, early stop and secret cleanup.
+    """
+    Check exact sizes, one attempt per sample, early stop and secret cleanup.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -70,7 +89,9 @@ def test_diagnostic_run(
     # КЛАСС : Подставной канал короткого диагностического сценария
     #--------------------------------------------------------------------------------------------------------------
     class Channel:
-        """Stand in for ntfy without HTTP or credentials outside the test process."""
+        """
+        Stand in for ntfy without HTTP or credentials outside the test process.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # КОНСТРУКТОР
@@ -80,9 +101,10 @@ def test_diagnostic_run(
             config: Any,
             *,
             retry: Any,
-        ) -> None:
+            ) -> None:
 
-            """Verify the diagnostic owns a single-attempt channel.
+            """
+            Verify the diagnostic owns a single-attempt channel.
 
             :param config: Validated provider configuration.
             :type config: Any
@@ -101,9 +123,13 @@ def test_diagnostic_run(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Подготовка клиента и данных авторизации
         #----------------------------------------------------------------------------------------------------------
-        async def open(self) -> None:
+        async def open(
+            self,
+            ) -> None:
 
-            """Read only the temporary synthetic token."""
+            """
+            Read only the temporary synthetic token.
+            """
 
             assert os.environ[self.config.token_env] == "private_token"
             if mode == "open_error":
@@ -116,9 +142,10 @@ def test_diagnostic_run(
         async def send(
             self,
             delivery: Delivery,
-        ) -> DeliveryResult:
+            ) -> DeliveryResult:
 
-            """Record each exact-size input and optionally fail without retrying.
+            """
+            Record each exact-size input and optionally fail without retrying.
 
             :param delivery: Immutable delivery attempt.
             :type delivery: Delivery
@@ -141,9 +168,13 @@ def test_diagnostic_run(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
         #----------------------------------------------------------------------------------------------------------
-        async def close(self) -> None:
+        async def close(
+            self,
+            ) -> None:
 
-            """Record cleanup even after partial startup or cancellation."""
+            """
+            Record cleanup even after partial startup or cancellation.
+            """
 
             states["closed"] = True
             if mode == "close_error":
@@ -154,9 +185,12 @@ def test_diagnostic_run(
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Учёт пауз без реального ожидания
     #--------------------------------------------------------------------------------------------------------------
-    async def sleep(delay: float) -> None:
+    async def sleep(
+        delay: float,
+        ) -> None:
 
-        """Advance the schedule immediately while recording the requested pause.
+        """
+        Advance the schedule immediately while recording the requested pause.
 
         :param delay: Validated minimum retry delay.
         :type delay: float
@@ -193,7 +227,6 @@ def test_diagnostic_run(
     assert "private_topic" not in raw
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ от неверного расписания до сети
 #------------------------------------------------------------------------------------------------------------------
@@ -202,9 +235,10 @@ def test_diagnostic_bounds(
     tmp_path: Path,
     interval: str,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Reject invalid schedules before creating reports or attempting network access.
+    """
+    Reject invalid schedules before creating reports or attempting network access.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -229,16 +263,16 @@ def test_diagnostic_bounds(
     assert "private_token" not in capsys.readouterr().out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение существующего отчёта
 #------------------------------------------------------------------------------------------------------------------
 def test_diagnostic_exclusive(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Preserve an existing report and leave no temporary credentials behind.
+    """
+    Preserve an existing report and leave no temporary credentials behind.
 
     :param tmp_path: Temporary directory fixture.
     :type tmp_path: Path
@@ -259,8 +293,6 @@ def test_diagnostic_exclusive(
     assert dict(os.environ) == environment
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

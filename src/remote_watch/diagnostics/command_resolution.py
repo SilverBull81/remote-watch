@@ -1,18 +1,19 @@
 ﻿# Локальная утилита разбора и явного согласования конфликтующих результатов команд.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-235443
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> main(): Выбор безопасного просмотра либо явного применения решения.
+# -> main(): Выбор безопасного просмотра либо явного применения решения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import argparse
@@ -22,16 +23,26 @@ from pathlib import Path
 
 from remote_watch.commands.resolution import ResolutionError, export_evidence, pending_summary, reconcile
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Выбор безопасного просмотра либо явного применения решения
 #------------------------------------------------------------------------------------------------------------------
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    ) -> int:
 
-    """Run explicit local journal reconciliation with no provider or callback operations.
+    """
+    Run explicit local journal reconciliation with no provider or callback operations.
 
     :param argv: Optional argument vector for tests and embedding.
     :type argv: list[str] | None
+
     :return: Zero on success, two on a safe diagnosed failure.
     :rtype: int
     """
@@ -70,15 +81,13 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "failed", "code": str(error)}))
         return 2
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, IndexError, RecursionError, OverflowError):
-        # Нельзя печатать SQLite/JSON/OS-текст: он может содержать путь или payload.
+        # Нельзя печатать SQLite/JSON/OS-текст: он может содержать путь или данные команды.
         print(json.dumps({"status": "failed", "code": "journal_or_evidence_invalid"}))
         return 2
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск локальной административной утилиты
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

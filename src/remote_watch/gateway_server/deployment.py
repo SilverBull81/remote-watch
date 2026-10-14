@@ -1,29 +1,38 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> DeployOptions: Параметры подготовки новой или существующей установки.
-# -> DeployError: Безопасная категория отказа без содержимого файлов.
+# -> DeployOptions: Параметры подготовки установки
+#
+# -> DeployError: Безопасная ошибка подготовки установки
 #
 # Функции:
-# -> prepare_files(): Подготовка согласованных шаблонов из ресурсов wheel.
-# -> deploy(): Предварительное сравнение и создание только отсутствующих файлов.
-# -> _path(): Проверка пути без перехода через ссылки и junction.
-# -> _resource(): Чтение встроенного шаблона.
-# -> _json(): Единое представление JSON.
-# -> _reference(): Проверка существующей ссылки без чтения приватного конфига.
-# -> _compare(): Сравнение ограниченного файла без вывода его содержимого.
-# -> _write_new(): Создание файла с отказом при конкурентном появлении.
+# -> _path(): Проверка пути без перехода через ссылки и junction
+#
+# -> _resource(): Чтение встроенного шаблона
+#
+# -> _json(): Единое представление JSON
+#
+# -> _reference(): Проверка ссылки без чтения конфигурации
+#
+# -> prepare_files(): Подготовка согласованных файлов установки
+#
+# -> _compare(): Ограниченное сравнение без показа приватного содержимого
+#
+# -> _write_new(): Создание файла без возможности перезаписи
+#
+# -> deploy(): Предварительное сравнение и создание отсутствующих файлов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import hashlib
@@ -42,44 +51,99 @@ from urllib.parse import urlsplit
 from remote_watch.gateway_server.config import _origin
 from remote_watch.gateway_server.tray import default_icon
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Параметры подготовки установки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, kw_only=True)
 class DeployOptions:
-    """Describe an offline deployment without credentials or live runtime ownership."""
+    """
+    Describe an offline deployment without credentials or live runtime ownership.
+
+    :param directory: Root directory resolved when configuration is created.
+    :type directory: Path
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param python: Explicit Python interpreter used by the deployment.
+    :type python: Path
+
+    :param components: Enabled gateway components.
+    :type components: str
+
+    :param notifications_config: Existing notification gateway configuration file.
+    :type notifications_config: Path | None
+
+    :param commands_config: Existing command gateway configuration file.
+    :type commands_config: Path | None
+
+    :param notification_port: Internal notification gateway loopback TCP port.
+    :type notification_port: int
+
+    :param command_port: Internal command gateway loopback TCP port.
+    :type command_port: int
+
+    :param caddy_mode: Explicit choice of external or managed Caddy.
+    :type caddy_mode: str
+
+    :param caddy_executable: Installed Caddy executable for managed operation.
+    :type caddy_executable: Path | None
+
+    :param caddy_config: Existing Caddy configuration, or None to generate a template.
+    :type caddy_config: Path | None
+
+    :param caddy_data: Persistent Caddy storage directory containing the original CA.
+    :type caddy_data: Path | None
+
+    :param ui: Headless or interactive Windows tray mode.
+    :type ui: str
+    """
 
     directory: Path = field(repr=False)                  # Папка создаваемого комплекта.
     endpoint: str = field(repr=False)                    # Общий внешний HTTPS-адрес клиентов.
     python: Path = field(default_factory=lambda: Path(sys.executable), repr=False)  # Выбранный интерпретатор.
-    components: str = "both"                            # notifications, commands либо оба компонента.
+    components: str = "both"                             # notifications, commands либо оба компонента.
     notifications_config: Path | None = field(default=None, repr=False)  # Ссылка на прежний конфиг уведомлений.
-    commands_config: Path | None = field(default=None, repr=False)       # Ссылка на прежний конфиг команд.
+    commands_config: Path | None = field(default=None, repr=False)  # Ссылка на прежний конфиг команд.
     notification_port: int = 8765                        # Внутренний loopback-порт уведомлений.
     command_port: int = 8766                             # Внутренний loopback-порт команд.
     caddy_mode: str = "external"                         # Владение Caddy задаётся явно.
-    caddy_executable: Path | None = field(default=None, repr=False)      # Локальный Caddy для managed-режима.
-    caddy_config: Path | None = field(default=None, repr=False)          # Прежний Caddyfile; None — новый шаблон.
-    caddy_data: Path | None = field(default=None, repr=False)            # Явное постоянное хранилище Caddy.
+    caddy_executable: Path | None = field(default=None, repr=False)  # Локальный Caddy для managed-режима.
+    caddy_config: Path | None = field(default=None, repr=False)  # Прежний Caddyfile; None — новый шаблон.
+    caddy_data: Path | None = field(default=None, repr=False)  # Явное постоянное хранилище Caddy.
     ui: str = "headless"                                 # headless или Windows tray.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная ошибка подготовки установки
 #------------------------------------------------------------------------------------------------------------------
 class DeployError(ValueError):
-    """Carry only a fixed deployment failure code, never an original exception."""
+    """
+    Carry only a fixed deployment failure code, never an original exception.
+    """
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка пути без перехода через ссылки и junction
-#------------------------------------------------------------------------------------------------------------------
-def _path(value: Path) -> Path:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Reject link ancestors before any directory creation or file access.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка пути без перехода через ссылки и junction
+#------------------------------------------------------------------------------------------------------------------
+def _path(
+    value: Path,
+    ) -> Path:
+
+    """
+    Reject link ancestors before any directory creation or file access.
 
     :param value: Explicit operator-owned local path.
     :type value: Path
@@ -102,13 +166,15 @@ def _path(value: Path) -> Path:
     return path
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Чтение встроенного шаблона
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Чтение встроенного шаблона
 #------------------------------------------------------------------------------------------------------------------
-def _resource(name: str) -> str:
+def _resource(
+    name: str,
+    ) -> str:
 
-    """Read a fixed packaged template independently of the source checkout.
+    """
+    Read a fixed packaged template independently of the source checkout.
 
     :param name: Library-owned template basename.
     :type name: str
@@ -121,13 +187,15 @@ def _resource(name: str) -> str:
     return files("remote_watch.gateway_server").joinpath("templates", name).read_text(encoding="utf-8-sig")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Единое представление JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Единое представление JSON
 #------------------------------------------------------------------------------------------------------------------
-def _json(value: object) -> bytes:
+def _json(
+    value: object,
+    ) -> bytes:
 
-    """Serialize configuration with readable Unicode and Windows-friendly line endings.
+    """
+    Serialize configuration with readable Unicode and Windows-friendly line endings.
 
     :param value: Generated configuration or manifest object.
     :type value: object
@@ -140,13 +208,15 @@ def _json(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").replace("\n", "\r\n").encode("utf-8")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка ссылки без чтения конфигурации
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка ссылки без чтения конфигурации
 #------------------------------------------------------------------------------------------------------------------
-def _reference(value: Path) -> str:
+def _reference(
+    value: Path,
+    ) -> str:
 
-    """Keep an existing file at its original location and preserve its relative-path base.
+    """
+    Keep an existing file at its original location and preserve its relative-path base.
 
     :param value: Existing operator-selected component file or executable.
     :type value: Path
@@ -166,13 +236,15 @@ def _reference(value: Path) -> str:
     return str(path)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка согласованных файлов установки
 #------------------------------------------------------------------------------------------------------------------
-def prepare_files(options: DeployOptions) -> dict[str, bytes]:
+def prepare_files(
+    options: DeployOptions,
+    ) -> dict[str, bytes]:
 
-    """Render an offline installation kit with explicit external and internal endpoints.
+    """
+    Render an offline installation kit with explicit external and internal endpoints.
 
     :param options: Explicit deployment choices, without provider credentials.
     :type options: DeployOptions
@@ -319,16 +391,16 @@ def prepare_files(options: DeployOptions) -> dict[str, bytes]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Ограниченное сравнение без показа приватного содержимого
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Ограниченное сравнение без показа приватного содержимого
 #------------------------------------------------------------------------------------------------------------------
 def _compare(
     path: Path,
     expected: bytes,
-) -> str:
+    ) -> str:
 
-    """Compare an existing file without returning its content or hash to the caller.
+    """
+    Compare an existing file without returning its content or hash to the caller.
 
     :param path: Checked destination path.
     :type path: Path
@@ -351,16 +423,16 @@ def _compare(
     return "identical" if current == expected else "preserved"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Создание файла без возможности перезаписи
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Создание файла без возможности перезаписи
 #------------------------------------------------------------------------------------------------------------------
 def _write_new(
     path: Path,
     data: bytes,
-) -> None:
+    ) -> None:
 
-    """Create exclusively and leave previous files untouched, including during a race.
+    """
+    Create exclusively and leave previous files untouched, including during a race.
 
     :param path: Checked library-owned output path.
     :type path: Path
@@ -380,7 +452,6 @@ def _write_new(
         os.fsync(stream.fileno())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Предварительное сравнение и создание отсутствующих файлов
 #------------------------------------------------------------------------------------------------------------------
@@ -389,9 +460,10 @@ def deploy(
     *,
     dry_run: bool = False,
     update_templates: bool = False,
-) -> list[tuple[str, str]]:
+    ) -> list[tuple[str, str]]:
 
-    """Prepare files offline without changing existing configurations, journals or services.
+    """
+    Prepare files offline without changing existing configurations, journals or services.
 
     :param options: Explicit installation choices.
     :type options: DeployOptions
@@ -407,7 +479,7 @@ def deploy(
     """
 
     # options — рабочие конфиги только упоминаются по абсолютной ссылке.
-    # dry_run — никаких mkdir, сетевых проверок, журналов, служб и environment credentials.
+    # dry_run — не создаём папки, не проверяем сеть, не открываем журналы и службы, не читаем токены из окружения.
     # update_templates — оператор вручную переносит нужные отличия в рабочие настройки.
     content = prepare_files(options)
     root = _path(options.directory)
@@ -428,8 +500,6 @@ def deploy(
     return reports
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

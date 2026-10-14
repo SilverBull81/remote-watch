@@ -1,20 +1,27 @@
 ﻿# Сохранение режима команд между решениями источника, SQLite и доставкой ответа.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_command_mode_recovery(): Восстановление решения и ответ по режиму исходной сессии.
-# -> test_command_mode_configuration(): Раздельные настройки клиента/источника и безопасные ошибки.
-# -> test_old_display_config_key_is_rejected(): Отказ от старого ключа JSON до открытия журнала.
+# -> test_command_mode_recovery(): Восстановление решения и ответ по режиму исходной сессии
+#    Вложенные объявления:
+#    -> scenario(): Постоянное решение источника и единственный результат приложения
+#       Вложенные объявления:
+#       -> lost_reply(): Управляемая потеря ответа без гонки с опросом SQLite
+#
+# -> test_command_mode_configuration(): Раздельные настройки клиента/источника и безопасные ошибки
+#
+# -> test_old_display_config_key_is_rejected(): Старое имя поля JSON не должно молча отключать выбранное оформление
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -37,6 +44,12 @@ from remote_watch.commands.source_store import SourceJournal
 from remote_watch.commands.transport import CommandError
 from remote_watch.gateway.command_config import CommandConfigError, load_command_client, load_command_gateway
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление решения и ответ по режиму исходной сессии
@@ -45,9 +58,10 @@ from remote_watch.gateway.command_config import CommandConfigError, load_command
 def test_command_mode_recovery(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Retain the client mode across source reopening, lost replies and a newer registration.
+    """
+    Retain the client mode across source reopening, lost replies and a newer registration.
 
     :param tmp_path: Separate source, hub and application SQLite files.
     :type tmp_path: Path
@@ -56,6 +70,9 @@ def test_command_mode_recovery(
     :type mode: str
     """
 
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
+
     # mode сохраняется в постоянном request до submit, а не читается при каждом retry.
 
     #--------------------------------------------------------------------------------------------------------------
@@ -63,7 +80,9 @@ def test_command_mode_recovery(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise real journals without real provider credentials or external network."""
+        """
+        Exercise real journals without real provider credentials or external network.
+        """
 
         rig = Rig(tmp_path)
         rig.registration = replace(rig.registration, command_display_mode=mode)
@@ -111,9 +130,10 @@ def test_command_mode_recovery(
             async def lost_reply(
                 conversation_id: str,
                 text: str,
-            ) -> None:
+                ) -> None:
 
-                """Hold one provider attempt while the test inspects durable state.
+                """
+                Hold one provider attempt while the test inspects durable state.
 
                 :param conversation_id: Synthetic authorized chat.
                 :type conversation_id: str
@@ -121,6 +141,10 @@ def test_command_mode_recovery(
                 :param text: Original rendered response.
                 :type text: str
                 """
+
+                # conversation_id — идентификатор чата, участвующий в проверке доступа.
+                # text — проверяемый текст сообщения или конфигурации.
+
 
                 # Пока провайдер ждёт, responder не начинает следующую операцию журнала.
                 assert conversation_id == "chat" and text == expected
@@ -158,7 +182,6 @@ def test_command_mode_recovery(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Раздельные настройки клиента/источника и безопасные ошибки
 #------------------------------------------------------------------------------------------------------------------
@@ -166,9 +189,10 @@ def test_command_mode_recovery(
 def test_command_mode_configuration(
     tmp_path: Path,
     mode: object,
-) -> None:
+    ) -> None:
 
-    """Read independent client/source defaults while rejecting invalid values without disclosure.
+    """
+    Read independent client/source defaults while rejecting invalid values without disclosure.
 
     :param tmp_path: Directory for synthetic configuration files only.
     :type tmp_path: Path
@@ -176,6 +200,10 @@ def test_command_mode_configuration(
     :param mode: Optional valid mode or deliberately invalid configuration value.
     :type mode: object
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+    # mode — выбранный режим отображения или запуска в этом сценарии.
+
 
     # Служебные ошибки остаются русскими в CLI; содержимое неверного поля не выводится.
     raw = settings()
@@ -202,7 +230,6 @@ def test_command_mode_configuration(
         assert caught.value.field == "sources[0].display_mode" and "PRIVATE" not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Старое имя поля JSON не должно молча отключать выбранное оформление
 #------------------------------------------------------------------------------------------------------------------
@@ -210,9 +237,10 @@ def test_command_mode_configuration(
 def test_old_display_config_key_is_rejected(
     tmp_path: Path,
     location: str,
-) -> None:
+    ) -> None:
 
-    """Reject the previous JSON key while keeping command wire fields unchanged.
+    """
+    Reject the previous JSON key while keeping command wire fields unchanged.
 
     :param tmp_path: Temporary directory containing synthetic configuration only.
     :type tmp_path: Path
@@ -243,8 +271,6 @@ def test_old_display_config_key_is_rejected(
     assert not (tmp_path / "client.sqlite").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

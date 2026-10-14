@@ -1,30 +1,33 @@
 ﻿# Ограниченный HTTP-обмен для приёма команд и отправки ответов.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> SourceHttp: Два ограниченных сетевых слота одного получателя.
+# -> SourceHttp: Два ограниченных сетевых слота одного получателя
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> call(): Один ограниченный HTTP-запрос без скрытых повторов.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
-#    -> defer(): Пауза по требованию провайдера на монотонных часах.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> call(): Один ограниченный HTTP-запрос без скрытых повторов
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
+#    -> defer(): Пауза по требованию провайдера на монотонных часах
 #
 # Функции:
-# -> _json(): Строгий разбор ограниченного JSON провайдера.
-# -> _pairs(): Отказ от повторяющихся ключей JSON.
-# -> _constant(): Отказ от нечисловых JSON-констант.
+# -> _json(): Строгий разбор ограниченного JSON провайдера
+#
+# -> _pairs(): Отказ от повторяющихся ключей JSON
+#
+# -> _constant(): Отказ от нечисловых JSON-констант
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -38,13 +41,20 @@ from remote_watch.adapters._common import validate_endpoint
 from remote_watch.commands.transport import CommandError
 from remote_watch.notifications._context import delivery_context
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Два ограниченных сетевых слота одного получателя
 #------------------------------------------------------------------------------------------------------------------
 class SourceHttp:
-    """Own two bounded HTTPS slots for provider polling and replies without implicit retries."""
-
+    """
+    Own two bounded HTTPS slots for provider polling and replies without implicit retries.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -54,9 +64,10 @@ class SourceHttp:
         endpoint: str,
         *,
         allow_loopback_http: bool = False,
-    ) -> None:
+        ) -> None:
 
-        """Validate a fixed provider origin while deferring optional imports and network resources.
+        """
+        Validate a fixed provider origin while deferring optional imports and network resources.
 
         :param endpoint: HTTPS origin without credentials, query or path.
         :type endpoint: str
@@ -81,13 +92,16 @@ class SourceHttp:
         self._blocked_until = 0.0
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Create a lazy aiohttp session with finite waits, no cookies and no environment proxies."""
+        """
+        Create a lazy aiohttp session with finite waits, no cookies and no environment proxies.
+        """
 
         import aiohttp
 
@@ -105,7 +119,6 @@ class SourceHttp:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Один ограниченный HTTP-запрос без скрытых повторов
     #--------------------------------------------------------------------------------------------------------------
@@ -119,9 +132,10 @@ class SourceHttp:
         token: str | None = None,
         stream: bool = False,
         privacy_probe: bool = False,
-    ) -> tuple[int, Any]:
+        ) -> tuple[int, Any]:
 
-        """Make one bounded request and retain only a fixed private-safe failure classification.
+        """
+        Make one bounded request and retain only a fixed private-safe failure classification.
 
         :param method: Fixed HTTP method or Bot API operation.
         :type method: str
@@ -240,19 +254,21 @@ class SourceHttp:
             delivery_context.reset(context_token)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close all connections belonging to this provider reader."""
+        """
+        Close all connections belonging to this provider reader.
+        """
 
         if self._client is not None:
             await self._client.close()
             self._client = None
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Пауза по требованию провайдера на монотонных часах
@@ -260,9 +276,10 @@ class SourceHttp:
     def defer(
         self,
         seconds: int,
-    ) -> None:
+        ) -> None:
 
-        """Honor a bounded provider retry delay on the monotonic clock.
+        """
+        Honor a bounded provider retry delay on the monotonic clock.
 
         :param seconds: Requested bounded provider retry delay in seconds.
         :type seconds: int
@@ -276,12 +293,19 @@ class SourceHttp:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Строгий разбор ограниченного JSON провайдера
-#------------------------------------------------------------------------------------------------------------------
-def _json(body: bytes) -> Any:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Decode provider JSON with duplicate-key and nonfinite-number rejection.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Строгий разбор ограниченного JSON провайдера
+#------------------------------------------------------------------------------------------------------------------
+def _json(
+    body: bytes,
+    ) -> Any:
+
+    """
+    Decode provider JSON with duplicate-key and nonfinite-number rejection.
 
     :param body: Bounded provider response bytes.
     :type body: bytes
@@ -298,13 +322,15 @@ def _json(body: bytes) -> Any:
         raise CommandError("invalid") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отказ от повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ от повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+def _pairs(
+    pairs: list[tuple[str, Any]],
+    ) -> dict[str, Any]:
 
-    """Reject ambiguous repeated fields at every JSON nesting level.
+    """
+    Reject ambiguous repeated fields at every JSON nesting level.
 
     :param pairs: Field pairs from one JSON object.
     :type pairs: list[tuple[str, Any]]
@@ -324,13 +350,15 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отказ от нечисловых JSON-констант
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ от нечисловых JSON-констант
 #------------------------------------------------------------------------------------------------------------------
-def _constant(value: str) -> None:
+def _constant(
+    value: str,
+    ) -> None:
 
-    """Reject nonfinite JSON constants without echoing provider content.
+    """
+    Reject nonfinite JSON constants without echoing provider content.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: str
@@ -341,7 +369,6 @@ def _constant(value: str) -> None:
     raise ValueError("invalid provider constant")
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

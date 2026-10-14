@@ -1,85 +1,94 @@
 ﻿# Модели и строгий wire-контракт команд без сети и исполнения callbacks.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
 #
-# Константы и типы:
-# -> MAX_COMMAND_BYTES, MAX_COMMAND_TEXT_BYTES: Пределы wire и текста ответа, байт UTF-8.
-# -> MAX_COMMAND_SECONDS, MAX_CAPABILITIES: Пределы срока и числа зарегистрированных команд.
-# -> CommandMessage: Закрытый набор моделей сообщений.
-# -> _KINDS, _NESTED: Закрытые таблицы видов сообщений и вложенных моделей.
+# Классы:
+# -> CommandOutcome: Результат обработчика без предположений о состоянии приложения
 #
-# Состав модуля:
-# -> CommandOutcome: Результат обработчика без предположений о состоянии приложения.
+# -> CommandReason: Фиксированные безопасные причины отказа
 #
-# -> CommandReason: Фиксированные безопасные причины отказа.
-#
-# -> _identifier(): Проверка ограниченного служебного имени.
-# -> _nonce(): Проверка формата случайного идентификатора.
-# -> _digest(): Проверка формата хеша данных.
-# -> _seconds(): Ограничение присланного интервала времени.
-# -> CommandCapability: Метаданные команды без ссылки на callback.
+# -> CommandCapability: Метаданные команды без ссылки на callback
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandRegistration: Регистрация запуска приложения и его команд.
+# -> CommandRegistration: Регистрация запуска приложения и его команд
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandSession: Связь приложения с текущим запуском hub.
+# -> CommandSession: Связь приложения с текущим запуском hub
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandRef: Полная цель и идентификатор одной команды.
+# -> CommandRef: Полная цель и идентификатор одной команды
 #    Интерфейс:
-#    -> matches(): Проверка точной связи запроса и ответа.
+#    -> matches(): Проверка точной связи запроса и ответа
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandRequest: Неизменяемое намерение пользователя.
+# -> CommandRequest: Неизменяемое намерение пользователя
 #    Интерфейс:
-#    -> context(): Подготовка контекста без исполнения и выдачи прав.
+#    -> context(): Подготовка контекста без исполнения и выдачи прав
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandClaim: Запрос единственной попытки исполнения.
+# -> CommandClaim: Запрос единственной попытки исполнения
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandGrant: Разрешение на начало конкретной попытки.
+# -> CommandGrant: Разрешение на начало конкретной попытки
 #    Интерфейс:
-#    -> matches(): Проверка точной связи запроса и ответа.
+#    -> matches(): Проверка точной связи запроса и ответа
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandResult: Завершение обработчика или неизвестный исход.
+# -> CommandResult: Завершение обработчика или неизвестный исход
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> CommandReceipt: Подтверждение сохранения точного результата.
+# -> CommandReceipt: Подтверждение сохранения точного результата
 #    Интерфейс:
-#    -> matches(): Проверка точной связи запроса и ответа.
+#    -> matches(): Проверка точной связи запроса и ответа
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
+#    -> __post_init__(): Проверка полей и согласованности объекта
 #
-# -> describe_commands(): Подготовка метаданных без вызова обработчиков.
-# -> callback_result(): Проверка результата без пользовательского преобразования в строку.
-# -> _plain(): Преобразование только разрешённых моделей в данные JSON.
-# -> encode_command(): Кодирование ограниченного сообщения заданной версии.
-# -> _schema_version(): Выбор схемы без изменения прежних сообщений и их хешей.
-# -> _pairs(): Запрет повторяющихся ключей JSON.
-# -> _constant(): Запрет нестандартных чисел JSON.
-# -> _model(): Разбор точного состава полей по закрытому перечню моделей.
-# -> decode_command(): Чтение сообщения без раскрытия ошибочного содержимого.
-# -> message_digest(): Хеш канонических данных для проверки связи сообщений.
+# Функции:
+# -> _identifier(): Проверка ограниченного служебного имени
+#
+# -> _nonce(): Проверка формата случайного идентификатора
+#
+# -> _digest(): Проверка формата хеша данных
+#
+# -> _seconds(): Ограничение присланного интервала времени
+#
+# -> describe_commands(): Подготовка метаданных без вызова обработчиков
+#
+# -> callback_result(): Проверка результата без пользовательского преобразования в строку
+#
+# -> _plain(): Преобразование только разрешённых моделей в данные JSON
+#
+# -> _schema_version(): Выбор схемы без изменения прежних сообщений и их хешей
+#
+# -> encode_command(): Кодирование ограниченного сообщения заданной версии
+#
+# -> _pairs(): Запрет повторяющихся ключей JSON
+#
+# -> _constant(): Запрет нестандартных чисел JSON
+#
+# -> _model(): Разбор точного состава полей по закрытому перечню моделей
+#
+# -> decode_command(): Чтение сообщения без раскрытия ошибочного содержимого
+#
+# -> message_digest(): Хеш канонических данных для проверки связи сообщений
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import hashlib
@@ -94,17 +103,32 @@ from remote_watch._validation import require_number, require_text
 from remote_watch.commands.registry import CommandContext, CommandRegistry
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 MAX_COMMAND_BYTES = 65536
 MAX_COMMAND_TEXT_BYTES = 4096
 MAX_COMMAND_SECONDS = 300
 MAX_CAPABILITIES = 64
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Результат обработчика без предположений о состоянии приложения
 #------------------------------------------------------------------------------------------------------------------
 class CommandOutcome(str, Enum):
-    """Describe callback completion, never inferred completion of application work."""
+    """
+    Describe callback completion, never inferred completion of application work.
+    """
 
     COMPLETED = "completed"
     REJECTED = "rejected"
@@ -112,12 +136,13 @@ class CommandOutcome(str, Enum):
     UNKNOWN = "unknown"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Фиксированные безопасные причины отказа
 #------------------------------------------------------------------------------------------------------------------
 class CommandReason(str, Enum):
-    """Expose fixed reasons without exception text or provider payloads."""
+    """
+    Expose fixed reasons without exception text or provider payloads.
+    """
 
     DENIED = "denied"
     INVALID_ARGUMENTS = "invalid_arguments"
@@ -129,12 +154,19 @@ class CommandReason(str, Enum):
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка ограниченного служебного имени
-#------------------------------------------------------------------------------------------------------------------
-def _identifier(value: str) -> None:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Validate an opaque identifier without allowing arbitrary wire text.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка ограниченного служебного имени
+#------------------------------------------------------------------------------------------------------------------
+def _identifier(
+    value: str,
+    ) -> None:
+
+    """
+    Validate an opaque identifier without allowing arbitrary wire text.
 
     :param value: Value to validate or normalize.
     :type value: str
@@ -146,13 +178,15 @@ def _identifier(value: str) -> None:
         raise ValueError("invalid command identifier")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка формата случайного идентификатора
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка формата случайного идентификатора
 #------------------------------------------------------------------------------------------------------------------
-def _nonce(value: str) -> None:
+def _nonce(
+    value: str,
+    ) -> None:
 
-    """Require the shape of a 128-bit randomly generated identifier.
+    """
+    Require the shape of a 128-bit randomly generated identifier.
 
     :param value: Value to validate or normalize.
     :type value: str
@@ -164,13 +198,15 @@ def _nonce(value: str) -> None:
         raise ValueError("invalid command nonce")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка формата хеша данных
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка формата хеша данных
 #------------------------------------------------------------------------------------------------------------------
-def _digest(value: str) -> None:
+def _digest(
+    value: str,
+    ) -> None:
 
-    """Validate the hexadecimal representation of a SHA-256 digest.
+    """
+    Validate the hexadecimal representation of a SHA-256 digest.
 
     :param value: Value to validate or normalize.
     :type value: str
@@ -182,13 +218,15 @@ def _digest(value: str) -> None:
         raise ValueError("invalid command digest")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Ограничение присланного интервала времени
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Ограничение присланного интервала времени
 #------------------------------------------------------------------------------------------------------------------
-def _seconds(value: float) -> None:
+def _seconds(
+    value: float,
+    ) -> None:
 
-    """Bound all remotely supplied command intervals.
+    """
+    Bound all remotely supplied command intervals.
 
     :param value: Value to validate or normalize.
     :type value: float
@@ -202,12 +240,36 @@ def _seconds(value: float) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Метаданные команды без ссылки на callback
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandCapability:
-    """Advertise application-owned metadata without a callback reference."""
+    """
+    Advertise application-owned metadata without a callback reference.
+
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
+
+    :param required_scope: Scope required to execute the command; does not grant permission.
+    :type required_scope: str
+
+    :param timeout: Maximum command or gateway operation duration, in seconds.
+    :type timeout: float
+
+    :param read_only: Application declaration that the command does not mutate its state.
+    :type read_only: bool
+
+    :param idempotent: Application declaration of idempotence; never enables automatic callback replay.
+    :type idempotent: bool
+
+    :param accepts_arguments: Whether the command provides a local argument validator.
+    :type accepts_arguments: bool
+    """
 
     name: str                           # Точное имя команды в приложении.
     required_scope: str                 # Требуемое право; не выданное разрешение.
@@ -219,9 +281,13 @@ class CommandCapability:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject invalid names, flags and unbounded execution budgets."""
+        """
+        Reject invalid names, flags and unbounded execution budgets.
+        """
 
         if not isinstance(self.name, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.name) is None:
             raise ValueError("invalid command name")
@@ -233,25 +299,42 @@ class CommandCapability:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Регистрация запуска приложения и его команд
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandRegistration:
-    """Register one application session and a finite capability snapshot."""
+    """
+    Register one application session and a finite capability snapshot.
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param session_id: Identifier of the original application session.
+    :type session_id: str
+
+    :param capabilities: Declared commands without callbacks or application state.
+    :type capabilities: tuple[CommandCapability, ...]
+
+    :param command_display_mode: Command reply presentation override, or None to inherit source settings.
+    :type command_display_mode: str | None
+    """
 
     identity: Identity      # Полная принадлежность приложения.
     session_id: str         # Новый случайный ID при каждом запуске клиента.
-    capabilities: tuple[CommandCapability, ...]     # Только метаданные, без функций и состояния приложения.
-    command_display_mode: str | None = None        # full/compact/text; None — оформление источника gateway.
+    capabilities: tuple[CommandCapability, ...]  # Только метаданные, без функций и состояния приложения.
+    command_display_mode: str | None = None  # full/compact/text; None — оформление источника gateway.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy capabilities and reject duplicate names before registration."""
+        """
+        Copy capabilities and reject duplicate names before registration.
+        """
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
@@ -269,13 +352,26 @@ class CommandRegistration:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Связь приложения с текущим запуском hub
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandSession:
-    """Bind one live application session to a specific hub incarnation."""
+    """
+    Bind one live application session to a specific hub incarnation.
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param session_id: Identifier of the original application session.
+    :type session_id: str
+
+    :param hub_epoch: Hub generation identifier fencing prior sessions.
+    :type hub_epoch: str
+
+    :param remaining_ttl: Remaining registration or request lifetime, in seconds.
+    :type remaining_ttl: float
+    """
 
     identity: Identity      # Единственная разрешённая цель.
     session_id: str         # Идентификатор запуска приложения.
@@ -285,9 +381,13 @@ class CommandSession:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate session fencing and a bounded relative lease."""
+        """
+        Validate session fencing and a bounded relative lease.
+        """
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
@@ -297,13 +397,26 @@ class CommandSession:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Полная цель и идентификатор одной команды
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandRef:
-    """Identify one command within its exact target session and hub epoch."""
+    """
+    Identify one command within its exact target session and hub epoch.
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param session_id: Identifier of the original application session.
+    :type session_id: str
+
+    :param hub_epoch: Hub generation identifier fencing prior sessions.
+    :type hub_epoch: str
+
+    :param command_id: Stable identifier preserved across retries of the same command intent.
+    :type command_id: str
+    """
 
     identity: Identity      # Все пять полей целевого приложения.
     session_id: str         # Запуск приложения, которому адресована команда.
@@ -316,9 +429,10 @@ class CommandRef:
     def matches(
         self,
         session: CommandSession,
-    ) -> bool:
+        ) -> bool:
 
-        """Check exact target binding without claiming authentication or liveness.
+        """
+        Check exact target binding without claiming authentication or liveness.
 
         :param session: Current authenticated session metadata; liveness is checked separately.
         :type session: CommandSession
@@ -336,9 +450,13 @@ class CommandRef:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate all identity and correlation fields."""
+        """
+        Validate all identity and correlation fields.
+        """
 
         if type(self.identity) is not Identity:
             raise TypeError("identity must be Identity")
@@ -347,29 +465,57 @@ class CommandRef:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Неизменяемое намерение пользователя
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandRequest:
-    """Carry an immutable intent after future source authentication and authorization."""
+    """
+    Carry an immutable intent after future source authentication and authorization.
+
+    :param ref: Exact application, session, epoch and command reference.
+    :type ref: CommandRef
+
+    :param source_event_id: Stable provider event identifier used to prevent duplicate command admission.
+    :type source_event_id: str
+
+    :param source_id: Stable ordered command-source identifier.
+    :type source_id: str
+
+    :param actor_id: Authenticated command actor or explicitly configured private-topic writer.
+    :type actor_id: str
+
+    :param conversation_id: Provider conversation identifier checked by the command ACL.
+    :type conversation_id: str
+
+    :param name: Stable configured command, principal, service or component name.
+    :type name: str
+
+    :param arguments: Validated named command arguments.
+    :type arguments: Mapping[str, str]
+
+    :param command_display_mode: Command reply presentation override, or None to inherit source settings.
+    :type command_display_mode: str | None
+    """
 
     ref: CommandRef                         # Однозначная цель и идентификатор команды.
     source_event_id: str                    # ID исходного сообщения для устойчивого устранения повторов.
     source_id: str                          # Имя настроенного источника, а не URL провайдера.
     actor_id: str = field(repr=False)       # Проверенный ID пользователя, без display name.
-    conversation_id: str = field(repr=False)    # Проверенный ID беседы или чата.
+    conversation_id: str = field(repr=False)  # Проверенный ID беседы или чата.
     name: str                               # Пользовательское имя зарегистрированного callback.
-    arguments: Mapping[str, str] = field(default_factory=dict, repr=False)      # Проверяемые именованные строки.
-    command_display_mode: str | None = None        # Режим исходной регистрации; сохраняется вместе с командой.
+    arguments: Mapping[str, str] = field(default_factory=dict, repr=False)  # Проверяемые именованные строки.
+    command_display_mode: str | None = None  # Режим исходной регистрации; сохраняется вместе с командой.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка контекста без исполнения и выдачи прав
     #--------------------------------------------------------------------------------------------------------------
-    def context(self) -> CommandContext:
+    def context(
+        self,
+        ) -> CommandContext:
 
-        """Build callback metadata without executing or authorizing the callback.
+        """
+        Build callback metadata without executing or authorizing the callback.
 
         :return: Application context copied from the admitted command.
         :rtype: CommandContext
@@ -383,9 +529,13 @@ class CommandRequest:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy argument data using the existing command context limits."""
+        """
+        Copy argument data using the existing command context limits.
+        """
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
@@ -403,13 +553,23 @@ class CommandRequest:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Запрос единственной попытки исполнения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandClaim:
-    """Ask to start one exact request; retries retain the same claim identifier."""
+    """
+    Ask to start one exact request; retries retain the same claim identifier.
+
+    :param ref: Exact application, session, epoch and command reference.
+    :type ref: CommandRef
+
+    :param claim_id: Unique identifier of the single execution claim.
+    :type claim_id: str
+
+    :param request_digest: Digest of the complete authorized command request.
+    :type request_digest: str
+    """
 
     ref: CommandRef         # Точная команда в заданной сессии.
     claim_id: str           # Случайный ID единственной попытки исполнения.
@@ -418,9 +578,13 @@ class CommandClaim:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject malformed claims without accepting them as execution authority."""
+        """
+        Reject malformed claims without accepting them as execution authority.
+        """
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
@@ -429,13 +593,26 @@ class CommandClaim:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Разрешение на начало конкретной попытки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandGrant:
-    """Represent a start authorization after durable hub admission, never by construction alone."""
+    """
+    Represent a start authorization after durable hub admission, never by construction alone.
+
+    :param request: Exact command request bound to the original session.
+    :type request: CommandRequest
+
+    :param claim_id: Unique identifier of the single execution claim.
+    :type claim_id: str
+
+    :param remaining_ttl: Remaining registration or request lifetime, in seconds.
+    :type remaining_ttl: float
+
+    :param execution_timeout: Callback wait limit in seconds; does not forcibly stop a running thread.
+    :type execution_timeout: float
+    """
 
     request: CommandRequest     # Точный запрос, связанный с выданным разрешением.
     claim_id: str               # ID попытки из CommandClaim; при повторе не меняется.
@@ -448,9 +625,10 @@ class CommandGrant:
     def matches(
         self,
         claim: CommandClaim,
-    ) -> bool:
+        ) -> bool:
 
-        """Check request correlation including its immutable argument digest.
+        """
+        Check request correlation including its immutable argument digest.
 
         :param claim: Expected claim for one exact request.
         :type claim: CommandClaim
@@ -468,9 +646,13 @@ class CommandGrant:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Keep execution inside both the command lifetime and finite timeout."""
+        """
+        Keep execution inside both the command lifetime and finite timeout.
+        """
 
         if type(self.request) is not CommandRequest:
             raise TypeError("request must be CommandRequest")
@@ -482,26 +664,46 @@ class CommandGrant:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Завершение обработчика или неизвестный исход
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandResult:
-    """Record callback outcome, not an inferred business-process state."""
+    """
+    Record callback outcome, not an inferred business-process state.
+
+    :param ref: Exact application, session, epoch and command reference.
+    :type ref: CommandRef
+
+    :param claim_id: Unique identifier of the single execution claim.
+    :type claim_id: str | None
+
+    :param outcome: Durable command execution outcome.
+    :type outcome: CommandOutcome
+
+    :param text: Application-defined command reply bounded to 4096 UTF-8 bytes.
+    :type text: str | None
+
+    :param reason: Fixed decision or failure reason without private exception text.
+    :type reason: CommandReason | None
+    """
 
     ref: CommandRef                         # Команда и целевая сессия.
     claim_id: str | None                    # ID попытки; None допустим только до начала исполнения.
     outcome: CommandOutcome                 # Завершение callback, отказ, истечение или неизвестный исход.
-    text: str | None = field(default=None, repr=False)      # Явный ответ приложения, максимум 4096 байт UTF-8.
+    text: str | None = field(default=None, repr=False)  # Явный ответ приложения, максимум 4096 байт UTF-8.
     reason: CommandReason | None = None     # Фиксированная причина; исключения и traceback не передаются.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate outcome semantics and a bounded application-owned response."""
+        """
+        Validate outcome semantics and a bounded application-owned response.
+        """
 
         if type(self.ref) is not CommandRef or type(self.outcome) is not CommandOutcome:
             raise TypeError("invalid command result type")
@@ -528,13 +730,23 @@ class CommandResult:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подтверждение сохранения точного результата
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandReceipt:
-    """Acknowledge durable storage of an exact result without authorizing another call."""
+    """
+    Acknowledge durable storage of an exact result without authorizing another call.
+
+    :param ref: Exact application, session, epoch and command reference.
+    :type ref: CommandRef
+
+    :param claim_id: Unique identifier of the single execution claim.
+    :type claim_id: str | None
+
+    :param result_digest: Digest of the complete persisted command result.
+    :type result_digest: str
+    """
 
     ref: CommandRef         # Команда, для которой сохранён результат.
     claim_id: str | None    # ID попытки или None для отказа до выдачи разрешения.
@@ -546,9 +758,10 @@ class CommandReceipt:
     def matches(
         self,
         result: CommandResult,
-    ) -> bool:
+        ) -> bool:
 
-        """Check acknowledgment of the exact result, not just its command identifier.
+        """
+        Check acknowledgment of the exact result, not just its command identifier.
 
         :param result: Correlated callback result.
         :type result: CommandResult
@@ -566,9 +779,13 @@ class CommandReceipt:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate receipt correlation fields."""
+        """
+        Validate receipt correlation fields.
+        """
 
         if type(self.ref) is not CommandRef:
             raise TypeError("ref must be CommandRef")
@@ -578,6 +795,10 @@ class CommandReceipt:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
 
 CommandMessage: TypeAlias = (CommandRegistration | CommandSession | CommandRequest | CommandClaim
                             | CommandGrant | CommandResult | CommandReceipt)
@@ -592,13 +813,22 @@ _NESTED = {
     CommandResult: {"ref": CommandRef}, CommandReceipt: {"ref": CommandRef},
 }
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка метаданных без вызова обработчиков
 #------------------------------------------------------------------------------------------------------------------
-def describe_commands(registry: CommandRegistry) -> tuple[CommandCapability, ...]:
+def describe_commands(
+    registry: CommandRegistry,
+    ) -> tuple[CommandCapability, ...]:
 
-    """Export finite command metadata without serializing or invoking callbacks.
+    """
+    Export finite command metadata without serializing or invoking callbacks.
 
     :param registry: Application-owned immutable command registry.
     :type registry: CommandRegistry
@@ -616,7 +846,6 @@ def describe_commands(registry: CommandRegistry) -> tuple[CommandCapability, ...
         accepts_arguments=spec.validate_arguments is not None) for spec in (registry[name] for name in registry))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка результата без пользовательского преобразования в строку
 #------------------------------------------------------------------------------------------------------------------
@@ -624,9 +853,10 @@ def callback_result(
     ref: CommandRef,
     claim_id: str,
     value: object,
-) -> CommandResult:
+    ) -> CommandResult:
 
-    """Normalize an already returned value without calling user-defined string conversion.
+    """
+    Normalize an already returned value without calling user-defined string conversion.
 
     :param ref: Exact command and target-session reference.
     :type ref: CommandRef
@@ -641,6 +871,11 @@ def callback_result(
     :rtype: CommandResult
     """
 
+    # ref — точная ссылка на команду, её исходную сессию и поколение сервера.
+    # claim_id — идентификатор исходного разрешения на исполнение.
+    # value — значение, проверяемое по контракту операции.
+
+
     # Пользовательский __str__ не вызывается: он может менять состояние или выдавать секреты.
     # Неверный/слишком большой ответ после callback не означает, что действие не произошло.
     if value is None or type(value) is str:
@@ -652,13 +887,15 @@ def callback_result(
                          reason=CommandReason.INVALID_RESULT)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Преобразование только разрешённых моделей в данные JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Преобразование только разрешённых моделей в данные JSON
 #------------------------------------------------------------------------------------------------------------------
-def _plain(value: object) -> object:
+def _plain(
+    value: object,
+    ) -> object:
 
-    """Convert only explicitly allowed protocol types to JSON data.
+    """
+    Convert only explicitly allowed protocol types to JSON data.
 
     :param value: Value to validate or normalize.
     :type value: object
@@ -683,13 +920,15 @@ def _plain(value: object) -> object:
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Выбор схемы без изменения прежних сообщений и их хешей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Выбор схемы без изменения прежних сообщений и их хешей
 #------------------------------------------------------------------------------------------------------------------
-def _schema_version(message: CommandMessage) -> int:
+def _schema_version(
+    message: CommandMessage,
+    ) -> int:
 
-    """Select the smallest exact schema needed by the immutable message.
+    """
+    Select the smallest exact schema needed by the immutable message.
 
     :param message: Validated command protocol model.
     :type message: CommandMessage
@@ -698,19 +937,24 @@ def _schema_version(message: CommandMessage) -> int:
     :rtype: int
     """
 
+    # message — исходное сообщение; в диагностику попадает только разрешённая структура.
+
+
     # В grant вложен тот же request; result/receipt остаются в прежней схеме.
     target = message.request if type(message) is CommandGrant else message
     return 2 if (type(target) in (CommandRegistration, CommandRequest)
                  and target.command_display_mode is not None) else 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Кодирование ограниченного сообщения заданной версии
 #------------------------------------------------------------------------------------------------------------------
-def encode_command(message: CommandMessage) -> bytes:
+def encode_command(
+    message: CommandMessage,
+    ) -> bytes:
 
-    """Encode one exact versioned envelope with a fixed UTF-8 byte limit.
+    """
+    Encode one exact versioned envelope with a fixed UTF-8 byte limit.
 
     :param message: Validated command protocol message.
     :type message: CommandMessage
@@ -733,13 +977,15 @@ def encode_command(message: CommandMessage) -> bytes:
         raise ValueError("invalid command message") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+def _pairs(
+    pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
 
-    """Reject repeated JSON keys at every nesting level.
+    """
+    Reject repeated JSON keys at every nesting level.
 
     :param pairs: JSON object key/value pairs.
     :type pairs: list[tuple[str, object]]
@@ -758,13 +1004,15 @@ def _pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Запрет нестандартных чисел JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Запрет нестандартных чисел JSON
 #------------------------------------------------------------------------------------------------------------------
-def _constant(value: str) -> None:
+def _constant(
+    value: str,
+    ) -> None:
 
-    """Reject nonstandard JSON numeric constants.
+    """
+    Reject nonstandard JSON numeric constants.
 
     :param value: Value to validate or normalize.
     :type value: str
@@ -775,17 +1023,17 @@ def _constant(value: str) -> None:
     raise ValueError("invalid command JSON number")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Разбор точного состава полей по закрытому перечню моделей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Разбор точного состава полей по закрытому перечню моделей
 #------------------------------------------------------------------------------------------------------------------
 def _model(
     model: type,
     value: object,
     schema_version: int = 1,
-) -> object:
+    ) -> object:
 
-    """Decode exact field sets using a closed model registry.
+    """
+    Decode exact field sets using a closed model registry.
 
     :param model: Allowed model type from the closed registry.
     :type model: type
@@ -799,6 +1047,9 @@ def _model(
     :return: An instance of the requested validated message model.
     :rtype: object
     """
+
+    # schema_version — версия проверяемого формата данных.
+
 
     # model — ожидаемый класс сообщения протокола.
     # value — словарь полей входящего сообщения.
@@ -828,13 +1079,15 @@ def _model(
     return model(**payload)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение сообщения без раскрытия ошибочного содержимого
 #------------------------------------------------------------------------------------------------------------------
-def decode_command(data: bytes) -> CommandMessage:
+def decode_command(
+    data: bytes,
+    ) -> CommandMessage:
 
-    """Decode a bounded closed schema without exposing malformed input in errors.
+    """
+    Decode a bounded closed schema without exposing malformed input in errors.
 
     :param data: Bounded UTF-8 JSON bytes.
     :type data: bytes
@@ -863,13 +1116,15 @@ def decode_command(data: bytes) -> CommandMessage:
         raise ValueError("invalid command message") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Хеш канонических данных для проверки связи сообщений
 #------------------------------------------------------------------------------------------------------------------
-def message_digest(message: CommandMessage) -> str:
+def message_digest(
+    message: CommandMessage,
+    ) -> str:
 
-    """Bind correlation to canonical data; this hash is not an authentication signature.
+    """
+    Bind correlation to canonical data; this hash is not an authentication signature.
 
     :param message: Validated command protocol message.
     :type message: CommandMessage
@@ -883,8 +1138,6 @@ def message_digest(message: CommandMessage) -> str:
     return hashlib.sha256(encode_command(message)).hexdigest()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

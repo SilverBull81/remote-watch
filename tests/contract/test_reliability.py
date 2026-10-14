@@ -1,55 +1,84 @@
 ﻿# Проверки повторов, ограничений работы и асинхронного управления runtime без сети.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> VirtualClock: Тестовые часы с мгновенным продвижением времени.
+# -> VirtualClock: Тестовые часы с мгновенным продвижением времени
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> monotonic(): Чтение монотонного времени доставки.
-#    -> sleep(): Отменяемое ожидание перед повторной попыткой.
+#    -> monotonic(): Чтение монотонного времени доставки
+#    -> sleep(): Отменяемое ожидание перед повторной попыткой
 #
-# -> PausedClock: Управляемая пауза между попытками для проверки остановки.
+# -> PausedClock: Управляемая пауза между попытками для проверки остановки
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> sleep(): Отменяемое ожидание перед повторной попыткой.
+#    -> sleep(): Отменяемое ожидание перед повторной попыткой
 #
-# -> ScriptedChannel: Тестовый канал с заданной последовательностью ответов.
+# -> ScriptedChannel: Тестовый канал с заданной последовательностью ответов
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка тестового канала и барьера запуска.
-#    -> send(): Возврат очередного ответа или ошибки тестового сервиса.
-#    -> close(): Фиксация закрытия тестового канала.
+#    -> open(): Подготовка тестового канала и барьера запуска
+#    -> send(): Возврат очередного ответа или ошибки тестового сервиса
+#    -> close(): Фиксация закрытия тестового канала
+#
+# Функции:
+# -> make_runtime(): Создание runtime с подменяемым временем и случайными задержками
+#
+# -> finish_deliveries(): Ожидание завершения принятых доставок через тестовый барьер
+#    Вложенные объявления:
+#    -> barrier(): Ожидание маршрутизации и освобождения очередей получателей
 #
 # Тесты:
-# -> make_runtime(): Создание runtime с подменяемым временем и случайными задержками.
-# -> finish_deliveries(): Ожидание завершения принятых доставок через тестовый барьер.
+# -> test_retry_ids_and_full_jitter(): Сохранение идентификаторов и увеличение номера попытки
 #
-# Тесты:
-# -> test_retry_ids_and_full_jitter(): Сохранение идентификаторов и увеличение номера попытки.
-# -> test_terminal_results(): Различение окончательного отказа и исчерпания попыток.
-# -> test_retry_after_and_expiry(): Нижняя граница retry-after и общий срок доставки.
-# -> test_adapter_error_can_retry(): Повторы после неизвестного исхода и нарушения контракта адаптера.
-# -> test_retry_keeps_capacity_and_neighbor_progress(): Сохранение слота при ожидании и независимость получателей.
-# -> test_async_context_and_cancelled_start(): Отмена асинхронного запуска с последующим закрытием.
-# -> test_retry_order_and_scheduler_error(): Порядок событий и изоляция ошибки генератора задержек.
-# -> test_blocking_adapter_exceeds_stop_budget(): Явный отказ остановки при заблокированном чужим кодом loop.
-# -> test_atexit_cleanup(): Закрытие runtime при завершении отдельного процесса.
-# -> test_cancelled_async_stop(): Завершение остановки при отмене ожидающего приложения.
-# -> test_retry_burst_remains_bounded(): Ограничение задач и доставок при одновременных повторах.
-# -> test_astop_from_channel(): Асинхронный запрос остановки из рабочего канала.
+# -> test_terminal_results(): Различение окончательного отказа и исчерпания попыток
+#
+# -> test_retry_after_and_expiry(): Нижняя граница retry-after и общий срок доставки
+#
+# -> test_adapter_error_can_retry(): Повторы после неизвестного исхода и нарушения контракта адаптера
+#
+# -> test_retry_keeps_capacity_and_neighbor_progress(): Сохранение слота при ожидании и независимость получателей
+#
+# -> test_async_context_and_cancelled_start(): Отмена асинхронного запуска с последующим закрытием
+#    Вложенные объявления:
+#    -> exercise(): Асинхронный тестовый сценарий
+#
+# -> test_retry_order_and_scheduler_error(): Порядок событий и изоляция ошибки генератора задержек
+#
+# -> test_blocking_adapter_exceeds_stop_budget(): Явный отказ остановки при заблокированном чужим кодом loop
+#    Вложенные объявления:
+#    -> blocked_send(): Контролируемое нарушение асинхронного контракта адаптера
+#
+# -> test_atexit_cleanup(): Закрытие runtime при завершении отдельного процесса
+#
+# -> test_cancelled_async_stop(): Завершение остановки при отмене ожидающего приложения
+#    Вложенные объявления:
+#    -> exercise(): Асинхронный тестовый сценарий
+#       Вложенные объявления:
+#       -> wait_stopping(): Ожидание закрытия приёма без блокировки loop
+#
+# -> test_retry_burst_remains_bounded(): Ограничение задач и доставок при одновременных повторах
+#    Вложенные объявления:
+#    -> inspect_bound(): Проверка числа задач и незавершённых доставок
+#
+# -> test_astop_from_channel(): Асинхронный запрос остановки из рабочего канала
+#    Вложенные объявления:
+#    -> exercise(): Асинхронный тестовый сценарий
+#       Вложенные объявления:
+#       -> stop_and_send(): Завершение активной отправки после запроса остановки
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -79,23 +108,31 @@ from remote_watch import (
     WatcherConfig,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Тестовые часы с мгновенным продвижением времени
 #------------------------------------------------------------------------------------------------------------------
 class VirtualClock:
-    """Advance delivery time without real backoff waits."""
+    """
+    Advance delivery time without real backoff waits.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Initialize a deterministic time source."""
+        """
+        Initialize a deterministic time source.
+        """
 
         self.now = 10000.0
         self.sleeps: list[float] = []
@@ -104,9 +141,12 @@ class VirtualClock:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение монотонного времени доставки
     #--------------------------------------------------------------------------------------------------------------
-    def monotonic(self) -> float:
+    def monotonic(
+        self,
+        ) -> float:
 
-        """Read virtual delivery time.
+        """
+        Read virtual delivery time.
 
         :return: Virtual time in seconds.
         :rtype: float
@@ -121,9 +161,10 @@ class VirtualClock:
     async def sleep(
         self,
         delay: float,
-    ) -> None:
+        ) -> None:
 
-        """Advance time and allow other channel tasks to run.
+        """
+        Advance time and allow other channel tasks to run.
 
         :param delay: Requested delay.
         :type delay: float
@@ -137,19 +178,24 @@ class VirtualClock:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Управляемая пауза между попытками для проверки остановки
 #------------------------------------------------------------------------------------------------------------------
 class PausedClock(VirtualClock):
-    """Hold a retry wait until runtime cancellation for bounds and shutdown tests."""
+    """
+    Hold a retry wait until runtime cancellation for bounds and shutdown tests.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Prepare a barrier identifying the retry-wait phase."""
+        """
+        Prepare a barrier identifying the retry-wait phase.
+        """
 
         super().__init__()
         self.waiting = threading.Event()
@@ -161,9 +207,10 @@ class PausedClock(VirtualClock):
     async def sleep(
         self,
         delay: float,
-    ) -> None:
+        ) -> None:
 
-        """Hold this destination without blocking the worker loop.
+        """
+        Hold this destination without blocking the worker loop.
 
         :param delay: Scheduled retry delay.
         :type delay: float
@@ -177,12 +224,13 @@ class PausedClock(VirtualClock):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Тестовый канал с заданной последовательностью ответов
 #------------------------------------------------------------------------------------------------------------------
 class ScriptedChannel:
-    """Return a predefined sequence of results without network activity."""
+    """
+    Return a predefined sequence of results without network activity.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -190,9 +238,10 @@ class ScriptedChannel:
     def __init__(
         self,
         results: tuple[object, ...] = (),
-    ) -> None:
+        ) -> None:
 
-        """Prepare scripted results and synchronization barriers.
+        """
+        Prepare scripted results and synchronization barriers.
 
         :param results: Results or exceptions consumed one per attempt.
         :type results: tuple[object, ...]
@@ -214,9 +263,13 @@ class ScriptedChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка тестового канала и барьера запуска
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Prepare a loop-owned gate and optionally block initialization."""
+        """
+        Prepare a loop-owned gate and optionally block initialization.
+        """
 
         self.loop = asyncio.get_running_loop()
         self.gate = asyncio.Event()
@@ -232,9 +285,10 @@ class ScriptedChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Return the next scripted result or raise the next scripted exception.
+        """
+        Return the next scripted result or raise the next scripted exception.
 
         :param delivery: Current delivery attempt.
         :type delivery: Delivery
@@ -264,9 +318,13 @@ class ScriptedChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Фиксация закрытия тестового канала
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record successful channel cleanup."""
+        """
+        Record successful channel cleanup.
+        """
 
         self.closed = True
     #--------------------------------------------------------------------------------------------------------------
@@ -276,7 +334,6 @@ class ScriptedChannel:
 #******************************************************************************************************************
 # ФУНКЦИИ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Создание runtime с подменяемым временем и случайными задержками
@@ -289,9 +346,10 @@ def make_runtime(
     policy: RetryPolicy | None = None,
     capacity: int = 16,
     random_source: Callable[[], float] = lambda: 1.0,
-) -> tuple[NotificationRuntime, logging.Logger]:
+    ) -> tuple[NotificationRuntime, logging.Logger]:
 
-    """Build an isolated runtime with injectable retry time and randomness.
+    """
+    Build an isolated runtime with injectable retry time and randomness.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -334,15 +392,15 @@ def make_runtime(
     return runtime, logger
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ожидание завершения принятых доставок через тестовый барьер
 #------------------------------------------------------------------------------------------------------------------
 def finish_deliveries(
     runtime: NotificationRuntime,
-) -> None:
+    ) -> None:
 
-    """Wait for admitted deliveries through a finite test barrier without stopping runtime.
+    """
+    Wait for admitted deliveries through a finite test barrier without stopping runtime.
 
     :param runtime: Running runtime with cooperative fake channels.
     :type runtime: NotificationRuntime
@@ -355,7 +413,9 @@ def finish_deliveries(
     #--------------------------------------------------------------------------------------------------------------
     async def barrier() -> None:
 
-        """Wait until routing and all delivery queues have completed."""
+        """
+        Wait until routing and all delivery queues have completed.
+        """
 
         while True:
             with runtime._lock:
@@ -375,15 +435,15 @@ def finish_deliveries(
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение идентификаторов и увеличение номера попытки
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_ids_and_full_jitter(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Keep event and delivery identity stable while attempts advance and clocks are virtual.
+    """
+    Keep event and delivery identity stable while attempts advance and clocks are virtual.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -409,7 +469,6 @@ def test_retry_ids_and_full_jitter(
     assert runtime.stats("0").admitted == 0
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Различение окончательного отказа и исчерпания попыток
 #------------------------------------------------------------------------------------------------------------------
@@ -418,9 +477,10 @@ def test_retry_ids_and_full_jitter(
 def test_terminal_results(
     identity: Identity,
     failure: DeliveryStatus,
-) -> None:
+    ) -> None:
 
-    """Distinguish permanent failure from exhaustion of bounded retryable outcomes.
+    """
+    Distinguish permanent failure from exhaustion of bounded retryable outcomes.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -445,7 +505,6 @@ def test_terminal_results(
     assert runtime.stats().unknown_attempts == (3 if failure is DeliveryStatus.UNKNOWN else 0)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Нижняя граница retry-after и общий срок доставки
 #------------------------------------------------------------------------------------------------------------------
@@ -455,9 +514,10 @@ def test_retry_after_and_expiry(
     retry_after: float,
     expected_calls: int,
     expected_sleeps: list[float],
-) -> None:
+    ) -> None:
 
-    """Honor retry-after without scheduling an attempt at or beyond expiry.
+    """
+    Honor retry-after without scheduling an attempt at or beyond expiry.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -486,7 +546,6 @@ def test_retry_after_and_expiry(
     assert runtime.stats().expired == int(expected_calls == 1)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Повторы после неизвестного исхода и нарушения контракта адаптера
 #------------------------------------------------------------------------------------------------------------------
@@ -494,9 +553,10 @@ def test_retry_after_and_expiry(
 def test_adapter_error_can_retry(
     identity: Identity,
     failure: object,
-) -> None:
+    ) -> None:
 
-    """Treat exceptions, spontaneous cancellation and malformed replies as retryable unknowns.
+    """
+    Treat exceptions, spontaneous cancellation and malformed replies as retryable unknowns.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -518,15 +578,15 @@ def test_adapter_error_can_retry(
     assert runtime.stats().accepted == runtime.stats().retries == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение слота при ожидании и независимость получателей
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_keeps_capacity_and_neighbor_progress(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Retain an outstanding slot during retry wait without delaying a healthy destination.
+    """
+    Retain an outstanding slot during retry wait without delaying a healthy destination.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -554,15 +614,15 @@ def test_retry_keeps_capacity_and_neighbor_progress(
     assert runtime.stats().shutdown_unknown == 0
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отмена асинхронного запуска с последующим закрытием
 #------------------------------------------------------------------------------------------------------------------
 def test_async_context_and_cancelled_start(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Keep the application loop responsive and clean up a repeatedly cancelled start.
+    """
+    Keep the application loop responsive and clean up a repeatedly cancelled start.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -575,7 +635,9 @@ def test_async_context_and_cancelled_start(
     #--------------------------------------------------------------------------------------------------------------
     async def exercise() -> None:
 
-        """Exercise async context ownership and cancellation with deterministic barriers."""
+        """
+        Exercise async context ownership and cancellation with deterministic barriers.
+        """
 
         channel = ScriptedChannel()
         runtime, logger = make_runtime(identity, (channel,))
@@ -606,15 +668,15 @@ def test_async_context_and_cancelled_start(
     asyncio.run(exercise())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Порядок событий и изоляция ошибки генератора задержек
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_order_and_scheduler_error(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Keep retries before the next queued event and recover from a bad random source.
+    """
+    Keep retries before the next queued event and recover from a bad random source.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -642,15 +704,15 @@ def test_retry_order_and_scheduler_error(
     assert runtime.stats().scheduler_errors == 1 and runtime.stats().accepted == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явный отказ остановки при заблокированном чужим кодом loop
 #------------------------------------------------------------------------------------------------------------------
 def test_blocking_adapter_exceeds_stop_budget(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Report FAILED when a foreign adapter blocks the loop instead of claiming successful stop.
+    """
+    Report FAILED when a foreign adapter blocks the loop instead of claiming successful stop.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -666,9 +728,10 @@ def test_blocking_adapter_exceeds_stop_budget(
     #--------------------------------------------------------------------------------------------------------------
     async def blocked_send(
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Deliberately block the worker to verify the caller's bounded stop wait.
+        """
+        Deliberately block the worker to verify the caller's bounded stop wait.
 
         :param delivery: Current attempt.
         :type delivery: Delivery
@@ -703,15 +766,15 @@ def test_blocking_adapter_exceeds_stop_budget(
     assert not runtime._thread.is_alive()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Закрытие runtime при завершении отдельного процесса
 #------------------------------------------------------------------------------------------------------------------
 def test_atexit_cleanup(
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Close an omitted explicit-stop runtime at normal process exit without network activity.
+    """
+    Close an omitted explicit-stop runtime at normal process exit without network activity.
 
     :param tmp_path: Temporary directory for a child-process cleanup marker.
     :type tmp_path: pathlib.Path
@@ -738,15 +801,15 @@ runtime.start()
     assert marker.read_text() == "closed"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Завершение остановки при отмене ожидающего приложения
 #------------------------------------------------------------------------------------------------------------------
 def test_cancelled_async_stop(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Finish owned shutdown before propagating cancellation of astop.
+    """
+    Finish owned shutdown before propagating cancellation of astop.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -759,7 +822,9 @@ def test_cancelled_async_stop(
     #--------------------------------------------------------------------------------------------------------------
     async def exercise() -> None:
 
-        """Cancel the waiting caller while the background stop continues."""
+        """
+        Cancel the waiting caller while the background stop continues.
+        """
 
         channel = ScriptedChannel()
         channel.block_send = True
@@ -774,7 +839,9 @@ def test_cancelled_async_stop(
         #----------------------------------------------------------------------------------------------------------
         async def wait_stopping() -> None:
 
-            """Wait for the offloaded stop to close admission."""
+            """
+            Wait for the offloaded stop to close admission.
+            """
 
             while runtime.state is RuntimeState.RUNNING:
                 await asyncio.sleep(0)
@@ -793,15 +860,15 @@ def test_cancelled_async_stop(
     asyncio.run(exercise())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение задач и доставок при одновременных повторах
 #------------------------------------------------------------------------------------------------------------------
 def test_retry_burst_remains_bounded(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Bound simultaneous retry waits, retained deliveries and task count during a burst.
+    """
+    Bound simultaneous retry waits, retained deliveries and task count during a burst.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -817,7 +884,8 @@ def test_retry_burst_remains_bounded(
     #--------------------------------------------------------------------------------------------------------------
     async def inspect_bound() -> tuple[int, tuple[int, ...]]:
 
-        """Observe the bound after the admitted burst has been routed.
+        """
+        Observe the bound after the admitted burst has been routed.
 
         :return: Task count and outstanding deliveries by destination.
         :rtype: tuple[int, tuple[int, ...]]
@@ -852,15 +920,15 @@ def test_retry_burst_remains_bounded(
     assert runtime.stats().shutdown_discarded_deliveries == len(channels)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Асинхронный запрос остановки из рабочего канала
 #------------------------------------------------------------------------------------------------------------------
 def test_astop_from_channel(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Request async shutdown from a channel without offloading a self-join.
+    """
+    Request async shutdown from a channel without offloading a self-join.
 
     :param identity: Application identity fixture.
     :type identity: Identity
@@ -873,7 +941,9 @@ def test_astop_from_channel(
     #--------------------------------------------------------------------------------------------------------------
     async def exercise() -> None:
 
-        """Run a channel-owned stop request and observe successful cleanup."""
+        """
+        Run a channel-owned stop request and observe successful cleanup.
+        """
 
         channel = ScriptedChannel()
         runtime, logger = make_runtime(identity, (channel,))
@@ -884,9 +954,10 @@ def test_astop_from_channel(
         #----------------------------------------------------------------------------------------------------------
         async def stop_and_send(
             delivery: Delivery,
-        ) -> DeliveryResult:
+            ) -> DeliveryResult:
 
-            """Request stop and return the active attempt result.
+            """
+            Request stop and return the active attempt result.
 
             :param delivery: Active attempt.
             :type delivery: Delivery
@@ -913,8 +984,6 @@ def test_astop_from_channel(
     asyncio.run(exercise())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

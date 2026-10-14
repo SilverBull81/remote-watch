@@ -1,24 +1,25 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandGateway: Владелец сервера, времени и всех источников команд.
+# -> CommandGateway: Владелец сервера, времени и всех источников команд
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Открытие ресурсов до начала приёма команд.
-#    -> stats(): Чтение счётчиков и состояния источника.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> start(): Открытие ресурсов до начала приёма команд
+#    -> stats(): Чтение счётчиков и состояния источника
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -40,13 +41,20 @@ from remote_watch.commands.time import TimeSource, TrustedClock
 from remote_watch.gateway.command_config import CommandGatewayConfig
 from remote_watch.gateway.command_server import CommandHubServer
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Владелец сервера, времени и всех источников команд
 #------------------------------------------------------------------------------------------------------------------
 class CommandGateway:
-    """Own the command listener, trusted time, durable journals and explicitly enabled provider readers."""
-
+    """
+    Own the command listener, trusted time, durable journals and explicitly enabled provider readers.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -56,9 +64,10 @@ class CommandGateway:
         config: CommandGatewayConfig,
         *,
         time_source: TimeSource | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Compose resources lazily while retaining command-only authorization boundaries.
+        """
+        Compose resources lazily while retaining command-only authorization boundaries.
 
         :param config: Explicit credentials, access rules and finite limits.
         :type config: CommandGatewayConfig
@@ -91,7 +100,6 @@ class CommandGateway:
                 command_display_mode=binding.command_display_mode))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов до начала приёма команд
     #--------------------------------------------------------------------------------------------------------------
@@ -102,9 +110,10 @@ class CommandGateway:
         port: int = 8766,
         ssl_context: ssl.SSLContext | None = None,
         allow_loopback_http: bool = False,
-    ) -> None:
+        ) -> None:
 
-        """Acquire deployment ownership and validate every reader before activating any command source.
+        """
+        Acquire deployment ownership and validate every reader before activating any command source.
 
         :param host: Explicit listener address.
         :type host: str
@@ -141,13 +150,15 @@ class CommandGateway:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение счётчиков и состояния источника
     #--------------------------------------------------------------------------------------------------------------
-    def stats(self) -> dict[str, Any]:
+    def stats(
+        self,
+        ) -> dict[str, Any]:
 
-        """Return aggregate counters and fixed error codes without source names or identities.
+        """
+        Return aggregate counters and fixed error codes without source names or identities.
 
         :return: Local readiness, fixed failure reasons and aggregate source counters.
         :rtype: dict[str, Any]
@@ -174,13 +185,16 @@ class CommandGateway:
                              "sources": [source.journal_status for source in self.sources]}}
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Stop provider consumption before closing the hub and releasing process ownership."""
+        """
+        Stop provider consumption before closing the hub and releasing process ownership.
+        """
 
         if self._closed:
             return
@@ -199,7 +213,6 @@ class CommandGateway:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

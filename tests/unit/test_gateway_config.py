@@ -1,21 +1,26 @@
 ﻿# Проверки закрытых разрешений и ограничений gateway без сетевых зависимостей.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> configuration(): Конфигурация без запуска фабрики канала
 #
 # Тесты:
-# -> configuration(): Конфигурация без запуска фабрики канала.
-# -> test_config_bounds(): Отклонение неверных ограничений до запуска.
-# -> test_config_grants(): Запрет каскадов gateway и неоднозначных прав.
-# -> test_config_copy(): Отделение настроек от изменяемых списков приложения.
+# -> test_config_bounds(): Отклонение неверных ограничений до запуска
+#
+# -> test_config_grants(): Запрет каскадов gateway и неоднозначных прав
+#
+# -> test_config_copy(): Отделение настроек от изменяемых списков приложения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -31,13 +36,22 @@ from remote_watch import (
 )
 from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конфигурация без запуска фабрики канала
 #------------------------------------------------------------------------------------------------------------------
-def configuration(identity: Identity) -> NotificationGatewayServerConfig:
+def configuration(
+    identity: Identity,
+    ) -> NotificationGatewayServerConfig:
 
-    """Create settings whose factory must never run during validation.
+    """
+    Create settings whose factory must never run during validation.
 
     :param identity: Exact synthetic application identity.
     :type identity: Identity
@@ -56,6 +70,10 @@ def configuration(identity: Identity) -> NotificationGatewayServerConfig:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение неверных ограничений до запуска
 #------------------------------------------------------------------------------------------------------------------
@@ -68,9 +86,10 @@ def configuration(identity: Identity) -> NotificationGatewayServerConfig:
 def test_config_bounds(
     identity: Identity,
     changes: dict[str, Any],
-) -> None:
+    ) -> None:
 
-    """Reject invalid or unbounded server settings before resources exist.
+    """
+    Reject invalid or unbounded server settings before resources exist.
 
     :param identity: Exact synthetic application identity.
     :type identity: Identity
@@ -86,7 +105,6 @@ def test_config_bounds(
         replace(configuration(identity), **changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет каскадов gateway и неоднозначных прав
 #------------------------------------------------------------------------------------------------------------------
@@ -95,9 +113,10 @@ def test_config_bounds(
 def test_config_grants(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous credentials, unauthorized aliases and gateway cascades.
+    """
+    Reject ambiguous credentials, unauthorized aliases and gateway cascades.
 
     :param identity: Exact synthetic application identity.
     :type identity: Identity
@@ -133,13 +152,15 @@ def test_config_grants(
             replace(principal, capacity=257)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отделение настроек от изменяемых списков приложения
 #------------------------------------------------------------------------------------------------------------------
-def test_config_copy(identity: Identity) -> None:
+def test_config_copy(
+    identity: Identity,
+    ) -> None:
 
-    """Detach permissions and destinations from caller-owned mutable lists.
+    """
+    Detach permissions and destinations from caller-owned mutable lists.
 
     :param identity: Exact synthetic application identity.
     :type identity: Identity
@@ -156,8 +177,6 @@ def test_config_copy(identity: Identity) -> None:
     assert len(config.destinations) == len(config.principals) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

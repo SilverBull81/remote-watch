@@ -1,19 +1,29 @@
 ﻿# Проверка настоящего HTTP-клиента на локальном сервере без внешней сети.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер.
-# -> test_ntfy_wire_limits(): Размер фактически отправленного JSON и текста ntfy.
+# -> test_local_http(): Настоящий HTTP-клиент и управляемый локальный сервер
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#       Вложенные объявления:
+#       -> respond(): Ответ локального сервера в выбранном режиме
+#
+# -> test_ntfy_wire_limits(): Размер фактически отправленного JSON и текста ntfy
+#    Вложенные объявления:
+#    -> scenario(): Проверка настоящих байтов запроса на локальном сервере
+#       Вложенные объявления:
+#       -> publish(): Воспроизведение ограничений JSON publish API
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -33,13 +43,15 @@ from remote_watch.adapters._common import render
 from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 pytest.importorskip("aiohttp")
 
 
 #******************************************************************************************************************
 # ТЕСТЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий HTTP-клиент и управляемый локальный сервер
@@ -52,9 +64,10 @@ def test_local_http(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Verify the real session, cancellation, logging and absence of hidden POST retries.
+    """
+    Verify the real session, cancellation, logging and absence of hidden POST retries.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -86,7 +99,9 @@ def test_local_http(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Serve a controlled response entirely on the local loopback interface."""
+        """
+        Serve a controlled response entirely on the local loopback interface.
+        """
 
         received = asyncio.Event()
         release = asyncio.Event()
@@ -99,9 +114,10 @@ def test_local_http(
         async def respond(
             reader: asyncio.StreamReader,
             writer: asyncio.StreamWriter,
-        ) -> None:
+            ) -> None:
 
-            """Consume one POST and reproduce a selected server behavior.
+            """
+            Consume one POST and reproduce a selected server behavior.
 
             :param reader: Incoming connection stream.
             :type reader: asyncio.StreamReader
@@ -182,7 +198,6 @@ def test_local_http(
     assert "synthetic" not in caplog.text
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Размер фактически отправленного JSON и текста ntfy
 #------------------------------------------------------------------------------------------------------------------
@@ -197,9 +212,10 @@ def test_ntfy_wire_limits(
     message: str,
     rendered_size: int | None,
     large_metadata: bool,
-) -> None:
+    ) -> None:
 
-    """Exercise actual aiohttp serialization against ntfy's two size limits.
+    """
+    Exercise actual aiohttp serialization against ntfy's two size limits.
 
     :param notification: Synthetic source notification.
     :type notification: Notification
@@ -224,7 +240,9 @@ def test_ntfy_wire_limits(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Reject oversized wire requests before parsing their JSON contents."""
+        """
+        Reject oversized wire requests before parsing their JSON contents.
+        """
 
         from aiohttp import web
 
@@ -233,9 +251,12 @@ def test_ntfy_wire_limits(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Воспроизведение ограничений JSON publish API
         #----------------------------------------------------------------------------------------------------------
-        async def publish(request: web.Request) -> web.Response:
+        async def publish(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Apply the provider limits to raw bytes, then to the decoded message.
+            """
+            Apply the provider limits to raw bytes, then to the decoded message.
 
             :param request: Incoming loopback request.
             :type request: web.Request
@@ -314,8 +335,6 @@ def test_ntfy_wire_limits(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

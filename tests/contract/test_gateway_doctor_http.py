@@ -1,24 +1,49 @@
 ﻿# Настоящий локальный HTTPS для doctor: права, свежесть времени и отсутствие побочных действий.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_command_probe(): Авторизация и наблюдение сессии без регистрации или продления.
-# -> test_notification_probe(): Отсутствие доставки и изменений рабочих счётчиков.
-# -> test_tls_failures(): Различение отказов сертификата без отключения TLS.
-# -> test_http_failures(): Ошибки маршрута, upstream и ответа без утечки или redirect.
-# -> test_probe_limits(): Независимая квота и ограничение размера тела.
-# -> test_server_status(): Чтение готовности manager без управления процессами.
-# -> test_network_faults(): Отказ TCP и порт без TLS отличаются от сертификатных ошибок.
+# -> test_command_probe(): Авторизация и наблюдение сессии без регистрации или продления
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_notification_probe(): Отсутствие доставки и изменений рабочих счётчиков
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_tls_failures(): Различение отказов сертификата без отключения TLS
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_http_failures(): Ошибки маршрута, upstream и ответа без утечки или redirect
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#       Вложенные объявления:
+#       -> respond(): Тестовый ответ сервера без обращения к внешним сервисам
+#
+# -> test_probe_limits(): Независимая квота и ограничение размера тела
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_server_status(): Чтение готовности manager без управления процессами
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_network_faults(): Отказ TCP и порт без TLS отличаются от сертификатных ошибок
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#       Вложенные объявления:
+#       -> accept(): Приём тестового соединения без регистрации клиентской сессии
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -37,28 +62,58 @@ from remote_watch.gateway.command_server import CommandHubServer
 from remote_watch.gateway.doctor_protocol import ProbeEndpoint, probe_response
 from remote_watch.gateway.notification_server import NotificationGateway
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 aiohttp = pytest.importorskip("aiohttp")
+
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ИМПОРТ
+#******************************************************************************************************************
+
 from aiohttp import web  # noqa: E402
 from test_command_hub import APP_TOKEN, Rig  # noqa: E402
 from test_gateway import TOKEN, Channel, settings  # noqa: E402
 from test_gateway_tls import certificates  # noqa: E402
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Авторизация и наблюдение сессии без регистрации или продления
 #------------------------------------------------------------------------------------------------------------------
-def test_command_probe(tmp_path: Path) -> None:
+def test_command_probe(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep session deadlines and persistent rows unchanged across authorized probes.
+    """
+    Keep session deadlines and persistent rows unchanged across authorized probes.
 
     :param tmp_path: Temporary journals and synthetic certificate directory.
     :type tmp_path: Path
     """
 
     # tmp_path — отдельные журналы и CA этого сценария.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         # Один настоящий hub со своими SQLite и TLS; внешняя сеть не используется.
         rig = Rig(tmp_path)
@@ -120,16 +175,16 @@ def test_command_probe(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие доставки и изменений рабочих счётчиков
 #------------------------------------------------------------------------------------------------------------------
 def test_notification_probe(
     notification: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Observe the notification listener without consuming rate or delivery capacity.
+    """
+    Observe the notification listener without consuming rate or delivery capacity.
 
     :param notification: Synthetic notification fixture.
     :type notification: object
@@ -139,9 +194,15 @@ def test_notification_probe(
     """
 
     # notification/monkeypatch — синтетическое событие и отдельный токен теста.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         # Это отдельный endpoint: даже успешная проверка не вызывает channel.send().
         monkeypatch.setenv("RW_GW_TEST", TOKEN)
@@ -166,7 +227,6 @@ def test_notification_probe(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Различение отказов сертификата без отключения TLS
 #------------------------------------------------------------------------------------------------------------------
@@ -175,9 +235,10 @@ def test_tls_failures(
     tmp_path: Path,
     mode: str,
     code: int,
-) -> None:
+    ) -> None:
 
-    """Preserve safe TLS verification diagnostics using an actual local handshake.
+    """
+    Preserve safe TLS verification diagnostics using an actual local handshake.
 
     :param tmp_path: Temporary synthetic certificate folder.
     :type tmp_path: Path
@@ -190,9 +251,15 @@ def test_tls_failures(
     """
 
     # tmp_path/mode/code — независимая цепочка сертификатов и ожидаемый отказ.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         # Не устанавливаем CA в ОС; каждый тест получает собственный проверяющий context.
         ca, cert, key = certificates(tmp_path, mode)
@@ -216,7 +283,6 @@ def test_tls_failures(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибки маршрута, upstream и ответа без утечки или redirect
 #------------------------------------------------------------------------------------------------------------------
@@ -232,9 +298,10 @@ def test_http_failures(
     status: int,
     mode: str,
     code: str,
-) -> None:
+    ) -> None:
 
-    """Reject private error bodies and redirects over a verified TLS connection.
+    """
+    Reject private error bodies and redirects over a verified TLS connection.
 
     :param tmp_path: Temporary certificate directory.
     :type tmp_path: Path
@@ -250,9 +317,15 @@ def test_http_failures(
     """
 
     # tmp_path/status/mode/code — варианты отказов локального подставного upstream.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         # Проверяем реальный POST и подсчитываем запросы: перехода по Location быть не должно.
         ca, cert, key = certificates(tmp_path, "trusted")
@@ -261,9 +334,15 @@ def test_http_failures(
         context = ssl.create_default_context(cafile=str(ca))
         seen = []
 
-        async def respond(request: web.Request) -> web.StreamResponse:
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Тестовый ответ сервера без обращения к внешним сервисам
+        #----------------------------------------------------------------------------------------------------------
+        async def respond(
+            request: web.Request,
+            ) -> web.StreamResponse:
 
-            """Return an intentionally untrusted proxy response.
+            """
+            Return an intentionally untrusted proxy response.
 
             :param request: Incoming diagnostic POST.
             :type request: web.Request
@@ -271,6 +350,9 @@ def test_http_failures(
             :return: Synthetic response containing private data that must be discarded.
             :rtype: web.StreamResponse
             """
+
+            # request — исходный запрос команды, связанный с разрешённым назначением.
+
 
             # Подставной ответ может содержать секреты: doctor не печатает его содержимое.
             seen.append(request.path)
@@ -314,17 +396,23 @@ def test_http_failures(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимая квота и ограничение размера тела
 #------------------------------------------------------------------------------------------------------------------
 def test_probe_limits() -> None:
 
-    """Bound slow or oversized diagnostic requests independently of application traffic."""
+    """
+    Bound slow or oversized diagnostic requests independently of application traffic.
+    """
 
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         principal = SimpleNamespace(identities=(), scopes=())
         endpoint = ProbeEndpoint("commands", lambda request: principal, lambda identity: {"ready": True})
@@ -355,22 +443,30 @@ def test_probe_limits() -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Чтение готовности manager без управления процессами
 #------------------------------------------------------------------------------------------------------------------
-def test_server_status(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_server_status(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
 
-    """Filter local manager status without launching, stopping or exposing component payloads.
+    """
+    Filter local manager status without launching, stopping or exposing component payloads.
 
     :param monkeypatch: Scoped control transport replacement.
     :type monkeypatch: pytest.MonkeyPatch
     """
 
     # monkeypatch — подмена только status, без запуска серверных процессов.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise the isolated asynchronous server lifecycle."""
+        """
+        Exercise the isolated asynchronous server lifecycle.
+        """
 
         # Doctor вызывает только status; неизвестные значения из ответа не попадают в отчёт.
         control = AsyncMock(return_value={"state": "degraded", "secret": "private",
@@ -388,32 +484,44 @@ def test_server_status(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ TCP и порт без TLS отличаются от сертификатных ошибок
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("mode", ["refused", "plaintext", "silent"])
-def test_network_faults(mode: str) -> None:
+def test_network_faults(
+    mode: str,
+    ) -> None:
 
-    """Distinguish TCP refusal, a plaintext service and a stalled TLS handshake.
+    """
+    Distinguish TCP refusal, a plaintext service and a stalled TLS handshake.
 
     :param mode: Synthetic loopback listener behavior.
     :type mode: str
     """
 
     # mode — сеть ограничена отдельным loopback listener без провайдеров и токенов.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Own and close each accepted stream before returning from the test."""
+        """
+        Own and close each accepted stream before returning from the test.
+        """
 
         writers = []
 
+        #----------------------------------------------------------------------------------------------------------
+        # ФУНКЦИЯ : Приём тестового соединения без регистрации клиентской сессии
+        #----------------------------------------------------------------------------------------------------------
         def accept(
             reader: asyncio.StreamReader,
             writer: asyncio.StreamWriter,
-        ) -> None:
+            ) -> None:
 
-            """Respond in plaintext or hold a synthetic handshake open.
+            """
+            Respond in plaintext or hold a synthetic handshake open.
 
             :param reader: Unused input stream.
             :type reader: asyncio.StreamReader
@@ -421,6 +529,10 @@ def test_network_faults(mode: str) -> None:
             :param writer: Owned accepted stream.
             :type writer: asyncio.StreamWriter
             """
+
+            # reader — чтение запроса из тестового соединения.
+            # writer — запись ответа в тестовое соединение.
+
 
             # Ни один ответ не содержит закрытых данных теста.
             writers.append(writer)
@@ -453,8 +565,6 @@ def test_network_faults(mode: str) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск проверок через pytest
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

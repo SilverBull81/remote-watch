@@ -1,42 +1,54 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> CommandConfigError: Безопасная ошибка с названием раздела настроек.
+# -> CommandConfigError: Безопасная ошибка с названием раздела настроек
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #
-# -> ProviderBinding: Связь политики источника с настройками провайдера.
+# -> ProviderBinding: Связь политики источника с настройками провайдера
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> CommandGatewayConfig: Настройки отдельного командного сервера.
+# -> CommandGatewayConfig: Настройки отдельного командного сервера
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
 # Функции:
-# -> load_command_gateway(): Чтение и проверка серверных настроек.
-# -> check_command_gateway(): Проверка структуры без чтения окружения и сетевых запросов.
-# -> load_command_client(): Подготовка клиента с новой сессией и постоянным журналом.
-# -> read_command_json(): Чтение ограниченного строгого JSON.
-# -> _gateway(): Проверка разделов серверного JSON.
-# -> _credential(): Проверка и разрешение выбранного секрета.
-# -> _path(): Путь относительно файла настроек.
-# -> _schema(): Проверка версии командных настроек.
-# -> _keys(): Проверка обязательных и лишних полей.
-# -> _items(): Проверка конечного списка настроек.
-# -> _pairs(): Отказ от повторяющихся ключей JSON.
-# -> _constant(): Отказ от нечисловых JSON-констант.
+# -> load_command_gateway(): Чтение и проверка серверных настроек
+#
+# -> check_command_gateway(): Проверка структуры без чтения окружения и сетевых запросов
+#
+# -> load_command_client(): Подготовка клиента с новой сессией и постоянным журналом
+#
+# -> read_command_json(): Чтение ограниченного строгого JSON
+#
+# -> _gateway(): Проверка разделов серверного JSON
+#
+# -> _credential(): Проверка и разрешение выбранного секрета
+#
+# -> _path(): Путь относительно файла настроек
+#
+# -> _schema(): Проверка версии командных настроек
+#
+# -> _keys(): Проверка обязательных и лишних полей
+#
+# -> _items(): Проверка конечного списка настроек
+#
+# -> _pairs(): Отказ от повторяющихся ключей JSON
+#
+# -> _constant(): Отказ от нечисловых JSON-констант
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -60,13 +72,20 @@ from remote_watch.commands.sqlite_store import SQLiteCommandStore
 from remote_watch.commands.storage import StoreRole
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная ошибка с названием раздела настроек
 #------------------------------------------------------------------------------------------------------------------
 class CommandConfigError(ValueError):
-    """Expose only a known configuration stage without values or nested exception details."""
-
+    """
+    Expose only a known configuration stage without values or nested exception details.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -79,9 +98,10 @@ class CommandConfigError(ValueError):
         line: int | None = None,
         column: int | None = None,
         json_reason: str = "syntax",
-    ) -> None:
+        ) -> None:
 
-        """Restrict the public diagnostic to known configuration sections.
+        """
+        Restrict the public diagnostic to known configuration sections.
 
         :param field: Known configuration section used for a fixed diagnostic.
         :type field: str
@@ -170,25 +190,38 @@ class CommandConfigError(ValueError):
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Связь политики источника с настройками провайдера
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ProviderBinding:
-    """Pair one source policy with the provider settings that establish its actor identity."""
+    """
+    Pair one source policy with the provider settings that establish its actor identity.
+
+    :param source_id: Stable ordered command-source identifier.
+    :type source_id: str
+
+    :param settings: Validated provider-specific configuration.
+    :type settings: TelegramCommandConfig | NtfyCommandConfig
+
+    :param command_display_mode: Default full, compact or text presentation for replies from this source.
+    :type command_display_mode: str
+    """
 
     source_id: str                              # Постоянный ID источника в журнале hub.
-    settings: TelegramCommandConfig | NtfyCommandConfig = field(repr=False)     # Проверенные настройки провайдера.
+    settings: TelegramCommandConfig | NtfyCommandConfig = field(repr=False)  # Проверенные настройки провайдера.
     command_display_mode: str = "full"          # Оформление результатов при отсутствии режима клиента.
-
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject unsupported providers and unsafe source filenames in typed configuration."""
+        """
+        Reject unsupported providers and unsafe source filenames in typed configuration.
+        """
 
         if type(self.source_id) is not str or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.source_id) is None:
             raise ValueError("invalid source binding")
@@ -201,26 +234,42 @@ class ProviderBinding:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки отдельного командного сервера
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandGatewayConfig:
-    """Compose typed command-only gateway settings without starting network activity."""
+    """
+    Compose typed command-only gateway settings without starting network activity.
+
+    :param state_dir: Persistent command journal directory shared across restarts.
+    :type state_dir: Path
+
+    :param hub: Command hub configuration or session authority.
+    :type hub: CommandHubConfig
+
+    :param targets: Explicit aliases for all configured application identities.
+    :type targets: SourceTargets
+
+    :param providers: Configured command provider bindings.
+    :type providers: tuple[ProviderBinding, ...]
+    """
 
     state_dir: Path                             # Постоянный каталог журналов; общий для перезапусков.
     hub: CommandHubConfig = field(repr=False)   # Отдельные секреты приложений и права команд.
     targets: SourceTargets                      # Явные адреса всех приложений.
     providers: tuple[ProviderBinding, ...]      # Не более восьми отдельных источников.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject ambiguous provider bindings before starting the server."""
+        """
+        Reject ambiguous provider bindings before starting the server.
+        """
 
         if type(self.hub) is not CommandHubConfig or type(self.targets) is not SourceTargets:
             raise TypeError("invalid command gateway config")
@@ -244,12 +293,19 @@ class CommandGatewayConfig:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение и проверка серверных настроек
 #------------------------------------------------------------------------------------------------------------------
-def load_command_gateway(path: str | Path) -> CommandGatewayConfig:
+def load_command_gateway(
+    path: str | Path,
+    ) -> CommandGatewayConfig:
 
-    """Read explicit server settings, resolving principal environment references only on this call.
+    """
+    Read explicit server settings, resolving principal environment references only on this call.
 
     :param path: Explicit local data path or fixed HTTP operation path.
     :type path: str | Path
@@ -263,13 +319,15 @@ def load_command_gateway(path: str | Path) -> CommandGatewayConfig:
     return _gateway(Path(path), True)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка структуры без чтения окружения и сетевых запросов
 #------------------------------------------------------------------------------------------------------------------
-def check_command_gateway(path: str | Path) -> None:
+def check_command_gateway(
+    path: str | Path,
+    ) -> None:
 
-    """Validate server structure without resolving environment values or contacting providers.
+    """
+    Validate server structure without resolving environment values or contacting providers.
 
     :param path: Explicit local data path or fixed HTTP operation path.
     :type path: str | Path
@@ -280,16 +338,16 @@ def check_command_gateway(path: str | Path) -> None:
     _gateway(Path(path), False)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка клиента с новой сессией и постоянным журналом
 #------------------------------------------------------------------------------------------------------------------
 def load_command_client(
     path: str | Path,
     commands: CommandRegistry,
-) -> CommandClient:
+    ) -> CommandClient:
 
-    """Build one fresh-session client from local settings while retaining its durable journal path.
+    """
+    Build one fresh-session client from local settings while retaining its durable journal path.
 
     :param path: Explicit local data path or fixed HTTP operation path.
     :type path: str | Path
@@ -350,13 +408,15 @@ def load_command_client(
         raise CommandConfigError(field_name, code) from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение ограниченного строгого JSON
 #------------------------------------------------------------------------------------------------------------------
-def read_command_json(path: Path) -> dict[str, Any]:
+def read_command_json(
+    path: Path,
+    ) -> dict[str, Any]:
 
-    """Read at most one MiB of strict JSON without importing Python factories or revealing values.
+    """
+    Read at most one MiB of strict JSON without importing Python factories or revealing values.
 
     :param path: Explicit local data path or fixed HTTP operation path.
     :type path: Path
@@ -400,16 +460,16 @@ def read_command_json(path: Path) -> dict[str, Any]:
         raise CommandConfigError("config", "config_json") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка разделов серверного JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка разделов серверного JSON
 #------------------------------------------------------------------------------------------------------------------
 def _gateway(
     path: Path,
     resolve_environment: bool,
-) -> CommandGatewayConfig:
+    ) -> CommandGatewayConfig:
 
-    """Validate nested server sections using fixed error paths and exact allowed keys.
+    """
+    Validate nested server sections using fixed error paths and exact allowed keys.
 
     :param path: Explicit local data path or fixed HTTP operation path.
     :type path: Path
@@ -559,16 +619,16 @@ def _gateway(
         raise CommandConfigError(field_name) from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка и разрешение выбранного секрета
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка и разрешение выбранного секрета
 #------------------------------------------------------------------------------------------------------------------
 def _credential(
     value: dict[str, Any],
     resolve_environment: bool,
-) -> str:
+    ) -> str:
 
-    """Validate one literal or environment credential without exposing its origin or value.
+    """
+    Validate one literal or environment credential without exposing its origin or value.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: dict[str, Any]
@@ -593,16 +653,16 @@ def _credential(
     return token_hex(32)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Путь относительно файла настроек
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Путь относительно файла настроек
 #------------------------------------------------------------------------------------------------------------------
 def _path(
     location: Path,
     value: str,
-) -> Path:
+    ) -> Path:
 
-    """Resolve local data paths relative to the configuration file rather than the shell directory.
+    """
+    Resolve local data paths relative to the configuration file rather than the shell directory.
 
     :param location: Absolute path of the configuration file.
     :type location: Path
@@ -622,13 +682,15 @@ def _path(
     return (location.parent / value).resolve()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка версии командных настроек
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка версии командных настроек
 #------------------------------------------------------------------------------------------------------------------
-def _schema(value: dict[str, Any]) -> None:
+def _schema(
+    value: dict[str, Any],
+    ) -> None:
 
-    """Require the command-specific JSON schema without accepting a Boolean as its version.
+    """
+    Require the command-specific JSON schema without accepting a Boolean as its version.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: dict[str, Any]
@@ -640,18 +702,18 @@ def _schema(value: dict[str, Any]) -> None:
         raise CommandConfigError("schema", "config_schema")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка обязательных и лишних полей
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка обязательных и лишних полей
 #------------------------------------------------------------------------------------------------------------------
 def _keys(
     value: Any,
     required: set[str],
     optional: set[str],
     field_name: str = "config",
-) -> None:
+    ) -> None:
 
-    """Reject missing and unknown keys before constructing typed objects.
+    """
+    Reject missing and unknown keys before constructing typed objects.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: Any
@@ -683,17 +745,17 @@ def _keys(
         raise CommandConfigError(field_name, "config_unknown")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Проверка конечного списка настроек
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка конечного списка настроек
 #------------------------------------------------------------------------------------------------------------------
 def _items(
     value: Any,
     maximum: int,
     field_name: str = "config",
-) -> list[Any]:
+    ) -> list[Any]:
 
-    """Require a nonempty bounded JSON list instead of accepting arbitrary iterables.
+    """
+    Require a nonempty bounded JSON list instead of accepting arbitrary iterables.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: Any
@@ -717,13 +779,15 @@ def _items(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отказ от повторяющихся ключей JSON
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ от повторяющихся ключей JSON
 #------------------------------------------------------------------------------------------------------------------
-def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+def _pairs(
+    pairs: list[tuple[str, Any]],
+    ) -> dict[str, Any]:
 
-    """Reject repeated JSON object keys at every nesting level.
+    """
+    Reject repeated JSON object keys at every nesting level.
 
     :param pairs: Field pairs from one JSON object.
     :type pairs: list[tuple[str, Any]]
@@ -743,13 +807,15 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Отказ от нечисловых JSON-констант
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Отказ от нечисловых JSON-констант
 #------------------------------------------------------------------------------------------------------------------
-def _constant(value: str) -> None:
+def _constant(
+    value: str,
+    ) -> None:
 
-    """Reject nonfinite JSON constants without including them in diagnostics.
+    """
+    Reject nonfinite JSON constants without including them in diagnostics.
 
     :param value: Untrusted configuration or provider value under validation.
     :type value: str
@@ -760,7 +826,6 @@ def _constant(value: str) -> None:
     raise CommandConfigError("config", "config_json", json_reason="constant")
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

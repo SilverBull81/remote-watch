@@ -1,31 +1,31 @@
 ﻿# Проверки неизменяемости, сериализации и границ размера уведомлений.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
+# -> test_snapshot_is_detached(): Снимок не меняется через исходный список или сериализованные данные
 #
-# -> test_snapshot_is_detached(): Защита от изменения исходных и сериализованных данных.
+# -> test_json_round_trip(): JSON round-trip без потери временной зоны и кириллицы
 #
-# -> test_json_round_trip(): Полный round-trip и нормализация UTC.
+# -> test_payload_rejects_invalid_schema(): Ошибочная версия или неизвестные поля не принимаются
 #
-# -> test_payload_rejects_invalid_schema(): Версия и неизвестные поля.
+# -> test_snapshot_rejects_invalid_fields(): Типы и временные границы проверяются при создании
 #
-# -> test_snapshot_rejects_invalid_fields(): Типы, даты и метаданные.
+# -> test_utf8_and_serialized_limits(): Размер ограничен в байтах, включая сериализованное представление
 #
-# -> test_utf8_and_serialized_limits(): Лимиты байтов и JSON escaping.
+# -> test_identity_errors_do_not_echo_values(): Ошибка не раскрывает неправильное входное значение
 #
-# -> test_identity_errors_do_not_echo_values(): Безопасное сообщение ошибки.
-#
-# -> test_invalid_limits(): Невалидные лимиты.
+# -> test_invalid_limits(): Нельзя задать некорректные размеры снимка
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 import json
 from dataclasses import FrozenInstanceError, replace
 from datetime import datetime, timedelta, timezone
@@ -34,19 +34,22 @@ import pytest
 
 from remote_watch import Identity, Notification, SnapshotLimits
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # ТЕСТЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Снимок не меняется через исходный список или сериализованные данные
 #------------------------------------------------------------------------------------------------------------------
 def test_snapshot_is_detached(
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Keep notification data immutable across caller and payload mutations.
+    """
+    Keep notification data immutable across caller and payload mutations.
 
     :param notification: Valid snapshot fixture.
     :type notification: Notification
@@ -67,15 +70,15 @@ def test_snapshot_is_detached(
         snapshot.message = "changed"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : JSON round-trip без потери временной зоны и кириллицы
 #------------------------------------------------------------------------------------------------------------------
 def test_json_round_trip(
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Round-trip complete optional metadata and normalize timestamps to UTC.
+    """
+    Round-trip complete optional metadata and normalize timestamps to UTC.
 
     :param notification: Valid snapshot fixture.
     :type notification: Notification
@@ -98,7 +101,6 @@ def test_json_round_trip(
     assert "Ошибка" not in repr(restored)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибочная версия или неизвестные поля не принимаются
 #------------------------------------------------------------------------------------------------------------------
@@ -110,9 +112,10 @@ def test_json_round_trip(
 def test_payload_rejects_invalid_schema(
     notification: Notification,
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject untrusted schema extensions and malformed payload fields.
+    """
+    Reject untrusted schema extensions and malformed payload fields.
 
     :param notification: Valid snapshot fixture.
     :type notification: Notification
@@ -128,7 +131,6 @@ def test_payload_rejects_invalid_schema(
         Notification.from_dict(notification.to_dict() | changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Типы и временные границы проверяются при создании
 #------------------------------------------------------------------------------------------------------------------
@@ -141,9 +143,10 @@ def test_payload_rejects_invalid_schema(
 def test_snapshot_rejects_invalid_fields(
     notification: Notification,
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject mutable objects, invalid Unicode and ambiguous metadata.
+    """
+    Reject mutable objects, invalid Unicode and ambiguous metadata.
 
     :param notification: Valid snapshot fixture.
     :type notification: Notification
@@ -159,15 +162,15 @@ def test_snapshot_rejects_invalid_fields(
         replace(notification, **changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Размер ограничен в байтах, включая сериализованное представление
 #------------------------------------------------------------------------------------------------------------------
 def test_utf8_and_serialized_limits(
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Enforce text, metadata and full-payload byte limits independently.
+    """
+    Enforce text, metadata and full-payload byte limits independently.
 
     :param notification: Valid snapshot fixture.
     :type notification: Notification
@@ -194,13 +197,14 @@ def test_utf8_and_serialized_limits(
         Notification.from_dict(payload)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибка не раскрывает неправильное входное значение
 #------------------------------------------------------------------------------------------------------------------
 def test_identity_errors_do_not_echo_values() -> None:
 
-    """Avoid echoing a supplied value in validation diagnostics."""
+    """
+    Avoid echoing a supplied value in validation diagnostics.
+    """
 
     value = "sensitive-test-marker" * 30
 
@@ -210,7 +214,6 @@ def test_identity_errors_do_not_echo_values() -> None:
     assert "sensitive-test-marker" not in str(error.value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Нельзя задать некорректные размеры снимка
 #------------------------------------------------------------------------------------------------------------------
@@ -218,9 +221,10 @@ def test_identity_errors_do_not_echo_values() -> None:
                                      {"message_max_bytes": 20000}])
 def test_invalid_limits(
     changes: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject noninteger, nonpositive and contradictory size budgets.
+    """
+    Reject noninteger, nonpositive and contradictory size budgets.
 
     :param changes: Invalid limit fields.
     :type changes: dict[str, object]
@@ -232,8 +236,6 @@ def test_invalid_limits(
         SnapshotLimits(**changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

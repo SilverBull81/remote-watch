@@ -1,19 +1,21 @@
 ﻿# Отдельный интерактивный controller службы, не владеющий gateway и журналами команд.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> tray_settings(): Чтение только выбранных полей UI без связанных конфигов.
-# -> run_tray(): SCM-наблюдение и запрос stop без запуска manager.
+# -> tray_settings(): Чтение только выбранных полей UI без связанных конфигов
+#
+# -> run_tray(): Наблюдение за службой и запрос остановки без запуска второго сервера
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import ctypes
@@ -30,16 +32,26 @@ from .service import ServiceSpec, current_sid
 from .service_windows import WindowsService
 from .tray import GatewayTray
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение только выбранных полей UI без связанных конфигов
 #------------------------------------------------------------------------------------------------------------------
-def tray_settings(path: Path) -> tuple[bool, Path | None]:
+def tray_settings(
+    path: Path,
+    ) -> tuple[bool, Path | None]:
 
-    """Read only UI preferences without resolving credentials or opening runtime state.
+    """
+    Read only UI preferences without resolving credentials or opening runtime state.
 
     :param path: Existing deployment config, not a component configuration.
     :type path: Path
+
     :return: Enabled flag and optional absolute icon path.
     :rtype: tuple[bool, Path | None]
     """
@@ -59,16 +71,19 @@ def tray_settings(path: Path) -> tuple[bool, Path | None]:
     return ui == "tray", (path.parent / icon).resolve() if icon else None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : SCM-наблюдение и запрос stop без запуска manager
+# ФУНКЦИЯ : Наблюдение за службой и запрос остановки без запуска второго сервера
 #------------------------------------------------------------------------------------------------------------------
-def run_tray(spec: ServiceSpec) -> int:
+def run_tray(
+    spec: ServiceSpec,
+    ) -> int:
 
-    """Observe one service in the operator's interactive session without becoming a gateway owner.
+    """
+    Observe one service in the operator's interactive session without becoming a gateway owner.
 
     :param spec: Exact service binding registered for the current operator.
     :type spec: ServiceSpec
+
     :return: Zero after disabled UI or requested controller exit.
     :rtype: int
     """
@@ -122,8 +137,6 @@ def run_tray(spec: ServiceSpec) -> int:
         owner.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

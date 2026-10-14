@@ -1,22 +1,23 @@
 ﻿# Подключение стандартного logging к очереди уведомлений без сетевых операций.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NotificationHandler: Обработчик logging для очереди уведомлений.
+# -> NotificationHandler: Обработчик logging для очереди уведомлений
 #    Конструктор:
-#    -> __init__(): Подготовка состояния объекта без запуска фоновой работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> emit(): Подготовка уведомления и попытка помещения в очередь.
+#    -> emit(): Подготовка уведомления и попытка помещения в очередь
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import logging
@@ -27,6 +28,9 @@ from remote_watch._validation import require_callback
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.normalization import prepare_notification
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 if TYPE_CHECKING:
     from remote_watch.notifications.runtime import NotificationRuntime
 
@@ -35,12 +39,13 @@ if TYPE_CHECKING:
 # КЛАССЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Обработчик logging для очереди уведомлений
 #------------------------------------------------------------------------------------------------------------------
 class NotificationHandler(logging.Handler):
-    """Copy records into a runtime without network I/O or queue-space waits."""
+    """
+    Copy records into a runtime without network I/O or queue-space waits.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -50,9 +55,10 @@ class NotificationHandler(logging.Handler):
         runtime: NotificationRuntime,
         *,
         redactor: Callable[[str], str] | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Bind one runtime and an optional text redactor.
+        """
+        Bind one runtime and an optional text redactor.
 
         :param runtime: Runtime owning identity, queues and lifecycle.
         :type runtime: NotificationRuntime
@@ -79,9 +85,10 @@ class NotificationHandler(logging.Handler):
     def emit(
         self,
         record: logging.LogRecord,
-    ) -> None:
+        ) -> None:
 
-        """Normalize and submit a record, containing failures inside the handler.
+        """
+        Normalize and submit a record, containing failures inside the handler.
 
         :param record: Record already accepted by standard logging filters.
         :type record: logging.LogRecord
@@ -131,8 +138,6 @@ class NotificationHandler(logging.Handler):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

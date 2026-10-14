@@ -1,22 +1,44 @@
 ﻿# Проверки пересечений фонового обслуживания, HTTP-опроса и обновления времени.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_worker_waiting(): Очередь, отмена, timeout и остановка без скрытого исполнения.
-# -> test_poll_sweep_overlap(): Настоящий HTTP poll во время фонового sweep без отказов.
-# -> test_refresh_readiness(): Действующее показание при refresh и реальные причины отказа.
-# -> test_busy_details(): Проверка закрытого набора причин в HTTP и health.
-# -> test_queued_claims(): Истечение и повтор grant во время очереди без второго разрешения.
+# -> test_worker_waiting(): Очередь, отмена, timeout и остановка без скрытого исполнения
+#    Вложенные объявления:
+#    -> scenario(): Управляемая занятость без зависимости от скорости диска
+#       Вложенные объявления:
+#       -> blocked(): Удержание рабочего потока до сигнала теста
+#
+# -> test_poll_sweep_overlap(): Настоящий HTTP poll во время фонового sweep без отказов
+#    Вложенные объявления:
+#    -> scenario(): Повторные пересечения poll и sweep с настоящим SQLite
+#       Вложенные объявления:
+#       -> pending(): Задержка одной выборки журнала до разрешения теста
+#       -> queued(): Ожидание регистрации ограниченного waiter
+#
+# -> test_refresh_readiness(): Действующее показание при refresh и реальные причины отказа
+#    Вложенные объявления:
+#    -> scenario(): Обновление UTC с наблюдением готовности во время await
+#       Вложенные объявления:
+#       -> sample(): Подставной внешний источник с задержкой ответа
+#
+# -> test_busy_details(): Проверка закрытого набора причин в HTTP и health
+#
+# -> test_queued_claims(): Истечение и повтор grant во время очереди без второго разрешения
+#    Вложенные объявления:
+#    -> scenario(): Два одинаковых claim за одной удерживаемой операцией
+#       Вложенные объявления:
+#       -> block(): Удержание единственного исполнителя
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -38,6 +60,12 @@ from remote_watch.commands.time import TimeSample, TimeUnavailable
 from remote_watch.commands.transport import CommandError
 from remote_watch.gateway.command_server import CommandHubServer
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Очередь, отмена, timeout и остановка без скрытого исполнения
@@ -47,9 +75,10 @@ from remote_watch.gateway.command_server import CommandHubServer
 def test_worker_waiting(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Keep executor work serial and never execute a discarded waiting request.
+    """
+    Keep executor work serial and never execute a discarded waiting request.
 
     :param tmp_path: Temporary SQLite directory.
     :type tmp_path: Path
@@ -65,7 +94,9 @@ def test_worker_waiting(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Pin a real worker with events and inspect queue admission before releasing it."""
+        """
+        Pin a real worker with events and inspect queue admission before releasing it.
+        """
 
         worker = StoreWorker(Rig(tmp_path).store, 5, max_waiters=1)
         await worker.open()
@@ -77,7 +108,9 @@ def test_worker_waiting(
         #----------------------------------------------------------------------------------------------------------
         def blocked() -> None:
 
-            """Hold the executor independently of the async caller lifetime."""
+            """
+            Hold the executor independently of the async caller lifetime.
+            """
 
             entered.set()
             assert release.wait(10)
@@ -138,7 +171,6 @@ def test_worker_waiting(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий HTTP poll во время фонового sweep без отказов
 #------------------------------------------------------------------------------------------------------------------
@@ -146,9 +178,10 @@ def test_worker_waiting(
 def test_poll_sweep_overlap(
     tmp_path: Path,
     expired: bool,
-) -> None:
+    ) -> None:
 
-    """Wait for actual maintenance contention through HTTP without hiding an expired session.
+    """
+    Wait for actual maintenance contention through HTTP without hiding an expired session.
 
     :param tmp_path: Temporary hub journal.
     :type tmp_path: Path
@@ -165,7 +198,9 @@ def test_poll_sweep_overlap(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise idle polls, heartbeat and bounded overload with maintenance still enabled."""
+        """
+        Exercise idle polls, heartbeat and bounded overload with maintenance still enabled.
+        """
 
         rig = Rig(tmp_path, refresh_interval=0.1)
         second_identity = replace(rig.identity, instance_id="two")
@@ -184,9 +219,12 @@ def test_poll_sweep_overlap(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Задержка одной выборки журнала до разрешения теста
         #----------------------------------------------------------------------------------------------------------
-        def pending(*, limit: int = 1000) -> tuple:
+        def pending(
+            *, limit: int = 1000,
+            ) -> tuple:
 
-            """Pause the next scan, then delegate to real SQLite.
+            """
+            Pause the next scan, then delegate to real SQLite.
 
             :param limit: Original bounded page size.
             :type limit: int
@@ -213,12 +251,15 @@ def test_poll_sweep_overlap(
             assert await asyncio.to_thread(entered.wait, 5)
             poll = asyncio.create_task(transports[0].exchange("poll", session))
             jobs.append(poll)
+
             #------------------------------------------------------------------------------------------------------
             # ФУНКЦИЯ : Ожидание регистрации ограниченного waiter
             #------------------------------------------------------------------------------------------------------
             async def queued() -> None:
 
-                """Wait until HTTP polling enters the bounded storage queue."""
+                """
+                Wait until HTTP polling enters the bounded storage queue.
+                """
 
                 while not rig.hub._worker._waiters:
                     await asyncio.sleep(0.001)
@@ -257,7 +298,6 @@ def test_poll_sweep_overlap(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Действующее показание при refresh и реальные причины отказа
 #------------------------------------------------------------------------------------------------------------------
@@ -265,9 +305,10 @@ def test_poll_sweep_overlap(
 def test_refresh_readiness(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Keep readiness during normal refresh but fail closed at actual trust boundaries.
+    """
+    Keep readiness during normal refresh but fail closed at actual trust boundaries.
 
     :param tmp_path: Temporary journal for a real hub health probe.
     :type tmp_path: Path
@@ -283,7 +324,9 @@ def test_refresh_readiness(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Inspect health while the external time response is deliberately pending."""
+        """
+        Inspect health while the external time response is deliberately pending.
+        """
 
         rig = Rig(tmp_path)
         await rig.hub.start()
@@ -294,7 +337,8 @@ def test_refresh_readiness(
         #----------------------------------------------------------------------------------------------------------
         async def sample() -> TimeSample:
 
-            """Return a fresh interval or a controlled failure after the test signal.
+            """
+            Return a fresh interval or a controlled failure after the test signal.
 
             :return: Synthetic trusted UTC interval.
             :rtype: TimeSample
@@ -351,7 +395,6 @@ def test_refresh_readiness(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка закрытого набора причин в HTTP и health
 #------------------------------------------------------------------------------------------------------------------
@@ -359,9 +402,12 @@ def test_refresh_readiness(
     "session_poll_active", "http_requests_full", "http_polls_full", "transport_requests_full",
     "client_operation_active", "PRIVATE", None, 4,
     ["PRIVATE"], {"PRIVATE": True}])
-def test_busy_details(reason: object) -> None:
+def test_busy_details(
+    reason: object,
+    ) -> None:
 
-    """Retain only known contention reasons, clear current details on recovery and keep counters.
+    """
+    Retain only known contention reasons, clear current details on recovery and keep counters.
 
     :param reason: Valid reason or adversarial JSON-compatible value.
     :type reason: object
@@ -387,7 +433,6 @@ def test_busy_details(reason: object) -> None:
     assert state._stages["poll"].transient_failures == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Истечение и повтор grant во время очереди без второго разрешения
 #------------------------------------------------------------------------------------------------------------------
@@ -395,9 +440,10 @@ def test_busy_details(reason: object) -> None:
 def test_queued_claims(
     tmp_path: Path,
     expired: bool,
-) -> None:
+    ) -> None:
 
-    """Recheck durable deadlines after storage waiting and grant execution at most once.
+    """
+    Recheck durable deadlines after storage waiting and grant execution at most once.
 
     :param tmp_path: Directory containing the real durable hub store.
     :type tmp_path: Path
@@ -413,7 +459,9 @@ def test_queued_claims(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Queue duplicate requests and inspect durable outcomes after releasing the store."""
+        """
+        Queue duplicate requests and inspect durable outcomes after releasing the store.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -425,7 +473,9 @@ def test_queued_claims(
         #----------------------------------------------------------------------------------------------------------
         def block() -> None:
 
-            """Keep later grant decisions outside the executor until released."""
+            """
+            Keep later grant decisions outside the executor until released.
+            """
 
             entered.set()
             assert release.wait(10)
@@ -463,8 +513,6 @@ def test_queued_claims(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

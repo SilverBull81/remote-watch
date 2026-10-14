@@ -1,27 +1,31 @@
 ﻿# Проверка структурного async-контракта на fake-канале без наследования.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> MemoryChannel: Тестовая реализация без provider dependencies.
+# -> MemoryChannel: Fake-канал с независимой реализацией
 #    Конструктор:
-#    -> __init__(): Создать локальное состояние тестового канала.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Зафиксировать loop владельца.
-#    -> send(): Одна тестовая попытка.
-#    -> close(): Завершение тестового клиента.
+#    -> open(): Зафиксировать loop владельца
+#    -> send(): Одна тестовая попытка
+#    -> close(): Завершение тестового клиента
+#
+# Функции:
+# -> exercise_channel(): Проверка общей границы канала
 #
 # Тесты:
-# -> test_structural_async_channel_contract(): Проверка канала без наследования.
+# -> test_structural_async_channel_contract(): Тестовый канал соответствует асинхронному интерфейсу
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 import asyncio
 
 from remote_watch import (
@@ -33,23 +37,31 @@ from remote_watch import (
     NotificationChannel,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Fake-канал с независимой реализацией
 #------------------------------------------------------------------------------------------------------------------
 class MemoryChannel:
-    """Implement the channel protocol without importing any concrete provider."""
+    """
+    Implement the channel protocol without importing any concrete provider.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Initialize state without creating an event loop or network client."""
+        """
+        Initialize state without creating an event loop or network client.
+        """
 
         self.loop: asyncio.AbstractEventLoop | None = None
         self.deliveries: list[Delivery] = []
@@ -59,9 +71,13 @@ class MemoryChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Зафиксировать loop владельца
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Bind the fake to the running owner loop."""
+        """
+        Bind the fake to the running owner loop.
+        """
 
         self.loop = asyncio.get_running_loop()
     #--------------------------------------------------------------------------------------------------------------
@@ -72,9 +88,10 @@ class MemoryChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Record exactly one delivery attempt in the owner loop.
+        """
+        Record exactly one delivery attempt in the owner loop.
 
         :param delivery: Immutable attempt.
         :type delivery: Delivery
@@ -94,9 +111,13 @@ class MemoryChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Завершение тестового клиента
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record cleanup in the same loop."""
+        """
+        Record cleanup in the same loop.
+        """
 
         assert asyncio.get_running_loop() is self.loop
         self.closed = True
@@ -108,16 +129,16 @@ class MemoryChannel:
 # ФУНКЦИИ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка общей границы канала
 #------------------------------------------------------------------------------------------------------------------
 async def exercise_channel(
     channel: NotificationChannel,
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Exercise async lifecycle using only the structural protocol.
+    """
+    Exercise async lifecycle using only the structural protocol.
 
     :param channel: Any structural channel implementation.
     :type channel: NotificationChannel
@@ -145,15 +166,15 @@ async def exercise_channel(
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Тестовый канал соответствует асинхронному интерфейсу
 #------------------------------------------------------------------------------------------------------------------
 def test_structural_async_channel_contract(
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Use a class factory and exercise the protocol without provider dependencies.
+    """
+    Use a class factory and exercise the protocol without provider dependencies.
 
     :param notification: Immutable snapshot fixture.
     :type notification: Notification
@@ -168,8 +189,6 @@ def test_structural_async_channel_contract(
     assert channel.closed
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

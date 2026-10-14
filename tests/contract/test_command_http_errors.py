@@ -1,19 +1,29 @@
 ﻿# Проверка кодов отказа и повреждённых ответов командного HTTP-сервера.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-200546
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_error_response(): Классификация ограниченного HTTP-ответа без раскрытия тела.
-# -> test_error_response_timeout(): Сохранение статуса при зависшем теле ответа.
+# -> test_error_response(): Классификация ограниченного HTTP-ответа без раскрытия тела
+#    Вложенные объявления:
+#    -> scenario(): Один запрос к подставному серверу и обязательное освобождение ресурсов
+#       Вложенные объявления:
+#       -> reply(): Отправка выбранного ответа с подсчётом обращений
+#
+# -> test_error_response_timeout(): Сохранение статуса при зависшем теле ответа
+#    Вложенные объявления:
+#    -> scenario(): Зависание только чтения тела после полученных заголовков
+#       Вложенные объявления:
+#       -> reply(): Отправка заголовков и ожидание завершения теста
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -30,6 +40,12 @@ pytest.importorskip("aiohttp")
 from aiohttp import web  # noqa: E402
 from test_command_hub import APP_TOKEN, Rig  # noqa: E402
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Классификация ограниченного HTTP-ответа без раскрытия тела
@@ -78,9 +94,10 @@ def test_error_response(
     body: bytes,
     headers: dict[str, str],
     expected: str,
-) -> None:
+    ) -> None:
 
-    """Exercise real loopback HTTP with valid errors and adversarial response bodies.
+    """
+    Exercise real loopback HTTP with valid errors and adversarial response bodies.
 
     :param tmp_path: Isolated directory for synthetic registration settings.
     :type tmp_path: Path
@@ -106,16 +123,21 @@ def test_error_response(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Make one request and retain no credentials or private response text in errors."""
+        """
+        Make one request and retain no credentials or private response text in errors.
+        """
 
         calls = 0
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Отправка выбранного ответа с подсчётом обращений
         #----------------------------------------------------------------------------------------------------------
-        async def reply(request: web.Request) -> web.Response:
+        async def reply(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Return a synthetic response without logging request contents.
+            """
+            Return a synthetic response without logging request contents.
 
             :param request: Local HTTP request, used only to complete body consumption.
             :type request: web.Request
@@ -157,7 +179,6 @@ def test_error_response(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение статуса при зависшем теле ответа
 #------------------------------------------------------------------------------------------------------------------
@@ -166,9 +187,10 @@ def test_error_response_timeout(
     tmp_path: Path,
     status: int,
     expected: str,
-) -> None:
+    ) -> None:
 
-    """Bound a stalled body while retaining headers already received.
+    """
+    Bound a stalled body while retaining headers already received.
 
     :param tmp_path: Isolated synthetic registration directory.
     :type tmp_path: Path
@@ -187,7 +209,9 @@ def test_error_response_timeout(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep the server responsive while intentionally withholding body completion."""
+        """
+        Keep the server responsive while intentionally withholding body completion.
+        """
 
         release = asyncio.Event()
         started = asyncio.Event()
@@ -195,9 +219,12 @@ def test_error_response_timeout(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Отправка заголовков и ожидание завершения теста
         #----------------------------------------------------------------------------------------------------------
-        async def reply(request: web.Request) -> web.StreamResponse:
+        async def reply(
+            request: web.Request,
+            ) -> web.StreamResponse:
 
-            """Hold an incomplete chunked response until test cleanup.
+            """
+            Hold an incomplete chunked response until test cleanup.
 
             :param request: Local HTTP request to prepare the response for.
             :type request: web.Request
@@ -240,8 +267,6 @@ def test_error_response_timeout(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

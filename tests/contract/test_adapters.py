@@ -1,46 +1,73 @@
 ﻿# Проверки обоих адаптеров с подменённой HTTP-сессией без доступа к сервисам.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> FakeResponse: Управляемый HTTP-ответ для тестов.
+# -> FakeResponse: Управляемый HTTP-ответ для тестов
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> iter_chunked(): Чтение тестового ответа по частям.
+#    -> iter_chunked(): Чтение тестового ответа по частям
 #    Специальные методы:
-#    -> __aenter__(): Начало управляемого тестового запроса.
-#    -> __aexit__(): Учёт освобождения тестового ответа.
+#    -> __aenter__(): Начало управляемого тестового запроса
+#    -> __aexit__(): Учёт освобождения тестового ответа
 #
-# -> FakeSession: HTTP-сессия, сохраняющая запросы без отправки.
+# -> FakeSession: HTTP-сессия, сохраняющая запросы без отправки
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> post(): Один HTTP POST без скрытых повторов.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
+#    -> post(): Один HTTP POST без скрытых повторов
+#    -> close(): Закрытие клиента и освобождение ресурсов
+#
+# Функции:
+# -> sessions(): Подмена HTTP-сессии и подготовка тестовых токенов
+#    Вложенные объявления:
+#    -> create(): Создание и сохранение тестовой сессии
+#
+# -> make_channel(): Создание адаптера с тестовыми настройками
+#
+# -> accepted_body(): Подтверждение приёма в формате выбранного сервиса
 #
 # Тесты:
-# -> sessions(): Подмена HTTP-сессии и подготовка тестовых токенов.
-# -> make_channel(): Создание адаптера с тестовыми настройками.
-# -> accepted_body(): Подтверждение приёма в формате выбранного сервиса.
-# -> test_success_and_lifecycle(): Отправка, размер текста и освобождение клиента.
-# -> test_http_errors(): Классификация кодов HTTP без утечки тела ответа.
-# -> test_invalid_success(): Неполное подтверждение не считается успешной доставкой.
-# -> test_interrupted_requests(): Отмена, обрыв, таймаут и ограничение размера ответа.
-# -> test_telegram_envelope_retry(): Задержка Telegram и отказ от автоматической смены чата.
-# -> test_retry_after_values(): Допустимые и ошибочные значения задержки.
-# -> test_endpoint_validation(): Запрет неоднозначных адресов и токенов в настройке URL.
-# -> test_token_resolution_and_policy(): Позднее чтение токена и согласованность таймаутов.
-# -> test_runtime_with_both_adapters(): Оба адаптера в настоящем рабочем потоке runtime.
+# -> test_success_and_lifecycle(): Отправка, размер текста и освобождение клиента
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_http_errors(): Классификация кодов HTTP без утечки тела ответа
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_invalid_success(): Неполное подтверждение не считается успешной доставкой
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_interrupted_requests(): Отмена, обрыв, таймаут и ограничение размера ответа
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_telegram_envelope_retry(): Задержка Telegram и отказ от автоматической смены чата
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_retry_after_values(): Допустимые и ошибочные значения задержки
+#
+# -> test_endpoint_validation(): Запрет неоднозначных адресов и токенов в настройке URL
+#
+# -> test_token_resolution_and_policy(): Позднее чтение токена и согласованность таймаутов
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_runtime_with_both_adapters(): Оба адаптера в настоящем рабочем потоке runtime
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -66,26 +93,40 @@ from remote_watch.adapters._common import retry_after
 from remote_watch.adapters.ntfy_notifications import NtfyChannel, NtfyConfig
 from remote_watch.adapters.telegram_notifications import TelegramChannel, TelegramConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 aiohttp = pytest.importorskip("aiohttp")
+
+#------------------------------------------------------------------------------------------------------------------
 
 
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Управляемый HTTP-ответ для тестов
 #------------------------------------------------------------------------------------------------------------------
 class FakeResponse:
-    """Model a bounded streaming response and a controllable interrupted request."""
+    """
+    Model a bounded streaming response and a controllable interrupted request.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Initialize one configurable HTTP response."""
+        """
+        Initialize one configurable HTTP response.
+        """
 
         self.status = 200
         self.headers: dict[str, str] = {}
@@ -104,9 +145,10 @@ class FakeResponse:
     async def iter_chunked(
         self,
         size: int,
-    ) -> AsyncIterator[bytes]:
+        ) -> AsyncIterator[bytes]:
 
-        """Yield response bytes or wait for cancellation after headers arrive.
+        """
+        Yield response bytes or wait for cancellation after headers arrive.
 
         :param size: Maximum chunk size in bytes.
         :type size: int
@@ -127,9 +169,12 @@ class FakeResponse:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Начало управляемого тестового запроса
     #--------------------------------------------------------------------------------------------------------------
-    async def __aenter__(self) -> FakeResponse:
+    async def __aenter__(
+        self,
+        ) -> FakeResponse:
 
-        """Enter a request or reproduce a connection failure.
+        """
+        Enter a request or reproduce a connection failure.
 
         :return: This fake response for use by the asynchronous context manager.
         :rtype: FakeResponse
@@ -147,9 +192,10 @@ class FakeResponse:
     async def __aexit__(
         self,
         *args: object,
-    ) -> None:
+        ) -> None:
 
-        """Record response cleanup after success, cancellation or malformed data.
+        """
+        Record response cleanup after success, cancellation or malformed data.
 
         :param args: Context manager exception details.
         :type args: object
@@ -161,12 +207,13 @@ class FakeResponse:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : HTTP-сессия, сохраняющая запросы без отправки
 #------------------------------------------------------------------------------------------------------------------
 class FakeSession:
-    """Capture client settings and outgoing requests without network access."""
+    """
+    Capture client settings and outgoing requests without network access.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -174,9 +221,10 @@ class FakeSession:
     def __init__(
         self,
         **settings: Any,
-    ) -> None:
+        ) -> None:
 
-        """Keep the actual connector for checking ownership and cleanup.
+        """
+        Keep the actual connector for checking ownership and cleanup.
 
         :param settings: Client constructor settings.
         :type settings: Any
@@ -197,9 +245,10 @@ class FakeSession:
         self,
         url: str,
         **kwargs: Any,
-    ) -> FakeResponse:
+        ) -> FakeResponse:
 
-        """Record exactly one request without retries or redirects.
+        """
+        Record exactly one request without retries or redirects.
 
         :param url: Fixed request URL.
         :type url: str
@@ -221,9 +270,13 @@ class FakeSession:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the owned connector once the channel finishes."""
+        """
+        Close the owned connector once the channel finishes.
+        """
 
         await self.settings["connector"].close()
         self.closed = True
@@ -235,14 +288,16 @@ class FakeSession:
 # ФУНКЦИИ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подмена HTTP-сессии и подготовка тестовых токенов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
-def sessions(monkeypatch: pytest.MonkeyPatch) -> list[FakeSession]:
+def sessions(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> list[FakeSession]:
 
-    """Replace session creation and provide only synthetic test credentials.
+    """
+    Replace session creation and provide only synthetic test credentials.
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -258,9 +313,12 @@ def sessions(monkeypatch: pytest.MonkeyPatch) -> list[FakeSession]:
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Создание и сохранение тестовой сессии
     #--------------------------------------------------------------------------------------------------------------
-    def create(**kwargs: Any) -> FakeSession:
+    def create(
+        **kwargs: Any,
+        ) -> FakeSession:
 
-        """Capture one newly created client.
+        """
+        Capture one newly created client.
 
         :param kwargs: Captured request or client keyword arguments.
         :type kwargs: Any
@@ -282,13 +340,15 @@ def sessions(monkeypatch: pytest.MonkeyPatch) -> list[FakeSession]:
     return created
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Создание адаптера с тестовыми настройками
 #------------------------------------------------------------------------------------------------------------------
-def make_channel(provider: str) -> TelegramChannel | NtfyChannel:
+def make_channel(
+    provider: str,
+    ) -> TelegramChannel | NtfyChannel:
 
-    """Construct one provider with explicit display settings.
+    """
+    Construct one provider with explicit display settings.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -306,13 +366,15 @@ def make_channel(provider: str) -> TelegramChannel | NtfyChannel:
     ))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подтверждение приёма в формате выбранного сервиса
 #------------------------------------------------------------------------------------------------------------------
-def accepted_body(provider: str) -> dict[str, object]:
+def accepted_body(
+    provider: str,
+    ) -> dict[str, object]:
 
-    """Return the documented success envelope for one provider.
+    """
+    Return the documented success envelope for one provider.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -333,7 +395,6 @@ def accepted_body(provider: str) -> dict[str, object]:
 # ТЕСТЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отправка, размер текста и освобождение клиента
 #------------------------------------------------------------------------------------------------------------------
@@ -344,9 +405,10 @@ def test_success_and_lifecycle(
     notification: Notification,
     sessions: list[FakeSession],
     display: str,
-) -> None:
+    ) -> None:
 
-    """Verify rendering, limits, authentication, request budgets and owned cleanup.
+    """
+    Verify rendering, limits, authentication, request budgets and owned cleanup.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -371,7 +433,9 @@ def test_success_and_lifecycle(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise one full channel lifetime in its owning loop."""
+        """
+        Exercise one full channel lifetime in its owning loop.
+        """
 
         channel = make_channel(provider)
         channel._config = replace(channel._config, display_mode=display)
@@ -426,7 +490,6 @@ def test_success_and_lifecycle(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Классификация кодов HTTP без утечки тела ответа
 #------------------------------------------------------------------------------------------------------------------
@@ -441,9 +504,10 @@ def test_http_errors(
     expected: str,
     notification: Notification,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Classify HTTP failures without returning their sensitive response bodies.
+    """
+    Classify HTTP failures without returning their sensitive response bodies.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -472,7 +536,9 @@ def test_http_errors(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Send one rejected request and verify the fixed result code."""
+        """
+        Send one rejected request and verify the fixed result code.
+        """
 
         channel = make_channel(provider)
         await channel.open()
@@ -493,7 +559,6 @@ def test_http_errors(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неполное подтверждение не считается успешной доставкой
 #------------------------------------------------------------------------------------------------------------------
@@ -506,9 +571,10 @@ def test_invalid_success(
     body: object,
     notification: Notification,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Treat ambiguous success as unknown instead of claiming delivery.
+    """
+    Treat ambiguous success as unknown instead of claiming delivery.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -533,7 +599,9 @@ def test_invalid_success(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Read one malformed acknowledgement."""
+        """
+        Read one malformed acknowledgement.
+        """
 
         channel = make_channel(provider)
         await channel.open()
@@ -548,7 +616,6 @@ def test_invalid_success(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отмена, обрыв, таймаут и ограничение размера ответа
 #------------------------------------------------------------------------------------------------------------------
@@ -559,9 +626,10 @@ def test_interrupted_requests(
     mode: str,
     notification: Notification,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Verify unknown outcomes, response bounds and propagation of cancellation.
+    """
+    Verify unknown outcomes, response bounds and propagation of cancellation.
 
     :param provider: Provider selected by the test.
     :type provider: str
@@ -586,7 +654,9 @@ def test_interrupted_requests(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Interrupt an attempt and still release owned resources."""
+        """
+        Interrupt an attempt and still release owned resources.
+        """
 
         channel = make_channel(provider)
         await channel.open()
@@ -620,16 +690,16 @@ def test_interrupted_requests(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Задержка Telegram и отказ от автоматической смены чата
 #------------------------------------------------------------------------------------------------------------------
 def test_telegram_envelope_retry(
     notification: Notification,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Respect Telegram parameters and refuse automatic chat migration.
+    """
+    Respect Telegram parameters and refuse automatic chat migration.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -646,7 +716,9 @@ def test_telegram_envelope_retry(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check a logical API error even when HTTP itself succeeds."""
+        """
+        Check a logical API error even when HTTP itself succeeds.
+        """
 
         channel = make_channel("telegram")
         await channel.open()
@@ -666,7 +738,6 @@ def test_telegram_envelope_retry(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Допустимые и ошибочные значения задержки
 #------------------------------------------------------------------------------------------------------------------
@@ -675,9 +746,10 @@ def test_telegram_envelope_retry(
 def test_retry_after_values(
     value: object,
     expected: float | None,
-) -> None:
+    ) -> None:
 
-    """Parse delay fields without accepting nonfinite values or booleans.
+    """
+    Parse delay fields without accepting nonfinite values or booleans.
 
     :param value: Untrusted delay value.
     :type value: object
@@ -693,7 +765,6 @@ def test_retry_after_values(
     assert retry_after("Mon, 28 Sep 2026 12:00:10 GMT", datetime(2026, 9, 28, 12, tzinfo=timezone.utc)) == 10
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет неоднозначных адресов и токенов в настройке URL
 #------------------------------------------------------------------------------------------------------------------
@@ -702,9 +773,12 @@ def test_retry_after_values(
     "https://example.com/#fragment", "https://example.com/../other", "https://example.com/%2e",
     "https://x:bad", "https://x/\n",
 ])
-def test_endpoint_validation(endpoint: str) -> None:
+def test_endpoint_validation(
+    endpoint: str,
+    ) -> None:
 
-    """Reject unsafe endpoints without echoing their contents.
+    """
+    Reject unsafe endpoints without echoing their contents.
 
     :param endpoint: Configured provider base URL.
     :type endpoint: str
@@ -717,16 +791,16 @@ def test_endpoint_validation(endpoint: str) -> None:
     assert endpoint not in str(caught.value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Позднее чтение токена и согласованность таймаутов
 #------------------------------------------------------------------------------------------------------------------
 def test_token_resolution_and_policy(
     monkeypatch: pytest.MonkeyPatch,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Resolve secrets at open and use identical timeout policies on both boundaries.
+    """
+    Resolve secrets at open and use identical timeout policies on both boundaries.
 
     :param monkeypatch: Pytest patch and environment fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -751,7 +825,9 @@ def test_token_resolution_and_policy(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Retry opening only after the application supplies its missing credential."""
+        """
+        Retry opening only after the application supplies its missing credential.
+        """
 
         with pytest.raises(ValueError, match="missing or invalid"):
             await channel.open()
@@ -767,16 +843,16 @@ def test_token_resolution_and_policy(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Оба адаптера в настоящем рабочем потоке runtime
 #------------------------------------------------------------------------------------------------------------------
 def test_runtime_with_both_adapters(
     notification: Notification,
     sessions: list[FakeSession],
-) -> None:
+    ) -> None:
 
-    """Exercise logger routing and two managed adapters in the actual worker thread.
+    """
+    Exercise logger routing and two managed adapters in the actual worker thread.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -806,8 +882,6 @@ def test_runtime_with_both_adapters(
         runtime.handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

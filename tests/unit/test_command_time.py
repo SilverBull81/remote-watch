@@ -1,25 +1,29 @@
 ﻿# Проверки свежести команд при независимых часах и ошибках источника времени.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_vm_clocks_do_not_authorize_commands(): Независимость допуска команды от UTC машин.
+# -> test_vm_clocks_do_not_authorize_commands(): Независимость допуска команды от UTC машин
 #
-# -> test_untrusted_time_fails_closed(): Отказ при истечении, дрейфе и возврате времени назад.
+# -> test_untrusted_time_fails_closed(): Отказ при истечении, дрейфе и возврате времени назад
 #
-# -> test_refresh_failure_invalidates_old_anchor(): Снятие доверия после неудачного обновления.
+# -> test_refresh_failure_invalidates_old_anchor(): Снятие доверия после неудачного обновления
+#    Вложенные объявления:
+#    -> Source: Источник с подставной ошибкой
+#       Интерфейс:
+#       -> sample(): Получение одного показания времени
 #
-# -> test_time_policy_limits(): Ограничения настроек проверки времени.
-#
+# -> test_time_policy_limits(): Ограничения настроек проверки времени
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +39,12 @@ from remote_watch.commands.time import (
     TrustedClock,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимость допуска команды от UTC машин
@@ -43,9 +53,10 @@ from remote_watch.commands.time import (
 def test_vm_clocks_do_not_authorize_commands(
     monkeypatch: pytest.MonkeyPatch,
     offset: int,
-) -> None:
+    ) -> None:
 
-    """Use the trusted interval despite either sign of VM UTC error.
+    """
+    Use the trusted interval despite either sign of VM UTC error.
 
     :param monkeypatch: Pytest scoped dependency replacement.
     :type monkeypatch: pytest.MonkeyPatch
@@ -70,14 +81,16 @@ def test_vm_clocks_do_not_authorize_commands(
     assert clock.check(1000010, "a" * 32).reason is FreshnessReason.FUTURE
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ при истечении, дрейфе и возврате времени назад
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("case", ["missing", "old_sample", "wide_sample", "rollback", "drift", "future_sample"])
-def test_untrusted_time_fails_closed(case: str) -> None:
+def test_untrusted_time_fails_closed(
+    case: str,
+    ) -> None:
 
-    """Invalidate unavailable, expired, imprecise and rolled-back anchors.
+    """
+    Invalidate unavailable, expired, imprecise and rolled-back anchors.
 
     :param case: Selected success or failure scenario.
     :type case: str
@@ -105,26 +118,32 @@ def test_untrusted_time_fails_closed(case: str) -> None:
     assert clock.check(1000, "a" * 32).reason is FreshnessReason.TIME_UNAVAILABLE
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Снятие доверия после неудачного обновления
 #------------------------------------------------------------------------------------------------------------------
 def test_refresh_failure_invalidates_old_anchor() -> None:
 
-    """Do not reuse a previous successful sample after a failed refresh."""
+    """
+    Do not reuse a previous successful sample after a failed refresh.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КЛАСС : Источник с подставной ошибкой
     #--------------------------------------------------------------------------------------------------------------
     class Source:
-        """Supply synthetic failure without contacting a provider."""
+        """
+        Supply synthetic failure without contacting a provider.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Получение одного показания времени
         #----------------------------------------------------------------------------------------------------------
-        async def sample(self) -> TimeSample:
+        async def sample(
+            self,
+            ) -> TimeSample:
 
-            """Raise an error containing synthetic private detail.
+            """
+            Raise an error containing synthetic private detail.
 
             :return: UTC bounds associated with a local monotonic observation.
             :rtype: TimeSample
@@ -142,7 +161,6 @@ def test_refresh_failure_invalidates_old_anchor() -> None:
     assert clock.check(1000, "a" * 32).deadline is None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничения настроек проверки времени
 #------------------------------------------------------------------------------------------------------------------
@@ -154,9 +172,10 @@ def test_refresh_failure_invalidates_old_anchor() -> None:
 def test_time_policy_limits(
     field: str,
     value: object,
-) -> None:
+    ) -> None:
 
-    """Reject policies that would silently relax freshness beyond bounded limits.
+    """
+    Reject policies that would silently relax freshness beyond bounded limits.
 
     :param field: Configuration field being tested.
     :type field: str
@@ -172,8 +191,6 @@ def test_time_policy_limits(
         replace(FreshnessPolicy(), **{field: value})
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

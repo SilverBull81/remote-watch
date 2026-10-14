@@ -1,51 +1,53 @@
 ﻿# Подключение фоновой доставки и локальных журналов к обычному logging.Logger.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-112702
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> ConsoleConfig: Настройки необязательного вывода в консоль.
+# -> ConsoleConfig: Настройки необязательного вывода в консоль
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек без открытия ресурсов.
+#    -> __post_init__(): Проверка настроек без открытия ресурсов
 #
-# -> RotatingFileConfig: Настройки локального журнала с ротацией.
+# -> RotatingFileConfig: Настройки локального журнала с ротацией
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек без открытия ресурсов.
+#    -> __post_init__(): Проверка настроек без открытия ресурсов
 #
-# -> _OwnedRotatingFileHandler: Файловый обработчик без повторного открытия после остановки.
+# -> _OwnedRotatingFileHandler: Файловый обработчик без повторного открытия после остановки
 #    Интерфейс:
-#    -> emit(): Запись только в действующий файловый обработчик.
+#    -> emit(): Запись только в действующий файловый обработчик
 #
-# -> RemoteWatcher: Владелец фоновой доставки и выбранных локальных обработчиков.
+# -> RemoteWatcher: Владелец фоновой доставки и выбранных локальных обработчиков
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> command_stats(): Чтение состояния командного исполнителя.
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> astart(): Асинхронный запуск с откатом при отмене.
-#    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов.
-#    -> astop(): Асинхронная остановка с завершением очистки.
+#    -> command_stats(): Чтение состояния командного исполнителя
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> astart(): Асинхронный запуск с откатом при отмене
+#    -> stop(): Остановка приёма команд и принадлежащих объекту ресурсов
+#    -> astop(): Асинхронная остановка с завершением очистки
+#       Вложенные объявления:
+#       -> cleanup(): Остановка обоих runtime даже при отказе одного из них
 #    Специальные методы:
-#    -> __enter__(): Запуск при входе в контекст.
-#    -> __exit__(): Остановка при выходе из контекста.
-#    -> __aenter__(): Асинхронный вход в контекст.
-#    -> __aexit__(): Асинхронный выход из контекста.
+#    -> __enter__(): Запуск при входе в контекст
+#    -> __exit__(): Остановка при выходе из контекста
+#    -> __aenter__(): Асинхронный вход в контекст
+#    -> __aexit__(): Асинхронный выход из контекста
 #    Служебные методы:
-#    -> _start_notifications(): Создание обработчиков и запуск фоновой доставки.
-#    -> _stop_notifications(): Снятие обработчиков и завершение принятой работы.
-#    -> _check_context(): Запрет управления lifecycle из внутренних callback.
-#    -> _release_handlers(): Закрытие только принадлежащих объекту обработчиков.
-#    -> _call(): Выполнение lifecycle вне цикла приложения.
-#    -> _finish(): Ожидание очистки с учётом повторной отмены.
-#
+#    -> _start_notifications(): Создание обработчиков и запуск фоновой доставки
+#    -> _stop_notifications(): Снятие обработчиков и завершение принятой работы
+#    -> _check_context(): Запрет запуска и остановки из внутренних обработчиков
+#    -> _release_handlers(): Закрытие только принадлежащих объекту обработчиков
+#    -> _call(): Запуск и остановка вне цикла приложения
+#    -> _finish(): Ожидание очистки с учётом повторной отмены
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -66,24 +68,45 @@ from remote_watch.local_logging import DailyFileConfig, DailyFileHandler
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.runtime import NotificationRuntime
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки необязательного вывода в консоль
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConsoleConfig:
-    """Configure an optional stderr or caller-owned stream handler."""
+    """
+    Configure an optional stderr or caller-owned stream handler.
+
+    :param level: Minimum standard logging severity.
+    :type level: int
+
+    :param format: Standard logging formatter pattern.
+    :type format: str
+
+    :param stream: Application output stream, or None to select stderr.
+    :type stream: TextIO | None
+    """
 
     level: int = logging.INFO                               # Минимальный уровень для консоли.
     format: str = "%(levelname)s %(name)s: %(message)s"     # Шаблон стандартного logging.Formatter.
-    stream: TextIO | None = field(default=None, repr=False)     # Поток приложения; None выбирает stderr.
+    stream: TextIO | None = field(default=None, repr=False)  # Поток приложения; None выбирает stderr.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек без открытия ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate settings without writing to the stream."""
+        """
+        Validate settings without writing to the stream.
+        """
 
         require_int(self.level, "level", 0)
         if not isinstance(self.format, str):
@@ -96,26 +119,46 @@ class ConsoleConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки локального журнала с ротацией
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RotatingFileConfig:
-    """Configure a bounded rotating UTF-8 log; the parent directory must exist."""
+    """
+    Configure a bounded rotating UTF-8 log; the parent directory must exist.
+
+    :param path: Configured file path resolved according to the owning configuration contract.
+    :type path: str | Path
+
+    :param level: Minimum standard logging severity.
+    :type level: int
+
+    :param max_bytes: Maximum log file size before rotation, in bytes.
+    :type max_bytes: int
+
+    :param backup_count: Number of rotated log files to retain.
+    :type backup_count: int
+
+    :param format: Standard logging formatter pattern.
+    :type format: str
+    """
 
     path: str | Path                                        # Путь к журналу, отдельному для процесса.
     level: int = logging.DEBUG                              # Минимальный уровень для файла.
     max_bytes: int = 10 * 1024 * 1024                       # Порог ротации основного журнала.
     backup_count: int = 3                                   # Число сохраняемых предыдущих файлов.
-    format: str = "%(asctime)s %(levelname)s %(name)s: %(message)s"     # Шаблон строки журнала.
+    format: str = "%(asctime)s %(levelname)s %(name)s: %(message)s"  # Шаблон строки журнала.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек без открытия ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate rotation and freeze an absolute path without opening files."""
+        """
+        Validate rotation and freeze an absolute path without opening files.
+        """
 
         if not isinstance(self.path, (str, Path)) or not str(self.path).strip():
             raise ValueError("path must be a nonempty string or Path")
@@ -131,12 +174,13 @@ class RotatingFileConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Файловый обработчик без повторного открытия после остановки
 #------------------------------------------------------------------------------------------------------------------
 class _OwnedRotatingFileHandler(RotatingFileHandler):
-    """Prevent a late emit from reopening a closed append-mode file."""
+    """
+    Prevent a late emit from reopening a closed append-mode file.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запись только в действующий файловый обработчик
@@ -144,9 +188,10 @@ class _OwnedRotatingFileHandler(RotatingFileHandler):
     def emit(
         self,
         record: logging.LogRecord,
-    ) -> None:
+        ) -> None:
 
-        """Write only while open; logging.Handler.handle already holds the handler lock.
+        """
+        Write only while open; logging.Handler.handle already holds the handler lock.
 
         :param record: Standard logging record.
         :type record: logging.LogRecord
@@ -161,12 +206,12 @@ class _OwnedRotatingFileHandler(RotatingFileHandler):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Владелец фоновой доставки и выбранных локальных обработчиков
 #------------------------------------------------------------------------------------------------------------------
 class RemoteWatcher:
-    """Own notification delivery and explicitly requested local handlers.
+    """
+    Own notification delivery and explicitly requested local handlers.
 
     Logging remains on logger, which is never replaced by a custom logging API.
     An existing logger keeps its level, propagation, filters and foreign handlers.
@@ -188,9 +233,10 @@ class RemoteWatcher:
         file: RotatingFileConfig | DailyFileConfig | None = None,
         redactor: Callable[[str], str] | None = None,
         command_client: CommandClient | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Prepare ownership without attaching handlers, opening files or starting threads.
+        """
+        Prepare ownership without attaching handlers, opening files or starting threads.
 
         :param config: Validated application settings.
         :type config: WatcherConfig
@@ -245,14 +291,16 @@ class RemoteWatcher:
         self._closed = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение состояния командного исполнителя
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def command_stats(self) -> DispatcherStats | None:
+    def command_stats(
+        self,
+        ) -> DispatcherStats | None:
 
-        """Read command counters without exposing identities, arguments or callback exceptions.
+        """
+        Read command counters without exposing identities, arguments or callback exceptions.
 
         :return: Command counters, or None when commands are not explicitly enabled.
         :rtype: DispatcherStats | None
@@ -261,13 +309,16 @@ class RemoteWatcher:
         return None if self._commands is None else self._commands.dispatcher.stats
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
-    def start(self) -> None:
+    def start(
+        self,
+        ) -> None:
 
-        """Start notification delivery and explicitly configured synchronous commands."""
+        """
+        Start notification delivery and explicitly configured synchronous commands.
+        """
 
         self._check_context()
         try:
@@ -279,13 +330,16 @@ class RemoteWatcher:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронный запуск с откатом при отмене
     #--------------------------------------------------------------------------------------------------------------
-    async def astart(self) -> None:
+    async def astart(
+        self,
+        ) -> None:
 
-        """Start notifications and bind asynchronous commands to the application loop."""
+        """
+        Start notifications and bind asynchronous commands to the application loop.
+        """
 
         self._check_context()
         try:
@@ -297,13 +351,16 @@ class RemoteWatcher:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка приёма команд и принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    def stop(self) -> None:
+    def stop(
+        self,
+        ) -> None:
 
-        """Stop command admission before detaching owned notification handlers."""
+        """
+        Stop command admission before detaching owned notification handlers.
+        """
 
         self._check_context()
         try:
@@ -316,19 +373,24 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Асинхронная остановка с завершением очистки
     #--------------------------------------------------------------------------------------------------------------
-    async def astop(self) -> None:
+    async def astop(
+        self,
+        ) -> None:
 
-        """Stop command admission before notification cleanup, retaining cancellation safety."""
+        """
+        Stop command admission before notification cleanup, retaining cancellation safety.
+        """
 
         self._check_context()
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Остановка обоих runtime даже при отказе одного из них
         #----------------------------------------------------------------------------------------------------------
         async def cleanup() -> None:
 
-            """Close both owned runtimes even if command cleanup fails."""
+            """
+            Close both owned runtimes even if command cleanup fails.
+            """
 
             try:
                 if self._commands is not None:
@@ -349,9 +411,12 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Запуск при входе в контекст
     #--------------------------------------------------------------------------------------------------------------
-    def __enter__(self) -> RemoteWatcher:
+    def __enter__(
+        self,
+        ) -> RemoteWatcher:
 
-        """Start and return the owner.
+        """
+        Start and return the owner.
 
         :return: This running watcher.
         :rtype: RemoteWatcher
@@ -367,9 +432,10 @@ class RemoteWatcher:
     def __exit__(
         self,
         *args: object,
-    ) -> None:
+        ) -> None:
 
-        """Stop on normal completion or an application exception.
+        """
+        Stop on normal completion or an application exception.
 
         :param args: Context manager exception details.
         :type args: object
@@ -383,9 +449,12 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Асинхронный вход в контекст
     #--------------------------------------------------------------------------------------------------------------
-    async def __aenter__(self) -> RemoteWatcher:
+    async def __aenter__(
+        self,
+        ) -> RemoteWatcher:
 
-        """Start without blocking the application loop.
+        """
+        Start without blocking the application loop.
 
         :return: This running watcher.
         :rtype: RemoteWatcher
@@ -401,9 +470,10 @@ class RemoteWatcher:
     async def __aexit__(
         self,
         *args: object,
-    ) -> None:
+        ) -> None:
 
-        """Drain without blocking the application loop.
+        """
+        Drain without blocking the application loop.
 
         :param args: Context manager exception details.
         :type args: object
@@ -417,9 +487,13 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Создание обработчиков и запуск фоновой доставки
     #--------------------------------------------------------------------------------------------------------------
-    def _start_notifications(self) -> None:
+    def _start_notifications(
+        self,
+        ) -> None:
 
-        """Open local files, start delivery and attach owned handlers atomically for lifecycle callers."""
+        """
+        Open local files, start delivery and attach owned handlers atomically for lifecycle callers.
+        """
 
         self._check_context()
         with self._lock:
@@ -464,13 +538,16 @@ class RemoteWatcher:
                 raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Снятие обработчиков и завершение принятой работы
     #--------------------------------------------------------------------------------------------------------------
-    def _stop_notifications(self) -> None:
+    def _stop_notifications(
+        self,
+        ) -> None:
 
-        """Detach owned handlers, drain delivery and close only owned local resources."""
+        """
+        Detach owned handlers, drain delivery and close only owned local resources.
+        """
 
         self._check_context()
         with self._lock:
@@ -484,13 +561,16 @@ class RemoteWatcher:
                 self._release_handlers()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Запрет управления lifecycle из внутренних callback
+    # СЛУЖЕБНЫЙ МЕТОД : Запрет запуска и остановки из внутренних обработчиков
     #--------------------------------------------------------------------------------------------------------------
-    def _check_context(self) -> None:
+    def _check_context(
+        self,
+        ) -> None:
 
-        """Reject lifecycle calls from delivery or normalization callbacks before locking."""
+        """
+        Reject lifecycle calls from delivery or normalization callbacks before locking.
+        """
 
         # Такой вызов мог бы ждать поток, который сейчас выполняет сам callback.
         if delivery_context.get() or command_context.get():
@@ -500,9 +580,13 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Закрытие только принадлежащих объекту обработчиков
     #--------------------------------------------------------------------------------------------------------------
-    def _release_handlers(self) -> None:
+    def _release_handlers(
+        self,
+        ) -> None:
 
-        """Detach and close owned handlers while holding the lifecycle lock."""
+        """
+        Detach and close owned handlers while holding the lifecycle lock.
+        """
 
         first_error: Exception | None = None
         for handler in reversed(self._handlers):
@@ -521,16 +605,17 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Выполнение lifecycle вне цикла приложения
+    # СЛУЖЕБНЫЙ МЕТОД : Запуск и остановка вне цикла приложения
     #--------------------------------------------------------------------------------------------------------------
     async def _call(
         self,
         action: Callable[[], None],
         *,
         stop_on_cancel: bool,
-    ) -> None:
+        ) -> None:
 
-        """Shield the finite synchronous lifecycle operation and complete cancellation cleanup.
+        """
+        Shield the finite synchronous lifecycle operation and complete cancellation cleanup.
 
         :param action: Synchronous lifecycle operation.
         :type action: Callable[[], None]
@@ -559,9 +644,10 @@ class RemoteWatcher:
     async def _finish(
         self,
         task: asyncio.Task[None],
-    ) -> None:
+        ) -> None:
 
-        """Wait through repeated cancellation and consume a cleanup task's exception.
+        """
+        Wait through repeated cancellation and consume a cleanup task's exception.
 
         :param task: Offloaded lifecycle task.
         :type task: asyncio.Task[None]
@@ -582,8 +668,6 @@ class RemoteWatcher:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

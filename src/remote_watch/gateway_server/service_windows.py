@@ -1,39 +1,41 @@
 ﻿# Ограниченные операции SCM, права виртуального аккаунта и автозапуск пользовательского UI.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
-# Класс:
-# -> ServiceInstallError: Безопасная стадия частично завершённой установки.
+# Классы:
+# -> ServiceInstallError: Безопасная стадия частично завершённой установки
 #    Конструктор:
-#    -> __init__(): Сохранение только разрешённой стадии и номера ошибки ОС.
+#    -> __init__(): Подготовка состояния объекта.
 #
-# -> WindowsService: Управление только точно совпадающей службой deployment.
+# -> WindowsService: Управление только точно совпадающей службой этого сервера
 #    Конструктор:
-#    -> __init__(): Загрузка optional API без изменения ОС.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> status(): Безопасное состояние SCM, не готовность приложений.
-#    -> start(): Запрос запуска проверенной службы.
-#    -> stop(): Запрос мягкой остановки проверенной службы.
-#    -> install(): Регистрация нового владельца с отдельными правами.
-#    -> remove(): Удаление остановленной службы без удаления данных.
-#    -> sync_tray(): Обновление только собственного HKCU Run оператора.
+#    -> status(): Безопасное состояние SCM, не готовность приложений
+#    -> start(): Запрос запуска проверенной службы
+#    -> stop(): Запрос мягкой остановки проверенной службы
+#    -> install(): Регистрация нового владельца с отдельными правами
+#    -> remove(): Удаление остановленной службы без удаления данных
+#    -> sync_tray(): Обновление только собственного HKCU Run оператора
 #    Служебные методы:
-#    -> _open(): Открытие handle с проверкой binary/account.
-#    -> _sync_entry(): Проверка и изменение только своей записи Run.
-#    -> _grant(): Выдача прав только виртуальному SID на проверенный путь.
+#    -> _sync_entry(): Проверка и изменение своей записи Run
+#    -> _open(): Открытие handle с проверкой binary/account
+#    -> _grant(): Выдача прав только виртуальному SID на проверенный путь
 #
 # Функции:
-# -> managed(): Гарантированное закрытие native SCM handle.
-# -> checked_tree(): Запрет рекурсивного ACL через reparse point.
+# -> managed(): Гарантированное закрытие native SCM handle
+#
+# -> checked_tree(): Запрет рекурсивного ACL через reparse point
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import os
@@ -47,12 +49,20 @@ from remote_watch.commands.source_store import ProcessLock
 from .deployment import _path
 from .service import ServicePlan, ServiceSpec
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Безопасная стадия частично завершённой установки
 #------------------------------------------------------------------------------------------------------------------
 class ServiceInstallError(ValueError):
-    """Retain only a fixed installation phase and numeric OS error."""
+    """
+    Retain only a fixed installation phase and numeric OS error.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -61,12 +71,14 @@ class ServiceInstallError(ValueError):
         self,
         stage: str,
         winerror: int | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Discard raw errors while retaining an actionable installation boundary.
+        """
+        Discard raw errors while retaining an actionable installation boundary.
 
         :param stage: Library-owned account/acl/security/recovery/tray/autostart phase.
         :type stage: str
+
         :param winerror: Numeric native failure, without its localized message.
         :type winerror: int | None
         """
@@ -80,16 +92,24 @@ class ServiceInstallError(ValueError):
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Гарантированное закрытие native SCM handle
 #------------------------------------------------------------------------------------------------------------------
 @contextmanager
-def managed(handle: object) -> Iterator[object]:
+def managed(
+    handle: object,
+    ) -> Iterator[object]:
 
-    """Close a PySC_HANDLE even on an ownership or permission failure.
+    """
+    Close a PySC_HANDLE even on an ownership or permission failure.
 
     :param handle: Owned pywin32 SCM handle; it is not a context manager itself.
     :type handle: object
+
     :return: Handle valid only during the enclosing operation.
     :rtype: Iterator[object]
     """
@@ -101,13 +121,15 @@ def managed(handle: object) -> Iterator[object]:
         handle.Close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запрет рекурсивного ACL через reparse point
 #------------------------------------------------------------------------------------------------------------------
-def checked_tree(path: Path) -> None:
+def checked_tree(
+    path: Path,
+    ) -> None:
 
-    """Check all existing descendants before a recursive permissions operation.
+    """
+    Check all existing descendants before a recursive permissions operation.
 
     :param path: Explicit environment or runtime directory, never an inferred disk root.
     :type path: Path
@@ -126,11 +148,17 @@ def checked_tree(path: Path) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Управление только точно совпадающей службой deployment
+# КЛАСС : Управление только точно совпадающей службой этого сервера
 #------------------------------------------------------------------------------------------------------------------
 class WindowsService:
-    """Delegate only service query/start/stop and retain exact deployment ownership checks."""
+    """
+    Delegate only service query/start/stop and retain exact deployment ownership checks.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -138,15 +166,16 @@ class WindowsService:
     def __init__(
         self,
         spec: ServiceSpec,
-    ) -> None:
+        ) -> None:
 
-        """Load Windows dependencies lazily without touching services or credentials.
+        """
+        Load Windows dependencies lazily without touching services or credentials.
 
         :param spec: Exact expected binary, account and operator binding.
         :type spec: ServiceSpec
         """
 
-        # spec — разрешение управлять одним deployment не распространяется на Caddy.
+        # spec — разрешение управлять одним развёрнутым сервером не распространяется на Caddy.
         import win32security
         import win32service
 
@@ -159,9 +188,12 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Безопасное состояние SCM, не готовность приложений
     #--------------------------------------------------------------------------------------------------------------
-    def status(self) -> dict:
+    def status(
+        self,
+        ) -> dict:
 
-        """Read SCM lifecycle without loading linked configs, tokens or journals.
+        """
+        Read SCM lifecycle without loading linked configs, tokens or journals.
 
         :return: Fixed state and numeric exit status only.
         :rtype: dict
@@ -178,9 +210,13 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запрос запуска проверенной службы
     #--------------------------------------------------------------------------------------------------------------
-    def start(self) -> None:
+    def start(
+        self,
+        ) -> None:
 
-        """Request SCM startup without treating its acceptance as gateway readiness."""
+        """
+        Request SCM startup without treating its acceptance as gateway readiness.
+        """
 
         with self._open(16) as handle:
             self.api.StartService(handle, None)
@@ -189,9 +225,13 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запрос мягкой остановки проверенной службы
     #--------------------------------------------------------------------------------------------------------------
-    def stop(self) -> None:
+    def stop(
+        self,
+        ) -> None:
 
-        """Request the service's common graceful shutdown path, never terminate by PID."""
+        """
+        Request the service's common graceful shutdown path, never terminate by PID.
+        """
 
         with self._open(32 | 4) as handle:
             if self.api.QueryServiceStatus(handle)[1] != 1:
@@ -204,16 +244,17 @@ class WindowsService:
     def install(
         self,
         plan: ServicePlan,
-    ) -> None:
+        ) -> None:
 
-        """Create a stopped passwordless service and only then permit automatic boot startup.
+        """
+        Create a stopped passwordless service and only then permit automatic boot startup.
 
         :param plan: Fully validated original paths and bounded ACL targets.
         :type plan: ServicePlan
         """
 
         # plan — recursive ACL проверяется целиком до первой записи. Не открываем
-        # SQLite; manager.lock нужен лишь для исключения действующего foreground owner.
+        # SQLite; manager.lock исключает установку при уже работающем сервере.
         for directory in (plan.environment, *plan.write_dirs):
             checked_tree(directory)
         owner = ProcessLock(plan.deployment.control_dir / "manager.lock")
@@ -239,7 +280,7 @@ class WindowsService:
                         sid = self.security.LookupAccountName(None, "NT SERVICE\\" + self.spec.name)[0]
                         sid_text = self.security.ConvertSidToStringSid(sid)
                         # Доступ к коду — RX, к конфигам — R. Только runtime dirs
-                        # получают F, поскольку manager защищает их DACL при запуске.
+                        # получают полный доступ F: управляющий процесс защищает их DACL при запуске.
                         stage = "acl"
                         self._grant(plan.spec.config.parent, sid_text, "RX", False)
                         self._grant(plan.environment, sid_text, "(OI)(CI)RX", True)
@@ -255,7 +296,7 @@ class WindowsService:
                         stage = "recovery"
                         self.api.ChangeServiceConfig2(handle, 2, {"ResetPeriod": 86400,
                             "RebootMsg": None, "Command": None, "Actions": [(1, 60000), (1, 300000), (0, 0)]})
-                        # Configuration/startup failure с корректным STOPPED не
+                        # Отказ настройки или запуска с корректным статусом STOPPED не
                         # считается crash. Последний NONE предотвращает вечный restart.
                         self.api.ChangeServiceConfig2(handle, 4, False)
                         self.api.ChangeServiceConfig2(handle, 7, int((plan.deployment.lifecycle.shutdown_timeout
@@ -279,9 +320,13 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Удаление остановленной службы без удаления данных
     #--------------------------------------------------------------------------------------------------------------
-    def remove(self) -> None:
+    def remove(
+        self,
+        ) -> None:
 
-        """Delete only the exact stopped service, preserving configs, journals, ACL and CA."""
+        """
+        Delete only the exact stopped service, preserving configs, journals, ACL and CA.
+        """
 
         with self._open(0x10000 | 4) as handle:
             if self.api.QueryServiceStatus(handle)[1] != 1:
@@ -296,9 +341,10 @@ class WindowsService:
     def sync_tray(
         self,
         enabled: bool,
-    ) -> None:
+        ) -> None:
 
-        """Apply the config's UI choice without restarting the service.
+        """
+        Apply the config's UI choice without restarting the service.
 
         :param enabled: Whether to register this operator's logon controller.
         :type enabled: bool
@@ -315,12 +361,14 @@ class WindowsService:
     def _sync_entry(
         self,
         enabled: bool,
-    ) -> bool:
+        ) -> bool:
 
-        """Never replace another logon entry or register a SYSTEM interactive application.
+        """
+        Never replace another logon entry or register a SYSTEM interactive application.
 
         :param enabled: Desired state of the exact operator's Run value.
         :type enabled: bool
+
         :return: Whether this operation created its own new Run value.
         :rtype: bool
         """
@@ -359,12 +407,14 @@ class WindowsService:
     def _open(
         self,
         rights: int,
-    ) -> object:
+        ) -> object:
 
-        """Refuse a same-name foreign service before sending any control.
+        """
+        Refuse a same-name foreign service before sending any control.
 
         :param rights: Minimal additional access for the selected operation.
         :type rights: int
+
         :return: Caller-owned verified PySC_HANDLE context manager.
         :rtype: object
         """
@@ -392,16 +442,20 @@ class WindowsService:
         sid: str,
         rights: str,
         tree: bool,
-    ) -> None:
+        ) -> None:
 
-        """Use one native ACL tool with argument vectors and discard path-bearing output.
+        """
+        Use one native ACL tool with argument vectors and discard path-bearing output.
 
         :param path: Explicit checked local path.
         :type path: Path
+
         :param sid: Windows-resolved virtual service SID.
         :type sid: str
+
         :param rights: Library-owned fixed ACL permission expression.
         :type rights: str
+
         :param tree: Whether the previously checked tree needs recursive grants.
         :type tree: bool
         """
@@ -421,8 +475,6 @@ class WindowsService:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,24 +1,25 @@
 ﻿# HTTPS-транспорт команд с проверкой TLS и ограничением одновременных запросов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> HttpsCommandTransport: Защищённые запросы без неявных повторов.
+# -> HttpsCommandTransport: Защищённые запросы без неявных повторов
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие принадлежащих объекту ресурсов.
-#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> open(): Открытие принадлежащих объекту ресурсов
+#    -> exchange(): Один обмен с проверкой ответа и без скрытого retry
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -41,13 +42,20 @@ from remote_watch.commands.protocol import CommandMessage, encode_command
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.notifications._context import delivery_context
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Защищённые запросы без неявных повторов
 #------------------------------------------------------------------------------------------------------------------
 class HttpsCommandTransport:
-    """Make bounded authenticated exchanges without implicit retries or redirects."""
-
+    """
+    Make bounded authenticated exchanges without implicit retries or redirects.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -60,9 +68,10 @@ class HttpsCommandTransport:
         ssl_context: ssl.SSLContext | None = None,
         timeout: float = 25.0,
         allow_loopback_http: bool = False,
-    ) -> None:
+        ) -> None:
 
-        """Validate a command-only endpoint and retain credentials outside representations.
+        """
+        Validate a command-only endpoint and retain credentials outside representations.
 
         :param endpoint: HTTPS origin without credentials, query or path.
         :type endpoint: str
@@ -121,13 +130,16 @@ class HttpsCommandTransport:
         self._closed = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Create the optional HTTP client only on explicit startup."""
+        """
+        Create the optional HTTP client only on explicit startup.
+        """
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
@@ -141,7 +153,6 @@ class HttpsCommandTransport:
         )
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Один обмен с проверкой ответа и без скрытого retry
     #--------------------------------------------------------------------------------------------------------------
@@ -149,9 +160,10 @@ class HttpsCommandTransport:
         self,
         operation: str,
         message: CommandMessage,
-    ) -> CommandMessage | CommandOffer | None:
+        ) -> CommandMessage | CommandOffer | None:
 
-        """Send one request and return a validated response without retrying it.
+        """
+        Send one request and return a validated response without retrying it.
 
         :param operation: Single operation executed within the documented limits.
         :type operation: str
@@ -239,13 +251,16 @@ class HttpsCommandTransport:
             delivery_context.reset(context_token)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the HTTP session and prohibit reuse after shutdown."""
+        """
+        Close the HTTP session and prohibit reuse after shutdown.
+        """
 
         self._closed = True
 
@@ -255,7 +270,6 @@ class HttpsCommandTransport:
 
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

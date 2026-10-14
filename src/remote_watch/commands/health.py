@@ -1,33 +1,40 @@
 ﻿# Текущее состояние командного клиента и ограниченная история отказов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-235443
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> StageHealth: Ошибка одного этапа и счётчики восстановления.
-# -> CommandHealth: Согласованное состояние четырёх этапов без сетевых обращений.
-# -> HealthState: Потокобезопасное накопление наблюдений клиента.
+# -> StageHealth: Ошибка одного этапа и счётчики восстановления
+#
+# -> CommandHealth: Согласованное состояние четырёх этапов без сетевых обращений
+#
+# -> HealthState: Потокобезопасное накопление наблюдений клиента
 #    Конструктор:
-#    -> __init__(): Подготовка ограниченного состояния.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> snapshot(): Чтение состояния без изменения истории.
-#    -> lease(): Установка проверенного срока регистрации.
-#    -> recovery(): Состояние восстановления и его конечные причины.
-#    -> close(): Отметка начала остановки.
-#    -> pending(): Отметка неподтверждённых результатов.
-#    -> failure(): Учёт одного отказа без повторного счёта при передаче исключения.
-#    -> success(): Восстановление только соответствующего этапа.
+#    -> snapshot(): Чтение состояния без изменения истории
+#    -> lease(): Установка проверенного срока регистрации
+#    -> recovery(): Состояние восстановления без стирания истории отказов
+#    -> close(): Отметка начала остановки
+#    -> pending(): Отметка неподтверждённых результатов
+#    -> failure(): Учёт одного отказа без повторного счёта при передаче исключения
+#    -> success(): Восстановление только соответствующего этапа
 #
 # Функции:
-# -> observe(): Наблюдение асинхронной операции без изменения её результата.
+# -> observe(): Наблюдение асинхронной операции без изменения её результата
+#    Вложенные объявления:
+#    -> decorate(): Сохранение сигнатуры наблюдаемого метода
+#       Вложенные объявления:
+#       -> observed(): Учёт отказа или успешного окончания операции
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -42,17 +49,59 @@ from weakref import ref
 
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 _attempt: ContextVar[tuple[ref | None, object] | None] = ContextVar("command_health_attempt", default=None)
 _STAGES = ("poll", "heartbeat", "storage", "result")
 _TRANSIENT = frozenset({"busy", "unavailable", "capacity"})
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ошибка одного этапа и счётчики восстановления
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StageHealth:
-    """Separate the active failure from cumulative incident counters."""
+    """
+    Separate the active failure from cumulative incident counters.
+
+    :param current_error: Current failure, or None after recovery.
+    :type current_error: str | None
+
+    :param http_status: Observed HTTP status, or None when no valid status was received.
+    :type http_status: int | None
+
+    :param error_kind: Safe local transport error category, or None.
+    :type error_kind: str | None
+
+    :param verify_code: OpenSSL certificate verification code, or None.
+    :type verify_code: int | None
+
+    :param tls_reason: Allowlisted TLS failure reason without server addresses or exception text.
+    :type tls_reason: str | None
+
+    :param busy_reason: Allowlisted reason for current storage contention, or None.
+    :type busy_reason: str | None
+
+    :param failures: Cumulative observed failures at this stage.
+    :type failures: int
+
+    :param transient_failures: Number of temporary busy, unavailable or capacity failures, including retries.
+    :type transient_failures: int
+
+    :param recoveries: Number of observed transitions from failure to successful operation.
+    :type recoveries: int
+    """
 
     current_error: str | None = None     # Текущая ошибка; None после успешного восстановления.
     http_status: int | None = None       # HTTP-статус текущего отказа, если он был получен.
@@ -65,45 +114,99 @@ class StageHealth:
     recoveries: int = 0                  # Переходы от временного отказа к успешной операции.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Согласованное состояние четырёх этапов без сетевых обращений
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandHealth:
-    """Expose observed readiness independently of callback progress and incident history."""
+    """
+    Expose observed readiness independently of callback progress and incident history.
+
+    :param ready: Current observed readiness, independently of historical failures.
+    :type ready: bool
+
+    :param closed: Whether this component has stopped admitting new work.
+    :type closed: bool
+
+    :param session_valid: Whether the authenticated session is still valid on local monotonic time.
+    :type session_valid: bool
+
+    :param has_pending_results: Whether results remain unacknowledged or that check is unresolved.
+    :type has_pending_results: bool
+
+    :param last_error: Last historical error; successful recovery does not erase it.
+    :type last_error: str | None
+
+    :param last_error_stage: Stage that recorded the last historical error, or None.
+    :type last_error_stage: str | None
+
+    :param poll: Current poll-stage health.
+    :type poll: StageHealth
+
+    :param heartbeat: Session heartbeat health independently of polling and callbacks.
+    :type heartbeat: StageHealth
+
+    :param storage: Current local journal operation health.
+    :type storage: StageHealth
+
+    :param result: Durable command result or current result-delivery health.
+    :type result: StageHealth
+
+    :param connection_state: Starting, connected, reconnecting, blocked or closed client state.
+    :type connection_state: str
+
+    :param reconnect_reason: Fixed reason for recovery waiting or blocking, or None.
+    :type reconnect_reason: str | None
+
+    :param reconnect_attempts: Number of automatic recovery attempts, including unsuccessful ones.
+    :type reconnect_attempts: int
+
+    :param reconnects: Number of sessions successfully replaced by this client process.
+    :type reconnects: int
+
+    :param operator_action_required: Whether an unresolved outcome requires explicit operator review.
+    :type operator_action_required: bool
+
+    :param recovery_hint: Safe operator guidance retained after close, or None.
+    :type recovery_hint: str | None
+    """
 
     ready: bool                         # Все этапы исправны, сессия действует, результат доставлен.
     closed: bool                        # Началась остановка принадлежащих клиенту ресурсов.
     session_valid: bool                 # Проверенная сессия ещё действует на монотонных часах.
     has_pending_results: bool           # Есть неподтверждённый результат либо его проверка не завершена.
-    last_error: str | None               # Последний отказ в истории; после восстановления сохраняется.
-    last_error_stage: str | None         # Этап последнего отказа; None до первого инцидента.
+    last_error: str | None              # Последний отказ в истории; после восстановления сохраняется.
+    last_error_stage: str | None        # Этап последнего отказа; None до первого инцидента.
     poll: StageHealth                   # Опрос/получение разрешения на команду.
     heartbeat: StageHealth              # Подтверждение и продление регистрации.
     storage: StageHealth                # Завершение операций локального журнала.
     result: StageHealth                 # Передача результата и получение устойчивой квитанции.
     connection_state: str = "starting"  # Состояние: starting/connected/reconnecting/blocked/closed.
-    reconnect_reason: str | None = None # Фиксированная причина ожидания или блокировки.
+    reconnect_reason: str | None = None  # Фиксированная причина ожидания или блокировки.
     reconnect_attempts: int = 0         # Число попыток восстановления, включая неудачные.
     reconnects: int = 0                 # Число успешно заменённых сессий этого процесса.
     operator_action_required: bool = False  # Нужна сверка журналов; обычный reconnect не поможет.
-    recovery_hint: str | None = None        # Фиксированная подсказка, сохраняемая после close.
+    recovery_hint: str | None = None    # Фиксированная подсказка, сохраняемая после close.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Потокобезопасное накопление наблюдений клиента
 #------------------------------------------------------------------------------------------------------------------
 class HealthState:
-    """Retain a fixed number of immutable stage snapshots under one local lock."""
+    """
+    Retain a fixed number of immutable stage snapshots under one local lock.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Initialize inactive readiness without threads or external resources."""
+        """
+        Initialize inactive readiness without threads or external resources.
+        """
 
         self._lock = threading.Lock()
         self._stages = {stage: StageHealth() for stage in _STAGES}
@@ -126,9 +229,10 @@ class HealthState:
         self,
         now: float,
         floor: float,
-    ) -> CommandHealth:
+        ) -> CommandHealth:
 
-        """Read immutable observations using the client's monotonic time domain.
+        """
+        Read immutable observations using the client's monotonic time domain.
 
         :param now: Current monotonic reading; invalid readings prohibit readiness.
         :type now: float
@@ -166,9 +270,10 @@ class HealthState:
     def lease(
         self,
         expires: float,
-    ) -> None:
+        ) -> None:
 
-        """Retain only a fully validated lease deadline without clearing other stages.
+        """
+        Retain only a fully validated lease deadline without clearing other stages.
 
         :param expires: Deadline in the client's monotonic time domain.
         :type expires: float
@@ -190,9 +295,10 @@ class HealthState:
         reason: str | None = None,
         *,
         attempt: bool = False,
-    ) -> None:
+        ) -> None:
 
-        """Record bounded recovery observations and clear only obsolete session fencing.
+        """
+        Record bounded recovery observations and clear only obsolete session fencing.
 
         :param state: Library-controlled connection state.
         :type state: str
@@ -203,6 +309,9 @@ class HealthState:
         :param attempt: Whether a new recovery pass has begun.
         :type attempt: bool
         """
+
+        # attempt — попытка передачи результата, для которой сохраняется безопасная диагностика.
+
 
         # state/reason — только фиксированные значения; токены и ответы сервера сюда не попадают.
         with self._lock:
@@ -230,9 +339,13 @@ class HealthState:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Отметка начала остановки
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Withdraw readiness immediately while retaining all incident counters."""
+        """
+        Withdraw readiness immediately while retaining all incident counters.
+        """
 
         with self._lock:
             self._closed = True
@@ -245,9 +358,10 @@ class HealthState:
     def pending(
         self,
         value: bool,
-    ) -> None:
+        ) -> None:
 
-        """Retain whether durable result acknowledgement remains unresolved.
+        """
+        Retain whether durable result acknowledgement remains unresolved.
 
         :param value: True until a journal check proves no current-session result remains.
         :type value: bool
@@ -266,9 +380,10 @@ class HealthState:
         stage: str,
         error: CommandError,
         attempt: object,
-    ) -> None:
+        ) -> None:
 
-        """Attribute a failure to its innermost observed stage exactly once per attempt.
+        """
+        Attribute a failure to its innermost observed stage exactly once per attempt.
 
         :param stage: Fixed stage name controlled by library code.
         :type stage: str
@@ -304,9 +419,10 @@ class HealthState:
     def success(
         self,
         stage: str,
-    ) -> None:
+        ) -> None:
 
-        """Clear a transient failure only after the matching stage completes successfully.
+        """
+        Clear a transient failure only after the matching stage completes successfully.
 
         :param stage: Fixed stage name controlled by library code.
         :type stage: str
@@ -329,12 +445,19 @@ class HealthState:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Наблюдение асинхронной операции без изменения её результата
 #------------------------------------------------------------------------------------------------------------------
-def observe(stage: str) -> Callable:
+def observe(
+    stage: str,
+    ) -> Callable:
 
-    """Observe nested client operations while preserving their existing exception semantics.
+    """
+    Observe nested client operations while preserving their existing exception semantics.
 
     :param stage: Library-controlled stage name.
     :type stage: str
@@ -348,9 +471,12 @@ def observe(stage: str) -> Callable:
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Сохранение сигнатуры наблюдаемого метода
     #--------------------------------------------------------------------------------------------------------------
-    def decorate(function: Callable) -> Callable:
+    def decorate(
+        function: Callable,
+        ) -> Callable:
 
-        """Preserve the wrapped public interface.
+        """
+        Preserve the wrapped public interface.
 
         :param function: Asynchronous client operation.
         :type function: Callable
@@ -369,9 +495,10 @@ def observe(stage: str) -> Callable:
             self: Any,
             *args: Any,
             **kwargs: Any,
-        ) -> Any:
+            ) -> Any:
 
-            """Record one stage outcome without treating cancellation as recovery.
+            """
+            Record one stage outcome without treating cancellation as recovery.
 
             :param self: Client owning the health accumulator.
             :type self: Any
@@ -417,8 +544,6 @@ def observe(stage: str) -> Callable:
     return decorate
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

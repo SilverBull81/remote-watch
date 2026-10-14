@@ -1,22 +1,35 @@
 ﻿# Проверки безопасной диагностики ntfy, совместимости gateway и пределов уведомления.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_diagnostic_values(): Отклонение недопустимых значений диагностики.
-# -> test_response_versions(): Совместимость прежнего ответа и новой диагностики.
-# -> test_notification_gateway_limits(): Единые ограничения уведомления на обеих сторонах gateway.
-# -> test_notification_gateway_rejects_before_post(): Отказ по размеру до сетевой попытки.
-# -> test_ntfy_diagnostics(): Сохранение безопасных чисел через обе сетевые границы.
+# -> test_diagnostic_values(): Отклонение недопустимых значений диагностики
+#
+# -> test_response_versions(): Совместимость прежнего ответа и новой диагностики
+#
+# -> test_notification_gateway_limits(): Единые ограничения уведомления на обеих сторонах gateway
+#
+# -> test_notification_gateway_rejects_before_post(): Отказ по размеру до сетевой попытки
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#       Вложенные объявления:
+#       -> post(): Один HTTP POST без скрытых повторов
+#
+# -> test_ntfy_diagnostics(): Сохранение безопасных чисел через обе сетевые границы
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#       Вложенные объявления:
+#       -> publish(): Подставной ответ ntfy с приватным текстом ошибки
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -49,8 +62,15 @@ from remote_watch.notifications.gateway_protocol import (
     encode_response,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 pytest.importorskip("aiohttp")
 
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение недопустимых значений диагностики
@@ -60,9 +80,10 @@ pytest.importorskip("aiohttp")
 def test_diagnostic_values(
     field: str,
     value: Any,
-) -> None:
+    ) -> None:
 
-    """Keep diagnostic fields bounded and reject text or bool values.
+    """
+    Keep diagnostic fields bounded and reject text or bool values.
 
     :param field: Diagnostic field name.
     :type field: str
@@ -78,7 +99,6 @@ def test_diagnostic_values(
         DeliveryResult(status=DeliveryStatus.UNKNOWN, **{field: value})
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Совместимость прежнего ответа и новой диагностики
 #------------------------------------------------------------------------------------------------------------------
@@ -86,9 +106,10 @@ def test_diagnostic_values(
 def test_response_versions(
     notification: Notification,
     schema_version: int,
-) -> None:
+    ) -> None:
 
-    """Preserve v1 shape and strictly correlate v2 diagnostic replies.
+    """
+    Preserve v1 shape and strictly correlate v2 diagnostic replies.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -118,7 +139,6 @@ def test_response_versions(
         decode_response(payload, delivery, schema_version=3 - schema_version)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Единые ограничения уведомления на обеих сторонах gateway
 #------------------------------------------------------------------------------------------------------------------
@@ -126,9 +146,10 @@ def test_response_versions(
 def test_notification_gateway_limits(
     notification: Notification,
     size: int,
-) -> None:
+    ) -> None:
 
-    """Apply the receiver's fixed limits even when the sender allows larger local snapshots.
+    """
+    Apply the receiver's fixed limits even when the sender allows larger local snapshots.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -152,16 +173,16 @@ def test_notification_gateway_limits(
         assert decoded.delivery.notification.to_dict() == event.to_dict()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ по размеру до сетевой попытки
 #------------------------------------------------------------------------------------------------------------------
 def test_notification_gateway_rejects_before_post(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Classify an oversized outgoing event as permanent without invoking HTTP.
+    """
+    Classify an oversized outgoing event as permanent without invoking HTTP.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -180,7 +201,9 @@ def test_notification_gateway_rejects_before_post(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Prepare a valid local event that exceeds the wire contract."""
+        """
+        Prepare a valid local event that exceeds the wire contract.
+        """
 
         now = datetime.now(timezone.utc)
         event = replace(notification, message="x" * 10000, created_at=now, expires_at=now + timedelta(seconds=60),
@@ -195,9 +218,10 @@ def test_notification_gateway_rejects_before_post(
         async def post(
             *args: Any,
             **kwargs: Any,
-        ) -> None:
+            ) -> None:
 
-            """Fail the test if any HTTP request is attempted.
+            """
+            Fail the test if any HTTP request is attempted.
 
             :param args: Context manager exception details.
             :type args: Any
@@ -224,7 +248,6 @@ def test_notification_gateway_rejects_before_post(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение безопасных чисел через обе сетевые границы
 #------------------------------------------------------------------------------------------------------------------
@@ -236,9 +259,10 @@ def test_ntfy_diagnostics(
     code: Any,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Preserve safe numbers through ntfy, gateway v1/v2 and the field journal.
+    """
+    Preserve safe numbers through ntfy, gateway v1/v2 and the field journal.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -271,16 +295,21 @@ def test_ntfy_diagnostics(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use real HTTP on both hops and compare diagnostics with transmitted bytes."""
+        """
+        Use real HTTP on both hops and compare diagnostics with transmitted bytes.
+        """
 
         requests: list[bytes] = []
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Подставной ответ ntfy с приватным текстом ошибки
         #----------------------------------------------------------------------------------------------------------
-        async def publish(request: web.Request) -> web.Response:
+        async def publish(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Return a controlled provider response containing deliberately private text.
+            """
+            Return a controlled provider response containing deliberately private text.
 
             :param request: Incoming loopback HTTP request.
             :type request: web.Request
@@ -354,8 +383,6 @@ def test_ntfy_diagnostics(
     assert "private_value" not in caplog.text
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

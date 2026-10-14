@@ -1,20 +1,23 @@
 ﻿# Конечная проверка DNS, TCP, TLS и read-only маршрута gateway.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> network_checks(): Наблюдение ограниченной проверки без зависания на системном DNS.
-# -> _probe(): Сетевая работа с проверяемым TLS и без повторных POST.
-# -> _http(): Единственный запрос doctor и проверка фиксированной схемы ответа.
+# -> network_checks(): Наблюдение ограниченной проверки без зависания на системном DNS
+#
+# -> _probe(): Сетевая работа с проверяемым TLS и без повторных POST
+#
+# -> _http(): Единственный запрос doctor и проверка схемы ответа
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import http.client
@@ -30,6 +33,12 @@ from urllib.parse import urlsplit
 from remote_watch._tls import tls_diagnostics
 from remote_watch.gateway.doctor_protocol import _pairs, probe_response
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Наблюдение ограниченной проверки без зависания на системном DNS
@@ -41,9 +50,10 @@ def network_checks(
     token: str,
     body: bytes,
     timeout: float,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Run one bounded diagnostic exchange; never retry a POST or disable TLS verification.
+    """
+    Run one bounded diagnostic exchange; never retry a POST or disable TLS verification.
 
     :param endpoint: Validated HTTPS origin without credentials or operation path.
     :type endpoint: str
@@ -105,9 +115,8 @@ def network_checks(
             rows.append(dict(value, check=component + "." + value["check"]))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Сетевая работа с проверяемым TLS и без повторных POST
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Сетевая работа с проверяемым TLS и без повторных POST
 #------------------------------------------------------------------------------------------------------------------
 def _probe(
     endpoint: str,
@@ -118,9 +127,10 @@ def _probe(
     timeout: float,
     events: queue.Queue,
     cancel: threading.Event,
-) -> None:
+    ) -> None:
 
-    """Resolve once, connect to at most four returned addresses, and keep the verified TLS socket.
+    """
+    Resolve once, connect to at most four returned addresses, and keep the verified TLS socket.
 
     :param endpoint: Validated HTTPS origin.
     :type endpoint: str
@@ -222,18 +232,18 @@ def _probe(
         events.put(("done", None))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Единственный запрос doctor и проверка схемы ответа
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Единственный запрос doctor и проверка схемы ответа
 #------------------------------------------------------------------------------------------------------------------
 def _http(
     connection: http.client.HTTPConnection,
     component: str,
     token: str,
     body: bytes,
-) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
 
-    """Interpret a small fixed-schema response without returning remote strings or following redirects.
+    """
+    Interpret a small fixed-schema response without returning remote strings or following redirects.
 
     :param connection: HTTP connection already bound to a verified TLS socket.
     :type connection: http.client.HTTPConnection
@@ -291,8 +301,6 @@ def _http(
     return rows
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

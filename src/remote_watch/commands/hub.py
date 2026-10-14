@@ -1,60 +1,75 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> _Session: Регистрация процесса, сохраняемая и после истечения срока.
+# -> _Session: Регистрация процесса, сохраняемая и после истечения срока
 #
-# -> CommandHub: Маршрутизация команд между доверенным источником и приложениями.
+# -> CommandHub: Маршрутизация команд между доверенным источником и приложениями
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> start(): Запуск объекта и подготовка состояния.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
-#    -> journal_status(): Кэш сводки журнала без обращения к SQLite.
-#    -> health(): Готовность обслуживания и доверенного времени без обращения к сети.
-#    -> client_present(): Наличие живой сессии одной явно указанной Identity без продления.
-#    -> authenticate(): Проверка отдельных учётных данных приложения.
-#    -> register(): Регистрация точной цели без замены живой сессии.
-#    -> heartbeat(): Продление живой регистрации без продления команд.
-#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения.
-#    -> source_cursor(): Чтение подтверждённой позиции доверенного источника.
-#    -> skip_source(): Фиксация пропуска события до подтверждения провайдеру.
-#    -> source_cutoff(): Консервативная граница очистки по доверенному времени.
-#    -> commands_for(): Разрешённые команды живого приложения для автора и чата.
-#    -> response_mode_for(): Режим ответа именно исходной зарегистрированной сессии.
-#    -> submit(): Проверка прав и свежести перед атомарной записью с cursor.
-#    -> poll(): Ожидание одной команды с одним waiter на сессию.
-#    -> claim(): Запись CLAIMED и STARTED до выдачи разрешения приложению.
-#    -> finish(): Сохранение точного результата выданного исполнения.
-#    -> results(): Чтение результатов только для своего источника.
-#    -> sweep(): Завершение просроченных записей без предположения об остановке callback.
-#    -> acknowledge(): Подтверждение ответа провайдера отдельно от квитанции приложению.
-#    -> target(): Поиск точной живой цели для доверенного источника.
+#    -> start(): Запуск объекта и подготовка состояния
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
+#    -> journal_status(): Кэш сводки журнала без обращения к SQLite
+#    -> health(): Готовность обслуживания и доверенного времени без обращения к сети
+#    -> client_present(): Наличие живой сессии без продления и обращения к журналу
+#    -> authenticate(): Проверка отдельных учётных данных приложения
+#    -> register(): Регистрация точной цели без замены живой сессии
+#    -> heartbeat(): Продление живой регистрации без продления команд
+#    -> release(): Подтверждение фактического окончания ранее неизвестного исполнения
+#       Вложенные объявления:
+#       -> commit(): Проверка и запись решения в рабочем потоке журнала
+#    -> source_cursor(): Чтение подтверждённой позиции доверенного источника
+#    -> skip_source(): Фиксация пропуска события до подтверждения провайдеру
+#    -> source_cutoff(): Консервативная граница очистки по доверенному времени
+#    -> commands_for(): Разрешённые команды живого приложения для автора и чата
+#    -> response_mode_for(): Режим ответа именно исходной зарегистрированной сессии
+#    -> submit(): Проверка прав и свежести перед атомарной записью с cursor
+#       Вложенные объявления:
+#       -> commit(): Проверка и запись решения в единственном рабочем потоке журнала
+#    -> poll(): Ожидание одной команды с одним waiter на сессию
+#    -> claim(): Запись CLAIMED и STARTED до выдачи разрешения приложению
+#       Вложенные объявления:
+#       -> commit(): Проверка и запись решения в единственном рабочем потоке журнала
+#    -> finish(): Сохранение точного результата выданного исполнения
+#       Вложенные объявления:
+#       -> commit(): Проверка и запись решения в единственном рабочем потоке журнала
+#    -> results(): Чтение результатов только для своего источника
+#    -> sweep(): Завершение просроченных записей без предположения об остановке callback
+#       Вложенные объявления:
+#       -> expire(): Запись итогов команд с истёкшим сроком
+#    -> acknowledge(): Подтверждение ответа провайдера отдельно от квитанции приложению
+#       Вложенные объявления:
+#       -> commit(): Проверка и запись решения в единственном рабочем потоке журнала
+#    -> target(): Поиск точной живой цели для доверенного источника
 #    Служебные методы:
-#    -> _check(): Проверка жизненного цикла и владельца event loop.
-#    -> _now(): Проверка монотонного времени с запретом работы после отката.
-#    -> _deadline(): Создание локального срока регистрации.
-#    -> _session(): Остаток регистрации без её продления.
-#    -> _entry(): Проверка владельца, Identity, сессии и запуска hub.
-#    -> _ref_entry(): Проверка принадлежности команды приложению.
-#    -> _source_policy(): Авторизация доверенного адаптера входящих сообщений.
-#    -> _offer(): Выбор первой непросроченной команды этой сессии.
-#    -> _update_time(): Обновление достоверного времени с конечным ожиданием.
-#    -> _refresh_time(): Периодическое обслуживание времени и просроченных команд.
-#    -> _maintenance_finished(): Учёт неожиданного завершения обслуживания hub.
+#    -> _check(): Проверка жизненного цикла и владельца event loop
+#    -> _now(): Проверка монотонного времени с запретом работы после отката
+#    -> _deadline(): Создание локального срока регистрации
+#    -> _session(): Остаток регистрации без её продления
+#    -> _entry(): Проверка владельца, Identity, сессии и запуска hub
+#    -> _ref_entry(): Проверка принадлежности команды приложению
+#    -> _source_policy(): Авторизация доверенного адаптера входящих сообщений
+#    -> _offer(): Выбор первой непросроченной команды этой сессии
+#       Вложенные объявления:
+#       -> select(): Выбор команды из ограниченной страницы журнала
+#    -> _update_time(): Обновление достоверного времени с конечным ожиданием
+#    -> _refresh_time(): Периодическое обслуживание времени и просроченных команд
+#    -> _maintenance_finished(): Учёт неожиданного завершения обслуживания hub
 #
 # Функции:
-# -> _matches(): Сравнение хешей секретов без выдачи исходных значений.
+# -> _matches(): Сравнение хешей секретов без выдачи исходных значений
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -86,13 +101,36 @@ from remote_watch.commands.time import TimeSource, TimeUnavailable, TrustedClock
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Регистрация процесса, сохраняемая и после истечения срока
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(slots=True)
 class _Session:
-    """Keep one issued session, including expired sessions used to reject replay."""
+    """
+    Keep one issued session, including expired sessions used to reject replay.
+
+    :param registration: Immutable application session and command declarations.
+    :type registration: CommandRegistration
+
+    :param principal: Authenticated principal bound to the session.
+    :type principal: str
+
+    :param deadline: Locally enforced command deadline.
+    :type deadline: CommandDeadline
+
+    :param changed: Wakeup event for this session's long poll.
+    :type changed: asyncio.Event
+
+    :param polling: Whether a poll is already active for this session.
+    :type polling: bool
+    """
 
     registration: CommandRegistration   # Неизменяемые сведения о запуске приложения.
     principal: str                      # Владелец командных учётных данных.
@@ -101,13 +139,13 @@ class _Session:
     polling: bool = False               # Признак уже выполняющегося long poll.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Маршрутизация команд между доверенным источником и приложениями
 #------------------------------------------------------------------------------------------------------------------
 class CommandHub:
-    """Route authenticated command intents with bounded sessions and durable start decisions."""
-
+    """
+    Route authenticated command intents with bounded sessions and durable start decisions.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -121,9 +159,10 @@ class CommandHub:
         trusted_clock: TrustedClock,
         time_source: TimeSource | None = None,
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Bind an explicit journal generation and clock without opening resources.
+        """
+        Bind an explicit journal generation and clock without opening resources.
 
         :param config: Explicit credentials, access rules and finite limits.
         :type config: CommandHubConfig
@@ -176,13 +215,16 @@ class CommandHub:
         self._failed_clock = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запуск объекта и подготовка состояния
     #--------------------------------------------------------------------------------------------------------------
-    async def start(self) -> None:
+    async def start(
+        self,
+        ) -> None:
 
-        """Open the journal and start one explicitly configured time-refresh task."""
+        """
+        Open the journal and start one explicitly configured time-refresh task.
+        """
 
         if self._loop is not None or self._closed:
             raise CommandError("closed")
@@ -199,13 +241,16 @@ class CommandHub:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Wake all polls and close storage within one shared shutdown budget."""
+        """
+        Wake all polls and close storage within one shared shutdown budget.
+        """
 
         if self._closed:
             return
@@ -222,14 +267,16 @@ class CommandHub:
             await asyncio.wait({self._refresh}, timeout=0)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Кэш сводки журнала без обращения к SQLite
     #--------------------------------------------------------------------------------------------------------------
     @property
-    def journal_status(self) -> dict:
+    def journal_status(
+        self,
+        ) -> dict:
 
-        """Read the journal owner's cached aggregate without scheduling storage work.
+        """
+        Read the journal owner's cached aggregate without scheduling storage work.
 
         :return: Safe observation state, age and optional snapshot.
         :rtype: dict
@@ -241,9 +288,12 @@ class CommandHub:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Готовность обслуживания и доверенного времени без обращения к сети
     #--------------------------------------------------------------------------------------------------------------
-    def health(self) -> dict[str, bool | str | None]:
+    def health(
+        self,
+        ) -> dict[str, bool | str | None]:
 
-        """Read local readiness on the owning loop without probing storage or refreshing UTC.
+        """
+        Read local readiness on the owning loop without probing storage or refreshing UTC.
 
         :return: Fixed health flags and a nonsecret reason; readiness is not a delivery guarantee.
         :rtype: dict[str, bool | str | None]
@@ -277,16 +327,16 @@ class CommandHub:
                 "time_reason": None if time_ready else self._trusted.unavailable_reason}
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Наличие живой сессии без продления и обращения к журналу
     #--------------------------------------------------------------------------------------------------------------
     def client_present(
         self,
         identity: Identity,
-    ) -> bool:
+        ) -> bool:
 
-        """Observe an existing client lease without registering or renewing it.
+        """
+        Observe an existing client lease without registering or renewing it.
 
         :param identity: Locally supplied identity; HTTP callers must authorize it first.
         :type identity: Identity
@@ -302,16 +352,16 @@ class CommandHub:
                 and entry.deadline.remaining(now, self.epoch) > 0)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка отдельных учётных данных приложения
     #--------------------------------------------------------------------------------------------------------------
     def authenticate(
         self,
         token: str,
-    ) -> CommandPrincipal:
+        ) -> CommandPrincipal:
 
-        """Authorize application commands separately from notification gateway and source credentials.
+        """
+        Authorize application commands separately from notification gateway and source credentials.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -330,7 +380,6 @@ class CommandHub:
         raise CommandError("denied")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Регистрация точной цели без замены живой сессии
     #--------------------------------------------------------------------------------------------------------------
@@ -338,9 +387,10 @@ class CommandHub:
         self,
         token: str,
         registration: CommandRegistration,
-    ) -> CommandSession:
+        ) -> CommandSession:
 
-        """Issue a lease without replacing a live identity or reviving an expired session.
+        """
+        Issue a lease without replacing a live identity or reviving an expired session.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -385,7 +435,6 @@ class CommandHub:
         return self._session(entry)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Продление живой регистрации без продления команд
     #--------------------------------------------------------------------------------------------------------------
@@ -393,9 +442,10 @@ class CommandHub:
         self,
         token: str,
         session: CommandSession,
-    ) -> CommandSession:
+        ) -> CommandSession:
 
-        """Extend only a currently live registration, without extending command deadlines.
+        """
+        Extend only a currently live registration, without extending command deadlines.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -415,7 +465,6 @@ class CommandHub:
         return self._session(entry)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение фактического окончания ранее неизвестного исполнения
     #--------------------------------------------------------------------------------------------------------------
@@ -423,9 +472,10 @@ class CommandHub:
         self,
         token: str,
         claim: CommandClaim,
-    ) -> CommandReceipt:
+        ) -> CommandReceipt:
 
-        """Accept termination proof only from the owning application and original claim.
+        """
+        Accept termination proof only from the owning application and original claim.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -442,13 +492,13 @@ class CommandHub:
 
         self._ref_entry(token, claim.ref, live=False)
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка и запись решения в рабочем потоке журнала
         #----------------------------------------------------------------------------------------------------------
         def commit() -> CommandReceipt:
 
-            """Clear execution ownership without changing its retained terminal outcome.
+            """
+            Clear execution ownership without changing its retained terminal outcome.
 
             :return: Receipt bound to the exact durably stored result digest.
             :rtype: CommandReceipt
@@ -468,16 +518,16 @@ class CommandHub:
         return await self._worker.call(commit)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение подтверждённой позиции доверенного источника
     #--------------------------------------------------------------------------------------------------------------
     async def source_cursor(
         self,
         token: str,
-    ) -> int:
+        ) -> int:
 
-        """Read the durable position for an authenticated provider reader.
+        """
+        Read the durable position for an authenticated provider reader.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -492,7 +542,6 @@ class CommandHub:
         return await self._worker.call(lambda: self._worker.store.cursor(source.source_id))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Фиксация пропуска события до подтверждения провайдеру
     #--------------------------------------------------------------------------------------------------------------
@@ -502,9 +551,10 @@ class CommandHub:
         *,
         position: int,
         expected_cursor: int,
-    ) -> Admission:
+        ) -> Admission:
 
-        """Persist a non-command provider event before advancing its external checkpoint.
+        """
+        Persist a non-command provider event before advancing its external checkpoint.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -528,16 +578,16 @@ class CommandHub:
             source.source_id, position, expected_cursor, None))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Консервативная граница очистки по доверенному времени
     #--------------------------------------------------------------------------------------------------------------
     def source_cutoff(
         self,
         token: str,
-    ) -> int | None:
+        ) -> int | None:
 
-        """Return a conservative replay-pruning boundary only while trusted time is available.
+        """
+        Return a conservative replay-pruning boundary only while trusted time is available.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -556,7 +606,6 @@ class CommandHub:
         return max(0, int(sample.lower_utc - self._trusted.policy.max_age - 2))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Разрешённые команды живого приложения для автора и чата
     #--------------------------------------------------------------------------------------------------------------
@@ -566,9 +615,10 @@ class CommandHub:
         identity: Identity,
         actor_id: str,
         conversation_id: str,
-    ) -> tuple[str, ...]:
+        ) -> tuple[str, ...]:
 
-        """List only the live target's commands permitted to this exact provider actor and chat.
+        """
+        List only the live target's commands permitted to this exact provider actor and chat.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -604,7 +654,6 @@ class CommandHub:
         return tuple(cap.name for cap in entry.registration.capabilities if cap.required_scope in scopes)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Режим ответа именно исходной зарегистрированной сессии
     #--------------------------------------------------------------------------------------------------------------
@@ -612,9 +661,10 @@ class CommandHub:
         self,
         token: str,
         ref: CommandRef,
-    ) -> str | None:
+        ) -> str | None:
 
-        """Read presentation for the exact live session before persisting a source decision.
+        """
+        Read presentation for the exact live session before persisting a source decision.
 
         :param token: Credential of the trusted command source.
         :type token: str
@@ -626,6 +676,10 @@ class CommandHub:
         :rtype: str | None
         """
 
+        # token — токен аутентификации; его значение не включается в ошибки.
+        # ref — точная ссылка на команду, её исходную сессию и поколение сервера.
+
+
         # Режим читается до SourcePending и хранится в request. Новый процесс
         # не меняет оформление ответа уже принятой команды предыдущей сессии.
         self._source_policy(token)
@@ -634,7 +688,6 @@ class CommandHub:
             raise CommandError("stale_session")
         return entry.registration.command_display_mode
     #--------------------------------------------------------------------------------------------------------------
-
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Проверка прав и свежести перед атомарной записью с cursor
@@ -647,9 +700,10 @@ class CommandHub:
         position: int,
         expected_cursor: int,
         message_date: int,
-    ) -> Admission:
+        ) -> Admission:
 
-        """Commit an authenticated source decision before the source acknowledges its event.
+        """
+        Commit an authenticated source decision before the source acknowledges its event.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -715,7 +769,8 @@ class CommandHub:
         #----------------------------------------------------------------------------------------------------------
         def commit() -> Admission:
 
-            """Apply one source decision in the serialized storage lane.
+            """
+            Apply one source decision in the serialized storage lane.
 
             :return: Committed source cursor and optional admitted command.
             :rtype: Admission
@@ -737,7 +792,6 @@ class CommandHub:
         return admitted
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ожидание одной команды с одним waiter на сессию
     #--------------------------------------------------------------------------------------------------------------
@@ -745,9 +799,10 @@ class CommandHub:
         self,
         token: str,
         session: CommandSession,
-    ) -> CommandOffer | None:
+        ) -> CommandOffer | None:
 
-        """Wait for one command using at most one poll waiter per live session.
+        """
+        Wait for one command using at most one poll waiter per live session.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -784,7 +839,6 @@ class CommandHub:
             entry.polling = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Запись CLAIMED и STARTED до выдачи разрешения приложению
     #--------------------------------------------------------------------------------------------------------------
@@ -792,9 +846,10 @@ class CommandHub:
         self,
         token: str,
         claim: CommandClaim,
-    ) -> CommandGrant | CommandResult:
+        ) -> CommandGrant | CommandResult:
 
-        """Persist CLAIMED and STARTED before returning a single execution authorization.
+        """
+        Persist CLAIMED and STARTED before returning a single execution authorization.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -813,13 +868,13 @@ class CommandHub:
         session = self._session(entry)
         lease = entry.deadline
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка и запись решения в единственном рабочем потоке журнала
         #----------------------------------------------------------------------------------------------------------
         def commit() -> CommandGrant | CommandResult:
 
-            """Make the start decision durably without invoking application code.
+            """
+            Make the start decision durably without invoking application code.
 
             :return: Single execution grant or an already committed terminal result.
             :rtype: CommandGrant | CommandResult
@@ -873,7 +928,6 @@ class CommandHub:
         return await self._worker.call(commit)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Сохранение точного результата выданного исполнения
     #--------------------------------------------------------------------------------------------------------------
@@ -881,9 +935,10 @@ class CommandHub:
         self,
         token: str,
         result: CommandResult,
-    ) -> CommandReceipt:
+        ) -> CommandReceipt:
 
-        """Persist a result from its owning session, including a late but unambiguous result.
+        """
+        Persist a result from its owning session, including a late but unambiguous result.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -921,13 +976,13 @@ class CommandHub:
         session = CommandSession(identity=registration.identity, session_id=registration.session_id,
                                  hub_epoch=self.epoch, remaining_ttl=self.config.session_ttl)
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка и запись решения в единственном рабочем потоке журнала
         #----------------------------------------------------------------------------------------------------------
         def commit() -> CommandReceipt:
 
-            """Return a receipt only after storing the exact correlated result.
+            """
+            Return a receipt only after storing the exact correlated result.
 
             :return: Receipt bound to the exact durably stored result digest.
             :rtype: CommandReceipt
@@ -958,16 +1013,16 @@ class CommandHub:
         return await self._worker.call(commit)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение результатов только для своего источника
     #--------------------------------------------------------------------------------------------------------------
     async def results(
         self,
         token: str,
-    ) -> tuple[StoredCommand, ...]:
+        ) -> tuple[StoredCommand, ...]:
 
-        """Expose only this trusted source's pending terminal results for provider replies.
+        """
+        Expose only this trusted source's pending terminal results for provider replies.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -985,25 +1040,29 @@ class CommandHub:
                      and row.record.result is not None and not row.acknowledged)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Завершение просроченных записей без предположения об остановке callback
     #--------------------------------------------------------------------------------------------------------------
-    async def sweep(self) -> None:
+    async def sweep(
+        self,
+        ) -> None:
 
-        """Expire abandoned commands without pretending that a running callback stopped."""
+        """
+        Expire abandoned commands without pretending that a running callback stopped.
+        """
 
         self._check()
         # Снимок регистраций исключает чтение изменяемого словаря из рабочего потока.
         leases = {sid: entry.deadline for sid, entry in self._issued.items()}
-
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Запись итогов команд с истёкшим сроком
         #----------------------------------------------------------------------------------------------------------
         def expire() -> None:
 
-            """Persist terminal outcomes for expired commands and leases."""
+            """
+            Persist terminal outcomes for expired commands and leases.
+            """
 
             store = self._worker.store
 
@@ -1028,7 +1087,6 @@ class CommandHub:
         await self._worker.call(expire)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение ответа провайдера отдельно от квитанции приложению
     #--------------------------------------------------------------------------------------------------------------
@@ -1036,9 +1094,10 @@ class CommandHub:
         self,
         token: str,
         result: CommandResult,
-    ) -> None:
+        ) -> None:
 
-        """Acknowledge a provider reply separately from the application's result receipt.
+        """
+        Acknowledge a provider reply separately from the application's result receipt.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -1052,13 +1111,14 @@ class CommandHub:
 
         source = self._source_policy(token)
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка и запись решения в единственном рабочем потоке журнала
         #----------------------------------------------------------------------------------------------------------
         def commit() -> None:
 
-            """Check source ownership before acknowledging the exact result."""
+            """
+            Check source ownership before acknowledging the exact result.
+            """
 
             stored = self._worker.store.get(result.ref)
 
@@ -1072,7 +1132,6 @@ class CommandHub:
         await self._worker.call(commit)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Поиск точной живой цели для доверенного источника
     #--------------------------------------------------------------------------------------------------------------
@@ -1080,9 +1139,10 @@ class CommandHub:
         self,
         token: str,
         identity: Identity,
-    ) -> CommandSession:
+        ) -> CommandSession:
 
-        """Resolve an exact live target for a trusted source before constructing a request.
+        """
+        Resolve an exact live target for a trusted source before constructing a request.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -1108,13 +1168,16 @@ class CommandHub:
         return self._session(entry)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка жизненного цикла и владельца event loop
     #--------------------------------------------------------------------------------------------------------------
-    def _check(self) -> None:
+    def _check(
+        self,
+        ) -> None:
 
-        """Reject cross-loop use and calls outside the hub lifecycle."""
+        """
+        Reject cross-loop use and calls outside the hub lifecycle.
+        """
 
         if self._closed or self._loop is None or asyncio.get_running_loop() is not self._loop:
             raise CommandError("closed")
@@ -1125,13 +1188,15 @@ class CommandHub:
         self._now()
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка монотонного времени с запретом работы после отката
     #--------------------------------------------------------------------------------------------------------------
-    def _now(self) -> float:
+    def _now(
+        self,
+        ) -> float:
 
-        """Fail closed if the shared monotonic clock rolls back.
+        """
+        Fail closed if the shared monotonic clock rolls back.
 
         :return: Current validated monotonic time in seconds.
         :rtype: float
@@ -1147,16 +1212,16 @@ class CommandHub:
         return now
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Создание локального срока регистрации
     #--------------------------------------------------------------------------------------------------------------
     def _deadline(
         self,
         duration: float,
-    ) -> CommandDeadline:
+        ) -> CommandDeadline:
 
-        """Construct a local lease on the same clock used by the journal.
+        """
+        Construct a local lease on the same clock used by the journal.
 
         :param duration: Relative local lifetime in seconds.
         :type duration: float
@@ -1171,16 +1236,16 @@ class CommandHub:
         return CommandDeadline(hub_epoch=self.epoch, sent_at=now, received_at=now, expires_at=now + duration)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Остаток регистрации без её продления
     #--------------------------------------------------------------------------------------------------------------
     def _session(
         self,
         entry: _Session,
-    ) -> CommandSession:
+        ) -> CommandSession:
 
-        """Return remaining registration lifetime without renewing it.
+        """
+        Return remaining registration lifetime without renewing it.
 
         :param entry: Registration record owned by the current hub.
         :type entry: _Session
@@ -1200,7 +1265,6 @@ class CommandHub:
                               hub_epoch=self.epoch, remaining_ttl=remaining)
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка владельца, Identity, сессии и запуска hub
     #--------------------------------------------------------------------------------------------------------------
@@ -1208,9 +1272,10 @@ class CommandHub:
         self,
         token: str,
         session: CommandSession,
-    ) -> _Session:
+        ) -> _Session:
 
-        """Bind an authenticated client to its exact live identity, session and hub epoch.
+        """
+        Bind an authenticated client to its exact live identity, session and hub epoch.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -1238,7 +1303,6 @@ class CommandHub:
         return entry
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка принадлежности команды приложению
     #--------------------------------------------------------------------------------------------------------------
@@ -1247,9 +1311,10 @@ class CommandHub:
         token: str,
         ref: CommandRef,
         live: bool = True,
-    ) -> _Session:
+        ) -> _Session:
 
-        """Check result or claim ownership without granting privileges from a request body.
+        """
+        Check result or claim ownership without granting privileges from a request body.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -1283,16 +1348,16 @@ class CommandHub:
         return entry
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Авторизация доверенного адаптера входящих сообщений
     #--------------------------------------------------------------------------------------------------------------
     def _source_policy(
         self,
         token: str,
-    ) -> CommandSource:
+        ) -> CommandSource:
 
-        """Authorize trusted source calls separately from all application credentials.
+        """
+        Authorize trusted source calls separately from all application credentials.
 
         :param token: Command-only credential, never logged or echoed.
         :type token: str
@@ -1311,16 +1376,16 @@ class CommandHub:
         raise CommandError("denied")
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Выбор первой непросроченной команды этой сессии
     #--------------------------------------------------------------------------------------------------------------
     async def _offer(
         self,
         entry: _Session,
-    ) -> CommandOffer | None:
+        ) -> CommandOffer | None:
 
-        """Scan a bounded journal page and expire stale work before delivering a candidate.
+        """
+        Scan a bounded journal page and expire stale work before delivering a candidate.
 
         :param entry: Registration record owned by the current hub.
         :type entry: _Session
@@ -1333,13 +1398,13 @@ class CommandHub:
 
         session = self._session(entry)
 
-
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Выбор команды из ограниченной страницы журнала
         #----------------------------------------------------------------------------------------------------------
         def select() -> CommandOffer | None:
 
-            """Select the earliest pending command for this exact session.
+            """
+            Select the earliest pending command for this exact session.
 
             :return: Earliest eligible command and budget, or None if no work is available.
             :rtype: CommandOffer | None
@@ -1369,13 +1434,16 @@ class CommandHub:
         return offer
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Обновление достоверного времени с конечным ожиданием
     #--------------------------------------------------------------------------------------------------------------
-    async def _update_time(self) -> None:
+    async def _update_time(
+        self,
+        ) -> None:
 
-        """Bound time-source refresh and keep admissions closed after a failed update."""
+        """
+        Bound time-source refresh and keep admissions closed after a failed update.
+        """
 
         try:
             await asyncio.wait_for(self._trusted.refresh(self._source), 5.0)
@@ -1383,13 +1451,16 @@ class CommandHub:
             pass
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Периодическое обслуживание времени и просроченных команд
     #--------------------------------------------------------------------------------------------------------------
-    async def _refresh_time(self) -> None:
+    async def _refresh_time(
+        self,
+        ) -> None:
 
-        """Maintain one time estimate without accumulating timer tasks or retry queues."""
+        """
+        Maintain one time estimate without accumulating timer tasks or retry queues.
+        """
 
         refreshed = self._clock()
 
@@ -1411,16 +1482,16 @@ class CommandHub:
                 self._maintenance_error = "storage_" + error.code
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Учёт неожиданного завершения обслуживания hub
     #--------------------------------------------------------------------------------------------------------------
     def _maintenance_finished(
         self,
         task: asyncio.Task,
-    ) -> None:
+        ) -> None:
 
-        """Consume private exceptions and fence the hub after any unexpected maintenance termination.
+        """
+        Consume private exceptions and fence the hub after any unexpected maintenance termination.
 
         :param task: Completed owned maintenance task, including cancellation or an early return.
         :type task: asyncio.Task
@@ -1438,15 +1509,20 @@ class CommandHub:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Сравнение хешей секретов без выдачи исходных значений
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Сравнение хешей секретов без выдачи исходных значений
 #------------------------------------------------------------------------------------------------------------------
 def _matches(
     candidate: str,
     expected: str,
-) -> bool:
+    ) -> bool:
 
-    """Compare fixed-size credential digests without exposing the original secret.
+    """
+    Compare fixed-size credential digests without exposing the original secret.
 
     :param candidate: Untrusted credential supplied by the caller.
     :type candidate: str
@@ -1467,7 +1543,6 @@ def _matches(
         hashlib.sha256(candidate.encode()).digest(), hashlib.sha256(expected.encode()).digest())
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

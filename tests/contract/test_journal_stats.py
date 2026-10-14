@@ -1,28 +1,49 @@
 ﻿# Сводки SQLite, кэш владельца и безопасная диагностика без изменения команд.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-112210
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_command_snapshot(): Подсчёт сохранённых фаз без записи в журнал.
-# -> test_offline_source(): Replay-ёмкость источника без чтения приватных значений.
-# -> test_offline_refusal(): Отказ без создания БД, recovery или sidecar.
-# -> test_worker_cache(): Чтение кэша при занятом worker и независимость ошибок наблюдения.
-# -> test_ipc_metrics(): Ограниченная проверка IPC, включая максимальную сводку.
-# -> test_doctor_journal(): CLI остановленной БД, предупреждения и приватность отчёта.
-# -> test_doctor_server_cache(): Наблюдение живого сервера только по кэшу manager.
-# -> test_manager_snapshot_age(): Старый heartbeat не делает снимок свежим после сбоя.
-# -> test_observer_budget(): Прерывание SQL-наблюдения не мешает последующей записи.
-# -> test_resolved_unknown(): Согласованный UNKNOWN остаётся историей без предупреждения.
-# -> test_observer_cannot_timeout_commit(): Задержка диагностики не меняет исход и не освобождает executor.
+# -> test_command_snapshot(): Подсчёт сохранённых фаз без записи в журнал
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_offline_source(): Replay-ёмкость источника без чтения приватных значений
+#
+# -> test_offline_refusal(): Отказ без создания БД, recovery или sidecar
+#
+# -> test_worker_cache(): Чтение кэша при занятом worker и независимость ошибок наблюдения
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#       Вложенные объявления:
+#       -> held(): Занятая реальная операция владельца
+#
+# -> test_ipc_metrics(): Ограниченная проверка IPC, включая максимальную сводку
+#
+# -> test_doctor_journal(): CLI остановленной БД, предупреждения и приватность отчёта
+#
+# -> test_doctor_server_cache(): Наблюдение живого сервера только по кэшу manager
+#
+# -> test_manager_snapshot_age(): Старый heartbeat не делает снимок свежим после сбоя
+#
+# -> test_observer_budget(): Прерывание SQL-наблюдения не мешает последующей записи
+#
+# -> test_resolved_unknown(): Согласованный UNKNOWN остаётся историей без предупреждения
+#
+# -> test_observer_cannot_timeout_commit(): Задержка диагностики не меняет исход и не освобождает executor
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#       Вложенные объявления:
+#       -> slow_observation(): Задержка после настоящего успешного изменения журнала
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -48,6 +69,12 @@ from remote_watch.diagnostics.gateway_doctor import _journal_rows, _server_onlin
 from remote_watch.gateway_server.manager import ChildState, GatewayManager
 from remote_watch.gateway_server.messages import status_message
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Подсчёт сохранённых фаз без записи в журнал
@@ -56,20 +83,31 @@ from remote_watch.gateway_server.messages import status_message
 def test_command_snapshot(
     tmp_path: Path,
     phase: str,
-) -> None:
+    ) -> None:
 
-    """Inspect exact command phases and preserve every byte and generation of the durable journal.
+    """
+    Inspect exact command phases and preserve every byte and generation of the durable journal.
 
     :param tmp_path: Synthetic hub and client files.
     :type tmp_path: Path
+
     :param phase: Retained command state to observe.
     :type phase: str
     """
 
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
+
     # phase — UNKNOWN после рестарта не означает, что callback продолжает работать.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Create real protocol transitions and compare owner and offline counts."""
+        """
+        Create real protocol transitions and compare owner and offline counts.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -115,13 +153,15 @@ def test_command_snapshot(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Replay-ёмкость источника без чтения приватных значений
 #------------------------------------------------------------------------------------------------------------------
-def test_offline_source(tmp_path: Path) -> None:
+def test_offline_source(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep configured source limits separate from limits not persisted in an offline file.
+    """
+    Keep configured source limits separate from limits not persisted in an offline file.
 
     :param tmp_path: Isolated source owner and its stopped journal.
     :type tmp_path: Path
@@ -153,7 +193,6 @@ def test_offline_source(tmp_path: Path) -> None:
     assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == files
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ без создания БД, recovery или sidecar
 #------------------------------------------------------------------------------------------------------------------
@@ -161,15 +200,20 @@ def test_offline_source(tmp_path: Path) -> None:
 def test_offline_refusal(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Refuse unavailable or incomplete offline journals without creating files or repairing them.
+    """
+    Refuse unavailable or incomplete offline journals without creating files or repairing them.
 
     :param tmp_path: Isolated directory for malformed inputs.
     :type tmp_path: Path
+
     :param mode: Refusal boundary.
     :type mode: str
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # mode — даже имя отсутствующего файла не должно стать новой пустой SQLite.
     path = tmp_path / "private-journal.sqlite"
@@ -188,7 +232,6 @@ def test_offline_refusal(
     assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Чтение кэша при занятом worker и независимость ошибок наблюдения
 #------------------------------------------------------------------------------------------------------------------
@@ -196,20 +239,28 @@ def test_offline_refusal(
 def test_worker_cache(
     tmp_path: Path,
     cancel_observation: bool,
-) -> None:
+    ) -> None:
 
-    """Preserve successful results and original errors when the optional observation fails.
+    """
+    Preserve successful results and original errors when the optional observation fails.
 
     :param tmp_path: Isolated real source store.
     :type tmp_path: Path
+
     :param cancel_observation: Contain a misbehaving observer's cancellation separately from the original work.
     :type cancel_observation: bool
     """
 
     # tmp_path/cancel_observation — ошибка и самовольная отмена наблюдателя не меняют исход операции.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Block one owner operation and read the cached status from its loop."""
+        """
+        Block one owner operation and read the cached status from its loop.
+        """
 
         source = SourceJournal(tmp_path / "source.sqlite")
         worker = StoreWorker(source, 1)
@@ -223,7 +274,8 @@ def test_worker_cache(
         #----------------------------------------------------------------------------------------------------------
         def held() -> int:
 
-            """Keep the one executor occupied until the test releases it.
+            """
+            Keep the one executor occupied until the test releases it.
 
             :return: Unmodified operation result.
             :rtype: int
@@ -266,13 +318,15 @@ def test_worker_cache(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограниченная проверка IPC, включая максимальную сводку
 #------------------------------------------------------------------------------------------------------------------
-def test_ipc_metrics(tmp_path: Path) -> None:
+def test_ipc_metrics(
+    tmp_path: Path,
+    ) -> None:
 
-    """Validate nine bounded journal snapshots and reject fields capable of leaking payloads.
+    """
+    Validate nine bounded journal snapshots and reject fields capable of leaking payloads.
 
     :param tmp_path: Synthetic SQLite used to construct a real valid snapshot.
     :type tmp_path: Path
@@ -305,22 +359,26 @@ def test_ipc_metrics(tmp_path: Path) -> None:
     assert safe["journals"]["hub"]["snapshot"]["records"] != 0
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : CLI остановленной БД, предупреждения и приватность отчёта
 #------------------------------------------------------------------------------------------------------------------
 def test_doctor_journal(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Return safe stopped-journal metrics without exposing its path or application payload.
+    """
+    Return safe stopped-journal metrics without exposing its path or application payload.
 
     :param tmp_path: Synthetic source and new report.
     :type tmp_path: Path
+
     :param capsys: Captured shareable CLI output.
     :type capsys: pytest.CaptureFixture[str]
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # capsys — режим journal не читает конфиги/токены и не запускает сетевых проверок.
     path = tmp_path / "private-source.sqlite"
@@ -345,13 +403,15 @@ def test_doctor_journal(
             main(args)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Наблюдение живого сервера только по кэшу manager
 #------------------------------------------------------------------------------------------------------------------
-def test_doctor_server_cache(tmp_path: Path) -> None:
+def test_doctor_server_cache(
+    tmp_path: Path,
+    ) -> None:
 
-    """Consume the local manager's cached aggregate without opening any journal from doctor.
+    """
+    Consume the local manager's cached aggregate without opening any journal from doctor.
 
     :param tmp_path: Synthetic stopped source for a safe snapshot fixture.
     :type tmp_path: Path
@@ -374,13 +434,15 @@ def test_doctor_server_cache(tmp_path: Path) -> None:
     assert metrics[1]["check"] == "commands.journal.source_1"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Старый heartbeat не делает снимок свежим после сбоя
 #------------------------------------------------------------------------------------------------------------------
-def test_manager_snapshot_age(tmp_path: Path) -> None:
+def test_manager_snapshot_age(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep age and detached snapshots correct when a child stops reporting or restarts.
+    """
+    Keep age and detached snapshots correct when a child stops reporting or restarts.
 
     :param tmp_path: Synthetic journal fixture.
     :type tmp_path: Path
@@ -406,13 +468,15 @@ def test_manager_snapshot_age(tmp_path: Path) -> None:
         assert stopped["journals"]["hub"]["age_seconds"] == 42
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Прерывание SQL-наблюдения не мешает последующей записи
 #------------------------------------------------------------------------------------------------------------------
-def test_observer_budget(tmp_path: Path) -> None:
+def test_observer_budget(
+    tmp_path: Path,
+    ) -> None:
 
-    """Restore progress handling and busy timeout after a metrics query exceeds its budget.
+    """
+    Restore progress handling and busy timeout after a metrics query exceeds its budget.
 
     :param tmp_path: Synthetic source with enough replay rows to invoke progress handling.
     :type tmp_path: Path
@@ -437,13 +501,15 @@ def test_observer_budget(tmp_path: Path) -> None:
         source.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Согласованный UNKNOWN остаётся историей без предупреждения
 #------------------------------------------------------------------------------------------------------------------
-def test_resolved_unknown(tmp_path: Path) -> None:
+def test_resolved_unknown(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep original UNKNOWN while reporting separately whether it lacks an administrative decision.
+    """
+    Keep original UNKNOWN while reporting separately whether it lacks an administrative decision.
 
     :param tmp_path: Synthetic stopped conflict and accepted evidence.
     :type tmp_path: Path
@@ -463,22 +529,30 @@ def test_resolved_unknown(tmp_path: Path) -> None:
     assert not any(row["code"] == "journal_unknown" for row in rows)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Задержка диагностики не меняет исход и не освобождает executor
 #------------------------------------------------------------------------------------------------------------------
-def test_observer_cannot_timeout_commit(tmp_path: Path) -> None:
+def test_observer_cannot_timeout_commit(
+    tmp_path: Path,
+    ) -> None:
 
-    """Return an in-budget committed result even if a later observation remains blocked.
+    """
+    Return an in-budget committed result even if a later observation remains blocked.
 
     :param tmp_path: Isolated source and controlled observer blocking.
     :type tmp_path: Path
     """
 
     # tmp_path — имитируется зависший I/O наблюдения; новая запись не выполняется параллельно.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep the real storage lane pinned while preserving the original operation outcome."""
+        """
+        Keep the real storage lane pinned while preserving the original operation outcome.
+        """
 
         source = SourceJournal(tmp_path / "source.sqlite")
         worker = StoreWorker(source, 0.1)
@@ -491,7 +565,8 @@ def test_observer_cannot_timeout_commit(tmp_path: Path) -> None:
         #----------------------------------------------------------------------------------------------------------
         def slow_observation() -> object:
 
-            """Block diagnostics only, while allowing the original bind to finish.
+            """
+            Block diagnostics only, while allowing the original bind to finish.
 
             :return: Normal source aggregate after release.
             :rtype: object
@@ -523,8 +598,6 @@ def test_observer_cannot_timeout_commit(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

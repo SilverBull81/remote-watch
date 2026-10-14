@@ -1,36 +1,53 @@
 ﻿# Проверки владения logger, локальными файлами и жизненным циклом RemoteWatcher.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> MemoryChannel: Тестовый канал с управляемым запуском и закрытием.
+# -> MemoryChannel: Тестовый канал с управляемым запуском и закрытием
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска работы.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка тестового канала.
-#    -> send(): Одна попытка отправки и проверка ответа.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
+#    -> open(): Подготовка тестового канала
+#    -> send(): Одна попытка отправки и проверка ответа
+#    -> close(): Закрытие клиента и освобождение ресурсов
+#
+# Функции:
+# -> configuration(): Настройки одного тестового получателя
 #
 # Тесты:
-# -> configuration(): Настройки одного тестового получателя.
-# -> test_owned_handlers(): Сохранение чужого logger и ротация собственного журнала.
-# -> test_failure_rolls_back(): Откат при ошибке открытия файла или канала.
-# -> test_async_context_and_cancelled_start(): Асинхронный контекст и отмена запуска.
-# -> test_hierarchy_and_callback_lifecycle(): Иерархия logger и защита от взаимного ожидания.
-# -> test_invalid_local_settings(): Проверка ограничений локального журнала.
-# -> test_unstarted_and_named_logger(): Сохранение настроек именованного logger.
-# -> test_closed_file_cannot_reopen(): Защита от запоздавшей записи после закрытия файла.
-# -> test_slow_close_does_not_starve_other_channels(): Независимость закрытия разных каналов.
-# -> test_cancelled_stop(): Завершение очистки после отмены ожидания остановки.
+# -> test_owned_handlers(): Сохранение чужого logger и ротация собственного журнала
+#
+# -> test_failure_rolls_back(): Откат при ошибке открытия файла или канала
+#
+# -> test_async_context_and_cancelled_start(): Асинхронный контекст и отмена запуска
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_hierarchy_and_callback_lifecycle(): Иерархия logger и защита от взаимного ожидания
+#    Вложенные объявления:
+#    -> callback(): Попытка управления владельцем из канала
+#
+# -> test_invalid_local_settings(): Проверка ограничений локального журнала
+#
+# -> test_unstarted_and_named_logger(): Сохранение настроек именованного logger
+#
+# -> test_closed_file_cannot_reopen(): Защита от запоздавшей записи после закрытия файла
+#
+# -> test_slow_close_does_not_starve_other_channels(): Независимость закрытия разных каналов
+#
+# -> test_cancelled_stop(): Завершение очистки после отмены ожидания остановки
+#    Вложенные объявления:
+#    -> scenario(): Управляемая отмена во время закрытия канала
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -56,19 +73,31 @@ from remote_watch import (
     WatcherConfig,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Тестовый канал с управляемым запуском и закрытием
 #------------------------------------------------------------------------------------------------------------------
 class MemoryChannel:
-    """Capture delivery and coordinate startup without network or credentials."""
+    """
+    Capture delivery and coordinate startup without network or credentials.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Prepare deterministic synchronization points."""
+        """
+        Prepare deterministic synchronization points.
+        """
 
         self.deliveries: list[Delivery] = []
         self.opened = threading.Event()
@@ -86,9 +115,13 @@ class MemoryChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка тестового канала
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Wait for the test to release startup."""
+        """
+        Wait for the test to release startup.
+        """
 
         self.opened.set()
         while not self.release.is_set():
@@ -103,9 +136,10 @@ class MemoryChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Record an attempt and optionally call back into the owner.
+        """
+        Record an attempt and optionally call back into the owner.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -125,9 +159,13 @@ class MemoryChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record resource release."""
+        """
+        Record resource release.
+        """
 
         self.close_entered.set()
         while not self.close_release.is_set():
@@ -139,15 +177,20 @@ class MemoryChannel:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Настройки одного тестового получателя
 #------------------------------------------------------------------------------------------------------------------
 def configuration(
     identity: Identity,
     channel: MemoryChannel,
-) -> WatcherConfig:
+    ) -> WatcherConfig:
 
-    """Configure one bounded destination and an ERROR route.
+    """
+    Configure one bounded destination and an ERROR route.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -169,15 +212,20 @@ def configuration(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение чужого logger и ротация собственного журнала
 #------------------------------------------------------------------------------------------------------------------
 def test_owned_handlers(
     identity: Identity,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Preserve foreign handlers and adapters while draining and rotating owned output.
+    """
+    Preserve foreign handlers and adapters while draining and rotating owned output.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -226,16 +274,16 @@ def test_owned_handlers(
         watcher.start()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Откат при ошибке открытия файла или канала
 #------------------------------------------------------------------------------------------------------------------
 def test_failure_rolls_back(
     identity: Identity,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Clean up a failed channel or file initialization without mutating the caller logger.
+    """
+    Clean up a failed channel or file initialization without mutating the caller logger.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -265,13 +313,15 @@ def test_failure_rolls_back(
     assert watcher.runtime.state is RuntimeState.CLOSED
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Асинхронный контекст и отмена запуска
 #------------------------------------------------------------------------------------------------------------------
-def test_async_context_and_cancelled_start(identity: Identity) -> None:
+def test_async_context_and_cancelled_start(
+    identity: Identity,
+    ) -> None:
 
-    """Keep the application loop responsive and undo cancelled startup, including repeated cancellation.
+    """
+    Keep the application loop responsive and undo cancelled startup, including repeated cancellation.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -284,7 +334,9 @@ def test_async_context_and_cancelled_start(identity: Identity) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise successful and cancelled asynchronous ownership."""
+        """
+        Exercise successful and cancelled asynchronous ownership.
+        """
 
         channel = MemoryChannel()
         watcher = RemoteWatcher(configuration(identity, channel))
@@ -310,13 +362,15 @@ def test_async_context_and_cancelled_start(identity: Identity) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Иерархия logger и защита от взаимного ожидания
 #------------------------------------------------------------------------------------------------------------------
-def test_hierarchy_and_callback_lifecycle(identity: Identity) -> None:
+def test_hierarchy_and_callback_lifecycle(
+    identity: Identity,
+    ) -> None:
 
-    """Route propagated child records and reject callback lifecycle calls without deadlocks.
+    """
+    Route propagated child records and reject callback lifecycle calls without deadlocks.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -336,7 +390,9 @@ def test_hierarchy_and_callback_lifecycle(identity: Identity) -> None:
     #--------------------------------------------------------------------------------------------------------------
     def callback() -> None:
 
-        """Attempt forbidden worker-owned lifecycle changes."""
+        """
+        Attempt forbidden worker-owned lifecycle changes.
+        """
 
         for operation in (watcher.start, watcher.stop):
             try:
@@ -352,7 +408,6 @@ def test_hierarchy_and_callback_lifecycle(identity: Identity) -> None:
     assert channel.deliveries[0].notification.logger_name == "app.child"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка ограничений локального журнала
 #------------------------------------------------------------------------------------------------------------------
@@ -360,9 +415,10 @@ def test_hierarchy_and_callback_lifecycle(identity: Identity) -> None:
 def test_invalid_local_settings(
     settings: dict[str, object],
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Reject unbounded rotation and malformed local configuration before side effects.
+    """
+    Reject unbounded rotation and malformed local configuration before side effects.
 
     :param settings: Client constructor settings.
     :type settings: dict[str, object]
@@ -380,13 +436,15 @@ def test_invalid_local_settings(
     assert not (tmp_path / "log").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение настроек именованного logger
 #------------------------------------------------------------------------------------------------------------------
-def test_unstarted_and_named_logger(identity: Identity) -> None:
+def test_unstarted_and_named_logger(
+    identity: Identity,
+    ) -> None:
 
-    """Reuse a standard named logger without changing its settings and close an unused watcher.
+    """
+    Reuse a standard named logger without changing its settings and close an unused watcher.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -405,16 +463,16 @@ def test_unstarted_and_named_logger(identity: Identity) -> None:
         watcher.start()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Защита от запоздавшей записи после закрытия файла
 #------------------------------------------------------------------------------------------------------------------
 def test_closed_file_cannot_reopen(
     identity: Identity,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Prevent a concurrent logger call that already selected the file handler from reopening it.
+    """
+    Prevent a concurrent logger call that already selected the file handler from reopening it.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -435,13 +493,15 @@ def test_closed_file_cannot_reopen(
     assert handler.stream is None and path.read_bytes() == b""
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимость закрытия разных каналов
 #------------------------------------------------------------------------------------------------------------------
-def test_slow_close_does_not_starve_other_channels(identity: Identity) -> None:
+def test_slow_close_does_not_starve_other_channels(
+    identity: Identity,
+    ) -> None:
 
-    """Give every independent channel a chance to close even when a peer exhausts its deadline.
+    """
+    Give every independent channel a chance to close even when a peer exhausts its deadline.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -463,15 +523,15 @@ def test_slow_close_does_not_starve_other_channels(identity: Identity) -> None:
     assert watcher.runtime.stats("slow").close_failed == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Завершение очистки после отмены ожидания остановки
 #------------------------------------------------------------------------------------------------------------------
 def test_cancelled_stop(
     identity: Identity,
-) -> None:
+    ) -> None:
 
-    """Finish channel cleanup despite repeated cancellation of asynchronous stop.
+    """
+    Finish channel cleanup despite repeated cancellation of asynchronous stop.
 
     :param identity: Explicit application identity fixture.
     :type identity: Identity
@@ -484,7 +544,9 @@ def test_cancelled_stop(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Cancel only after close has started, then release the channel."""
+        """
+        Cancel only after close has started, then release the channel.
+        """
 
         channel = MemoryChannel()
         channel.close_release.clear()
@@ -507,8 +569,6 @@ def test_cancelled_stop(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

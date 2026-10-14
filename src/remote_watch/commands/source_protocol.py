@@ -1,41 +1,44 @@
 ﻿# События источников, явные адреса приложений и текстовые ответы на команды.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> SourceEvent: Проверенные данные одного события провайдера.
+# -> SourceEvent: Проверенные данные одного события провайдера
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> SourcePending: Решение с уже выбранной сессией приложения.
+# -> SourcePending: Решение с уже выбранной сессией приложения
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> SourceTargets: Явные короткие адреса приложений.
+# -> SourceTargets: Явные короткие адреса приложений
 #    Специальные методы:
-#    -> __post_init__(): Проверка и фиксация настроек.
+#    -> __post_init__(): Проверка и фиксация настроек
 #
-# -> CommandProvider: Контракт чтения событий и отправки ответов.
+# -> CommandProvider: Контракт чтения событий и отправки ответов
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> poll(): Получение ограниченной порции неподтверждённых событий.
-#    -> acknowledge(): Подтверждение только записанного события.
-#    -> reply(): Одна попытка отправить ответ проверенному получателю.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> poll(): Получение ограниченной порции неподтверждённых событий
+#    -> acknowledge(): Подтверждение только записанного события
+#    -> reply(): Одна попытка отправить ответ проверенному получателю
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
 #
 # Функции:
-# -> parse_source_command(): Разбор адреса, имени команды и строковых аргументов.
-# -> source_result_text(): Ответ с командой, сессией, адресом приложения и исходом.
-# -> bound_source_text(): Ограничение ответа по размеру с видимой отметкой усечения.
+# -> parse_source_command(): Разбор адреса, имени команды и строковых аргументов
+#
+# -> source_result_text(): Ответ с командой, сессией, адресом приложения и исходом
+#
+# -> bound_source_text(): Ограничение ответа по размеру с видимой отметкой усечения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -49,27 +52,53 @@ from remote_watch._validation import require_int, require_text
 from remote_watch.commands.protocol import CommandRequest, CommandResult
 from remote_watch.events import Identity
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Проверенные данные одного события провайдера
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceEvent:
-    """Retain only provider-authenticated routing fields and bounded text."""
+    """
+    Retain only provider-authenticated routing fields and bounded text.
+
+    :param event_id: Stable notification or source event identifier.
+    :type event_id: str
+
+    :param message_date: Provider event timestamp in whole Unix seconds.
+    :type message_date: int
+
+    :param actor_id: Provider-authenticated actor, or None when the event cannot authorize a command.
+    :type actor_id: str | None
+
+    :param conversation_id: Provider-authenticated conversation, or None for an unsupported event.
+    :type conversation_id: str | None
+
+    :param text: Provider command text, or None for an unsupported event.
+    :type text: str | None
+    """
 
     event_id: str                                       # Непрозрачный ID события провайдера.
-    message_date: int                                   # Время сообщения по данным провайдера, Unix seconds.
+    message_date: int                                   # Время сообщения по данным провайдера, секунды Unix.
     actor_id: str | None = field(repr=False)            # Удостоверенный автор; None для пропуска.
     conversation_id: str | None = field(repr=False)     # Проверенный чат или закрытый топик.
     text: str | None = field(repr=False)                # Текст команды; None для неподдерживаемого события.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject oversized provider data before retaining or journaling an event."""
+        """
+        Reject oversized provider data before retaining or journaling an event.
+        """
 
         require_text(self.event_id, "source event", 128)
         require_int(self.message_date, "message date", minimum=0)
@@ -85,26 +114,42 @@ class SourceEvent:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Решение с уже выбранной сессией приложения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourcePending:
-    """Persist a fully bound decision before communicating it to the hub."""
+    """
+    Persist a fully bound decision before communicating it to the hub.
+
+    :param position: Durable position within the ordered source stream.
+    :type position: int
+
+    :param event: Original source event with provider identity and timestamp.
+    :type event: SourceEvent
+
+    :param request: Exact command request bound to the original session.
+    :type request: CommandRequest | None
+
+    :param notice: Fixed source notice, or None when no notice is needed.
+    :type notice: str | None
+    """
 
     position: int                   # Собственная возрастающая позиция источника.
     event: SourceEvent              # Исходное событие с ID и временем провайдера.
     request: CommandRequest | None  # Уже выбранная сессия; None для отказа или справки.
     notice: str | None = None       # Безопасный ответ без выполнения callback.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate a persisted decision and its exact relationship to the source event."""
+        """
+        Validate a persisted decision and its exact relationship to the source event.
+        """
 
         require_int(self.position, "source position", minimum=0)
 
@@ -125,23 +170,30 @@ class SourcePending:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Явные короткие адреса приложений
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceTargets:
-    """Bind stable human-readable aliases to complete immutable application identities."""
+    """
+    Bind stable human-readable aliases to complete immutable application identities.
+
+    :param aliases: Explicitly configured destination aliases.
+    :type aliases: Mapping[str, Identity]
+    """
 
     aliases: Mapping[str, Identity]     # Адреса в команде, каждый указывает ровно на одну Identity.
-
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Copy bounded aliases without allowing wildcard or inferred identities."""
+        """
+        Copy bounded aliases without allowing wildcard or inferred identities.
+        """
 
         if not isinstance(self.aliases, Mapping) or not 1 <= len(self.aliases) <= 64:
             raise ValueError("invalid source targets")
@@ -159,20 +211,23 @@ class SourceTargets:
 
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контракт чтения событий и отправки ответов
 #------------------------------------------------------------------------------------------------------------------
 class CommandProvider(Protocol):
-    """Read authenticated provider events without knowing the application callbacks."""
-
+    """
+    Read authenticated provider events without knowing the application callbacks.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> str:
+    async def open(
+        self,
+        ) -> str:
 
-        """Open owned resources and return a stable nonsecret provider fingerprint.
+        """
+        Open owned resources and return a stable nonsecret provider fingerprint.
 
         :return: Stable nonsecret fingerprint of the opened provider stream.
         :rtype: str
@@ -181,16 +236,16 @@ class CommandProvider(Protocol):
         ...
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение ограниченной порции неподтверждённых событий
     #--------------------------------------------------------------------------------------------------------------
     async def poll(
         self,
         cursor: str,
-    ) -> tuple[SourceEvent, ...]:
+        ) -> tuple[SourceEvent, ...]:
 
-        """Read at most 32 events after the durable opaque provider cursor.
+        """
+        Read at most 32 events after the durable opaque provider cursor.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -204,16 +259,16 @@ class CommandProvider(Protocol):
         ...
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение только записанного события
     #--------------------------------------------------------------------------------------------------------------
     async def acknowledge(
         self,
         cursor: str,
-    ) -> None:
+        ) -> None:
 
-        """Confirm only a provider event whose decision is already durably committed.
+        """
+        Confirm only a provider event whose decision is already durably committed.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -224,7 +279,6 @@ class CommandProvider(Protocol):
         ...
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Одна попытка отправить ответ проверенному получателю
     #--------------------------------------------------------------------------------------------------------------
@@ -232,9 +286,10 @@ class CommandProvider(Protocol):
         self,
         conversation_id: str,
         text: str,
-    ) -> None:
+        ) -> None:
 
-        """Make one bounded plain-text reply attempt without formatting private errors.
+        """
+        Make one bounded plain-text reply attempt without formatting private errors.
 
         :param conversation_id: Authenticated chat ID or configured private command topic.
         :type conversation_id: str
@@ -249,19 +304,26 @@ class CommandProvider(Protocol):
         ...
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close resources and cooperate with cancellation."""
+        """
+        Close resources and cooperate with cancellation.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Разбор адреса, имени команды и строковых аргументов
@@ -270,9 +332,10 @@ def parse_source_command(
     text: str,
     *,
     short_commands: bool = False,
-) -> tuple[str | None, str | None, dict[str, str]]:
+    ) -> tuple[str | None, str | None, dict[str, str]]:
 
-    """Parse /rw [alias [command [key=value ...]]] without evaluation or positional callback arguments.
+    """
+    Parse /rw [alias [command [key=value ...]]] without evaluation or positional callback arguments.
 
     :param text: Bounded plain text of a command or a provider reply.
     :type text: str
@@ -322,7 +385,6 @@ def parse_source_command(
     return None if short else alias, name, arguments
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ответ с командой, сессией, адресом приложения и исходом
 #------------------------------------------------------------------------------------------------------------------
@@ -331,9 +393,10 @@ def source_result_text(
     result: CommandResult,
     *,
     mode: str = "full",
-) -> str:
+    ) -> str:
 
-    """Render bounded correlation and the retained outcome without claiming business completion.
+    """
+    Render bounded correlation and the retained outcome without claiming business completion.
 
     :param request: Incoming request validated before dispatch.
     :type request: CommandRequest
@@ -378,13 +441,15 @@ def source_result_text(
     return bound_source_text(value)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограничение ответа по размеру с видимой отметкой усечения
 #------------------------------------------------------------------------------------------------------------------
-def bound_source_text(text: str) -> str:
+def bound_source_text(
+    text: str,
+    ) -> str:
 
-    """Fit a complete plain-text reply into both initial providers' message limits.
+    """
+    Fit a complete plain-text reply into both initial providers' message limits.
 
     :param text: Bounded plain text of a command or a provider reply.
     :type text: str
@@ -399,7 +464,6 @@ def bound_source_text(text: str) -> str:
     return text if len(raw) <= 3800 else raw[:3760].decode("utf-8", errors="ignore") + "\n[response truncated]"
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

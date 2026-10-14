@@ -1,31 +1,31 @@
 ﻿# Исходящие текстовые уведомления через Telegram Bot API.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> TelegramConfig: Настройки получателя Telegram.
+# -> TelegramConfig: Настройки получателя Telegram
 #    Интерфейс:
-#    -> destination(): Создание получателя с общей политикой таймаутов.
+#    -> destination(): Создание получателя с общей политикой таймаутов
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек до начала сетевой работы.
+#    -> __post_init__(): Проверка настроек до начала сетевой работы
 #
-# -> TelegramChannel: Отправка текстового сообщения в Telegram.
+# -> TelegramChannel: Отправка текстового сообщения в Telegram
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка клиента и данных авторизации.
-#    -> send(): Одна попытка отправки и проверка ответа.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
-#
+#    -> open(): Подготовка клиента и данных авторизации
+#    -> send(): Одна попытка отправки и проверка ответа
+#    -> close(): Закрытие клиента и освобождение ресурсов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import re
@@ -46,27 +46,58 @@ from remote_watch.config import Destination, RetryPolicy
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 from remote_watch.notifications.display import validate_display
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки получателя Telegram
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TelegramConfig:
-    """Declare a Telegram destination using a literal token or environment reference."""
+    """
+    Declare a Telegram destination using a literal token or environment reference.
 
-    token_env: str | None = field(default=None, repr=False)     # Имя переменной с токеном; альтернатива token.
-    token: str | None = field(default=None, repr=False)         # Токен бота непосредственно в настройках.
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param chat_id: Telegram numeric chat identifier or channel username.
+    :type chat_id: int | str
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param message_thread_id: Telegram topic identifier, or None for the main conversation.
+    :type message_thread_id: int | None
+
+    :param disable_notification: Whether Telegram should deliver silently.
+    :type disable_notification: bool
+
+    :param allow_http: Explicit opt-in to unencrypted HTTP for supported local tests.
+    :type allow_http: bool
+
+    :param display_mode: Full, compact or text presentation for this Telegram destination.
+    :type display_mode: str
+
+    :param display_fields: Selected presentation field groups, or None for mode defaults.
+    :type display_fields: tuple[str, ...] | None
+    """
+
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной с токеном; альтернатива token.
+    token: str | None = field(default=None, repr=False)  # Токен бота непосредственно в настройках.
     chat_id: int | str = field(repr=False)      # Числовой ID чата либо @имя канала.
     endpoint: str = "https://api.telegram.org"  # Корень официального или собственного Bot API.
     message_thread_id: int | None = None        # ID темы в группе-форуме; None — обычная отправка.
     disable_notification: bool = False          # Отправка без звука.
     allow_http: bool = False                    # Явное разрешение HTTP для своего сервера.
     display_mode: str = "full"                  # Полная шапка, компактный источник либо только текст.
-    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
+    display_fields: tuple[str, ...] | None = None  # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Создание получателя с общей политикой таймаутов
@@ -77,9 +108,10 @@ class TelegramConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-    ) -> Destination:
+        ) -> Destination:
 
-        """Bind the same retry policy to the runtime and its lazy channel factory.
+        """
+        Bind the same retry policy to the runtime and its lazy channel factory.
 
         :param destination_id: Logical routing identifier.
         :type destination_id: str
@@ -109,9 +141,13 @@ class TelegramConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек до начала сетевой работы
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate static settings without reading credentials or importing aiohttp."""
+        """
+        Validate static settings without reading credentials or importing aiohttp.
+        """
 
         validate_credentials(self.token, self.token_env, "telegram")
         object.__setattr__(self, "display_fields", validate_display(self.display_mode, self.display_fields))
@@ -134,12 +170,13 @@ class TelegramConfig:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Отправка текстового сообщения в Telegram
 #------------------------------------------------------------------------------------------------------------------
 class TelegramChannel:
-    """Send plain-text notifications once through a privately owned HTTP client."""
+    """
+    Send plain-text notifications once through a privately owned HTTP client.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -149,9 +186,10 @@ class TelegramChannel:
         config: TelegramConfig,
         *,
         retry: RetryPolicy | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Retain validated settings without resolving tokens or starting network work.
+        """
+        Retain validated settings without resolving tokens or starting network work.
 
         :param config: Validated provider configuration.
         :type config: TelegramConfig
@@ -174,9 +212,13 @@ class TelegramChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка клиента и данных авторизации
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Resolve the bot credential and create a client in the worker loop."""
+        """
+        Resolve the bot credential and create a client in the worker loop.
+        """
 
         if self._url is not None:
             await self._http.open()
@@ -193,9 +235,10 @@ class TelegramChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Perform one sendMessage call and classify its sanitized result.
+        """
+        Perform one sendMessage call and classify its sanitized result.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -251,9 +294,13 @@ class TelegramChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release network resources and discard the credential-bearing URL."""
+        """
+        Release network resources and discard the credential-bearing URL.
+        """
 
         try:
             await self._http.close()
@@ -262,8 +309,6 @@ class TelegramChannel:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

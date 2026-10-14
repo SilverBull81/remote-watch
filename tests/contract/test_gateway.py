@@ -1,41 +1,85 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> Channel: Управляемый канал проверки попыток и отмены.
+# -> Channel: Управляемый канал проверки попыток и отмены
 #    Конструктор:
-#    -> __init__(): Подготовка состояния без запуска ресурсов.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка тестового канала.
-#    -> send(): Одна управляемая попытка отправки.
-#    -> close(): Ограниченное завершение и очистка.
+#    -> open(): Подготовка тестового канала
+#    -> send(): Одна управляемая попытка отправки
+#    -> close(): Ограниченное завершение и очистка
+#
+# Функции:
+# -> settings(): Настройки точных прав тестового отправителя
+#
+# -> envelope(): Запрос с заданным сроком и идентификатором доставки
+#
+# -> credential(): Временный вымышленный токен
 #
 # Тесты:
-# -> settings(): Настройки точных прав тестового отправителя.
-# -> envelope(): Запрос с заданным сроком и идентификатором доставки.
-# -> credential(): Временный вымышленный токен.
-# -> test_gateway_requests(): Проверка HTTP-доступа, формата и срока до отправки.
-# -> test_gateway_attempt_outcomes(): Классификация одной попытки без повторов сервера.
-# -> test_gateway_overload(): Немедленный отказ при превышении ёмкости.
-# -> test_gateway_body_deadline(): Ограничение времени чтения незавершённого тела.
-# -> test_gateway_lifecycle(): Очистка при ошибках и отмене запуска или остановки.
-# -> test_gateway_mixed_runtime(): Настоящие HTTP-адаптеры в смешанном direct и gateway режиме.
-# -> test_gateway_start_guards(): Защита запуска и независимость очистки от отмены владельца.
-# -> test_gateway_rate_and_chunked(): Ограничение частоты и размера chunked-запроса.
-# -> test_gateway_lost_reply(): Возможный дубликат при потере подтверждения провайдера.
-# -> test_gateway_multiple_apps(): Раздельные права и независимая отправка четырёх приложений.
-# -> test_gateway_clock_tolerance(): Расхождение UTC и границы допуска через настоящий HTTP.
-# -> test_gateway_elapsed_budget(): Допуск часов не восстанавливает исчерпанное время запроса.
+# -> test_gateway_requests(): Проверка HTTP-доступа, формата и срока до отправки
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_attempt_outcomes(): Классификация одной попытки без повторов сервера
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_overload(): Немедленный отказ при превышении ёмкости
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_body_deadline(): Ограничение времени чтения незавершённого тела
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_lifecycle(): Очистка при ошибках и отмене запуска или остановки
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_mixed_runtime(): Настоящие HTTP-адаптеры в смешанном direct и gateway режиме
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#       Вложенные объявления:
+#       -> provider(): Подставной HTTP-сервис Telegram и ntfy
+#
+# -> test_gateway_start_guards(): Защита запуска и независимость очистки от отмены владельца
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_lost_reply(): Возможный дубликат при потере подтверждения провайдера
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария
+#
+# -> test_gateway_rate_and_chunked(): Ограничение частоты и размера chunked-запроса
+#    Вложенные объявления:
+#    -> scenario(): Отправка запросов без внешней сети
+#
+# -> test_gateway_multiple_apps(): Раздельные права и независимая отправка четырёх приложений
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#       Вложенные объявления:
+#       -> post(): Отправка запроса от выбранного тестового приложения
+#
+# -> test_gateway_clock_tolerance(): Расхождение UTC и границы допуска через настоящий HTTP
+#    Вложенные объявления:
+#    -> scenario(): Один запрос с заданными часами без ожидания реальных минут
+#
+# -> test_gateway_elapsed_budget(): Допуск часов не восстанавливает исчерпанное время запроса
+#    Вложенные объявления:
+#    -> scenario(): Проверка вычисления остатка без таймеров и ожиданий
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -67,15 +111,30 @@ from remote_watch.gateway.notification_server import NotificationGateway
 from remote_watch.notifications._context import delivery_context
 from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest, decode_response
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 aiohttp = pytest.importorskip("aiohttp")
 TOKEN = "synthetic_gateway_credential_1234567890"
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Управляемый канал проверки попыток и отмены
 #------------------------------------------------------------------------------------------------------------------
 class Channel:
-    """Observe attempts, cancellation and ownership without provider network traffic."""
+    """
+    Observe attempts, cancellation and ownership without provider network traffic.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -83,9 +142,10 @@ class Channel:
     def __init__(
         self,
         mode: str = 'success',
-    ) -> None:
+        ) -> None:
 
-        """Prepare a selectable provider outcome.
+        """
+        Prepare a selectable provider outcome.
 
         :param mode: Selected fake-channel behavior.
         :type mode: str
@@ -106,9 +166,13 @@ class Channel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка тестового канала
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Record startup and optionally reproduce partial failure."""
+        """
+        Record startup and optionally reproduce partial failure.
+        """
 
         self.opened = True
         if self.mode == "open_error":
@@ -124,9 +188,10 @@ class Channel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Return one outcome or remain cancellably active until released.
+        """
+        Return one outcome or remain cancellably active until released.
 
         :param delivery: Validated provider attempt.
         :type delivery: Delivery
@@ -159,9 +224,13 @@ class Channel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ограниченное завершение и очистка
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Record cleanup, with an optional cancellation-cooperative stall."""
+        """
+        Record cleanup, with an optional cancellation-cooperative stall.
+        """
 
         self.closed = True
         if self.mode == "close_wait":
@@ -170,6 +239,10 @@ class Channel:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Настройки точных прав тестового отправителя
 #------------------------------------------------------------------------------------------------------------------
@@ -177,9 +250,10 @@ def settings(
     notification: Notification,
     channel: Channel,
     **changes: Any,
-) -> NotificationGatewayServerConfig:
+    ) -> NotificationGatewayServerConfig:
 
-    """Create exact grants and a one-attempt destination for tests.
+    """
+    Create exact grants and a one-attempt destination for tests.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -206,13 +280,15 @@ def settings(
         destination_interval=0, **changes)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запрос с заданным сроком и идентификатором доставки
 #------------------------------------------------------------------------------------------------------------------
-def envelope(notification: Notification) -> NotificationGatewayRequest:
+def envelope(
+    notification: Notification,
+    ) -> NotificationGatewayRequest:
 
-    """Create a finite request while preserving the fixture's controlled UTC time.
+    """
+    Create a finite request while preserving the fixture's controlled UTC time.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -228,14 +304,16 @@ def envelope(notification: Notification) -> NotificationGatewayRequest:
         alias="phone", remaining_ttl=10, timeout=8)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Временный вымышленный токен
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
-def credential(monkeypatch: pytest.MonkeyPatch) -> None:
+def credential(
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
 
-    """Install only synthetic service credentials in the test process.
+    """
+    Install only synthetic service credentials in the test process.
 
     :param monkeypatch: Pytest environment patch fixture.
     :type monkeypatch: pytest.MonkeyPatch
@@ -247,6 +325,10 @@ def credential(monkeypatch: pytest.MonkeyPatch) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка HTTP-доступа, формата и срока до отправки
 #------------------------------------------------------------------------------------------------------------------
@@ -257,9 +339,10 @@ def test_gateway_requests(
     notification: Notification,
     case: str,
     caplog: pytest.LogCaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Check authentication, exact grants, bounds and expiry before provider dispatch.
+    """
+    Check authentication, exact grants, bounds and expiry before provider dispatch.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -282,7 +365,9 @@ def test_gateway_requests(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Send one controlled HTTP request to the actual gateway."""
+        """
+        Send one controlled HTTP request to the actual gateway.
+        """
 
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel,
@@ -358,7 +443,6 @@ def test_gateway_requests(
     assert "synthetic private" not in caplog.text
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Классификация одной попытки без повторов сервера
 #------------------------------------------------------------------------------------------------------------------
@@ -366,9 +450,10 @@ def test_gateway_requests(
 def test_gateway_attempt_outcomes(
     notification: Notification,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Return safe classified outcomes without adding provider retries.
+    """
+    Return safe classified outcomes without adding provider retries.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -385,7 +470,9 @@ def test_gateway_attempt_outcomes(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use the real gateway client against one configured provider attempt."""
+        """
+        Use the real gateway client against one configured provider attempt.
+        """
 
         now = datetime.now(timezone.utc)
         event = replace(notification, created_at=now, expires_at=now + timedelta(seconds=60))
@@ -411,7 +498,6 @@ def test_gateway_attempt_outcomes(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Немедленный отказ при превышении ёмкости
 #------------------------------------------------------------------------------------------------------------------
@@ -419,9 +505,10 @@ def test_gateway_attempt_outcomes(
 def test_gateway_overload(
     notification: Notification,
     limit: str,
-) -> None:
+    ) -> None:
 
-    """Reject excess requests promptly instead of accumulating waiting tasks.
+    """
+    Reject excess requests promptly instead of accumulating waiting tasks.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -438,7 +525,9 @@ def test_gateway_overload(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Hold one attempt and test independent admission limits."""
+        """
+        Hold one attempt and test independent admission limits.
+        """
 
         channel = Channel("wait")
         config = settings(notification, channel, capacity=1 if limit == "global" else 32)
@@ -467,13 +556,15 @@ def test_gateway_overload(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение времени чтения незавершённого тела
 #------------------------------------------------------------------------------------------------------------------
-def test_gateway_body_deadline(notification: Notification) -> None:
+def test_gateway_body_deadline(
+    notification: Notification,
+    ) -> None:
 
-    """Reserve admission before body reading and release it after a stalled upload.
+    """
+    Reserve admission before body reading and release it after a stalled upload.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -486,7 +577,9 @@ def test_gateway_body_deadline(notification: Notification) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Send headers without the advertised body using a raw loopback connection."""
+        """
+        Send headers without the advertised body using a raw loopback connection.
+        """
 
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel, body_timeout=0.05),
@@ -509,7 +602,6 @@ def test_gateway_body_deadline(notification: Notification) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Очистка при ошибках и отмене запуска или остановки
 #------------------------------------------------------------------------------------------------------------------
@@ -517,9 +609,10 @@ def test_gateway_body_deadline(notification: Notification) -> None:
 def test_gateway_lifecycle(
     notification: Notification,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Clean partial startup and bound shutdown without skipping other providers.
+    """
+    Clean partial startup and bound shutdown without skipping other providers.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -536,7 +629,9 @@ def test_gateway_lifecycle(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise cancellation and timeout with cooperative fake channels."""
+        """
+        Exercise cancellation and timeout with cooperative fake channels.
+        """
 
         channel = Channel("open_wait" if mode == "cancel_start" else "wait" if mode == "disconnect" else mode)
         other = Channel()
@@ -577,16 +672,16 @@ def test_gateway_lifecycle(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящие HTTP-адаптеры в смешанном direct и gateway режиме
 #------------------------------------------------------------------------------------------------------------------
 def test_gateway_mixed_runtime(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Deliver Telegram through the real gateway and ntfy directly from one watcher.
+    """
+    Deliver Telegram through the real gateway and ntfy directly from one watcher.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -605,7 +700,9 @@ def test_gateway_mixed_runtime(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run actual provider HTTP adapters against a deterministic loopback service."""
+        """
+        Run actual provider HTTP adapters against a deterministic loopback service.
+        """
 
         from aiohttp import web
 
@@ -617,9 +714,12 @@ def test_gateway_mixed_runtime(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Подставной HTTP-сервис Telegram и ntfy
         #----------------------------------------------------------------------------------------------------------
-        async def provider(request: web.Request) -> web.Response:
+        async def provider(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Accept one Telegram or ntfy payload without external network access.
+            """
+            Accept one Telegram or ntfy payload without external network access.
 
             :param request: Incoming HTTP request.
             :type request: web.Request
@@ -675,7 +775,6 @@ def test_gateway_mixed_runtime(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Защита запуска и независимость очистки от отмены владельца
 #------------------------------------------------------------------------------------------------------------------
@@ -684,9 +783,10 @@ def test_gateway_start_guards(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Fail closed on invalid credentials and unsafe binds; preserve cleanup on caller cancellation.
+    """
+    Fail closed on invalid credentials and unsafe binds; preserve cleanup on caller cancellation.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -707,7 +807,9 @@ def test_gateway_start_guards(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check startup guards before any provider request is possible."""
+        """
+        Check startup guards before any provider request is possible.
+        """
 
         channel = Channel("close_wait" if case == "cancel_close" else "success")
         config = settings(notification, channel, shutdown_timeout=0.1)
@@ -735,13 +837,15 @@ def test_gateway_start_guards(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Возможный дубликат при потере подтверждения провайдера
 #------------------------------------------------------------------------------------------------------------------
-def test_gateway_lost_reply(notification: Notification) -> None:
+def test_gateway_lost_reply(
+    notification: Notification,
+    ) -> None:
 
-    """Allow a duplicate after provider success when the caller loses the first receipt.
+    """
+    Allow a duplicate after provider success when the caller loses the first receipt.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -754,7 +858,9 @@ def test_gateway_lost_reply(notification: Notification) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Discard the first response before validation, then retry the same delivery ID."""
+        """
+        Discard the first response before validation, then retry the same delivery ID.
+        """
 
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel), utc_now=lambda: notification.created_at)
@@ -784,7 +890,6 @@ def test_gateway_lost_reply(notification: Notification) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ограничение частоты и размера chunked-запроса
 #------------------------------------------------------------------------------------------------------------------
@@ -792,9 +897,10 @@ def test_gateway_lost_reply(notification: Notification) -> None:
 def test_gateway_rate_and_chunked(
     notification: Notification,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Enforce bounded rates and body sizes independently of Content-Length.
+    """
+    Enforce bounded rates and body sizes independently of Content-Length.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -811,7 +917,9 @@ def test_gateway_rate_and_chunked(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Check explicit 429 delay and reject a streamed oversized body."""
+        """
+        Check explicit 429 delay and reject a streamed oversized body.
+        """
 
         channel = Channel()
         config = settings(notification, channel)
@@ -844,16 +952,16 @@ def test_gateway_rate_and_chunked(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Раздельные права и независимая отправка четырёх приложений
+# ТЕСТ : Раздельные права и независимая отправка четырёх приложений
 #------------------------------------------------------------------------------------------------------------------
 def test_gateway_multiple_apps(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Route four applications through one listener while enforcing separate grants.
+    """
+    Route four applications through one listener while enforcing separate grants.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -865,9 +973,14 @@ def test_gateway_multiple_apps(
     # notification - синтетическое уведомление с фиксированным временем.
     # monkeypatch - временное окружение с вымышленными сервисными токенами.
 
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise concurrent destinations and cross-application access denial."""
+        """
+        Exercise concurrent destinations and cross-application access denial.
+        """
 
         config = load_notification_gateway_config(
             Path(__file__).parents[2] / "docs/examples/notification_gateway.example.json")
@@ -886,13 +999,17 @@ def test_gateway_multiple_apps(
             async with aiohttp.ClientSession() as session:
                 url = f"http://127.0.0.1:{gateway.port}/v1/notifications"
 
+                #--------------------------------------------------------------------------------------------------
+                # ФУНКЦИЯ : Отправка запроса от выбранного тестового приложения
+                #--------------------------------------------------------------------------------------------------
                 async def post(
                     index: int,
                     alias: str,
                     impersonate: bool = False,
-                ) -> int:
+                    ) -> int:
 
-                    """Send one correlated request using an application's own token.
+                    """
+                    Send one correlated request using an application's own token.
 
                     :param index: Application index.
                     :type index: int
@@ -921,7 +1038,6 @@ def test_gateway_multiple_apps(
                             result = decode_response(json.loads(body), item.delivery)
                             assert result.status is DeliveryStatus.PROVIDER_ACCEPTED
                         return response.status
-                #--------------------------------------------------------------------------------------------------
                 #--------------------------------------------------------------------------------------------------
 
                 # Даже знание чужого alias или Identity не расширяет права своего токена.
@@ -953,7 +1069,6 @@ def test_gateway_multiple_apps(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Расхождение UTC и границы допуска через настоящий HTTP
 #------------------------------------------------------------------------------------------------------------------
@@ -982,9 +1097,10 @@ def test_gateway_clock_tolerance(
     ttl: int,
     future: int,
     reason: str | None,
-) -> None:
+    ) -> None:
 
-    """Check clock skew, unchanged timestamps and bounded provider work over HTTP.
+    """
+    Check clock skew, unchanged timestamps and bounded provider work over HTTP.
 
     :param notification: Fixed synthetic notification.
     :type notification: Notification
@@ -1021,7 +1137,9 @@ def test_gateway_clock_tolerance(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Use a real loopback gateway with deterministic UTC and a fake provider."""
+        """
+        Use a real loopback gateway with deterministic UTC and a fake provider.
+        """
 
         event = replace(notification, expires_at=notification.created_at + timedelta(seconds=lifetime))
         channel = Channel()
@@ -1057,7 +1175,6 @@ def test_gateway_clock_tolerance(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Допуск часов не восстанавливает исчерпанное время запроса
 #------------------------------------------------------------------------------------------------------------------
@@ -1067,9 +1184,10 @@ def test_gateway_elapsed_budget(
     timeout: float,
     remaining_ttl: float,
     elapsed: float,
-) -> None:
+    ) -> None:
 
-    """Reject spent relative budgets even with the maximum UTC allowance.
+    """
+    Reject spent relative budgets even with the maximum UTC allowance.
 
     :param notification: Synthetic notification.
     :type notification: Notification
@@ -1093,7 +1211,9 @@ def test_gateway_elapsed_budget(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Model elapsed admission time directly at the dispatch boundary."""
+        """
+        Model elapsed admission time directly at the dispatch boundary.
+        """
 
         channel = Channel()
         gateway = NotificationGateway(settings(notification, channel, clock_skew_tolerance=3600),
@@ -1108,8 +1228,6 @@ def test_gateway_elapsed_budget(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

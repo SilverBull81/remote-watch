@@ -1,20 +1,23 @@
 ﻿# Режимы ответов команд, английские служебные тексты и совместимость хешей.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_legacy_digests(): Неизменность хешей старых сообщений и сохранённых квитанций.
-# -> test_command_display_wire_rejects(): Строгость новой схемы представления.
-# -> test_command_result_display(): Результат без изменения протокола, исхода и текста приложения.
+# -> test_legacy_digests(): Неизменность хешей старых сообщений и сохранённых квитанций
+#
+# -> test_command_display_wire_rejects(): Строгость новой схемы представления
+#
+# -> test_command_result_display(): Результат без изменения протокола, исхода и текста приложения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -38,17 +41,29 @@ from remote_watch.commands.protocol import (
 )
 from remote_watch.commands.source_protocol import source_result_text
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Неизменность хешей старых сообщений и сохранённых квитанций
 #------------------------------------------------------------------------------------------------------------------
-def test_legacy_digests(identity: Identity) -> None:
+def test_legacy_digests(
+    identity: Identity,
+    ) -> None:
 
-    """Compare canonical hashes captured from the dev8 protocol implementation.
+    """
+    Compare canonical hashes captured from the dev8 protocol implementation.
 
     :param identity: Fixed synthetic identity used for the legacy fingerprints.
     :type identity: Identity
     """
+
+    # identity — явные сведения о приложении и его экземпляре.
+
 
     # Константы получены из HEAD dev8 до изменения codec, а не новым сериализатором.
     event = request(identity)
@@ -68,7 +83,6 @@ def test_legacy_digests(identity: Identity) -> None:
     assert message_digest(replace(event, command_display_mode="text")) != expected[1]
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Строгость новой схемы представления
 #------------------------------------------------------------------------------------------------------------------
@@ -76,9 +90,10 @@ def test_legacy_digests(identity: Identity) -> None:
 def test_command_display_wire_rejects(
     identity: Identity,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous presentation extensions rather than silently dropping the selected mode.
+    """
+    Reject ambiguous presentation extensions rather than silently dropping the selected mode.
 
     :param identity: Synthetic application identity.
     :type identity: Identity
@@ -86,6 +101,10 @@ def test_command_display_wire_rejects(
     :param case: Deliberately malformed command envelope.
     :type case: str
     """
+
+    # identity — явные сведения о приложении и его экземпляре.
+    # case — вариант проверяемого сценария.
+
 
     # Новая схема не принимает null и не может быть переименована в старую.
     body = json.loads(encode_command(replace(request(identity), command_display_mode="text")))
@@ -105,7 +124,6 @@ def test_command_display_wire_rejects(
         decode_command(raw)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Результат без изменения протокола, исхода и текста приложения
 #------------------------------------------------------------------------------------------------------------------
@@ -115,9 +133,10 @@ def test_command_result_display(
     identity: Identity,
     mode: str,
     outcome: str,
-) -> None:
+    ) -> None:
 
-    """Retain explicit failures, source distinction and Unicode within bounded provider messages.
+    """
+    Retain explicit failures, source distinction and Unicode within bounded provider messages.
 
     :param identity: Explicit synthetic identity.
     :type identity: Identity
@@ -128,6 +147,11 @@ def test_command_result_display(
     :param outcome: Successful body, empty callback or fixed failure classification.
     :type outcome: str
     """
+
+    # identity — явные сведения о приложении и его экземпляре.
+    # mode — выбранный режим отображения или запуска в этом сценарии.
+    # outcome — сохранённый исход команды, который нельзя заменять повторным исполнением.
+
 
     # Даже режим text не превращает UNKNOWN/отказ в пустой ответ или успех.
     event = replace(request(identity), command_display_mode=mode)
@@ -166,8 +190,6 @@ def test_command_result_display(
     assert source_result_text(default, result, mode=mode) == text
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,24 +1,31 @@
 ﻿# Общие проверки настроек, подготовка текста и классификация HTTP-ответов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого.
-# -> validate_env(): Проверка имени переменной с токеном.
-# -> read_token(): Чтение токена при открытии канала.
-# -> truncate(): Сокращение текста с сохранением целых символов.
-# -> render(): Подготовка текста со сведениями об отправителе.
-# -> retry_after(): Чтение минимальной задержки из ответа сервиса.
-# -> http_failure(): Классификация HTTP-ошибки без текста ответа.
+# -> validate_endpoint(): Проверка адреса сервиса без раскрытия его содержимого
+#
+# -> validate_env(): Проверка имени переменной с токеном
+#
+# -> read_token(): Чтение токена при открытии канала
+#
+# -> truncate(): Сокращение текста с сохранением целых символов
+#
+# -> render(): Подготовка текста со сведениями об отправителе
+#
+# -> retry_after(): Чтение минимальной задержки из ответа сервиса
+#
+# -> http_failure(): Классификация HTTP-ошибки без текста ответа
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -32,10 +39,12 @@ from urllib.parse import urlsplit
 from remote_watch._validation import require_text
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # ФУНКЦИИ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка адреса сервиса без раскрытия его содержимого
@@ -43,9 +52,10 @@ from remote_watch.notifications.delivery import Delivery, DeliveryResult, Delive
 def validate_endpoint(
     endpoint: str,
     allow_http: bool,
-) -> None:
+    ) -> None:
 
-    """Reject credentials, redirects encoded in paths and ambiguous base URLs.
+    """
+    Reject credentials, redirects encoded in paths and ambiguous base URLs.
 
     :param endpoint: Configured provider base URL.
     :type endpoint: str
@@ -78,13 +88,15 @@ def validate_endpoint(
         raise ValueError("endpoint must be an absolute safe HTTPS base URL") from None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка имени переменной с токеном
 #------------------------------------------------------------------------------------------------------------------
-def validate_env(name: str | None) -> None:
+def validate_env(
+    name: str | None,
+    ) -> None:
 
-    """Validate an environment reference without accessing the secret.
+    """
+    Validate an environment reference without accessing the secret.
 
     :param name: Environment variable name.
     :type name: str | None
@@ -96,16 +108,16 @@ def validate_env(name: str | None) -> None:
         raise ValueError("token_env must name an environment variable")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение токена при открытии канала
 #------------------------------------------------------------------------------------------------------------------
 def read_token(
     name: str | None,
     telegram: bool = False,
-) -> str | None:
+    ) -> str | None:
 
-    """Resolve a credential only while opening a channel.
+    """
+    Resolve a credential only while opening a channel.
 
     :param name: Environment variable name.
     :type name: str | None
@@ -131,7 +143,6 @@ def read_token(
     return value
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Сокращение текста с сохранением целых символов
 #------------------------------------------------------------------------------------------------------------------
@@ -139,9 +150,10 @@ def truncate(
     text: str,
     limit: int,
     encoding: str = 'utf-8',
-) -> str:
+    ) -> str:
 
-    """Shorten text at a complete Unicode boundary and append a visible marker.
+    """
+    Shorten text at a complete Unicode boundary and append a visible marker.
 
     :param text: Text to shorten.
     :type text: str
@@ -167,7 +179,6 @@ def truncate(
     return data[:limit - len(marker.encode(encoding))].decode(encoding, errors="ignore") + marker
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка текста со сведениями об отправителе
 #------------------------------------------------------------------------------------------------------------------
@@ -175,9 +186,10 @@ def render(
     delivery: Delivery,
     mode: str = "full",
     fields: tuple[str, ...] | None = None,
-) -> str:
+    ) -> str:
 
-    """Render explicit source identity and event identifiers as plain text.
+    """
+    Render explicit source identity and event identifiers as plain text.
 
     :param delivery: Immutable delivery attempt.
     :type delivery: Delivery
@@ -228,16 +240,16 @@ def render(
     return source
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение минимальной задержки из ответа сервиса
 #------------------------------------------------------------------------------------------------------------------
 def retry_after(
     value: object,
     now: datetime | None = None,
-) -> float | None:
+    ) -> float | None:
 
-    """Parse finite Retry-After seconds or an HTTP date without exposing response text.
+    """
+    Parse finite Retry-After seconds or an HTTP date without exposing response text.
 
     :param value: Untrusted delay value.
     :type value: object
@@ -274,16 +286,16 @@ def retry_after(
     return result if math.isfinite(result) and result >= 0 else None
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Классификация HTTP-ошибки без текста ответа
 #------------------------------------------------------------------------------------------------------------------
 def http_failure(
     status: int,
     delay: float | None,
-) -> DeliveryResult:
+    ) -> DeliveryResult:
 
-    """Classify an HTTP rejection using fixed reason codes only.
+    """
+    Classify an HTTP rejection using fixed reason codes only.
 
     :param status: HTTP response status.
     :type status: int
@@ -312,8 +324,6 @@ def http_failure(
     return DeliveryResult(status=DeliveryStatus.UNKNOWN, reason_code="invalid_response")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

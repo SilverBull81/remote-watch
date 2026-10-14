@@ -1,22 +1,36 @@
 ﻿# Проверки восстановления этапов команд без стирания истории и потери результата.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261005-210047
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> wait_until(): Конечное ожидание наблюдаемого состояния без фиксированной задержки
 #
 # Тесты:
-# -> wait_until(): Конечное ожидание наблюдаемого состояния без фиксированной задержки.
-# -> test_health_stages(): Независимые отказы, восстановление, stale_session и shutdown.
-# -> test_result_health(): Потеря результата после callback не скрывается успешным poll.
-# -> test_dispatcher_readiness(): Временный busy и восстановление в фоновом исполнителе.
-# -> test_storage_timeout_health(): Timeout журнала не означает освобождение его рабочего потока.
+# -> test_health_stages(): Независимые отказы, восстановление, stale_session и shutdown
+#    Вложенные объявления:
+#    -> scenario(): Последовательные отказы и независимое восстановление этапов
+#
+# -> test_result_health(): Потеря результата после callback не скрывается успешным poll
+#    Вложенные объявления:
+#    -> scenario(): Один callback и повтор только результата
+#
+# -> test_dispatcher_readiness(): Временный busy и восстановление в фоновом исполнителе
+#    Вложенные объявления:
+#    -> scenario(): Наблюдение фонового цикла из второго потока
+#
+# -> test_storage_timeout_health(): Timeout журнала не означает освобождение его рабочего потока
+#    Вложенные объявления:
+#    -> scenario(): Проверка занятости потока после прекращения ожидания
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -35,13 +49,22 @@ from remote_watch import CommandRegistry
 from remote_watch.commands.protocol import callback_result
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конечное ожидание наблюдаемого состояния без фиксированной задержки
 #------------------------------------------------------------------------------------------------------------------
-async def wait_until(predicate: Callable[[], bool]) -> None:
+async def wait_until(
+    predicate: Callable[[], bool],
+    ) -> None:
 
-    """Wait for an observable condition within a finite test deadline.
+    """
+    Wait for an observable condition within a finite test deadline.
 
     :param predicate: Side-effect-free test condition.
     :type predicate: Callable[[], bool]
@@ -55,12 +78,19 @@ async def wait_until(predicate: Callable[[], bool]) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Независимые отказы, восстановление, stale_session и shutdown
 #------------------------------------------------------------------------------------------------------------------
-def test_health_stages(tmp_path: Path) -> None:
+def test_health_stages(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep stage failures independent and count repeated failures even when an exception object is reused.
+    """
+    Keep stage failures independent and count repeated failures even when an exception object is reused.
 
     :param tmp_path: Isolated real SQLite journals.
     :type tmp_path: Path
@@ -73,7 +103,9 @@ def test_health_stages(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise poll, heartbeat and storage without relying on wall-clock timing."""
+        """
+        Exercise poll, heartbeat and storage without relying on wall-clock timing.
+        """
 
         rig = Rig(tmp_path)
         assert not rig.client.health.ready
@@ -139,13 +171,15 @@ def test_health_stages(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Потеря результата после callback не скрывается успешным poll
 #------------------------------------------------------------------------------------------------------------------
-def test_result_health(tmp_path: Path) -> None:
+def test_result_health(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep a lost durable receipt visible until retry acknowledges the same result.
+    """
+    Keep a lost durable receipt visible until retry acknowledges the same result.
 
     :param tmp_path: Isolated real SQLite journals.
     :type tmp_path: Path
@@ -158,7 +192,9 @@ def test_result_health(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Lose a committed result response and recover without another callback invocation."""
+        """
+        Lose a committed result response and recover without another callback invocation.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -196,13 +232,15 @@ def test_result_health(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Временный busy и восстановление в фоновом исполнителе
 #------------------------------------------------------------------------------------------------------------------
-def test_dispatcher_readiness(tmp_path: Path) -> None:
+def test_dispatcher_readiness(
+    tmp_path: Path,
+    ) -> None:
 
-    """Expose recovery through the public dispatcher stats while preserving the last incident.
+    """
+    Expose recovery through the public dispatcher stats while preserving the last incident.
 
     :param tmp_path: Isolated real SQLite journals.
     :type tmp_path: Path
@@ -215,7 +253,9 @@ def test_dispatcher_readiness(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Recover the real poll loop and read immutable stats from another thread."""
+        """
+        Recover the real poll loop and read immutable stats from another thread.
+        """
 
         rig, dispatcher = configured(tmp_path, CommandRegistry.from_callbacks({"status": lambda: "ready"}))
         await rig.hub.start()
@@ -239,13 +279,15 @@ def test_dispatcher_readiness(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Timeout журнала не означает освобождение его рабочего потока
 #------------------------------------------------------------------------------------------------------------------
-def test_storage_timeout_health(tmp_path: Path) -> None:
+def test_storage_timeout_health(
+    tmp_path: Path,
+    ) -> None:
 
-    """Recover storage health only after a real worker finishes and a later operation succeeds.
+    """
+    Recover storage health only after a real worker finishes and a later operation succeeds.
 
     :param tmp_path: Isolated real SQLite journals.
     :type tmp_path: Path
@@ -258,7 +300,9 @@ def test_storage_timeout_health(tmp_path: Path) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Hold storage beyond its wait budget, release it, then observe actual recovery."""
+        """
+        Hold storage beyond its wait budget, release it, then observe actual recovery.
+        """
 
         rig = Rig(tmp_path)
         release = threading.Event()
@@ -287,8 +331,6 @@ def test_storage_timeout_health(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

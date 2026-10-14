@@ -1,22 +1,27 @@
 ﻿# Отображение уведомлений без изменения исходных данных и протокола доставки.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_display_modes(): Прежний full, различимый compact и только текст с исключением.
-# -> test_display_validation(): Проверка настроек назначения до открытия сети.
-# -> test_notification_gateway_display_wire(): Строгое расширение wire и сохранение старых схем.
-# -> test_notification_gateway_display_invalid(): Отказ повреждённым настройкам отображения.
-# -> test_notification_gateway_display_configuration(): Выбор версии и приоритет клиентского режима.
+# -> test_display_modes(): Прежний full, различимый compact и только текст с исключением
+#
+# -> test_display_validation(): Проверка настроек назначения до открытия сети
+#
+# -> test_notification_gateway_display_wire(): Строгое расширение wire и сохранение старых схем
+#
+# -> test_notification_gateway_display_invalid(): Отказ повреждённым настройкам отображения
+#
+# -> test_notification_gateway_display_configuration(): Выбор версии и приоритет клиентского режима
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -37,13 +42,22 @@ from remote_watch.notifications.gateway_protocol import (
     encode_response,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Прежний full, различимый compact и только текст с исключением
 #------------------------------------------------------------------------------------------------------------------
-def test_display_modes(notification: Notification) -> None:
+def test_display_modes(
+    notification: Notification,
+    ) -> None:
 
-    """Preserve wire identity while changing only the provider-facing text.
+    """
+    Preserve wire identity while changing only the provider-facing text.
 
     :param notification: Fixed synthetic notification.
     :type notification: Notification
@@ -71,7 +85,6 @@ def test_display_modes(notification: Notification) -> None:
     assert request.to_dict() == original and event.event_id == "event-1" and event.session_id == "session-1"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка настроек назначения до открытия сети
 #------------------------------------------------------------------------------------------------------------------
@@ -89,9 +102,10 @@ def test_display_validation(
     mode: str,
     fields: Any,
     valid: bool,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous display configuration before creating provider resources.
+    """
+    Reject ambiguous display configuration before creating provider resources.
 
     :param provider: Adapter whose typed destination is constructed.
     :type provider: str
@@ -121,7 +135,6 @@ def test_display_validation(
             assert "PRIVATE" not in config.display_fields
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Строгое расширение wire и сохранение старых схем
 #------------------------------------------------------------------------------------------------------------------
@@ -131,9 +144,10 @@ def test_notification_gateway_display_wire(
     notification: Notification,
     schema: int,
     mode: str | None,
-) -> None:
+    ) -> None:
 
-    """Round-trip presentation independently of identity and delivery correlation.
+    """
+    Round-trip presentation independently of identity and delivery correlation.
 
     :param notification: Synthetic immutable event.
     :type notification: Notification
@@ -144,6 +158,9 @@ def test_notification_gateway_display_wire(
     :param mode: Optional client presentation override.
     :type mode: str | None
     """
+
+    # notification — подготовленное уведомление с фиксированными тестовыми данными.
+
 
     # schema/mode — новая настройка не добавляет поля в схемы старых клиентов.
     delivery = Delivery(notification=notification, destination_id="local", delivery_id="one",
@@ -166,7 +183,6 @@ def test_notification_gateway_display_wire(
         decode_response(response, delivery, schema_version=2 if schema == 3 else 3)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ повреждённым настройкам отображения
 #------------------------------------------------------------------------------------------------------------------
@@ -179,9 +195,10 @@ def test_notification_gateway_display_wire(
 def test_notification_gateway_display_invalid(
     notification: Notification,
     display: Any,
-) -> None:
+    ) -> None:
 
-    """Reject malformed, partial or routing-like display payloads before provider dispatch.
+    """
+    Reject malformed, partial or routing-like display payloads before provider dispatch.
 
     :param notification: Synthetic immutable event.
     :type notification: Notification
@@ -189,6 +206,9 @@ def test_notification_gateway_display_invalid(
     :param display: Deliberately invalid JSON display value.
     :type display: Any
     """
+
+    # notification — подготовленное уведомление с фиксированными тестовыми данными.
+
 
     # display — произвольное поле запроса не превращается в provider-настройку.
     delivery = Delivery(notification=notification, destination_id="phone", delivery_id="one")
@@ -199,17 +219,22 @@ def test_notification_gateway_display_invalid(
         NotificationGatewayRequest.from_bytes(json.dumps(payload).encode())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Выбор версии и приоритет клиентского режима
 #------------------------------------------------------------------------------------------------------------------
-def test_notification_gateway_display_configuration(notification: Notification) -> None:
+def test_notification_gateway_display_configuration(
+    notification: Notification,
+    ) -> None:
 
-    """Require compatible wire and preserve per-delivery isolation without mutating server defaults.
+    """
+    Require compatible wire and preserve per-delivery isolation without mutating server defaults.
 
     :param notification: Synthetic immutable event.
     :type notification: Notification
     """
+
+    # notification — подготовленное уведомление с фиксированными тестовыми данными.
+
 
     # Настройки принадлежат назначению, не общей Notification и не logging extra.
     base = {"endpoint": "https://gateway.invalid", "alias": "phone", "token": "x" * 32}
@@ -252,8 +277,6 @@ def test_notification_gateway_display_configuration(notification: Notification) 
         NotificationGatewayRequest.from_bytes(json.dumps(payload).encode())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

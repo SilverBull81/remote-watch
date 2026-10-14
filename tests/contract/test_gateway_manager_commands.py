@@ -1,24 +1,44 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-200317
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
+#    Вложенные объявления:
+#    -> spawn(): Запуск процесса с закрытым стартовым каналом
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_source_current_health(): Восстановление приёма не стирает независимый отказ доставки ответа.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_stop_without_component_config(): Локальный stop не зависит от исправности файлов компонентов.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_operator_runtime(): Оповещения работают в независимом runtime без gateway.
-# -> test_operator_delivery(): Служебные сообщения двум подставным HTTP провайдерам.
-# -> test_tray_stop(): Трей передаёт Stop в общий lifecycle.
-# -> test_log_failure(): Ошибка журнала видна без раскрытия исключения.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
+# -> test_operator_delivery(): Прямая отправка служебного сообщения двум подставным провайдерам
+#    Вложенные объявления:
+#    -> scenario(): Доставка через независимый runtime и два локальных HTTP назначения
+#       Вложенные объявления:
+#       -> publish(): Приём синтетического HTTP сообщения провайдера
+#
+# -> test_tray_stop(): Трей передаёт Stop в общий lifecycle без самостоятельного управления процессами
+#
+# -> test_log_failure(): Ошибка служебного журнала видна без раскрытия исключения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -49,8 +69,21 @@ from remote_watch.gateway_server.manager import GatewayManager, StatusLog, contr
 from remote_watch.gateway_server.processes import ProcessGroup
 from remote_watch.gateway_server.tray import GatewayTray
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 setup_deployment = _setup_deployment
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -60,9 +93,10 @@ def test_command_process(
     setup_deployment: DeploymentConfig,
     monkeypatch: pytest.MonkeyPatch,
     both: bool,
-) -> None:
+    ) -> None:
 
-    """Exercise real command child listeners and journals with only time/provider network calls replaced.
+    """
+    Exercise real command child listeners and journals with only time/provider network calls replaced.
 
     :param setup_deployment: Synthetic parent settings.
     :type setup_deployment: DeploymentConfig
@@ -107,9 +141,10 @@ raise SystemExit(main())
         group: ProcessGroup,
         arguments: list[str],
         capture: bool = False,
-    ) -> subprocess.Popen:
+        ) -> subprocess.Popen:
 
-        """Retain real ownership and replace only external network edges in the child.
+        """
+        Retain real ownership and replace only external network edges in the child.
 
         :param group: OS process owner.
         :type group: ProcessGroup
@@ -137,7 +172,9 @@ raise SystemExit(main())
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Restart the command hub while preserving its journals and the neighboring process."""
+        """
+        Restart the command hub while preserving its journals and the neighboring process.
+        """
 
         manager = GatewayManager(config)
         task = asyncio.create_task(manager.run())
@@ -165,25 +202,30 @@ raise SystemExit(main())
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление приёма не стирает независимый отказ доставки ответа.
 #------------------------------------------------------------------------------------------------------------------
-def test_source_current_health(tmp_path: Path) -> None:
+def test_source_current_health(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep historical incidents while independently clearing current receive and reply failures.
+    """
+    Keep historical incidents while independently clearing current receive and reply failures.
 
     :param tmp_path: Isolated real SQLite directory.
     :type tmp_path: Path
     """
 
     # tmp_path — время и провайдер подставные; loops и журнал настоящие.
+
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Проверка жизненного цикла на отдельном event loop
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Observe temporary busy and recovery while reply storage remains unavailable."""
+        """
+        Observe temporary busy and recovery while reply storage remains unavailable.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -222,13 +264,15 @@ def test_source_current_health(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Локальный stop не зависит от исправности файлов компонентов.
 #------------------------------------------------------------------------------------------------------------------
-def test_stop_without_component_config(setup_deployment: DeploymentConfig) -> None:
+def test_stop_without_component_config(
+    setup_deployment: DeploymentConfig,
+    ) -> None:
 
-    """Allow local control after a linked file is removed during an active deployment.
+    """
+    Allow local control after a linked file is removed during an active deployment.
 
     :param setup_deployment: Synthetic real notification gateway.
     :type setup_deployment: DeploymentConfig
@@ -242,7 +286,9 @@ def test_stop_without_component_config(setup_deployment: DeploymentConfig) -> No
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Read status and request common shutdown after removing the component JSON."""
+        """
+        Read status and request common shutdown after removing the component JSON.
+        """
 
         manager = GatewayManager(setup_deployment)
         task = asyncio.create_task(manager.run())
@@ -262,13 +308,14 @@ def test_stop_without_component_config(setup_deployment: DeploymentConfig) -> No
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Оповещения работают в независимом runtime без gateway.
 #------------------------------------------------------------------------------------------------------------------
 def test_operator_runtime() -> None:
 
-    """Start and close the independent operator runtime without gateway listeners or sends."""
+    """
+    Start and close the independent operator runtime without gateway listeners or sends.
+    """
 
     pytest.importorskip("aiohttp")
     config = application_config({"alerts": {"destinations": [{"alias": "owner", "provider": "ntfy",
@@ -279,7 +326,9 @@ def test_operator_runtime() -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Open direct provider resources without publishing any live notification."""
+        """
+        Open direct provider resources without publishing any live notification.
+        """
 
         alerts = OperatorAlerts(config)
         try:
@@ -293,33 +342,40 @@ def test_operator_runtime() -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Прямая отправка служебного сообщения двум подставным провайдерам
 #------------------------------------------------------------------------------------------------------------------
 def test_operator_delivery() -> None:
 
-    """Send owner failure and recovery notices without a notification gateway process."""
+    """
+    Send owner failure and recovery notices without a notification gateway process.
+    """
 
     pytest.importorskip("aiohttp")
     from aiohttp import web
 
     # Настоящий HTTP только на loopback; ни credentials, ни сообщения в Интернет не уходят.
+
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Доставка через независимый runtime и два локальных HTTP назначения
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Accept synthetic Telegram/ntfy payloads and observe provider acceptance counters."""
+        """
+        Accept synthetic Telegram/ntfy payloads and observe provider acceptance counters.
+        """
 
         received = []
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Приём синтетического HTTP сообщения провайдера
         #----------------------------------------------------------------------------------------------------------
-        async def publish(request: web.Request) -> web.Response:
+        async def publish(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Accept a provider request using an isolated test-only listener.
+            """
+            Accept a provider request using an isolated test-only listener.
 
             :param request: Synthetic provider request.
             :type request: web.Request
@@ -370,7 +426,6 @@ def test_operator_delivery() -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Трей передаёт Stop в общий lifecycle без самостоятельного управления процессами
 #------------------------------------------------------------------------------------------------------------------
@@ -380,9 +435,10 @@ def test_tray_stop(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     custom: bool,
-) -> None:
+    ) -> None:
 
-    """Exercise tray lifecycle and menu wiring with a fake GUI backend and no visible window.
+    """
+    Exercise tray lifecycle and menu wiring with a fake GUI backend and no visible window.
 
     :param monkeypatch: Replace optional GUI imports only within this test.
     :type monkeypatch: pytest.MonkeyPatch
@@ -430,16 +486,16 @@ def test_tray_stop(
     assert not tray._thread.is_alive()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибка служебного журнала видна без раскрытия исключения
 #------------------------------------------------------------------------------------------------------------------
 def test_log_failure(
     setup_deployment: DeploymentConfig,
     capsys: pytest.CaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Expose a latched file-write failure without logging its private exception text.
+    """
+    Expose a latched file-write failure without logging its private exception text.
 
     :param setup_deployment: Synthetic configuration with an unused manager.
     :type setup_deployment: DeploymentConfig
@@ -462,8 +518,6 @@ def test_log_failure(
         handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

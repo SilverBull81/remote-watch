@@ -1,24 +1,35 @@
 ﻿# Проверки ежедневных журналов, смены даты, владения файлами и интеграции с watcher.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-112702
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> record_at(): Запись logging с явно заданным временем создания
 #
 # Тесты:
-# -> record_at(): Запись logging с явно заданным временем создания.
-# -> test_calendar_paths(): Границы календаря, английские месяцы и закрепление пути.
-# -> test_invalid_settings(): Ошибки настроек до создания файлов.
-# -> test_daily_switch_and_close(): Переключение вперёд/назад, append и окончательное закрытие.
-# -> test_switch_failure(): Отказ нового пути не перенаправляет запись в старый файл.
-# -> test_concurrent_records(): Потоки не смешивают записи разных дней.
-# -> test_watcher_daily_lifecycle(): Владение handler, rollback и синхронный/async lifecycle.
+# -> test_calendar_paths(): Границы календаря, английские месяцы и закрепление пути
+#
+# -> test_invalid_settings(): Ошибки настроек до создания файлов
+#
+# -> test_daily_switch_and_close(): Переключение вперёд/назад, append и окончательное закрытие
+#
+# -> test_switch_failure(): Отказ нового пути не перенаправляет запись в старый файл
+#
+# -> test_concurrent_records(): Потоки не смешивают записи разных дней
+#
+# -> test_watcher_daily_lifecycle(): Владение handler, rollback и синхронный/async lifecycle
+#    Вложенные объявления:
+#    -> write(): Проверка обработчика в запущенном watcher
+#    -> scenario(): Асинхронный жизненный цикл
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -32,6 +43,12 @@ import pytest
 
 from remote_watch import DailyFileConfig, DailyFileHandler, Identity, RemoteWatcher, WatcherConfig
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Запись logging с явно заданным временем создания
@@ -39,9 +56,10 @@ from remote_watch import DailyFileConfig, DailyFileHandler, Identity, RemoteWatc
 def record_at(
     timestamp: float,
     text: str,
-) -> logging.LogRecord:
+    ) -> logging.LogRecord:
 
-    """Build a real LogRecord with a deterministic creation timestamp.
+    """
+    Build a real LogRecord with a deterministic creation timestamp.
 
     :param timestamp: POSIX time selected by the test.
     :type timestamp: float
@@ -60,6 +78,10 @@ def record_at(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Границы календаря, английские месяцы и закрепление пути
 #------------------------------------------------------------------------------------------------------------------
@@ -68,9 +90,10 @@ def test_calendar_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     month: int,
-) -> None:
+    ) -> None:
 
-    """Check portable English calendar paths and an explicit timezone across midnight.
+    """
+    Check portable English calendar paths and an explicit timezone across midnight.
 
     :param tmp_path: Temporary root, separate from application log directories.
     :type tmp_path: Path
@@ -81,6 +104,11 @@ def test_calendar_paths(
     :param month: Month whose full English name must appear regardless of locale.
     :type month: int
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+    # monkeypatch — временная подмена окружения или зависимостей только на время теста.
+    # month — проверяемый месяц календарной структуры журналов.
+
 
     # Относительный путь закрепляется при создании конфига; смена cwd его не меняет.
     monkeypatch.chdir(tmp_path)
@@ -102,7 +130,6 @@ def test_calendar_paths(
     assert local.path_for(stamp).name == f"local_log_{datetime.fromtimestamp(stamp):%y%m%d}.txt"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ошибки настроек до создания файлов
 #------------------------------------------------------------------------------------------------------------------
@@ -112,9 +139,10 @@ def test_calendar_paths(
 def test_invalid_settings(
     tmp_path: Path,
     values: dict[str, object],
-) -> None:
+    ) -> None:
 
-    """Reject malformed configuration without touching the filesystem.
+    """
+    Reject malformed configuration without touching the filesystem.
 
     :param tmp_path: Root whose contents must remain empty.
     :type tmp_path: Path
@@ -123,12 +151,14 @@ def test_invalid_settings(
     :type values: dict[str, object]
     """
 
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
+
     # values — неверные типы, шаблоны и компоненты пути.
     with pytest.raises((TypeError, ValueError)):
         DailyFileConfig(**{"directory": tmp_path, **values})
     assert list(tmp_path.iterdir()) == []
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Переключение вперёд/назад, append и окончательное закрытие
@@ -137,9 +167,10 @@ def test_invalid_settings(
 def test_daily_switch_and_close(
     tmp_path: Path,
     boundary: tuple[int, int, int],
-) -> None:
+    ) -> None:
 
-    """Keep dated Unicode messages and timezone formatting correct across calendar boundaries.
+    """
+    Keep dated Unicode messages and timezone formatting correct across calendar boundaries.
 
     :param tmp_path: Per-test file root.
     :type tmp_path: Path
@@ -147,6 +178,9 @@ def test_daily_switch_and_close(
     :param boundary: Date immediately before midnight, including leap-year boundaries.
     :type boundary: tuple[int, int, int]
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # boundary — переход суток/месяца/года; после новой даты приходит запоздавшая запись.
     zone = timezone(timedelta(hours=3))
@@ -180,17 +214,22 @@ def test_daily_switch_and_close(
     assert "Повторный запуск" in config.path_for(after.timestamp()).read_text(encoding="utf-8")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ нового пути не перенаправляет запись в старый файл
 #------------------------------------------------------------------------------------------------------------------
-def test_switch_failure(tmp_path: Path) -> None:
+def test_switch_failure(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep the previous stream usable after a new directory cannot be created.
+    """
+    Keep the previous stream usable after a new directory cannot be created.
 
     :param tmp_path: Root containing a synthetic path conflict.
     :type tmp_path: Path
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # Блокируем папку будущего года обычным файлом: воспроизводимо и без chmod.
     config = DailyFileConfig(directory=tmp_path, timezone=timezone.utc, format="%(message)s")
@@ -215,17 +254,22 @@ def test_switch_failure(tmp_path: Path) -> None:
         handler.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Потоки не смешивают записи разных дней
 #------------------------------------------------------------------------------------------------------------------
-def test_concurrent_records(tmp_path: Path) -> None:
+def test_concurrent_records(
+    tmp_path: Path,
+    ) -> None:
 
-    """Route concurrent adjacent-day records without loss, duplicates or cross-file contamination.
+    """
+    Route concurrent adjacent-day records without loss, duplicates or cross-file contamination.
 
     :param tmp_path: Root containing two synthetic daily logs.
     :type tmp_path: Path
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # Потоки намеренно чередуют даты: нужен общий lock на смену файла и запись.
     config = DailyFileConfig(directory=tmp_path, timezone=timezone.utc, format="%(message)s")
@@ -242,7 +286,6 @@ def test_concurrent_records(tmp_path: Path) -> None:
         assert len(lines) == 50 and set(lines) == {f"entry-{i}" for i in range(offset, 100, 2)}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Владение handler, rollback и синхронный/async lifecycle
 #------------------------------------------------------------------------------------------------------------------
@@ -250,9 +293,10 @@ def test_concurrent_records(tmp_path: Path) -> None:
 def test_watcher_daily_lifecycle(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Create local handlers only at startup and preserve caller-owned logging resources.
+    """
+    Create local handlers only at startup and preserve caller-owned logging resources.
 
     :param tmp_path: Root created lazily by watcher startup.
     :type tmp_path: Path
@@ -281,7 +325,8 @@ def test_watcher_daily_lifecycle(
     #--------------------------------------------------------------------------------------------------------------
     def write() -> Path:
 
-        """Return the actual current path after one logger call.
+        """
+        Return the actual current path after one logger call.
 
         :return: Current file path owned by the daily handler.
         :rtype: Path
@@ -298,7 +343,8 @@ def test_watcher_daily_lifecycle(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> Path:
 
-        """Run the same daily file lifecycle through the asynchronous facade.
+        """
+        Run the same daily file lifecycle through the asynchronous facade.
 
         :return: File produced by the active watcher.
         :rtype: Path
@@ -319,8 +365,6 @@ def test_watcher_daily_lifecycle(
     path.rename(path.with_suffix(".closed"))
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

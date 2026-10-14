@@ -1,27 +1,27 @@
 ﻿# Управляемый HTTP-клиент для одной попытки отправки без скрытых повторов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> HttpSender: HTTP-клиент с ограниченным чтением ответа.
+# -> HttpSender: HTTP-клиент с ограниченным чтением ответа
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка клиента и данных авторизации.
-#    -> post(): Один HTTP POST без скрытых повторов.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
+#    -> open(): Подготовка клиента и данных авторизации
+#    -> post(): Один HTTP POST без скрытых повторов
+#    -> close(): Закрытие клиента и освобождение ресурсов
 #    Служебные методы:
-#    -> _check_loop(): Проверка принадлежности текущему циклу asyncio.
-#
+#    -> _check_loop(): Проверка принадлежности текущему циклу asyncio
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +35,9 @@ from remote_watch._validation import require_int
 from remote_watch.config import RetryPolicy
 from remote_watch.notifications.delivery import DeliveryResult, DeliveryStatus
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 if TYPE_CHECKING:
     import aiohttp
 
@@ -43,12 +46,13 @@ if TYPE_CHECKING:
 # КЛАССЫ
 #******************************************************************************************************************
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : HTTP-клиент с ограниченным чтением ответа
 #------------------------------------------------------------------------------------------------------------------
 class HttpSender:
-    """Own a lazy aiohttp session, bounded responses and cancellation-safe requests."""
+    """
+    Own a lazy aiohttp session, bounded responses and cancellation-safe requests.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -61,9 +65,10 @@ class HttpSender:
         json_decoder: Callable[[bytes], object] = json.loads,
         json_encoder: Callable[[object], str] = json.dumps,
         ssl_context: ssl.SSLContext | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Store request budgets without importing or creating a network client.
+        """
+        Store request budgets without importing or creating a network client.
 
         :param policy: Timeout and retry policy.
         :type policy: RetryPolicy
@@ -108,9 +113,13 @@ class HttpSender:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка клиента и данных авторизации
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Create a session in its owning loop without sending a health request."""
+        """
+        Create a session in its owning loop without sending a health request.
+        """
 
         if self._closed:
             raise RuntimeError("a closed channel cannot be reopened")
@@ -165,9 +174,10 @@ class HttpSender:
         url: str,
         payload: dict[str, object],
         token: str | None = None,
-    ) -> tuple[int, dict[str, str], object] | DeliveryResult:
+        ) -> tuple[int, dict[str, str], object] | DeliveryResult:
 
-        """Send exactly one POST with bounded response storage and sanitized failures.
+        """
+        Send exactly one POST with bounded response storage and sanitized failures.
 
         :param url: Fixed request URL.
         :type url: str
@@ -233,9 +243,13 @@ class HttpSender:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Release the session in its owning loop; repeated cleanup is harmless."""
+        """
+        Release the session in its owning loop; repeated cleanup is harmless.
+        """
 
         self._check_loop()
         self._closed = True
@@ -248,17 +262,19 @@ class HttpSender:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка принадлежности текущему циклу asyncio
     #--------------------------------------------------------------------------------------------------------------
-    def _check_loop(self) -> None:
+    def _check_loop(
+        self,
+        ) -> None:
 
-        """Reject use from a different event loop before touching the session."""
+        """
+        Reject use from a different event loop before touching the session.
+        """
 
         if self._loop is not None and self._loop is not asyncio.get_running_loop():
             raise RuntimeError("channel must be used in its owning event loop")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,27 +1,51 @@
 ﻿# Проверки владения процессами, heartbeat, локального управления и оповещений manager.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> setup_deployment(): Настройки только с синтетическими адресами и credentials.
+#
+# -> wait_state(): Ограниченное ожидание состояния без жёсткого sleep.
 #
 # Тесты:
-# -> setup_deployment(): Настройки только с синтетическими адресами и credentials.
-# -> wait_state(): Ограниченное ожидание состояния без жёсткого sleep.
 # -> test_real_notification_lifecycle(): Реальный listener, статус, перезапуск и остановка.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_control_authentication(): Отказ чужому token, поколению и браузерному Origin.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_hang_and_limit(): Зависший loop, подтверждение смерти и исчерпание бюджета.
+#    Вложенные объявления:
+#    -> spawn(): Запуск процесса с закрытым стартовым каналом
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_startup_rollback(): Отказ одного компонента закрывает уже запущенный соседний.
+#
 # -> test_os_owner_death(): Смерть родителя не оставляет серверный дочерний процесс.
+#    Вложенные объявления:
+#    -> scenario(): Проверка жизненного цикла на отдельном event loop
+#
 # -> test_application_and_alerts(): Прямая конфигурация и ограничение повторов владельцу.
+#    Вложенные объявления:
+#    -> Capture: Запись синтетических сообщений без обращения к провайдеру
+#       Интерфейс:
+#       -> emit(): Сохранение текста служебного сообщения в тесте
+#
 # -> test_caddy_storage(): Проверка каталога CA и admin без запуска Caddy.
+#
 # -> test_status_privacy(): Состояние не принимает произвольные строки/поля.
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -46,6 +70,12 @@ from remote_watch.gateway_server.messages import status_message
 from remote_watch.gateway_server.policy import RestartPolicy
 from remote_watch.gateway_server.processes import ProcessGroup
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Настройки только с синтетическими адресами и credentials.
@@ -54,9 +84,10 @@ from remote_watch.gateway_server.processes import ProcessGroup
 def setup_deployment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> DeploymentConfig:
+    ) -> DeploymentConfig:
 
-    """Create a real outbound-only ntfy gateway without performing any provider sends.
+    """
+    Create a real outbound-only ntfy gateway without performing any provider sends.
 
     :param tmp_path: Isolated scratch directory.
     :type tmp_path: Path
@@ -87,7 +118,6 @@ def setup_deployment(
                             restart=RestartPolicy(max_restarts=1, initial_delay=.1, max_delay=.1))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Ограниченное ожидание состояния без жёсткого sleep.
 #------------------------------------------------------------------------------------------------------------------
@@ -95,9 +125,10 @@ async def wait_state(
     manager: GatewayManager,
     state: str,
     timeout: float = 12,
-) -> None:
+    ) -> None:
 
-    """Wait for a cached supervisor state with an explicit test deadline.
+    """
+    Wait for a cached supervisor state with an explicit test deadline.
 
     :param manager: Running local manager.
     :type manager: GatewayManager
@@ -117,12 +148,19 @@ async def wait_state(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Реальный listener, статус, перезапуск и остановка.
 #------------------------------------------------------------------------------------------------------------------
-def test_real_notification_lifecycle(setup_deployment: DeploymentConfig) -> None:
+def test_real_notification_lifecycle(
+    setup_deployment: DeploymentConfig,
+    ) -> None:
 
-    """Exercise real process ownership, provider-free HTTP startup and one bounded restart.
+    """
+    Exercise real process ownership, provider-free HTTP startup and one bounded restart.
 
     :param setup_deployment: Synthetic ntfy deployment.
     :type setup_deployment: DeploymentConfig
@@ -136,7 +174,9 @@ def test_real_notification_lifecycle(setup_deployment: DeploymentConfig) -> None
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run manager and operations on one event loop."""
+        """
+        Run manager and operations on one event loop.
+        """
 
         manager = GatewayManager(setup_deployment)
         task = asyncio.create_task(manager.run())
@@ -171,13 +211,15 @@ def test_real_notification_lifecycle(setup_deployment: DeploymentConfig) -> None
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ чужому token, поколению и браузерному Origin.
 #------------------------------------------------------------------------------------------------------------------
-def test_control_authentication(setup_deployment: DeploymentConfig) -> None:
+def test_control_authentication(
+    setup_deployment: DeploymentConfig,
+    ) -> None:
 
-    """Reject unauthenticated, stale, oversized and browser requests without state changes.
+    """
+    Reject unauthenticated, stale, oversized and browser requests without state changes.
 
     :param setup_deployment: Synthetic local deployment.
     :type setup_deployment: DeploymentConfig
@@ -191,7 +233,9 @@ def test_control_authentication(setup_deployment: DeploymentConfig) -> None:
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Send bounded adversarial requests against a real loopback control listener."""
+        """
+        Send bounded adversarial requests against a real loopback control listener.
+        """
 
         manager = GatewayManager(setup_deployment)
         task = asyncio.create_task(manager.run())
@@ -226,16 +270,16 @@ def test_control_authentication(setup_deployment: DeploymentConfig) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Зависший loop, подтверждение смерти и исчерпание бюджета.
 #------------------------------------------------------------------------------------------------------------------
 def test_hang_and_limit(
     setup_deployment: DeploymentConfig,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Stop a nonresponsive loop before replacement and latch restart exhaustion.
+    """
+    Stop a nonresponsive loop before replacement and latch restart exhaustion.
 
     :param setup_deployment: Isolated process settings.
     :type setup_deployment: DeploymentConfig
@@ -266,9 +310,10 @@ time.sleep(60)
         group: ProcessGroup,
         arguments: list[str],
         capture: bool = False,
-    ) -> subprocess.Popen:
+        ) -> subprocess.Popen:
 
-        """Replace only the trusted component bootstrap in this fault-injection test.
+        """
+        Replace only the trusted component bootstrap in this fault-injection test.
 
         :param group: Existing owned process group.
         :type group: ProcessGroup
@@ -294,7 +339,9 @@ time.sleep(60)
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Observe a hang, one replacement, and permanent recovery-budget exhaustion."""
+        """
+        Observe a hang, one replacement, and permanent recovery-budget exhaustion.
+        """
 
         manager = GatewayManager(setup_deployment)
         task = asyncio.create_task(manager.run())
@@ -316,13 +363,15 @@ time.sleep(60)
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ одного компонента закрывает уже запущенный соседний.
 #------------------------------------------------------------------------------------------------------------------
-def test_startup_rollback(setup_deployment: DeploymentConfig) -> None:
+def test_startup_rollback(
+    setup_deployment: DeploymentConfig,
+    ) -> None:
 
-    """Never leave an outbound child after the second component fails configuration.
+    """
+    Never leave an outbound child after the second component fails configuration.
 
     :param setup_deployment: Synthetic valid outbound component.
     :type setup_deployment: DeploymentConfig
@@ -339,13 +388,15 @@ def test_startup_rollback(setup_deployment: DeploymentConfig) -> None:
     assert not (config.control_dir / "runtime.json").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Смерть родителя не оставляет серверный дочерний процесс.
 #------------------------------------------------------------------------------------------------------------------
-def test_os_owner_death(setup_deployment: DeploymentConfig) -> None:
+def test_os_owner_death(
+    setup_deployment: DeploymentConfig,
+    ) -> None:
 
-    """Kill a real manager process and verify the operating system closes its child listener.
+    """
+    Kill a real manager process and verify the operating system closes its child listener.
 
     :param setup_deployment: Synthetic deployment settings.
     :type setup_deployment: DeploymentConfig
@@ -362,12 +413,15 @@ def test_os_owner_death(setup_deployment: DeploymentConfig) -> None:
                                 "--start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     try:
+
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка жизненного цикла на отдельном event loop
         #----------------------------------------------------------------------------------------------------------
         async def scenario() -> None:
 
-            """Wait for readiness through authenticated IPC, then verify port release after parent death."""
+            """
+            Wait for readiness through authenticated IPC, then verify port release after parent death.
+            """
 
             end = monotonic() + 12
             while True:
@@ -400,13 +454,14 @@ def test_os_owner_death(setup_deployment: DeploymentConfig) -> None:
         process.wait(timeout=5)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Прямая конфигурация и ограничение повторов владельцу.
 #------------------------------------------------------------------------------------------------------------------
 def test_application_and_alerts() -> None:
 
-    """Coalesce fixed component failures and recovery without duplicate alert floods."""
+    """
+    Coalesce fixed component failures and recovery without duplicate alert floods.
+    """
 
     config = application_config({"alerts": {"cooldown": 10, "destinations": [
         {"alias": "owner", "provider": "ntfy", "settings": {
@@ -419,8 +474,9 @@ def test_application_and_alerts() -> None:
     # КЛАСС : Запись синтетических сообщений без обращения к провайдеру
     #--------------------------------------------------------------------------------------------------------------
     class Capture(logging.Handler):
-
-        """Capture only local synthetic alert text."""
+        """
+        Capture only local synthetic alert text.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Сохранение текста служебного сообщения в тесте
@@ -428,9 +484,10 @@ def test_application_and_alerts() -> None:
         def emit(
             self,
             record: logging.LogRecord,
-        ) -> None:
+            ) -> None:
 
-            """Retain formatted operator notices without network access.
+            """
+            Retain formatted operator notices without network access.
 
             :param record: Fixed supervisor message.
             :type record: logging.LogRecord
@@ -454,7 +511,6 @@ def test_application_and_alerts() -> None:
         ApplicationConfig(ui="unknown")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка каталога CA и admin без запуска Caddy.
 #------------------------------------------------------------------------------------------------------------------
@@ -462,9 +518,10 @@ def test_application_and_alerts() -> None:
 def test_caddy_storage(
     tmp_path: Path,
     change: str,
-) -> None:
+    ) -> None:
 
-    """Reject a different CA directory and public or ambiguous Caddy admin addresses.
+    """
+    Reject a different CA directory and public or ambiguous Caddy admin addresses.
 
     :param tmp_path: Synthetic expected storage root.
     :type tmp_path: Path
@@ -487,7 +544,6 @@ def test_caddy_storage(
         check_caddy(config, tmp_path)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Состояние не принимает произвольные строки/поля.
 #------------------------------------------------------------------------------------------------------------------
@@ -496,9 +552,10 @@ def test_caddy_storage(
 def test_status_privacy(
     key: str,
     value: object,
-) -> None:
+    ) -> None:
 
-    """Reject arbitrary strings and structures before retaining IPC or operator output.
+    """
+    Reject arbitrary strings and structures before retaining IPC or operator output.
 
     :param key: Known field to corrupt.
     :type key: str
@@ -514,8 +571,6 @@ def test_status_privacy(
         status_message(data)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

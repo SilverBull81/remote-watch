@@ -1,47 +1,47 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-110259
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> SQLiteCommandStore: Журнал команд в локальной SQLite.
+# -> SQLiteCommandStore: Журнал команд в локальной SQLite
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие и восстановление нового поколения журнала.
-#    -> close(): Освобождение соединения SQLite.
-#    -> journal_stats(): Агрегаты без изменения generation и состояния команд.
-#    -> bind_session(): Новая сессия при прежнем живом владельце журнала.
-#    -> cursor(): Чтение сохранённой позиции источника.
-#    -> admit(): Атомарная запись решения и позиции источника.
-#    -> get(): Поиск команды с проверкой всех полей цели.
-#    -> resolved_result(): Итог, отдельно принятый владельцем при ручной сверке.
-#    -> transition(): Фиксация перехода с проверкой версии.
-#    -> acknowledge(): Подтверждение точного сохранённого результата.
-#    -> pending(): Ограниченная страница неподтверждённых или исполняемых команд.
-#    -> release_execution(): Отметка о фактическом окончании ранее неизвестного исполнения.
-#    -> audit(): Ограниченная страница аудита.
-#    -> prune(): Очистка подтверждённых записей с сохранением защиты от повторов.
+#    -> open(): Открытие и восстановление нового поколения журнала
+#    -> close(): Освобождение соединения SQLite
+#    -> journal_stats(): Агрегаты без изменения generation и состояния команд
+#    -> bind_session(): Новая сессия при прежнем живом владельце журнала
+#    -> cursor(): Чтение сохранённой позиции источника
+#    -> admit(): Атомарная запись решения и позиции источника
+#    -> get(): Поиск команды с проверкой всех полей цели
+#    -> resolved_result(): Чтение отдельно принятого владельцем итога
+#    -> transition(): Фиксация перехода с проверкой версии
+#    -> acknowledge(): Подтверждение точного сохранённого результата
+#    -> pending(): Ограниченная страница неподтверждённых или исполняемых команд
+#    -> release_execution(): Отметка о фактическом окончании ранее неизвестного исполнения
+#    -> audit(): Ограниченная страница аудита
+#    -> prune(): Очистка подтверждённых записей с сохранением защиты от повторов
 #    Служебные методы:
-#    -> _transaction(): Ограниченная транзакция с проверкой поколения владельца.
-#    -> _now(): Проверка монотонного времени.
-#    -> _target(): Проверка локального поколения hub или приложения.
-#    -> _row(): Получение строки с точной корреляцией.
-#    -> _stored(): Проверка сохранённых данных перед возвратом.
-#    -> _save(): Запись состояния и резерва результата.
-#    -> _audit(): Добавление записи без аргументов и текста ответа.
-#    -> _position(): Проверка целочисленной позиции потока.
-#    -> _page(): Ограничение размера страницы.
-#    -> _create(): Создание схемы в общей транзакции.
-#
+#    -> _transaction(): Ограниченная транзакция с проверкой поколения владельца
+#    -> _now(): Проверка монотонного времени
+#    -> _target(): Проверка локального поколения hub или приложения
+#    -> _row(): Получение строки с точной корреляцией
+#    -> _stored(): Проверка сохранённых данных перед возвратом
+#    -> _save(): Запись состояния и резерва результата
+#    -> _audit(): Добавление записи без аргументов и текста ответа
+#    -> _position(): Проверка целочисленной позиции потока
+#    -> _page(): Ограничение размера страницы
+#    -> _create(): Создание схемы в общей транзакции
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -88,12 +88,20 @@ from remote_watch.commands.storage import (
     StoreRole,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Журнал команд в локальной SQLite
 #------------------------------------------------------------------------------------------------------------------
 class SQLiteCommandStore:
-    """Own a bounded local SQLite journal; one logical owner may use serialized handles."""
+    """
+    Own a bounded local SQLite journal; one logical owner may use serialized handles.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -107,9 +115,10 @@ class SQLiteCommandStore:
         role: StoreRole,
         limits: StoreLimits = StoreLimits(),
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Store configuration without opening files or starting background work.
+        """
+        Store configuration without opening files or starting background work.
 
         :param path: Local persistent database path.
         :type path: str | Path
@@ -159,9 +168,13 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие и восстановление нового поколения журнала
     #--------------------------------------------------------------------------------------------------------------
-    def open(self) -> None:
+    def open(
+        self,
+        ) -> None:
 
-        """Create or validate the schema and recover all old-generation work atomically."""
+        """
+        Create or validate the schema and recover all old-generation work atomically.
+        """
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
@@ -258,9 +271,13 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение соединения SQLite
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Close the connection; reopening requires a new store object and generation."""
+        """
+        Close the connection; reopening requires a new store object and generation.
+        """
 
         if not self._lock.acquire(timeout=self._limits.lock_timeout):
             raise StoreError("store busy")
@@ -276,9 +293,12 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Агрегаты без изменения generation и состояния команд
     #--------------------------------------------------------------------------------------------------------------
-    def journal_stats(self) -> JournalStats:
+    def journal_stats(
+        self,
+        ) -> JournalStats:
 
-        """Read aggregates on the serialized owner connection without recovery or metadata writes.
+        """
+        Read aggregates on the serialized owner connection without recovery or metadata writes.
 
         :return: Bounded immutable journal capacity and pending counts.
         :rtype: JournalStats
@@ -301,9 +321,10 @@ class SQLiteCommandStore:
     def bind_session(
         self,
         session_id: str,
-    ) -> None:
+        ) -> None:
 
-        """Bind future admissions to a fresh session within the same live owner generation.
+        """
+        Bind future admissions to a fresh session within the same live owner generation.
 
         :param session_id: Fresh registration nonce after old work has been settled.
         :type session_id: str
@@ -325,9 +346,10 @@ class SQLiteCommandStore:
     def cursor(
         self,
         stream: str,
-    ) -> int:
+        ) -> int:
 
-        """Return the persisted high-water mark for one ordered source.
+        """
+        Return the persisted high-water mark for one ordered source.
 
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
@@ -355,9 +377,10 @@ class SQLiteCommandStore:
         request: CommandRequest | None,
         deadline: CommandDeadline | None = None,
         rejection: AuditCode = AuditCode.IGNORED,
-    ) -> Admission:
+        ) -> Admission:
 
-        """Persist a source decision and its cursor together before acknowledging the source.
+        """
+        Persist a source decision and its cursor together before acknowledging the source.
 
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
@@ -469,9 +492,10 @@ class SQLiteCommandStore:
     def get(
         self,
         ref: CommandRef,
-    ) -> StoredCommand | None:
+        ) -> StoredCommand | None:
 
-        """Read only an exact reference, including old terminal results.
+        """
+        Read only an exact reference, including old terminal results.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -493,12 +517,14 @@ class SQLiteCommandStore:
     def resolved_result(
         self,
         ref: CommandRef,
-    ) -> CommandResult | None:
+        ) -> CommandResult | None:
 
-        """Read a separately approved result without changing the original outcome.
+        """
+        Read a separately approved result without changing the original outcome.
 
         :param ref: Exact original command reference.
         :type ref: CommandRef
+
         :return: Administratively accepted result, if present.
         :rtype: CommandResult | None
         """
@@ -533,9 +559,10 @@ class SQLiteCommandStore:
         grant: CommandGrant | None = None,
         result: CommandResult | None = None,
         grant_deadline: CommandDeadline | None = None,
-    ) -> CommittedTransition:
+        ) -> CommittedTransition:
 
-        """Apply a state transition under revision comparison and return only after commit.
+        """
+        Apply a state transition under revision comparison and return only after commit.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -626,9 +653,10 @@ class SQLiteCommandStore:
     def acknowledge(
         self,
         result: CommandResult,
-    ) -> None:
+        ) -> None:
 
-        """Acknowledge only the exact persisted terminal result.
+        """
+        Acknowledge only the exact persisted terminal result.
 
         :param result: Exact terminal callback result.
         :type result: CommandResult
@@ -657,9 +685,10 @@ class SQLiteCommandStore:
         self,
         after: int = 0,
         limit: int = 100,
-    ) -> tuple[StoredCommand, ...]:
+        ) -> tuple[StoredCommand, ...]:
 
-        """Page through unacknowledged records without loading the full journal.
+        """
+        Page through unacknowledged records without loading the full journal.
 
         :param after: Exclusive sequence lower bound for pagination.
         :type after: int
@@ -689,9 +718,10 @@ class SQLiteCommandStore:
         self,
         ref: CommandRef,
         claim_id: str,
-    ) -> None:
+        ) -> None:
 
-        """Release an UNKNOWN execution only after the caller verifies it can no longer run.
+        """
+        Release an UNKNOWN execution only after the caller verifies it can no longer run.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -728,9 +758,10 @@ class SQLiteCommandStore:
         self,
         after: int = 0,
         limit: int = 100,
-    ) -> tuple[AuditEntry, ...]:
+        ) -> tuple[AuditEntry, ...]:
 
-        """Read a bounded page without command text or actor details.
+        """
+        Read a bounded page without command text or actor details.
 
         :param after: Exclusive sequence lower bound for pagination.
         :type after: int
@@ -758,9 +789,10 @@ class SQLiteCommandStore:
     def prune(
         self,
         limit: int = 100,
-    ) -> int:
+        ) -> int:
 
-        """Delete acknowledged terminal payloads after retention, keeping stream high-water marks.
+        """
+        Delete acknowledged terminal payloads after retention, keeping stream high-water marks.
 
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
@@ -774,7 +806,7 @@ class SQLiteCommandStore:
         self._page(0, limit)
         with self._transaction() as (db, now):
             # Активное исполнение и результат без ACK остаются независимо от возраста.
-            # Удаляется только payload; постоянная позиция потока защищает от повтора.
+            # Удаляются только данные команды; сохранённая позиция потока защищает от повторного приёма.
             result = db.execute("DELETE FROM commands WHERE sequence IN (SELECT sequence FROM commands "
                                 "WHERE acknowledged=1 AND running=0 AND result IS NOT NULL AND retain_until<=? "
                                 "ORDER BY sequence LIMIT ?)", (now, limit))
@@ -785,9 +817,12 @@ class SQLiteCommandStore:
     # СЛУЖЕБНЫЙ МЕТОД : Ограниченная транзакция с проверкой поколения владельца
     #--------------------------------------------------------------------------------------------------------------
     @contextmanager
-    def _transaction(self) -> Iterator[tuple[sqlite3.Connection, float]]:
+    def _transaction(
+        self,
+        ) -> Iterator[tuple[sqlite3.Connection, float]]:
 
-        """Serialize bounded operations and fence handles from an earlier owner generation.
+        """
+        Serialize bounded operations and fence handles from an earlier owner generation.
 
         :return: Locked transaction connection and its monotonic observation.
         :rtype: Iterator[tuple[sqlite3.Connection, float]]
@@ -832,9 +867,12 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Проверка монотонного времени
     #--------------------------------------------------------------------------------------------------------------
-    def _now(self) -> float:
+    def _now(
+        self,
+        ) -> float:
 
-        """Detect local clock rollback before touching retention or authorization.
+        """
+        Detect local clock rollback before touching retention or authorization.
 
         :return: Validated current monotonic time in seconds.
         :rtype: float
@@ -855,9 +893,10 @@ class SQLiteCommandStore:
     def _target(
         self,
         ref: CommandRef,
-    ) -> None:
+        ) -> None:
 
-        """Require the locally owned hub or application generation.
+        """
+        Require the locally owned hub or application generation.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -879,9 +918,10 @@ class SQLiteCommandStore:
         db: sqlite3.Connection,
         ref: CommandRef,
         required: bool = True,
-    ) -> sqlite3.Row | None:
+        ) -> sqlite3.Row | None:
 
-        """Fetch and verify full command correlation instead of trusting its ID alone.
+        """
+        Fetch and verify full command correlation instead of trusting its ID alone.
 
         :param db: Connection owned by the active transaction.
         :type db: sqlite3.Connection
@@ -916,9 +956,10 @@ class SQLiteCommandStore:
     def _stored(
         self,
         row: sqlite3.Row,
-    ) -> StoredCommand:
+        ) -> StoredCommand:
 
-        """Validate bounded persisted wire before returning a journal record.
+        """
+        Validate bounded persisted wire before returning a journal record.
 
         :param row: Persisted SQLite row.
         :type row: sqlite3.Row
@@ -957,9 +998,10 @@ class SQLiteCommandStore:
         row: sqlite3.Row,
         record: CommandRecord,
         now: float,
-    ) -> None:
+        ) -> None:
 
-        """Persist progress while keeping the reserved result capacity.
+        """
+        Persist progress while keeping the reserved result capacity.
 
         :param db: Connection owned by the active transaction.
         :type db: sqlite3.Connection
@@ -998,9 +1040,10 @@ class SQLiteCommandStore:
         db: sqlite3.Connection,
         code: AuditCode,
         record: CommandRecord | None,
-    ) -> None:
+        ) -> None:
 
-        """Append safe metadata and trim only audit, never command replay guards.
+        """
+        Append safe metadata and trim only audit, never command replay guards.
 
         :param db: Connection owned by the active transaction.
         :type db: sqlite3.Connection
@@ -1028,9 +1071,12 @@ class SQLiteCommandStore:
     # СЛУЖЕБНЫЙ МЕТОД : Проверка целочисленной позиции потока
     #--------------------------------------------------------------------------------------------------------------
     @staticmethod
-    def _position(value: int) -> None:
+    def _position(
+        value: int,
+        ) -> None:
 
-        """Validate a source sequence supported by SQLite integer storage.
+        """
+        Validate a source sequence supported by SQLite integer storage.
 
         :param value: Candidate value checked against the contract.
         :type value: int
@@ -1050,9 +1096,10 @@ class SQLiteCommandStore:
     def _page(
         after: int,
         limit: int,
-    ) -> None:
+        ) -> None:
 
-        """Bound every page independently of the total storage capacity.
+        """
+        Bound every page independently of the total storage capacity.
 
         :param after: Exclusive sequence lower bound for pagination.
         :type after: int
@@ -1074,9 +1121,12 @@ class SQLiteCommandStore:
     # СЛУЖЕБНЫЙ МЕТОД : Создание схемы в общей транзакции
     #--------------------------------------------------------------------------------------------------------------
     @staticmethod
-    def _create(db: sqlite3.Connection) -> None:
+    def _create(
+        db: sqlite3.Connection,
+        ) -> None:
 
-        """Create schema using individual statements inside the caller's transaction.
+        """
+        Create schema using individual statements inside the caller's transaction.
 
         :param db: Connection owned by the active transaction.
         :type db: sqlite3.Connection
@@ -1106,8 +1156,6 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

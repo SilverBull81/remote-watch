@@ -1,27 +1,36 @@
 ﻿# Административная сверка двух итогов без повтора команды и потери истории.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-000823
+# Дата и время последнего изменения: 261014-142149
 #
 # Функции:
-# -> conflict(): Два остановленных владельца с COMPLETED и UNKNOWN одной команды.
+# -> conflict(): Два остановленных владельца с COMPLETED и UNKNOWN одной команды
 #
 # Тесты:
-# -> test_resolution_receipt(): Сверка, перезапуск и точная квитанция без исполнения.
-# -> test_resolution_guards(): Отказы до записи при неверном доказательстве или подтверждении.
-# -> test_resolution_atomicity(): Полный откат ошибки в середине фиксации.
-# -> test_resolution_cli(): Безопасный CLI и запрет перезаписи доказательства.
-# -> test_resolution_health(): Понятная причина сверки до reconnect и после закрытия.
-# -> test_resolution_limits(): Соблюдение пределов журнала и размера доказательства.
-# -> test_resolution_migration(): Обычное открытие схемы 1 и каскадная очистка решения.
+# -> test_resolution_receipt(): Сверка, перезапуск и точная квитанция без исполнения
+#    Вложенные объявления:
+#    -> scenario(): Проверка асинхронного сценария с изолированными ресурсами
+#
+# -> test_resolution_guards(): Отказы до записи при неверном доказательстве или подтверждении
+#
+# -> test_resolution_atomicity(): Полный откат ошибки в середине фиксации
+#
+# -> test_resolution_cli(): Безопасный CLI и запрет перезаписи доказательства
+#
+# -> test_resolution_health(): Понятная причина сверки до reconnect и после закрытия
+#
+# -> test_resolution_limits(): Соблюдение пределов журнала и размера доказательства
+#
+# -> test_resolution_migration(): Обычное открытие схемы 1 и каскадная очистка решения
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -45,16 +54,26 @@ from remote_watch.commands.storage import StoreRole
 from remote_watch.commands.transport import CommandError
 from remote_watch.diagnostics.command_resolution import main
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Два остановленных владельца с COMPLETED и UNKNOWN одной команды
 #------------------------------------------------------------------------------------------------------------------
-async def conflict(path: Path) -> tuple[Rig, CommandResult]:
+async def conflict(
+    path: Path,
+    ) -> tuple[Rig, CommandResult]:
 
-    """Persist a client completion while the restarted hub recovers unknown execution.
+    """
+    Persist a client completion while the restarted hub recovers unknown execution.
 
     :param path: Isolated synthetic databases and evidence.
     :type path: Path
+
     :return: Closed fixture and its original completed result.
     :rtype: tuple[Rig, CommandResult]
     """
@@ -80,6 +99,10 @@ async def conflict(path: Path) -> tuple[Rig, CommandResult]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сверка, перезапуск и точная квитанция без исполнения
 #------------------------------------------------------------------------------------------------------------------
@@ -87,20 +110,28 @@ async def conflict(path: Path) -> tuple[Rig, CommandResult]:
 def test_resolution_receipt(
     tmp_path: Path,
     legacy: bool,
-) -> None:
+    ) -> None:
 
-    """Recover the blocked route and preserve UNKNOWN across migration and lost receipts.
+    """
+    Recover the blocked route and preserve UNKNOWN across migration and lost receipts.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
+
     :param legacy: Start with the previous on-disk schema.
     :type legacy: bool
     """
 
     # tmp_path/legacy — решение связывается с исходным claim, а не новой сессией.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка асинхронного сценария с изолированными ресурсами
+    #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Apply once, retry safely and resume ordinary reconnect with no callback replay."""
+        """
+        Apply once, retry safely and resume ordinary reconnect with no callback replay.
+        """
 
         rig, result = await conflict(tmp_path)
         hub, evidence = tmp_path / "hub.sqlite", tmp_path / "evidence.json"
@@ -159,7 +190,6 @@ def test_resolution_receipt(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказы до записи при неверном доказательстве или подтверждении
 #------------------------------------------------------------------------------------------------------------------
@@ -167,15 +197,20 @@ def test_resolution_receipt(
 def test_resolution_guards(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Reject mismatches and stale previews without partially changing either journal.
+    """
+    Reject mismatches and stale previews without partially changing either journal.
 
     :param tmp_path: Synthetic journal directory.
     :type tmp_path: Path
+
     :param mode: Invalid input or missing explicit operator attestation.
     :type mode: str
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # mode — изменения payload ограничены тестовым файлом и не выводятся в CLI.
     asyncio.run(conflict(tmp_path))
@@ -200,13 +235,15 @@ def test_resolution_guards(
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полный откат ошибки в середине фиксации
 #------------------------------------------------------------------------------------------------------------------
-def test_resolution_atomicity(tmp_path: Path) -> None:
+def test_resolution_atomicity(
+    tmp_path: Path,
+    ) -> None:
 
-    """Fail after inserting acceptance and prove that the entire administrative transaction rolls back.
+    """
+    Fail after inserting acceptance and prove that the entire administrative transaction rolls back.
 
     :param tmp_path: Isolated journals with a synthetic SQLite abort trigger.
     :type tmp_path: Path
@@ -225,22 +262,26 @@ def test_resolution_atomicity(tmp_path: Path) -> None:
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасный CLI и запрет перезаписи доказательства
 #------------------------------------------------------------------------------------------------------------------
 def test_resolution_cli(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Avoid echoing payloads, paths and low-level exceptions in CLI reports.
+    """
+    Avoid echoing payloads, paths and low-level exceptions in CLI reports.
 
     :param tmp_path: Isolated databases and private evidence.
     :type tmp_path: Path
+
     :param capsys: Captured diagnostic stdout.
     :type capsys: pytest.CaptureFixture[str]
     """
+
+    # tmp_path — отдельный временный каталог теста, без рабочих конфигов и журналов.
+
 
     # capsys — ни текст результата, ни поле пользователя не должны попасть в отчёт.
     asyncio.run(conflict(tmp_path))
@@ -257,14 +298,16 @@ def test_resolution_cli(
     assert "owners_stopped_confirmation_required" in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Понятная причина сверки до reconnect и после закрытия
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("reason", ["outcome_conflict", "unresolved_results", "unknown_execution", "unavailable"])
-def test_resolution_health(reason: str) -> None:
+def test_resolution_health(
+    reason: str,
+    ) -> None:
 
-    """Keep administrative action visible after closure without mislabeling transient outages.
+    """
+    Keep administrative action visible after closure without mislabeling transient outages.
 
     :param reason: Fixed protocol or reconnect reason.
     :type reason: str
@@ -284,7 +327,6 @@ def test_resolution_health(reason: str) -> None:
     assert snapshot.recovery_hint == ("review_command_journal" if expected else None)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Соблюдение пределов журнала и размера доказательства
 #------------------------------------------------------------------------------------------------------------------
@@ -292,12 +334,14 @@ def test_resolution_health(reason: str) -> None:
 def test_resolution_limits(
     tmp_path: Path,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Refuse over-capacity acceptance, oversized evidence and a replaced journal generation.
+    """
+    Refuse over-capacity acceptance, oversized evidence and a replaced journal generation.
 
     :param tmp_path: Synthetic administrative inputs.
     :type tmp_path: Path
+
     :param mode: Boundary to invalidate after a valid preview.
     :type mode: str
     """
@@ -322,13 +366,15 @@ def test_resolution_limits(
     assert hub.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Обычное открытие схемы 1 и каскадная очистка решения
 #------------------------------------------------------------------------------------------------------------------
-def test_resolution_migration(tmp_path: Path) -> None:
+def test_resolution_migration(
+    tmp_path: Path,
+    ) -> None:
 
-    """Migrate an existing journal and retain resolution exactly as long as its original command.
+    """
+    Migrate an existing journal and retain resolution exactly as long as its original command.
 
     :param tmp_path: Isolated synthetic journal with deterministic retention.
     :type tmp_path: Path
@@ -374,8 +420,6 @@ def test_resolution_migration(tmp_path: Path) -> None:
         assert db.execute("SELECT * FROM streams").fetchall() == streams
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение тестового файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

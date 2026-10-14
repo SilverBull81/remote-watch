@@ -1,22 +1,38 @@
 ﻿# Обмен командами через настоящий локальный TLS и проверки сетевых ограничений.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния.
-# -> test_command_http_rejection(): Безопасные отказы некорректным HTTP-запросам.
-# -> test_command_transport_endpoint(): Запрет небезопасных или неоднозначных адресов.
-# -> test_command_offer_wire(): Проверка внешней упаковки предложения команды.
-# -> test_command_http_capacity(): Сохранение места для heartbeat при занятом long poll.
+# -> test_command_https_exchange(): Реальный TLS до изменения подставного состояния
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#       Вложенные объявления:
+#       -> idle_maintenance(): Ожидание штатного закрытия без фоновых обращений к журналу
+#       -> callback(): Изменение только подставного состояния приложения
+#
+# -> test_command_http_rejection(): Безопасные отказы некорректным HTTP-запросам
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_transport_endpoint(): Запрет небезопасных или неоднозначных адресов
+#
+# -> test_command_offer_wire(): Проверка внешней упаковки предложения команды
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
+#
+# -> test_command_http_capacity(): Сохранение места для heartbeat при занятом long poll
+#    Вложенные объявления:
+#    -> scenario(): Выполнение изолированного асинхронного сценария
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -41,10 +57,31 @@ from remote_watch.commands.protocol import (
 from remote_watch.commands.transport import CommandError, CommandOffer
 from remote_watch.gateway.command_server import CommandHubServer
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 aiohttp = pytest.importorskip("aiohttp")
+
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ИМПОРТ
+#******************************************************************************************************************
+
 from test_command_hub import APP_TOKEN, SOURCE_TOKEN, Rig  # noqa: E402
 from test_gateway_tls import certificates  # noqa: E402
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Реальный TLS до изменения подставного состояния
@@ -55,9 +92,10 @@ def test_command_https_exchange(
     tmp_path: Path,
     mode: str,
     display: str | None,
-) -> None:
+    ) -> None:
 
-    """Verify real TLS before fake callback execution through both durable journals.
+    """
+    Verify real TLS before fake callback execution through both durable journals.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -69,6 +107,9 @@ def test_command_https_exchange(
     :type display: str | None
     """
 
+    # display — вариант оформления ответа команды.
+
+
     # tmp_path — отдельный временный каталог теста.
     # mode — сценарий проверки настоящего TLS-сертификата.
 
@@ -77,13 +118,14 @@ def test_command_https_exchange(
     server_ssl.load_cert_chain(cert, key)
     client_ssl = ssl.create_default_context(cafile=None if mode == "untrusted" else str(ca))
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run an isolated HTTPS hub with synthetic application state."""
+        """
+        Run an isolated HTTPS hub with synthetic application state.
+        """
 
         rig = Rig(tmp_path)
         rig.registration = replace(rig.registration, command_display_mode=display)
@@ -95,7 +137,9 @@ def test_command_https_exchange(
         #----------------------------------------------------------------------------------------------------------
         async def idle_maintenance() -> None:
 
-            """Keep lifecycle supervision active while isolating manual TLS exchanges from periodic storage."""
+            """
+            Keep lifecycle supervision active while isolating manual TLS exchanges from periodic storage.
+            """
 
             await asyncio.Event().wait()
         #----------------------------------------------------------------------------------------------------------
@@ -132,13 +176,13 @@ def test_command_https_exchange(
             assert ticket is not None and client.begin(ticket)
             state = {"resumed": False}
 
-
             #------------------------------------------------------------------------------------------------------
             # ФУНКЦИЯ : Изменение только подставного состояния приложения
             #------------------------------------------------------------------------------------------------------
             def callback() -> str:
 
-                """Change only local synthetic application state.
+                """
+                Change only local synthetic application state.
 
                 :return: Short confirmation of the synthetic application state change.
                 :rtype: str
@@ -181,7 +225,6 @@ def test_command_https_exchange(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасные отказы некорректным HTTP-запросам
 #------------------------------------------------------------------------------------------------------------------
@@ -189,9 +232,10 @@ def test_command_https_exchange(
 def test_command_http_rejection(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject malformed requests without registering or admitting a command.
+    """
+    Reject malformed requests without registering or admitting a command.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -203,13 +247,14 @@ def test_command_http_rejection(
     # tmp_path — отдельный временный каталог теста.
     # case — выбранный сценарий нарушения формата или границ запроса.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Send one bounded adversarial request over explicit test-only loopback HTTP."""
+        """
+        Send one bounded adversarial request over explicit test-only loopback HTTP.
+        """
 
         rig = Rig(tmp_path)
         server = CommandHubServer(rig.hub)
@@ -252,15 +297,17 @@ def test_command_http_rejection(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет небезопасных или неоднозначных адресов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("endpoint", ["http://example.com", "http://127.0.0.1", "https://u:p@host",
                                       "https://host/path", "https://host?token=secret", "ftp://127.0.0.1"])
-def test_command_transport_endpoint(endpoint: str) -> None:
+def test_command_transport_endpoint(
+    endpoint: str,
+    ) -> None:
 
-    """Reject plaintext defaults and endpoint credentials or ambiguous routing paths.
+    """
+    Reject plaintext defaults and endpoint credentials or ambiguous routing paths.
 
     :param endpoint: HTTPS origin without credentials, query or path.
     :type endpoint: str
@@ -272,7 +319,6 @@ def test_command_transport_endpoint(endpoint: str) -> None:
         HttpsCommandTransport(endpoint, APP_TOKEN)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка внешней упаковки предложения команды
 #------------------------------------------------------------------------------------------------------------------
@@ -280,9 +326,10 @@ def test_command_transport_endpoint(endpoint: str) -> None:
 def test_command_offer_wire(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Reject malformed outer envelopes independently of command JSON validation.
+    """
+    Reject malformed outer envelopes independently of command JSON validation.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -301,7 +348,9 @@ def test_command_offer_wire(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Build a valid offer and corrupt a single wire boundary."""
+        """
+        Build a valid offer and corrupt a single wire boundary.
+        """
 
         await rig.start()
 
@@ -330,13 +379,15 @@ def test_command_offer_wire(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение места для heartbeat при занятом long poll
 #------------------------------------------------------------------------------------------------------------------
-def test_command_http_capacity(tmp_path: Path) -> None:
+def test_command_http_capacity(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep heartbeat capacity while a long poll occupies its separate limit.
+    """
+    Keep heartbeat capacity while a long poll occupies its separate limit.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -344,13 +395,14 @@ def test_command_http_capacity(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Выполнение изолированного асинхронного сценария
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Hold one poll and verify that only extra polls are rejected."""
+        """
+        Hold one poll and verify that only extra polls are rejected.
+        """
 
         rig = Rig(tmp_path)
         rig.hub.config = replace(rig.hub.config, poll_timeout=0.3)
@@ -377,7 +429,6 @@ def test_command_http_capacity(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

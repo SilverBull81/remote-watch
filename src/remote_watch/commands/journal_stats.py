@@ -1,26 +1,32 @@
 ﻿# Ограниченные сводки командных журналов без чтения запросов и восстановления владельца.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-111029
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> JournalStats: Числа занятости и состояний одного журнала.
+# -> JournalStats: Числа занятости и состояний одного журнала
 #
 # Функции:
-# -> read_stats(): Согласованное чтение агрегатов в пределах SQL-бюджета.
-# -> inspect_journal(): Чтение остановленной локальной SQLite без recovery и файлов блокировок.
-# -> _commands(): Сводка hub/client с лимитами из metadata.
-# -> _source(): Сводка защиты от повторов и одного решения источника.
-# -> validate_status(): Строгая проверка безопасного сообщения сводки.
-# -> validate_stats(): Проверка полей числового снимка.
+# -> read_stats(): Согласованное чтение агрегатов в пределах SQL-бюджета
+#
+# -> inspect_journal(): Чтение остановленной локальной SQLite без recovery и файлов блокировок
+#
+# -> _commands(): Сводка hub/client с лимитами из metadata
+#
+# -> _source(): Сводка защиты от повторов и одного решения источника
+#
+# -> validate_status(): Строгая проверка безопасного сообщения сводки
+#
+# -> validate_stats(): Проверка полей числового снимка
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -29,36 +35,108 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import monotonic
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Числа занятости и состояний одного журнала
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True)
 class JournalStats:
-    """Expose bounded aggregates without owners, identities, cursors or command payloads."""
+    """
+    Expose bounded aggregates without owners, identities, cursors or command payloads.
+
+    :param kind: Fixed journal or operation category.
+    :type kind: str
+
+    :param schema_version: Serialized schema version, or automatic selection where explicitly supported.
+    :type schema_version: int
+
+    :param records: Number of retained records or configured record limit.
+    :type records: int
+
+    :param records_limit: Persisted record limit, or None when not available.
+    :type records_limit: int | None
+
+    :param pending: Number of retained pending commands.
+    :type pending: int
+
+    :param unknown: Number of outcomes that remain unknown.
+    :type unknown: int | None
+
+    :param unresolved_unknown: Number of UNKNOWN records without a separate administrative resolution.
+    :type unresolved_unknown: int | None
+
+    :param execution_active: Whether execution termination remains unconfirmed.
+    :type execution_active: int | None
+
+    :param streams: Retained ordered streams or configured stream limit.
+    :type streams: int
+
+    :param streams_limit: Persisted stream limit, or None when not available.
+    :type streams_limit: int | None
+
+    :param audit_entries: Number of retained audit entries.
+    :type audit_entries: int
+
+    :param audit_limit: Configured audit retention limit.
+    :type audit_limit: int | None
+
+    :param payload_bytes: Retained payload size or configured payload limit, in bytes.
+    :type payload_bytes: int
+
+    :param payload_reserved_bytes: Payload bytes reserved for admitted work.
+    :type payload_reserved_bytes: int | None
+
+    :param payload_limit_bytes: Configured maximum retained payload size, in bytes.
+    :type payload_limit_bytes: int | None
+
+    :param database_bytes: Allocated SQLite page bytes, including reusable pages.
+    :type database_bytes: int
+
+    :param database_limit_bytes: Configured database file limit, not operating-system free space.
+    :type database_limit_bytes: int | None
+
+    :param free_database_bytes: Allocated SQLite pages available for reuse, in bytes.
+    :type free_database_bytes: int
+
+    :param resolutions: Number of separate administrative outcome resolutions.
+    :type resolutions: int
+
+    :param capacity: Observed capacity classification: ok, near_limit, at_limit or unknown.
+    :type capacity: str
+    """
 
     kind: str                          # hub/client/source; только известное назначение БД.
     schema_version: int                # Версия файла, без миграции при чтении.
     records: int                       # Сохранённые команды либо replay-ID источника.
-    records_limit: int | None           # Предел числа записей; None, если он не сохранён в файле.
+    records_limit: int | None          # Предел числа записей; None, если он не сохранён в файле.
     pending: int                       # Без ACK или с неосвобождённым исполнением; у source — 0/1.
-    unknown: int | None                 # Команды UNKNOWN; у source такого состояния нет.
-    unresolved_unknown: int | None      # UNKNOWN без отдельного административного решения.
-    execution_active: int | None        # Окончание исполнения не подтверждено, не число живых потоков.
+    unknown: int | None                # Команды UNKNOWN; у source такого состояния нет.
+    unresolved_unknown: int | None     # UNKNOWN без отдельного административного решения.
+    execution_active: int | None       # Окончание исполнения не подтверждено, не число живых потоков.
     streams: int                       # Постоянные потоки; для source один state.
-    streams_limit: int | None           # Предел потоков, не сбрасываемых при очистке payload.
-    audit_entries: int                  # Число сохраняемых кратких операций аудита.
-    audit_limit: int | None             # Предел аудита; сам аудит ротируется, не блокирует приём.
+    streams_limit: int | None          # Предел потоков, не сбрасываемых при очистке payload.
+    audit_entries: int                 # Число сохраняемых кратких операций аудита.
+    audit_limit: int | None            # Предел аудита; сам аудит ротируется, не блокирует приём.
     payload_bytes: int                 # Размер запросов/результатов либо данных source, без содержимого.
     payload_reserved_bytes: int | None  # Резерв команд под будущий результат; для source не применим.
-    payload_limit_bytes: int | None     # Логический предел с учётом резерва, если известен.
+    payload_limit_bytes: int | None    # Логический предел с учётом резерва, если известен.
     database_bytes: int                # Размер выделенных SQLite-страниц, включая свободные.
-    database_limit_bytes: int | None    # Настроенный предел основного файла; не объём диска ОС.
+    database_limit_bytes: int | None   # Настроенный предел основного файла; не объём диска ОС.
     free_database_bytes: int           # Страницы, которые SQLite может переиспользовать.
     resolutions: int                   # Число отдельных административных решений.
     capacity: str                      # ok/near_limit/at_limit/unknown; это оценка, не обещание приёма.
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Согласованное чтение агрегатов в пределах SQL-бюджета
@@ -68,19 +146,26 @@ def read_stats(
     *,
     source_limit: int | None = None,
     owner_generation: str | None = None,
-) -> JournalStats:
+    ) -> JournalStats:
 
-    """Read bounded rows in one deferred transaction without changing journal state.
+    """
+    Read bounded rows in one deferred transaction without changing journal state.
 
     :param db: Serialized owner connection or immutable offline connection.
     :type db: sqlite3.Connection
+
     :param source_limit: Owner's runtime replay limit; None when not stored in the file.
     :type source_limit: int | None
+
     :param owner_generation: Optional owner fence, checked inside the same read transaction.
     :type owner_generation: str | None
+
     :return: Immutable aggregate with no payload values.
     :rtype: JournalStats
     """
+
+    # owner_generation — поколение владельца журнала; None не задаёт дополнительное ограничение.
+
 
     # db/source_limit — запросы используют только числа, длины и постоянные имена таблиц.
     # Наблюдение не должно держать storage lane дольше 50 мс SQL-работы и не ждёт writer.
@@ -107,7 +192,7 @@ def read_stats(
         validate_stats(asdict(value))
         return value
     finally:
-        # После прерванного SELECT снимаем progress handler до rollback, иначе
+        # После прерванного SELECT сначала отключаем обработчик прерывания, иначе
         # сам откат тоже может прерваться. Таймаут соседних операций восстанавливается.
         db.set_progress_handler(None, 0)
         if db.in_transaction:
@@ -115,21 +200,24 @@ def read_stats(
         db.execute(f"PRAGMA busy_timeout={int(previous_wait)}")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Чтение остановленной локальной SQLite без recovery и файлов блокировок
 #------------------------------------------------------------------------------------------------------------------
-def inspect_journal(path: Path) -> JournalStats:
+def inspect_journal(
+    path: Path,
+    ) -> JournalStats:
 
-    """Inspect an explicitly offline journal without creating files or opening it as an owner.
+    """
+    Inspect an explicitly offline journal without creating files or opening it as an owner.
 
     :param path: Existing stopped local journal, not a network share or live WAL database.
     :type path: Path
+
     :return: Bounded immutable aggregates; unknown source limits remain None.
     :rtype: JournalStats
     """
 
-    # path — immutable запрещает SQLite создавать sidecar и запускать rollback recovery.
+    # path — режим immutable запрещает SQLite создавать вспомогательные файлы и восстанавливать транзакции.
     # При незавершённой транзакции нельзя выдавать основной файл за полное состояние.
     resolved = path.resolve()
     if str(resolved).startswith(("\\\\", "//")):
@@ -146,26 +234,32 @@ def inspect_journal(path: Path) -> JournalStats:
         db.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Сводка hub/client с лимитами из metadata
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Сводка hub/client с лимитами из metadata
 #------------------------------------------------------------------------------------------------------------------
 def _commands(
     db: sqlite3.Connection,
     version: int,
-) -> JournalStats:
+    ) -> JournalStats:
 
-    """Aggregate at most 100001 command rows and reject an over-bound journal.
+    """
+    Aggregate at most 100001 command rows and reject an over-bound journal.
 
     :param db: Active read transaction.
     :type db: sqlite3.Connection
+
     :param version: Validated command storage version.
     :type version: int
+
     :return: Counts and persisted capacity settings.
     :rtype: JournalStats
     """
 
-    # metadata.settings — только проверенные числовые пределы; owner/generation не извлекаются.
+    # db — открытое соединение с журналом; владение остаётся у вызывающего кода.
+    # version — версия формата журнала для выбора допустимых полей.
+
+
+    # metadata.settings — только проверенные числовые пределы; сведения о владельце и поколении не извлекаются.
     meta = db.execute("SELECT role, settings FROM metadata WHERE id=1").fetchone()
     if meta is None or meta[0] not in ("hub", "client") or len(meta[1]) > 4096:
         raise ValueError("invalid metadata")
@@ -201,24 +295,30 @@ def _commands(
                         limits["payload_bytes"], size, limits["database_bytes"], free, resolutions, capacity)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Сводка защиты от повторов и одного решения источника
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Сводка защиты от повторов и одного решения источника
 #------------------------------------------------------------------------------------------------------------------
 def _source(
     db: sqlite3.Connection,
     limit: int | None,
-) -> JournalStats:
+    ) -> JournalStats:
 
-    """Count replay keys and pending presence without decoding provider cursor or payload.
+    """
+    Count replay keys and pending presence without decoding provider cursor or payload.
 
     :param db: Active source read transaction.
     :type db: sqlite3.Connection
+
     :param limit: Configured replay bound known only to a running owner.
     :type limit: int | None
+
     :return: Source aggregate with explicit unknown offline limits.
     :rtype: JournalStats
     """
+
+    # db — открытое соединение с журналом; владение остаётся у вызывающего кода.
+    # limit — предел, с которым сравнивается наблюдаемое значение.
+
 
     # seen содержит replay-ID; наружу выходит только число и общий объём строк.
     seen, payload = db.execute("SELECT COUNT(*),COALESCE(SUM(length(CAST(event AS BLOB))),0) "
@@ -240,16 +340,19 @@ def _source(
                         page_size * 2048 if limit is not None else None, free, 0, capacity)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Строгая проверка безопасного сообщения сводки
 #------------------------------------------------------------------------------------------------------------------
-def validate_status(value: object) -> dict:
+def validate_status(
+    value: object,
+    ) -> dict:
 
-    """Validate a cached journal observation crossing local IPC boundaries.
+    """
+    Validate a cached journal observation crossing local IPC boundaries.
 
     :param value: Untrusted decoded status fragment.
     :type value: object
+
     :return: Independent sanitized status, never a raw database value.
     :rtype: dict
     """
@@ -269,16 +372,19 @@ def validate_status(value: object) -> dict:
     return {"state": value["state"], "age_seconds": age, "snapshot": snapshot}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка полей числового снимка
 #------------------------------------------------------------------------------------------------------------------
-def validate_stats(value: object) -> dict:
+def validate_stats(
+    value: object,
+    ) -> dict:
 
-    """Reject arbitrary fields and unbounded numbers in a journal aggregate.
+    """
+    Reject arbitrary fields and unbounded numbers in a journal aggregate.
 
     :param value: Proposed aggregate from a local owner or file.
     :type value: object
+
     :return: Independent whitelisted values.
     :rtype: dict
     """
@@ -303,8 +409,6 @@ def validate_stats(value: object) -> dict:
     return dict(value)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,25 +1,42 @@
 ﻿# Проверки токенов из JSON: совместимость, безопасные ошибки и настоящая локальная доставка.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> document(): Конфигурация с вымышленными токенами
 #
 # Тесты:
-# -> document(): Конфигурация с вымышленными токенами.
-# -> test_inline_check(): Проверка JSON без чтения окружения и раскрытия токенов.
-# -> test_credential_errors(): Точное поле ошибки без приватных значений.
-# -> test_safe_error_labels(): Отклонение произвольных полей и объяснений ошибки.
-# -> test_inline_delivery(): Полный путь gateway к двум локальным провайдерам.
-# -> test_duplicate_credentials(): Запрет одинаковых сервисных токенов из разных источников.
-# -> test_typed_sources(): Конфликт источников в публичных Python-настройках.
-# -> test_inline_example(): Проверка поставляемого примера без реальных токенов.
+# -> test_inline_check(): Проверка JSON без чтения окружения и раскрытия токенов
+#    Вложенные объявления:
+#    -> forbidden(): Запрет чтения переменных при проверке конфига
+#
+# -> test_credential_errors(): Точное поле ошибки без приватных значений
+#
+# -> test_safe_error_labels(): Отклонение произвольных полей и объяснений ошибки
+#
+# -> test_inline_delivery(): Полный путь gateway к двум локальным провайдерам
+#    Вложенные объявления:
+#    -> scenario(): Запуск локальных серверов и отправка двух запросов
+#       Вложенные объявления:
+#       -> receive(): Проверка запроса к подставному провайдеру
+#
+# -> test_duplicate_credentials(): Запрет одинаковых сервисных токенов из разных источников
+#    Вложенные объявления:
+#    -> scenario(): Проверка отката запуска без открытия провайдеров
+#
+# -> test_typed_sources(): Конфликт источников в публичных Python-настройках
+#
+# -> test_inline_example(): Проверка поставляемого примера без реальных токенов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -44,13 +61,22 @@ from remote_watch.gateway.notification_json_config import (
 from remote_watch.gateway.notification_server import NotificationGateway, NotificationGatewayStartupError, main
 from remote_watch.notifications.gateway_protocol import NotificationGatewayRequest
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Конфигурация с вымышленными токенами
 #------------------------------------------------------------------------------------------------------------------
-def document(notification: Notification) -> dict[str, Any]:
+def document(
+    notification: Notification,
+    ) -> dict[str, Any]:
 
-    """Create synthetic inline credentials and exact identity grants.
+    """
+    Create synthetic inline credentials and exact identity grants.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -76,6 +102,10 @@ def document(notification: Notification) -> dict[str, Any]:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка JSON без чтения окружения и раскрытия токенов
 #------------------------------------------------------------------------------------------------------------------
@@ -84,9 +114,10 @@ def test_inline_check(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Keep check-config offline, environment-free and safe for object representations.
+    """
+    Keep check-config offline, environment-free and safe for object representations.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -117,9 +148,10 @@ def test_inline_check(
     def forbidden(
         *args: Any,
         **kwargs: Any,
-    ) -> None:
+        ) -> None:
 
-        """Fail on environment reads during configuration validation.
+        """
+        Fail on environment reads during configuration validation.
 
         :param args: Unexpected positional arguments.
         :type args: Any
@@ -149,7 +181,6 @@ def test_inline_check(
     assert raw["principals"][0]["token"] not in text
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Точное поле ошибки без приватных значений
 #------------------------------------------------------------------------------------------------------------------
@@ -162,9 +193,10 @@ def test_credential_errors(
     notification: Notification,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Reject malformed sources without echoing any credential or variable name.
+    """
+    Reject malformed sources without echoing any credential or variable name.
 
     :param target: Configuration entry being checked.
     :type target: str
@@ -222,15 +254,17 @@ def test_credential_errors(
         assert "Ожидается имя переменной" in output
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение произвольных полей и объяснений ошибки
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("field", ["PRIVATE_TOKEN", "destinations[999].settings.token",
                                   "principals[0].settings.token", "destinations[0].token"])
-def test_safe_error_labels(field: str) -> None:
+def test_safe_error_labels(
+    field: str,
+    ) -> None:
 
-    """Keep externally constructed diagnostic objects within a fixed vocabulary.
+    """
+    Keep externally constructed diagnostic objects within a fixed vocabulary.
 
     :param field: Untrusted diagnostic label.
     :type field: str
@@ -243,7 +277,6 @@ def test_safe_error_labels(field: str) -> None:
     assert "PRIVATE" not in repr(error)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полный путь gateway к двум локальным провайдерам
 #------------------------------------------------------------------------------------------------------------------
@@ -254,9 +287,10 @@ def test_inline_delivery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Authenticate and deliver over real loopback HTTP with either credential source.
+    """
+    Authenticate and deliver over real loopback HTTP with either credential source.
 
     :param source: Credential source arrangement.
     :type source: str
@@ -290,7 +324,9 @@ def test_inline_delivery(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise actual header and URL credentials without external network access."""
+        """
+        Exercise actual header and URL credentials without external network access.
+        """
 
         raw = document(notification)
         service_token = raw["principals"][0]["token"]
@@ -300,9 +336,12 @@ def test_inline_delivery(
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Проверка запроса к подставному провайдеру
         #----------------------------------------------------------------------------------------------------------
-        async def receive(request: web.Request) -> web.Response:
+        async def receive(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Check the exact provider credential and acknowledge one delivery.
+            """
+            Check the exact provider credential and acknowledge one delivery.
 
             :param request: Local HTTP request.
             :type request: web.Request
@@ -374,7 +413,6 @@ def test_inline_delivery(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет одинаковых сервисных токенов из разных источников
 #------------------------------------------------------------------------------------------------------------------
@@ -382,9 +420,10 @@ def test_duplicate_credentials(
     notification: Notification,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Reject duplicate resolved credentials before opening any provider.
+    """
+    Reject duplicate resolved credentials before opening any provider.
 
     :param notification: Synthetic notification fixture.
     :type notification: Notification
@@ -414,7 +453,9 @@ def test_duplicate_credentials(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Keep duplicate-credential failures safe and close partially started state."""
+        """
+        Keep duplicate-credential failures safe and close partially started state.
+        """
 
         try:
             with pytest.raises(NotificationGatewayStartupError) as captured:
@@ -428,7 +469,6 @@ def test_duplicate_credentials(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Конфликт источников в публичных Python-настройках
 #------------------------------------------------------------------------------------------------------------------
@@ -436,9 +476,10 @@ def test_duplicate_credentials(
 def test_typed_sources(
     kind: str,
     notification: Notification,
-) -> None:
+    ) -> None:
 
-    """Validate direct model usage independently of JSON parsing.
+    """
+    Validate direct model usage independently of JSON parsing.
 
     :param kind: Public configuration model.
     :type kind: str
@@ -467,13 +508,14 @@ def test_typed_sources(
         assert replace(config, token="x" * 512).token == "x" * 512
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка поставляемого примера без реальных токенов
 #------------------------------------------------------------------------------------------------------------------
 def test_inline_example() -> None:
 
-    """Load the shipped inline example without accessing environment credentials."""
+    """
+    Load the shipped inline example without accessing environment credentials.
+    """
 
     path = Path(__file__).resolve().parents[2] / "docs/examples/notification_gateway.inline.example.json"
     config = load_notification_gateway_config(path)
@@ -482,8 +524,6 @@ def test_inline_example() -> None:
     assert "REPLACE_WITH" not in repr(config)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

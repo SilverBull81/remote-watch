@@ -1,25 +1,25 @@
 ﻿# Необязательный HTTPS-источник времени с проверкой TLS и ограничением ожидания.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> HttpsDateTimeSource: Получение времени от явно доверенного HTTPS-сервера.
+# -> HttpsDateTimeSource: Получение времени от явно доверенного HTTPS-сервера
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> sample(): Получение одного показания времени.
+#    -> sample(): Получение одного показания времени
 #    Служебные методы:
-#    -> _fetch(): Один ограниченный HTTPS-запрос времени.
-#
+#    -> _fetch(): Один ограниченный HTTPS-запрос времени
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -33,12 +33,20 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 from remote_watch._validation import require_number, require_text
 from remote_watch.commands.time import TimeSample, TimeUnavailable
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Получение времени от явно доверенного HTTPS-сервера
 #------------------------------------------------------------------------------------------------------------------
 class HttpsDateTimeSource:
-    """Read Date from an explicitly trusted HTTPS origin; never infer its accuracy."""
+    """
+    Read Date from an explicitly trusted HTTPS origin; never infer its accuracy.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -51,9 +59,10 @@ class HttpsDateTimeSource:
         timeout: float = 5.0,
         ssl_context: ssl.SSLContext | None = None,
         clock: Callable[[], float] = monotonic,
-    ) -> None:
+        ) -> None:
 
-        """Configure explicit clock accuracy, bounded I/O and mandatory TLS verification.
+        """
+        Configure explicit clock accuracy, bounded I/O and mandatory TLS verification.
 
         :param url: Explicit trusted HTTPS origin without credentials or query.
         :type url: str
@@ -101,9 +110,12 @@ class HttpsDateTimeSource:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение одного показания времени
     #--------------------------------------------------------------------------------------------------------------
-    async def sample(self) -> TimeSample:
+    async def sample(
+        self,
+        ) -> TimeSample:
 
-        """Fetch one uncached HEAD response with no redirects, retries or environment proxy.
+        """
+        Fetch one uncached HEAD response with no redirects, retries or environment proxy.
 
         :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
@@ -123,9 +135,12 @@ class HttpsDateTimeSource:
     #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Один ограниченный HTTPS-запрос времени
     #--------------------------------------------------------------------------------------------------------------
-    async def _fetch(self) -> TimeSample:
+    async def _fetch(
+        self,
+        ) -> TimeSample:
 
-        """Bound response headers and translate second-resolution Date to an interval.
+        """
+        Bound response headers and translate second-resolution Date to an interval.
 
         :return: UTC bounds associated with a local monotonic observation.
         :rtype: TimeSample
@@ -167,8 +182,6 @@ class HttpsDateTimeSource:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,49 +1,62 @@
 ﻿# Проверки атомарности, аварийного восстановления и пределов журнала SQLite.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-195308
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> request(): Подготовка подставной команды
+#
+# -> options(): Согласованные данные разрешения и сессии
+#
+# -> opened(): Открытие временного журнала с управляемыми часами
+#
+# -> admit(): Атомарная запись решения и позиции источника
+#
+# -> _crash_worker(): Аварийная остановка отдельного процесса у границы записи
+#    Вложенные объявления:
+#    -> Connection: Соединение с подставным сбоем commit
+#       Интерфейс:
+#       -> commit(): Проверяемая граница фиксации транзакции
+#    -> connect(): Создание тестового соединения SQLite
 #
 # Тесты:
-# -> test_grant_rounding(): Корректный дробный срок и отказ при его реальном увеличении.
+# -> test_atomic_start_and_result_replay(): Единственный победитель конкурентного старта и повтор результата
+#    Вложенные объявления:
+#    -> start(): Конкурирующая попытка начать команду
 #
-# -> request(): Подготовка подставной команды.
+# -> test_restart_fences_old_handles_and_work(): Запрет продолжения старого поколения журнала
 #
-# -> options(): Согласованные данные разрешения и сессии.
+# -> test_retention_preserves_source_guards(): Сохранение защиты источника после очистки результата
 #
-# -> opened(): Открытие временного журнала с управляемыми часами.
+# -> test_delayed_grant_cannot_renew_original_lifetime(): Сужение исходного срока при позднем разрешении
 #
-# -> admit(): Атомарная запись решения и позиции источника.
+# -> test_failed_admission_keeps_cursor(): Отсутствие подтверждения источнику при отказе записи
 #
-# -> test_atomic_start_and_result_replay(): Единственный победитель конкурентного старта и повтор результата.
+# -> test_ignored_events_and_client_generation(): Запись отказов и проверка сессии приложения
 #
-# -> test_restart_fences_old_handles_and_work(): Запрет продолжения старого поколения журнала.
+# -> test_unknown_callback_pins_record_until_actual_exit(): Запрет очистки ещё работающего обработчика
 #
-# -> test_retention_preserves_source_guards(): Сохранение защиты источника после очистки результата.
+# -> test_commit_failure_does_not_authorize_callback(): Запрет callback после неопределённого исхода commit
+#    Вложенные объявления:
+#    -> Connection: Соединение с подставным сбоем commit
+#       Интерфейс:
+#       -> commit(): Проверяемая граница фиксации транзакции
+#    -> connect(): Создание тестового соединения SQLite
 #
-# -> test_delayed_grant_cannot_renew_original_lifetime(): Сужение исходного срока при позднем разрешении.
+# -> test_sqlite_lock_timeout_and_disk_bound(): Настоящая блокировка SQLite и физическое переполнение
 #
-# -> test_failed_admission_keeps_cursor(): Отсутствие подтверждения источнику при отказе записи.
+# -> test_process_crash_boundaries(): Восстановление после аварийной остановки процесса
 #
-# -> test_ignored_events_and_client_generation(): Запись отказов и проверка сессии приложения.
-#
-# -> test_unknown_callback_pins_record_until_actual_exit(): Запрет очистки ещё работающего обработчика.
-#
-# -> test_commit_failure_does_not_authorize_callback(): Запрет callback после неопределённого исхода commit.
-#
-# -> test_sqlite_lock_timeout_and_disk_bound(): Настоящая блокировка SQLite и физическое переполнение.
-#
-# -> _crash_worker(): Аварийная остановка отдельного процесса у границы записи.
-#
-# -> test_process_crash_boundaries(): Восстановление после аварийной остановки процесса.
-#
+# -> test_grant_rounding(): Корректный дробный срок и отказ при его реальном увеличении
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import math
@@ -84,6 +97,12 @@ from remote_watch.commands.storage import (
     StoreRole,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подготовка подставной команды
@@ -91,9 +110,10 @@ from remote_watch.commands.storage import (
 def request(
     number: int = 1,
     epoch: str = 'a' * 32,
-) -> CommandRequest:
+    ) -> CommandRequest:
 
-    """Build deterministic synthetic requests without real actor or provider credentials.
+    """
+    Build deterministic synthetic requests without real actor or provider credentials.
 
     :param number: Synthetic event and command number.
     :type number: int
@@ -115,16 +135,16 @@ def request(
                           conversation_id="123", name="resume_load")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Согласованные данные разрешения и сессии
 #------------------------------------------------------------------------------------------------------------------
 def options(
     event: CommandRequest,
     now: float = 100,
-) -> dict:
+    ) -> dict:
 
-    """Build consistent session, claim, grant and relative deadlines.
+    """
+    Build consistent session, claim, grant and relative deadlines.
 
     :param event: Synthetic immutable command request.
     :type event: CommandRequest
@@ -150,7 +170,6 @@ def options(
     }
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Открытие временного журнала с управляемыми часами
 #------------------------------------------------------------------------------------------------------------------
@@ -160,9 +179,10 @@ def opened(
     generation: str = 'a' * 32,
     limits: StoreLimits = StoreLimits(retention=300),
     role: StoreRole = StoreRole.HUB,
-) -> SQLiteCommandStore:
+    ) -> SQLiteCommandStore:
 
-    """Open an isolated journal with deterministic monotonic time.
+    """
+    Open an isolated journal with deterministic monotonic time.
 
     :param path: Local persistent database path.
     :type path: Path
@@ -195,7 +215,6 @@ def opened(
     return store
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Атомарная запись решения и позиции источника
 #------------------------------------------------------------------------------------------------------------------
@@ -203,9 +222,10 @@ def admit(
     store: SQLiteCommandStore,
     event: CommandRequest,
     now: float = 100,
-) -> None:
+    ) -> None:
 
-    """Commit one event with a remaining lifetime before acknowledging its source.
+    """
+    Commit one event with a remaining lifetime before acknowledging its source.
 
     :param store: Journal instance participating in the test.
     :type store: SQLiteCommandStore
@@ -228,12 +248,19 @@ def admit(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Единственный победитель конкурентного старта и повтор результата
 #------------------------------------------------------------------------------------------------------------------
-def test_atomic_start_and_result_replay(tmp_path: Path) -> None:
+def test_atomic_start_and_result_replay(
+    tmp_path: Path,
+    ) -> None:
 
-    """Two independent connections racing one revision may authorize only one effect.
+    """
+    Two independent connections racing one revision may authorize only one effect.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -253,9 +280,12 @@ def test_atomic_start_and_result_replay(tmp_path: Path) -> None:
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Конкурирующая попытка начать команду
         #----------------------------------------------------------------------------------------------------------
-        def start(store: SQLiteCommandStore) -> bool:
+        def start(
+            store: SQLiteCommandStore,
+            ) -> bool:
 
-            """Race the same persisted revision through separate SQLite connections.
+            """
+            Race the same persisted revision through separate SQLite connections.
 
             :param store: Journal instance participating in the test.
             :type store: SQLiteCommandStore
@@ -294,13 +324,15 @@ def test_atomic_start_and_result_replay(tmp_path: Path) -> None:
         second.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет продолжения старого поколения журнала
 #------------------------------------------------------------------------------------------------------------------
-def test_restart_fences_old_handles_and_work(tmp_path: Path) -> None:
+def test_restart_fences_old_handles_and_work(
+    tmp_path: Path,
+    ) -> None:
 
-    """Recovery closes all active phases and never recreates pre-restart deadlines.
+    """
+    Recovery closes all active phases and never recreates pre-restart deadlines.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -335,13 +367,15 @@ def test_restart_fences_old_handles_and_work(tmp_path: Path) -> None:
         new.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение защиты источника после очистки результата
 #------------------------------------------------------------------------------------------------------------------
-def test_retention_preserves_source_guards(tmp_path: Path) -> None:
+def test_retention_preserves_source_guards(
+    tmp_path: Path,
+    ) -> None:
 
-    """Deleting terminal payload never resets the committed source position.
+    """
+    Deleting terminal payload never resets the committed source position.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -374,13 +408,15 @@ def test_retention_preserves_source_guards(tmp_path: Path) -> None:
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сужение исходного срока при позднем разрешении
 #------------------------------------------------------------------------------------------------------------------
-def test_delayed_grant_cannot_renew_original_lifetime(tmp_path: Path) -> None:
+def test_delayed_grant_cannot_renew_original_lifetime(
+    tmp_path: Path,
+    ) -> None:
 
-    """Waiting for a grant consumes the original admission deadline, not its whole execution timeout.
+    """
+    Waiting for a grant consumes the original admission deadline, not its whole execution timeout.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -407,7 +443,6 @@ def test_delayed_grant_cannot_renew_original_lifetime(tmp_path: Path) -> None:
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отсутствие подтверждения источнику при отказе записи
 #------------------------------------------------------------------------------------------------------------------
@@ -417,9 +452,10 @@ def test_delayed_grant_cannot_renew_original_lifetime(tmp_path: Path) -> None:
 def test_failed_admission_keeps_cursor(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Rejected, conflicting or full transactions never acknowledge unrecorded commands.
+    """
+    Rejected, conflicting or full transactions never acknowledge unrecorded commands.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -465,13 +501,15 @@ def test_failed_admission_keeps_cursor(
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запись отказов и проверка сессии приложения
 #------------------------------------------------------------------------------------------------------------------
-def test_ignored_events_and_client_generation(tmp_path: Path) -> None:
+def test_ignored_events_and_client_generation(
+    tmp_path: Path,
+    ) -> None:
 
-    """Persist rejected source decisions and fence application-session journals.
+    """
+    Persist rejected source decisions and fence application-session journals.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -508,13 +546,15 @@ def test_ignored_events_and_client_generation(tmp_path: Path) -> None:
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет очистки ещё работающего обработчика
 #------------------------------------------------------------------------------------------------------------------
-def test_unknown_callback_pins_record_until_actual_exit(tmp_path: Path) -> None:
+def test_unknown_callback_pins_record_until_actual_exit(
+    tmp_path: Path,
+    ) -> None:
 
-    """Timeout and ACK cannot make a still-running callback eligible for deletion.
+    """
+    Timeout and ACK cannot make a still-running callback eligible for deletion.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -543,7 +583,6 @@ def test_unknown_callback_pins_record_until_actual_exit(tmp_path: Path) -> None:
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет callback после неопределённого исхода commit
 #------------------------------------------------------------------------------------------------------------------
@@ -552,9 +591,10 @@ def test_commit_failure_does_not_authorize_callback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     moment: str,
-) -> None:
+    ) -> None:
 
-    """Even an ambiguous commit failure never returns permission to invoke a callback.
+    """
+    Even an ambiguous commit failure never returns permission to invoke a callback.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -576,14 +616,20 @@ def test_commit_failure_does_not_authorize_callback(
     # КЛАСС : Соединение с подставным сбоем commit
     #--------------------------------------------------------------------------------------------------------------
     class Connection(sqlite3.Connection):
-        """Inject a safe synthetic I/O failure at STARTED commit."""
+        """
+        Inject a safe synthetic I/O failure at STARTED commit.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Проверяемая граница фиксации транзакции
         #----------------------------------------------------------------------------------------------------------
-        def commit(self) -> None:
+        def commit(
+            self,
+            ) -> None:
 
-            """Raise before or after committing the execution marker."""
+            """
+            Raise before or after committing the execution marker.
+            """
 
             exists = self.execute("SELECT 1 FROM sqlite_master WHERE name='commands'").fetchone()
             row = self.execute("SELECT phase FROM commands").fetchone() if exists else None
@@ -602,9 +648,10 @@ def test_commit_failure_does_not_authorize_callback(
     def connect(
         database: object,
         **kwargs: object,
-    ) -> sqlite3.Connection:
+        ) -> sqlite3.Connection:
 
-        """Create only instrumented test connections.
+        """
+        Create only instrumented test connections.
 
         :param database: Temporary SQLite database path.
         :type database: object
@@ -643,13 +690,15 @@ def test_commit_failure_does_not_authorize_callback(
         recovered.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящая блокировка SQLite и физическое переполнение
 #------------------------------------------------------------------------------------------------------------------
-def test_sqlite_lock_timeout_and_disk_bound(tmp_path: Path) -> None:
+def test_sqlite_lock_timeout_and_disk_bound(
+    tmp_path: Path,
+    ) -> None:
 
-    """Exercise real database locking and page limits instead of only logical row limits.
+    """
+    Exercise real database locking and page limits instead of only logical row limits.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -692,16 +741,21 @@ def test_sqlite_lock_timeout_and_disk_bound(tmp_path: Path) -> None:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Аварийная остановка отдельного процесса у границы записи
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Аварийная остановка отдельного процесса у границы записи
 #------------------------------------------------------------------------------------------------------------------
 def _crash_worker(
     path: str,
     phase: str,
     moment: str,
-) -> None:
+    ) -> None:
 
-    """Terminate the process immediately around a selected durable transaction boundary.
+    """
+    Terminate the process immediately around a selected durable transaction boundary.
 
     :param path: Local persistent database path.
     :type path: str
@@ -723,14 +777,20 @@ def _crash_worker(
     # КЛАСС : Соединение с подставным сбоем commit
     #--------------------------------------------------------------------------------------------------------------
     class Connection(sqlite3.Connection):
-        """Inject a hard process exit around commit without graceful rollback."""
+        """
+        Inject a hard process exit around commit without graceful rollback.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Проверяемая граница фиксации транзакции
         #----------------------------------------------------------------------------------------------------------
-        def commit(self) -> None:
+        def commit(
+            self,
+            ) -> None:
 
-            """Crash immediately before or after the selected commit."""
+            """
+            Crash immediately before or after the selected commit.
+            """
 
             exists = self.execute("SELECT 1 FROM sqlite_master WHERE name='commands'").fetchone()
             row = self.execute("SELECT phase, acknowledged FROM commands").fetchone() if exists else None
@@ -754,9 +814,10 @@ def _crash_worker(
     def connect(
         database: object,
         **kwargs: object,
-    ) -> sqlite3.Connection:
+        ) -> sqlite3.Connection:
 
-        """Use the instrumented connection only inside the test subprocess.
+        """
+        Use the instrumented connection only inside the test subprocess.
 
         :param database: Temporary SQLite database path.
         :type database: object
@@ -795,6 +856,10 @@ def _crash_worker(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление после аварийной остановки процесса
 #------------------------------------------------------------------------------------------------------------------
@@ -806,9 +871,10 @@ def test_process_crash_boundaries(
     tmp_path: Path,
     phase: str,
     moment: str,
-) -> None:
+    ) -> None:
 
-    """Recover real abrupt exits without starting an already authorized callback again.
+    """
+    Recover real abrupt exits without starting an already authorized callback again.
 
     :param tmp_path: Pytest temporary directory.
     :type tmp_path: Path
@@ -874,7 +940,6 @@ def test_process_crash_boundaries(
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Корректный дробный срок и отказ при его реальном увеличении
 #------------------------------------------------------------------------------------------------------------------
@@ -885,9 +950,10 @@ def test_grant_rounding(
     origin: float,
     duration: float,
     extended: bool,
-) -> None:
+    ) -> None:
 
-    """Accept rounded absolute bounds while rejecting even a one-ULP extension.
+    """
+    Accept rounded absolute bounds while rejecting even a one-ULP extension.
 
     :param tmp_path: Isolated journal directory.
     :type tmp_path: Path
@@ -944,8 +1010,6 @@ def test_grant_rounding(
         store.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

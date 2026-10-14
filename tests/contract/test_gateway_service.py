@@ -1,36 +1,66 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
+#
+# -> backend(): Fake SCM без регистрации реальной службы
 #
 # Тесты:
-# -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов.
-# -> backend(): Fake SCM без регистрации реальной службы.
-# -> test_plan(): Прежние пути и отсутствие побочных изменений при проверке.
-# -> test_unsafe_spec(): Запрет чужих имён/неверных SID.
-# -> test_ownership(): Exact binary/account перед любой командой.
-# -> test_install(): Остановленная служба, ограниченные права и конечный recovery.
-# -> test_install_refusal(): Отказ при существующей службе и откат частичной установки.
-# -> test_live_owner(): Отказ при действующем foreground manager.
-# -> test_second_manager_acl(): Второй start не меняет ACL живого владельца.
-# -> test_remove(): Удаление только остановленной точно совпадающей службы.
-# -> test_dry_run(): CLI dry-run не загружает SCM и не пишет файлы.
-# -> test_headless_host(): Служба не создаёт UI и останавливает один manager.
-# -> test_startup_failure(): Только временный startup отказ разрешает конечный restart.
-# -> test_host_controls(): Native callbacks, безопасная ошибка и конечный stop.
-# -> test_tray_config(): UI не зависит от поломанных связанных конфигов.
-# -> test_registry(): Run-запись не перезаписывает чужое приложение.
-# -> test_controller(): SCM-наблюдение без создания manager.
-# -> test_native_dispatcher(): Compiled host отказывает вне SCM без регистрации службы.
-# -> test_reparse(): Рекурсивные права не выдаются через ссылку.
+# -> test_plan(): Прежние пути и отсутствие побочных изменений при проверке
+#
+# -> test_unsafe_spec(): Запрет чужих имён и неверных SID
+#
+# -> test_ownership(): Exact binary/account перед любой командой
+#
+# -> test_install(): Остановленная служба, ограниченные права и конечный recovery
+#
+# -> test_install_refusal(): Отказ при существующей службе и откат частичной установки
+#
+# -> test_live_owner(): Действующий foreground владелец не меняет аккаунт посреди работы
+#
+# -> test_second_manager_acl(): Второй --start не меняет ACL живого владельца
+#
+# -> test_remove(): Удаление только остановленной точно совпадающей службы
+#
+# -> test_dry_run(): CLI dry-run не загружает SCM и не пишет файлы
+#
+# -> test_headless_host(): Служба не создаёт UI и останавливает один manager
+#    Вложенные объявления:
+#    -> manager_run(): Один искусственный жизненный цикл manager
+#
+# -> test_startup_failure(): Только временный startup отказ выбирает конечный restart ОС
+#    Вложенные объявления:
+#    -> failed_run(): Полный искусственный rollback до возврата результата
+#
+# -> test_host_controls(): SCM callbacks не выдают ложный RUNNING и скрывают исходное исключение
+#    Вложенные объявления:
+#    -> Framework: Минимальный контракт pywin32 framework без регистрации handler
+#       Конструктор:
+#       -> __init__(): Подготовка состояния объекта.
+#       Интерфейс:
+#       -> ReportServiceStatus(): Запись статуса вместо Windows API
+#
+# -> test_tray_config(): UI не зависит от поломанных связанных конфигов
+#
+# -> test_registry(): Run-запись не перезаписывает чужое приложение
+#
+# -> test_controller(): Controller использует только SCM, выход не останавливает gateway
+#
+# -> test_native_dispatcher(): Compiled pywin32 host не запускается как произвольный console process
+#
+# -> test_reparse(): Рекурсивные права не выдаются через ссылку
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -54,19 +84,36 @@ from remote_watch.gateway_server.service_host import TransientServiceFailure, ru
 from remote_watch.gateway_server.service_tray import tray_settings
 from remote_watch.gateway_server.service_windows import WindowsService, checked_tree
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 SID = "S-1-5-21-101-202-303-1001"
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФИКСТУРА : Изолированные конфиги и фиктивный venv без сетевых вызовов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.fixture
-def service_plan(tmp_path: Path) -> ServicePlan:
+def service_plan(
+    tmp_path: Path,
+    ) -> ServicePlan:
 
-    """Prepare synthetic deployment files without any installed or started OS service.
+    """
+    Prepare synthetic deployment files without any installed or started OS service.
 
     :param tmp_path: Isolated scratch directory.
     :type tmp_path: Path
+
     :return: Valid installation plan referencing only synthetic local resources.
     :rtype: ServicePlan
     """
@@ -82,16 +129,19 @@ def service_plan(tmp_path: Path) -> ServicePlan:
     return make_plan(ServiceSpec(root / "gateway_server.local.json", executable, SID))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ФИКСТУРА : Fake SCM без регистрации реальной службы
 #------------------------------------------------------------------------------------------------------------------
-def backend(plan: ServicePlan) -> WindowsService:
+def backend(
+    plan: ServicePlan,
+    ) -> WindowsService:
 
-    """Create a native-API substitute that works in core and on Linux.
+    """
+    Create a native-API substitute that works in core and on Linux.
 
     :param plan: Synthetic validated installation plan.
     :type plan: ServicePlan
+
     :return: Backend with all mutations replaced by mocks.
     :rtype: WindowsService
     """
@@ -117,12 +167,19 @@ def backend(plan: ServicePlan) -> WindowsService:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Прежние пути и отсутствие побочных изменений при проверке
 #------------------------------------------------------------------------------------------------------------------
-def test_plan(service_plan: ServicePlan) -> None:
+def test_plan(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Preserve configs and future journal paths and ship operational service resources.
+    """
+    Preserve configs and future journal paths and ship operational service resources.
 
     :param service_plan: Synthetic deployment with both channels and tray enabled.
     :type service_plan: ServicePlan
@@ -166,7 +223,6 @@ def test_plan(service_plan: ServicePlan) -> None:
     assert external.read_bytes() == b"synthetic-external-log"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет чужих имён и неверных SID
 #------------------------------------------------------------------------------------------------------------------
@@ -177,14 +233,17 @@ def test_unsafe_spec(
     service_plan: ServicePlan,
     field: str,
     value: str,
-) -> None:
+    ) -> None:
 
-    """Reject name injection and broader account classes before native API calls.
+    """
+    Reject name injection and broader account classes before native API calls.
 
     :param service_plan: Valid local binding.
     :type service_plan: ServicePlan
+
     :param field: Binding field being corrupted.
     :type field: str
+
     :param value: Invalid nonsecret test value.
     :type value: str
     """
@@ -194,7 +253,6 @@ def test_unsafe_spec(
         replace(service_plan.spec, **{field: value})
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Exact binary/account перед любой командой
 #------------------------------------------------------------------------------------------------------------------
@@ -202,12 +260,14 @@ def test_unsafe_spec(
 def test_ownership(
     service_plan: ServicePlan,
     foreign: str,
-) -> None:
+    ) -> None:
 
-    """Refuse all controls for a same-name service with another owner binding.
+    """
+    Refuse all controls for a same-name service with another owner binding.
 
     :param service_plan: Synthetic expected owner.
     :type service_plan: ServicePlan
+
     :param foreign: Changed native configuration field.
     :type foreign: str
     """
@@ -223,13 +283,15 @@ def test_ownership(
     item.api.OpenService.return_value.Close.assert_called_once()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Остановленная служба, ограниченные права и конечный recovery
 #------------------------------------------------------------------------------------------------------------------
-def test_install(service_plan: ServicePlan) -> None:
+def test_install(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Use a virtual account and delay automatic startup until ACL and recovery setup finish.
+    """
+    Use a virtual account and delay automatic startup until ACL and recovery setup finish.
 
     :param service_plan: Original local runtime paths.
     :type service_plan: ServicePlan
@@ -253,13 +315,15 @@ def test_install(service_plan: ServicePlan) -> None:
     item.api.DeleteService.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ при существующей службе и откат частичной установки
 #------------------------------------------------------------------------------------------------------------------
-def test_install_refusal(service_plan: ServicePlan) -> None:
+def test_install_refusal(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Never overwrite existing services and roll back only a newly created service on failure.
+    """
+    Never overwrite existing services and roll back only a newly created service on failure.
 
     :param service_plan: Original local runtime paths.
     :type service_plan: ServicePlan
@@ -281,13 +345,15 @@ def test_install_refusal(service_plan: ServicePlan) -> None:
     assert not (service_plan.spec.config.parent / "data").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Действующий foreground владелец не меняет аккаунт посреди работы
 #------------------------------------------------------------------------------------------------------------------
-def test_live_owner(service_plan: ServicePlan) -> None:
+def test_live_owner(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Reject installation before native service or ACL mutation when a manager owns its lock.
+    """
+    Reject installation before native service or ACL mutation when a manager owns its lock.
 
     :param service_plan: Synthetic deployment with a real local owner lock.
     :type service_plan: ServicePlan
@@ -306,19 +372,20 @@ def test_live_owner(service_plan: ServicePlan) -> None:
         owner.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Второй --start не меняет ACL живого владельца
 #------------------------------------------------------------------------------------------------------------------
 def test_second_manager_acl(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Acquire existing deployment ownership before changing a service/operator DACL.
+    """
+    Acquire existing deployment ownership before changing a service/operator DACL.
 
     :param service_plan: Synthetic deployment with its original control path.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Observe ACL calls without changing any native permissions.
     :type monkeypatch: pytest.MonkeyPatch
     """
@@ -352,13 +419,15 @@ def test_second_manager_acl(
     assert path.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Удаление только остановленной точно совпадающей службы
 #------------------------------------------------------------------------------------------------------------------
-def test_remove(service_plan: ServicePlan) -> None:
+def test_remove(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Keep running services and all working configuration and journal bytes intact.
+    """
+    Keep running services and all working configuration and journal bytes intact.
 
     :param service_plan: Original synthetic deployment.
     :type service_plan: ServicePlan
@@ -378,7 +447,6 @@ def test_remove(service_plan: ServicePlan) -> None:
     assert service_plan.spec.config.read_bytes() == before
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : CLI dry-run не загружает SCM и не пишет файлы
 #------------------------------------------------------------------------------------------------------------------
@@ -387,14 +455,17 @@ def test_dry_run(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture,
-) -> None:
+    ) -> None:
 
-    """Exercise the real parser while prohibiting native service mutations.
+    """
+    Exercise the real parser while prohibiting native service mutations.
 
     :param service_plan: Synthetic validated files and fake executable.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Override only the selected Python and native backend.
     :type monkeypatch: pytest.MonkeyPatch
+
     :param capsys: Captured safe CLI report.
     :type capsys: pytest.CaptureFixture
     """
@@ -410,19 +481,20 @@ def test_dry_run(
     assert before == {p: p.read_bytes() for p in service_plan.spec.config.parent.rglob("*") if p.is_file()}
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Служба не создаёт UI и останавливает один manager
 #------------------------------------------------------------------------------------------------------------------
 def test_headless_host(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Keep a tray-configured service headless and report startup only after manager initialization.
+    """
+    Keep a tray-configured service headless and report startup only after manager initialization.
 
     :param service_plan: Tray-enabled deployment.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Substitute one in-memory manager with no processes.
     :type monkeypatch: pytest.MonkeyPatch
     """
@@ -439,7 +511,8 @@ def test_headless_host(
     #--------------------------------------------------------------------------------------------------------------
     async def manager_run() -> int:
 
-        """Become ready, then complete only after the service requests shutdown.
+        """
+        Become ready, then complete only after the service requests shutdown.
 
         :return: Clean manager exit code.
         :rtype: int
@@ -462,7 +535,6 @@ def test_headless_host(
     assert constructor.call_count == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Только временный startup отказ выбирает конечный restart ОС
 #------------------------------------------------------------------------------------------------------------------
@@ -475,18 +547,23 @@ def test_startup_failure(
     reason: str,
     stop: bool,
     retry: bool,
-) -> None:
+    ) -> None:
 
-    """Distinguish finite network startup recovery from permanent errors and an intentional stop.
+    """
+    Distinguish finite network startup recovery from permanent errors and an intentional stop.
 
     :param service_plan: Synthetic original paths.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Fake manager with completed rollback.
     :type monkeypatch: pytest.MonkeyPatch
+
     :param reason: Fixed original manager reason.
     :type reason: str
+
     :param stop: Whether SCM requested stop during manager completion.
     :type stop: bool
+
     :param retry: Whether the finite OS recovery path is allowed.
     :type retry: bool
     """
@@ -501,7 +578,8 @@ def test_startup_failure(
     #--------------------------------------------------------------------------------------------------------------
     async def failed_run() -> int:
 
-        """Finish rollback before exposing the fixed failure.
+        """
+        Finish rollback before exposing the fixed failure.
 
         :return: Nonzero manager result with an independently retained reason.
         :rtype: int
@@ -522,19 +600,20 @@ def test_startup_failure(
         assert asyncio.run(supervise(service_plan.spec, stopped, Mock())) == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : SCM callbacks не выдают ложный RUNNING и скрывают исходное исключение
 #------------------------------------------------------------------------------------------------------------------
 def test_host_controls(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Test the actual host class with a fake compiled framework, including its hard-stop boundary.
+    """
+    Test the actual host class with a fake compiled framework, including its hard-stop boundary.
 
     :param service_plan: Original synthetic deployment config.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Substitute only native host bindings and deliberate failure boundaries.
     :type monkeypatch: pytest.MonkeyPatch
     """
@@ -547,7 +626,9 @@ def test_host_controls(
     # КЛАСС : Минимальный контракт pywin32 framework без регистрации handler
     #--------------------------------------------------------------------------------------------------------------
     class Framework:
-        """Retain the native service reports without Windows side effects."""
+        """
+        Retain the native service reports without Windows side effects.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # КОНСТРУКТОР
@@ -555,9 +636,10 @@ def test_host_controls(
         def __init__(
             self,
             args: list[str],
-        ) -> None:
+            ) -> None:
 
-            """Retain only report calls from the tested subclass.
+            """
+            Retain only report calls from the tested subclass.
 
             :param args: Synthetic service name.
             :type args: list[str]
@@ -574,12 +656,14 @@ def test_host_controls(
             self,
             state: int,
             **kwargs: object,
-        ) -> None:
+            ) -> None:
 
-            """Record fixed lifecycle and exit-code fields.
+            """
+            Record fixed lifecycle and exit-code fields.
 
             :param state: Native service lifecycle number.
             :type state: int
+
             :param kwargs: Optional wait and exit-code fields.
             :type kwargs: object
             """
@@ -626,13 +710,15 @@ def test_host_controls(
     assert item.reports[-1] == (1, {"win32ExitCode": 0})
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : UI не зависит от поломанных связанных конфигов
 #------------------------------------------------------------------------------------------------------------------
-def test_tray_config(service_plan: ServicePlan) -> None:
+def test_tray_config(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Read presentation independently of provider credentials and component availability.
+    """
+    Read presentation independently of provider credentials and component availability.
 
     :param service_plan: Synthetic configuration to corrupt safely.
     :type service_plan: ServicePlan
@@ -647,19 +733,20 @@ def test_tray_config(service_plan: ServicePlan) -> None:
     assert tray_settings(service_plan.spec.config)[0] is False
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Run-запись не перезаписывает чужое приложение
 #------------------------------------------------------------------------------------------------------------------
 def test_registry(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Create and remove only the exact operator's Run command, preserving foreign values.
+    """
+    Create and remove only the exact operator's Run command, preserving foreign values.
 
     :param service_plan: Exact synthetic binding.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Replace registry calls, never the real user profile.
     :type monkeypatch: pytest.MonkeyPatch
     """
@@ -686,7 +773,6 @@ def test_registry(
     assert not WindowsService._sync_entry(item, False)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Controller использует только SCM, выход не останавливает gateway
 #------------------------------------------------------------------------------------------------------------------
@@ -694,14 +780,17 @@ def test_controller(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-) -> None:
+    ) -> None:
 
-    """Keep UI in its own session with exact service controls and no manager construction.
+    """
+    Keep UI in its own session with exact service controls and no manager construction.
 
     :param service_plan: Tray-enabled synthetic binding.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Fake native session, UI and service APIs.
     :type monkeypatch: pytest.MonkeyPatch
+
     :param tmp_path: Isolated user-profile cache.
     :type tmp_path: Path
     """
@@ -739,14 +828,16 @@ def test_controller(
     assert factory.call_count == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Compiled pywin32 host не запускается как произвольный console process
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.skipif(os.name != "nt", reason="Windows SCM dispatcher")
-def test_native_dispatcher(service_plan: ServicePlan) -> None:
+def test_native_dispatcher(
+    service_plan: ServicePlan,
+    ) -> None:
 
-    """Load the real optional host DLL and refuse console invocation without creating any service.
+    """
+    Load the real optional host DLL and refuse console invocation without creating any service.
 
     :param service_plan: Synthetic config; service main must not be called.
     :type service_plan: ServicePlan
@@ -762,19 +853,20 @@ def test_native_dispatcher(service_plan: ServicePlan) -> None:
     assert caught.value.winerror == 1063
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Рекурсивные права не выдаются через ссылку
 #------------------------------------------------------------------------------------------------------------------
 def test_reparse(
     service_plan: ServicePlan,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Reject a reparse descendant before any recursive ACL operation.
+    """
+    Reject a reparse descendant before any recursive ACL operation.
 
     :param service_plan: Isolated environment tree.
     :type service_plan: ServicePlan
+
     :param monkeypatch: Simulate an NTFS reparse point without requiring symlink privileges.
     :type monkeypatch: pytest.MonkeyPatch
     """
@@ -788,8 +880,6 @@ def test_reparse(
         checked_tree(service_plan.environment)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Запуск тестов через pytest
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

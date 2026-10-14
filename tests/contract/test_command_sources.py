@@ -1,35 +1,49 @@
 ﻿# Проверки разбора команд, постоянной позиции и восстановления источника.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261006-102445
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями.
+# -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Открытие ресурсов и проверка владения.
-#    -> poll(): Получение ограниченной порции неподтверждённых событий.
-#    -> acknowledge(): Подтверждение только записанного события.
-#    -> reply(): Одна попытка отправить ответ проверенному получателю.
-#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов.
+#    -> open(): Открытие ресурсов и проверка владения
+#    -> poll(): Получение ограниченной порции неподтверждённых событий
+#    -> acknowledge(): Подтверждение только записанного события
+#    -> reply(): Одна попытка отправить ответ проверенному получателю
+#    -> close(): Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
+#
+# Функции:
+# -> event(): Подставное событие с известным временем
 #
 # Тесты:
-# -> event(): Подставное событие с известным временем.
-# -> test_source_parser(): Разбор явного адреса и строковых аргументов.
-# -> test_source_parser_rejects(): Отказ от неоднозначной или чрезмерной команды.
-# -> test_source_journal_recovery(): Восстановление решения и необратимая граница очистки.
-# -> test_source_journal_capacity_and_lock(): Предел защиты от повторов и исключительное владение.
-# -> test_source_admission(): Права, свежесть и потери подтверждений источника.
-# -> test_short_commands(): Короткая справка, однозначность и прежние границы доступа.
+# -> test_source_parser(): Разбор явного адреса и строковых аргументов
+#
+# -> test_source_parser_rejects(): Отказ от неоднозначной или чрезмерной команды
+#
+# -> test_source_journal_recovery(): Восстановление решения и необратимая граница очистки
+#
+# -> test_source_journal_capacity_and_lock(): Предел защиты от повторов и исключительное владение
+#
+# -> test_source_admission(): Права, свежесть и потери подтверждений источника
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#       Вложенные объявления:
+#       -> lost(): Потеря ответа после постоянной записи hub
+#
+# -> test_short_commands(): Короткая справка, однозначность и прежние границы доступа
+#    Вложенные объявления:
+#    -> scenario(): Обработка события через постоянное решение источника
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -49,20 +63,31 @@ from remote_watch.commands.source_store import ProcessLock, SourceJournal
 from remote_watch.commands.storage import StoreConflict, StoreFull
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подставной провайдер с наблюдаемыми подтверждениями
 #------------------------------------------------------------------------------------------------------------------
 class FakeProvider:
-    """Retain synthetic events until a durable source acknowledges them."""
-
+    """
+    Retain synthetic events until a durable source acknowledges them.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
     #--------------------------------------------------------------------------------------------------------------
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        ) -> None:
 
-        """Create independently observable event and reply queues."""
+        """
+        Create independently observable event and reply queues.
+        """
 
         self.events: list[SourceEvent] = []
         self.replies: list[tuple[str, str]] = []
@@ -70,13 +95,15 @@ class FakeProvider:
         self.lose_ack = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие ресурсов и проверка владения
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> str:
+    async def open(
+        self,
+        ) -> str:
 
-        """Return a stable synthetic provider identity.
+        """
+        Return a stable synthetic provider identity.
 
         :return: Stable nonsecret fingerprint of the opened provider stream.
         :rtype: str
@@ -85,16 +112,16 @@ class FakeProvider:
         return "fake-owner"
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Получение ограниченной порции неподтверждённых событий
     #--------------------------------------------------------------------------------------------------------------
     async def poll(
         self,
         cursor: str,
-    ) -> tuple[SourceEvent, ...]:
+        ) -> tuple[SourceEvent, ...]:
 
-        """Redeliver an unacknowledged event independently of its opaque ID.
+        """
+        Redeliver an unacknowledged event independently of its opaque ID.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -108,16 +135,16 @@ class FakeProvider:
         return tuple(self.events[:1])
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подтверждение только записанного события
     #--------------------------------------------------------------------------------------------------------------
     async def acknowledge(
         self,
         cursor: str,
-    ) -> None:
+        ) -> None:
 
-        """Optionally lose the acknowledgement without removing the provider event.
+        """
+        Optionally lose the acknowledgement without removing the provider event.
 
         :param cursor: Opaque identifier of the last durably processed provider event.
         :type cursor: str
@@ -132,7 +159,6 @@ class FakeProvider:
         self.events[:] = [event for event in self.events if event.event_id != cursor]
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Одна попытка отправить ответ проверенному получателю
     #--------------------------------------------------------------------------------------------------------------
@@ -140,9 +166,10 @@ class FakeProvider:
         self,
         conversation_id: str,
         text: str,
-    ) -> None:
+        ) -> None:
 
-        """Record plain output for an assertion without accessing a real provider.
+        """
+        Record plain output for an assertion without accessing a real provider.
 
         :param conversation_id: Authenticated chat ID or configured private command topic.
         :type conversation_id: str
@@ -157,17 +184,24 @@ class FakeProvider:
         self.replies.append((conversation_id, text))
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Complete the fake provider lifecycle without external resources."""
+        """
+        Complete the fake provider lifecycle without external resources.
+        """
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Подставное событие с известным временем
@@ -175,9 +209,10 @@ class FakeProvider:
 def event(
     number: int = 1,
     text: str = '/rw loader resume_load',
-) -> SourceEvent:
+    ) -> SourceEvent:
 
-    """Build one authenticated synthetic event at deterministic provider time.
+    """
+    Build one authenticated synthetic event at deterministic provider time.
 
     :param number: Synthetic command and provider event number.
     :type number: int
@@ -197,15 +232,22 @@ def event(
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Разбор явного адреса и строковых аргументов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text", [
     "/rw", "/rw loader", "/rw loader resume_load", '/rw loader resume_load a="two words"',
 ])
-def test_source_parser(text: str) -> None:
+def test_source_parser(
+    text: str,
+    ) -> None:
 
-    """Parse names and quoted values without interpreting Python or shell syntax.
+    """
+    Parse names and quoted values without interpreting Python or shell syntax.
 
     :param text: Bounded plain text of a command or a provider reply.
     :type text: str
@@ -219,15 +261,17 @@ def test_source_parser(text: str) -> None:
     assert arguments in ({}, {"a": "two words"})
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ от неоднозначной или чрезмерной команды
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text", ["resume_load", "/rw * resume_load", "/rw loader BAD", "/rw a b x=1 x=2",
                                  "/rw a b positional", '/rw a b x="', "/rw " + "я" * 5000])
-def test_source_parser_rejects(text: str) -> None:
+def test_source_parser_rejects(
+    text: str,
+    ) -> None:
 
-    """Reject ambiguous routing, duplicate arguments and excessive command text.
+    """
+    Reject ambiguous routing, duplicate arguments and excessive command text.
 
     :param text: Bounded plain text of a command or a provider reply.
     :type text: str
@@ -239,13 +283,15 @@ def test_source_parser_rejects(text: str) -> None:
         parse_source_command(text)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Восстановление решения и необратимая граница очистки
 #------------------------------------------------------------------------------------------------------------------
-def test_source_journal_recovery(tmp_path: Path) -> None:
+def test_source_journal_recovery(
+    tmp_path: Path,
+    ) -> None:
 
-    """Preserve one selected decision across reopen and refuse conflicting ownership.
+    """
+    Preserve one selected decision across reopen and refuse conflicting ownership.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -282,13 +328,15 @@ def test_source_journal_recovery(tmp_path: Path) -> None:
         recovered.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Предел защиты от повторов и исключительное владение
 #------------------------------------------------------------------------------------------------------------------
-def test_source_journal_capacity_and_lock(tmp_path: Path) -> None:
+def test_source_journal_capacity_and_lock(
+    tmp_path: Path,
+    ) -> None:
 
-    """Backpressure preserves fresh replay evidence and exclusive reader ownership.
+    """
+    Backpressure preserves fresh replay evidence and exclusive reader ownership.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -320,7 +368,6 @@ def test_source_journal_capacity_and_lock(tmp_path: Path) -> None:
     second.close()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Права, свежесть и потери подтверждений источника
 #------------------------------------------------------------------------------------------------------------------
@@ -328,9 +375,10 @@ def test_source_journal_capacity_and_lock(tmp_path: Path) -> None:
 def test_source_admission(
     tmp_path: Path,
     kind: str,
-) -> None:
+    ) -> None:
 
-    """Bind one session durably and reject foreign or stale source messages without callback retries.
+    """
+    Bind one session durably and reject foreign or stale source messages without callback retries.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -342,13 +390,14 @@ def test_source_admission(
     # tmp_path — отдельный временный каталог теста.
     # kind — выбранный подставной сценарий провайдера или отказа.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Exercise provider checkpoints against the actual hub and client journals."""
+        """
+        Exercise provider checkpoints against the actual hub and client journals.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -383,9 +432,10 @@ def test_source_admission(
                 async def lost(
                     *args: object,
                     **kwargs: object,
-                ) -> object:
+                    ) -> object:
 
-                    """Lose one response after the hub commits its durable decision.
+                    """
+                    Lose one response after the hub commits its durable decision.
 
                     :param args: Positional arguments of the intercepted submission.
                     :type args: object
@@ -444,9 +494,10 @@ def test_source_admission(
 def test_short_commands(
     tmp_path: Path,
     case: str,
-) -> None:
+    ) -> None:
 
-    """Resolve implicit targets from static ACL and preserve exact session binding.
+    """
+    Resolve implicit targets from static ACL and preserve exact session binding.
 
     :param tmp_path: Isolated source and command journals.
     :type tmp_path: Path
@@ -462,7 +513,9 @@ def test_short_commands(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Run one source event without interpreting availability as implicit addressing."""
+        """
+        Run one source event without interpreting availability as implicit addressing.
+        """
 
         rig = Rig(tmp_path)
         config = rig.hub.config
@@ -586,8 +639,6 @@ def test_short_commands(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

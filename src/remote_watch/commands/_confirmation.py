@@ -1,29 +1,31 @@
 ﻿# Одноразовое подтверждение изменяющего намерения без доверия к UTC машин.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-112704
+# Дата и время последнего изменения: 261014-142149
+#
+# Классы:
+# -> CommandChallenge: Одноразовое подтверждение точного намерения
+#    Специальные методы:
+#    -> __post_init__(): Проверка полей и согласованности объекта
+#
+# -> ConfirmationDecision: Решение о подтверждении до записи в журнал
+#    Специальные методы:
+#    -> __post_init__(): Проверка полей и согласованности объекта
+#
+# Функции:
+# -> confirm_command(): Проверка свежего подтверждения без сравнения UTC
 #
 # Константы:
 # -> MAX_CONFIRMATION_SECONDS: Максимальный срок одноразового подтверждения, секунды.
-#
-# Классы:
-# -> CommandChallenge: Одноразовое подтверждение точного намерения.
-#    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
-#
-# -> ConfirmationDecision: Решение о подтверждении до записи в журнал.
-#    Специальные методы:
-#    -> __post_init__(): Проверка полей и согласованности объекта.
-#
-# -> confirm_command(): Проверка свежего подтверждения без сравнения UTC.
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import hmac
@@ -32,15 +34,42 @@ from dataclasses import dataclass, field, replace
 from remote_watch.commands.protocol import CommandRequest, _nonce, message_digest
 from remote_watch.commands.state import CommandDeadline
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 MAX_CONFIRMATION_SECONDS = 30
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Одноразовое подтверждение точного намерения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommandChallenge:
-    """Bind a one-use confirmation to one intent, actor, conversation and hub incarnation."""
+    """
+    Bind a one-use confirmation to one intent, actor, conversation and hub incarnation.
+
+    :param request: Exact command request bound to the original session.
+    :type request: CommandRequest
+
+    :param nonce: Unique candidate or confirmation nonce.
+    :type nonce: str
+
+    :param deadline: Locally enforced command deadline.
+    :type deadline: CommandDeadline
+
+    :param consumed: Whether confirmation was used or permanently closed.
+    :type consumed: bool
+    """
 
     request: CommandRequest             # Точное намерение, которое увидит пользователь при подтверждении.
     nonce: str = field(repr=False)      # Случайный одноразовый код; генерирует hub после получения намерения.
@@ -50,9 +79,13 @@ class CommandChallenge:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate a short hub-local confirmation window."""
+        """
+        Validate a short hub-local confirmation window.
+        """
 
         if type(self.request) is not CommandRequest or type(self.deadline) is not CommandDeadline:
             raise TypeError("invalid confirmation type")
@@ -65,13 +98,20 @@ class CommandChallenge:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Решение о подтверждении до записи в журнал
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ConfirmationDecision:
-    """Propose consumption of a challenge; storage must commit it before command admission."""
+    """
+    Propose consumption of a challenge; storage must commit it before command admission.
+
+    :param challenge: Confirmation state to persist atomically.
+    :type challenge: CommandChallenge
+
+    :param accepted: Whether this confirmation was accepted.
+    :type accepted: bool
+    """
 
     challenge: CommandChallenge     # Состояние подтверждения для атомарной записи.
     accepted: bool                  # Разрешить приём только после успешной фиксации consumed.
@@ -79,9 +119,13 @@ class ConfirmationDecision:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и согласованности объекта
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Keep an accepted confirmation irreversibly consumed."""
+        """
+        Keep an accepted confirmation irreversibly consumed.
+        """
 
         if type(self.challenge) is not CommandChallenge or type(self.accepted) is not bool:
             raise TypeError("invalid confirmation decision")
@@ -90,6 +134,10 @@ class ConfirmationDecision:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Проверка свежего подтверждения без сравнения UTC
@@ -103,9 +151,10 @@ def confirm_command(
     conversation_id: str,
     hub_epoch: str,
     now: float,
-) -> ConfirmationDecision:
+    ) -> ConfirmationDecision:
 
-    """Check freshness without comparing provider, client or hub wall clocks.
+    """
+    Check freshness without comparing provider, client or hub wall clocks.
 
     :param challenge: Current immutable confirmation snapshot.
     :type challenge: CommandChallenge
@@ -164,8 +213,6 @@ def confirm_command(
     return ConfirmationDecision(challenge=replace(challenge, consumed=True), accepted=True)
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

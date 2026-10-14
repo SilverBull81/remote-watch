@@ -1,55 +1,55 @@
 ﻿# Контракты ограниченного постоянного хранения команд и результатов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-235443
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> StoreError: Ошибка хранилища без вывода его содержимого.
+# -> StoreError: Ошибка хранилища без вывода его содержимого
 #
-# -> StoreConflict: Конфликт версии или принадлежности команды.
+# -> StoreConflict: Конфликт версии или принадлежности команды
 #
-# -> StoreFull: Отказ в приёме при заполненном журнале.
+# -> StoreFull: Отказ в приёме при заполненном журнале
 #
-# -> StoreRole: Назначение журнала hub или приложения.
+# -> StoreRole: Назначение журнала hub или приложения
 #
-# -> AuditCode: Фиксированное действие для аудита.
+# -> AuditCode: Фиксированное действие для аудита
 #
-# -> StoreLimits: Пределы ёмкости и ожидания хранилища.
+# -> StoreLimits: Пределы ёмкости и ожидания хранилища
 #    Специальные методы:
-#    -> __post_init__(): Проверка типов и согласованности полей.
+#    -> __post_init__(): Проверка типов и согласованности полей
 #
-# -> StoredCommand: Сохранённая команда с номером версии.
+# -> StoredCommand: Сохранённая команда с номером версии
 #
-# -> Admission: Подтверждённая запись события источника.
+# -> Admission: Подтверждённая запись события источника
 #
-# -> CommittedTransition: Переход после успешного сохранения.
+# -> CommittedTransition: Переход после успешного сохранения
 #
-# -> AuditEntry: Краткие сведения об операции журнала.
+# -> AuditEntry: Краткие сведения об операции журнала
 #
-# -> CommandStore: Контракт ограниченного постоянного журнала.
+# -> CommandStore: Контракт ограниченного постоянного журнала
 #    Интерфейс:
-#    -> open(): Открытие и восстановление нового поколения журнала.
-#    -> close(): Освобождение соединения SQLite.
-#    -> bind_session(): Новая сессия при прежнем живом владельце журнала.
-#    -> cursor(): Чтение сохранённой позиции источника.
-#    -> admit(): Атомарная запись решения и позиции источника.
-#    -> get(): Поиск команды с проверкой всех полей цели.
-#    -> resolved_result(): Чтение отдельно принятого владельцем итога.
-#    -> transition(): Фиксация перехода с проверкой версии.
-#    -> acknowledge(): Подтверждение точного сохранённого результата.
-#    -> release_execution(): Отметка о фактическом окончании ранее неизвестного исполнения.
-#    -> pending(): Ограниченная страница неподтверждённых или исполняемых команд.
-#    -> audit(): Ограниченная страница аудита.
-#    -> prune(): Очистка подтверждённых записей с сохранением защиты от повторов.
-#
+#    -> open(): Открытие и восстановление нового поколения журнала
+#    -> close(): Освобождение соединения SQLite
+#    -> bind_session(): Привязка новой сессии без смены владельца журнала
+#    -> cursor(): Чтение сохранённой позиции источника
+#    -> admit(): Атомарная запись решения и позиции источника
+#    -> get(): Поиск команды с проверкой всех полей цели
+#    -> resolved_result(): Чтение отдельно принятого владельцем итога
+#    -> transition(): Фиксация перехода с проверкой версии
+#    -> acknowledge(): Подтверждение точного сохранённого результата
+#    -> release_execution(): Отметка о фактическом окончании ранее неизвестного исполнения
+#    -> pending(): Ограниченная страница неподтверждённых или исполняемых команд
+#    -> audit(): Ограниченная страница аудита
+#    -> prune(): Очистка подтверждённых записей с сохранением защиты от повторов
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -67,47 +67,59 @@ from remote_watch.commands.protocol import (
 )
 from remote_watch.commands.state import CommandAction, CommandDeadline, CommandRecord
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ошибка хранилища без вывода его содержимого
 #------------------------------------------------------------------------------------------------------------------
 class StoreError(RuntimeError):
-    """Report a fixed storage failure without SQL, paths or command payloads."""
+    """
+    Report a fixed storage failure without SQL, paths or command payloads.
+    """
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Конфликт версии или принадлежности команды
 #------------------------------------------------------------------------------------------------------------------
 class StoreConflict(StoreError):
-    """Reject stale cursor/revision or conflicting command identity."""
+    """
+    Reject stale cursor/revision or conflicting command identity.
+    """
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Отказ в приёме при заполненном журнале
 #------------------------------------------------------------------------------------------------------------------
 class StoreFull(StoreError):
-    """Refuse new work instead of removing active replay protection."""
+    """
+    Refuse new work instead of removing active replay protection.
+    """
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Назначение журнала hub или приложения
 #------------------------------------------------------------------------------------------------------------------
 class StoreRole(str, Enum):
-    """Select the generation field owned by this journal."""
+    """
+    Select the generation field owned by this journal.
+    """
 
     HUB = "hub"
     CLIENT = "client"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Фиксированное действие для аудита
 #------------------------------------------------------------------------------------------------------------------
 class AuditCode(str, Enum):
-    """Limit persisted diagnostics to known non-sensitive operations."""
+    """
+    Limit persisted diagnostics to known non-sensitive operations.
+    """
 
     ACCEPTED = "accepted"
     IGNORED = "ignored"
@@ -120,13 +132,35 @@ class AuditCode(str, Enum):
     ADMIN_RESOLVED = "admin_resolved"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Пределы ёмкости и ожидания хранилища
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StoreLimits:
-    """Bound records, streams, audit, disk pages and transaction lock waits."""
+    """
+    Bound records, streams, audit, disk pages and transaction lock waits.
+
+    :param records: Maximum retained command or replay records.
+    :type records: int
+
+    :param streams: Maximum persistent ordered streams.
+    :type streams: int
+
+    :param audit: Maximum retained audit entries.
+    :type audit: int
+
+    :param payload_bytes: Maximum retained payload size, in bytes.
+    :type payload_bytes: int
+
+    :param database_bytes: Maximum allocated SQLite database size, in bytes.
+    :type database_bytes: int
+
+    :param retention: Minimum retention after the last record change, in seconds.
+    :type retention: float
+
+    :param lock_timeout: Maximum SQLite lock wait, in seconds.
+    :type lock_timeout: float
+    """
 
     records: int = 1024                 # Предел команд, включая завершённые до очистки.
     streams: int = 64                   # Предел постоянных позиций источников.
@@ -139,9 +173,13 @@ class StoreLimits:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и согласованности полей
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate finite limits and reserve room for bounded command results."""
+        """
+        Validate finite limits and reserve room for bounded command results.
+        """
 
         for value in (self.records, self.streams, self.audit, self.payload_bytes, self.database_bytes):
             require_int(value, "storage limit")
@@ -155,13 +193,32 @@ class StoreLimits:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Сохранённая команда с номером версии
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class StoredCommand:
-    """Expose a journal snapshot with a revision and a stable delivery sequence."""
+    """
+    Expose a journal snapshot with a revision and a stable delivery sequence.
+
+    :param record: Exact durable command record associated with the transition.
+    :type record: CommandRecord
+
+    :param revision: Durable revision compared before changing a command record.
+    :type revision: int
+
+    :param sequence: Persistent increasing command or audit sequence number.
+    :type sequence: int
+
+    :param acknowledged: Whether the exact durable result receipt has been recorded.
+    :type acknowledged: bool
+
+    :param execution_active: Whether execution termination remains unconfirmed.
+    :type execution_active: bool
+
+    :param deadline: Locally enforced command deadline.
+    :type deadline: CommandDeadline | None
+    """
 
     record: CommandRecord                       # Текущее сохранённое состояние команды.
     revision: int                               # Номер версии для сравнения перед изменением.
@@ -171,38 +228,68 @@ class StoredCommand:
     deadline: CommandDeadline | None = None     # Локальный срок; None для записи прежнего запуска.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подтверждённая запись события источника
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Admission:
-    """Return a committed source position and optional command record."""
+    """
+    Return a committed source position and optional command record.
+
+    :param cursor: Durably committed source position eligible for acknowledgement.
+    :type cursor: int
+
+    :param command: Stored command, or None for a rejected or pruned event.
+    :type command: StoredCommand | None
+
+    :param inserted: Whether admission created a new durable record.
+    :type inserted: bool
+    """
 
     cursor: int                         # Уже записанная позиция; только её можно подтвердить источнику.
     command: StoredCommand | None       # None для отклонённого, пропущенного или очищенного события.
     inserted: bool                      # Новая команда записана именно этой транзакцией.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Переход после успешного сохранения
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CommittedTransition:
-    """Authorize a side effect only for the transaction which committed STARTED."""
+    """
+    Authorize a side effect only for the transaction which committed STARTED.
+
+    :param command: Exact stored command returned by the committed transition.
+    :type command: StoredCommand
+
+    :param start_callback: Whether the durable STARTED transition permits callback execution.
+    :type start_callback: bool
+    """
 
     command: StoredCommand      # Состояние после успешного commit.
     start_callback: bool        # Единственная транзакция, разрешающая следующий шаг.
 #------------------------------------------------------------------------------------------------------------------
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Краткие сведения об операции журнала
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AuditEntry:
-    """Expose bounded audit metadata without actors, arguments or response text."""
+    """
+    Expose bounded audit metadata without actors, arguments or response text.
+
+    :param sequence: Persistent increasing command or audit sequence number.
+    :type sequence: int
+
+    :param code: Fixed operation or failure code without private values.
+    :type code: AuditCode
+
+    :param command_id: Stable identifier preserved across retries of the same command intent.
+    :type command_id: str | None
+
+    :param phase: Durable command execution phase.
+    :type phase: str | None
+    """
 
     sequence: int               # Возрастающий номер записи аудита.
     code: AuditCode             # Фиксированное действие или отказ.
@@ -210,19 +297,24 @@ class AuditEntry:
     phase: str | None           # Состояние после записи, если команда существует.
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контракт ограниченного постоянного журнала
 #------------------------------------------------------------------------------------------------------------------
 class CommandStore(Protocol):
-    """Define synchronous bounded storage; use outside logging/event-loop threads."""
+    """
+    Define synchronous bounded storage; use outside logging/event-loop threads.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие и восстановление нового поколения журнала
     #--------------------------------------------------------------------------------------------------------------
-    def open(self) -> None:
+    def open(
+        self,
+        ) -> None:
 
-        """Open storage and recover a new owner generation before serving requests."""
+        """
+        Open storage and recover a new owner generation before serving requests.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
@@ -230,9 +322,13 @@ class CommandStore(Protocol):
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Освобождение соединения SQLite
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Release the owned database connection."""
+        """
+        Release the owned database connection.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
@@ -243,9 +339,10 @@ class CommandStore(Protocol):
     def bind_session(
         self,
         session_id: str,
-    ) -> None:
+        ) -> None:
 
-        """Bind future admissions to a fresh session within the same live owner generation.
+        """
+        Bind future admissions to a fresh session within the same live owner generation.
 
         :param session_id: Fresh registration nonce after old work has been settled.
         :type session_id: str
@@ -262,9 +359,10 @@ class CommandStore(Protocol):
     def cursor(
         self,
         stream: str,
-    ) -> int:
+        ) -> int:
 
-        """Read the last committed source position, or -1 before the first event.
+        """
+        Read the last committed source position, or -1 before the first event.
 
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
@@ -289,9 +387,10 @@ class CommandStore(Protocol):
         request: CommandRequest | None,
         deadline: CommandDeadline | None = None,
         rejection: AuditCode = AuditCode.IGNORED,
-    ) -> Admission:
+        ) -> Admission:
 
-        """Atomically record a source decision and advance its ordered cursor.
+        """
+        Atomically record a source decision and advance its ordered cursor.
 
         :param stream: Stable authenticated ordered-stream identifier.
         :type stream: str
@@ -331,9 +430,10 @@ class CommandStore(Protocol):
     def get(
         self,
         ref: CommandRef,
-    ) -> StoredCommand | None:
+        ) -> StoredCommand | None:
 
-        """Look up an exact command reference.
+        """
+        Look up an exact command reference.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -353,12 +453,14 @@ class CommandStore(Protocol):
     def resolved_result(
         self,
         ref: CommandRef,
-    ) -> CommandResult | None:
+        ) -> CommandResult | None:
 
-        """Read an explicit administrative result while retaining the original outcome.
+        """
+        Read an explicit administrative result while retaining the original outcome.
 
         :param ref: Exact original command reference.
         :type ref: CommandRef
+
         :return: Separately accepted result, if any.
         :rtype: CommandResult | None
         """
@@ -381,9 +483,10 @@ class CommandStore(Protocol):
         grant: CommandGrant | None = None,
         result: CommandResult | None = None,
         grant_deadline: CommandDeadline | None = None,
-    ) -> CommittedTransition:
+        ) -> CommittedTransition:
 
-        """Compare revision and commit a legal transition before authorizing a side effect.
+        """
+        Compare revision and commit a legal transition before authorizing a side effect.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -435,9 +538,10 @@ class CommandStore(Protocol):
     def acknowledge(
         self,
         result: CommandResult,
-    ) -> None:
+        ) -> None:
 
-        """Mark the exact durable result acknowledged; never execute the command.
+        """
+        Mark the exact durable result acknowledged; never execute the command.
 
         :param result: Exact terminal callback result.
         :type result: CommandResult
@@ -455,9 +559,10 @@ class CommandStore(Protocol):
         self,
         ref: CommandRef,
         claim_id: str,
-    ) -> None:
+        ) -> None:
 
-        """Record externally verified callback termination without changing its UNKNOWN outcome.
+        """
+        Record externally verified callback termination without changing its UNKNOWN outcome.
 
         :param ref: Exact command, identity, session and hub reference.
         :type ref: CommandRef
@@ -479,9 +584,10 @@ class CommandStore(Protocol):
         self,
         after: int = 0,
         limit: int = 100,
-    ) -> tuple[StoredCommand, ...]:
+        ) -> tuple[StoredCommand, ...]:
 
-        """Read a bounded page of records still awaiting acknowledgment.
+        """
+        Read a bounded page of records still awaiting acknowledgment.
 
         :param after: Exclusive sequence lower bound for pagination.
         :type after: int
@@ -506,9 +612,10 @@ class CommandStore(Protocol):
         self,
         after: int = 0,
         limit: int = 100,
-    ) -> tuple[AuditEntry, ...]:
+        ) -> tuple[AuditEntry, ...]:
 
-        """Read a bounded page of safe audit metadata.
+        """
+        Read a bounded page of safe audit metadata.
 
         :param after: Exclusive sequence lower bound for pagination.
         :type after: int
@@ -532,9 +639,10 @@ class CommandStore(Protocol):
     def prune(
         self,
         limit: int = 100,
-    ) -> int:
+        ) -> int:
 
-        """Remove eligible acknowledged terminal records without deleting source cursors.
+        """
+        Remove eligible acknowledged terminal records without deleting source cursors.
 
         :param limit: Maximum records in one bounded page or cleanup batch.
         :type limit: int
@@ -549,8 +657,6 @@ class CommandStore(Protocol):
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

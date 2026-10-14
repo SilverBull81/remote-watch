@@ -1,27 +1,37 @@
 ﻿# Проверки комплекта установки, сохранения рабочих данных и безопасного CLI.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-200317
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_new_installation(): Согласованность адресов и режимов новой установки.
-# -> test_existing_installation(): Повторная подготовка сохраняет настройки, CA и журналы.
-# -> test_dry_run_and_updates(): Preview не пишет файлы, обновление создаёт отдельные образцы.
-# -> test_validation(): Ошибки параметров обнаруживаются до первой записи.
-# -> test_output_links(): Запрет записи через символические ссылки.
-# -> test_exclusive_write(): Конкурентное появление файла не разрешает перезапись.
-# -> test_managed(): Явные пути Caddy и сохранение его прежнего конфига.
-# -> test_cli(): Безопасные отчёты и отказ при ошибках.
-# -> test_launchers(): Скрипты запуска передают пути отдельными аргументами.
-# -> test_preflight_conflict(): Ошибка типа файла обнаруживается до записи остального комплекта.
+# -> test_new_installation(): Согласованность новой установки и отсутствие побочных действий
+#
+# -> test_existing_installation(): Сохранение прежних конфигов и постоянного состояния
+#
+# -> test_dry_run_and_updates(): Preview и отдельные предложения обновления
+#
+# -> test_validation(): Полная проверка аргументов до записи
+#
+# -> test_output_links(): Запрет записи через ссылки
+#
+# -> test_exclusive_write(): Отказ от перезаписи при конкурентном создании
+#
+# -> test_managed(): Явное владение Caddy и сохранение его конфига
+#
+# -> test_cli(): Безопасный вывод ошибок и различий
+#
+# -> test_launchers(): Настоящий запуск PowerShell или POSIX shell из другой папки
+#
+# -> test_preflight_conflict(): Проверка всего плана перед первой записью
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -43,6 +53,12 @@ from remote_watch.gateway_server.deploy import main
 from remote_watch.gateway_server.deployment import DeployError, DeployOptions, _write_new, deploy, prepare_files
 from remote_watch.gateway_server.tray import default_icon
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Согласованность новой установки и отсутствие побочных действий
@@ -52,9 +68,10 @@ def test_new_installation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     components: str,
-) -> None:
+    ) -> None:
 
-    """Render and validate all enabled components without network, subprocesses or SQLite.
+    """
+    Render and validate all enabled components without network, subprocesses or SQLite.
 
     :param tmp_path: Isolated output directory.
     :type tmp_path: Path
@@ -90,13 +107,15 @@ def test_new_installation(
     assert not (root / "data").exists() and not (root / "caddy-data").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение прежних конфигов и постоянного состояния
 #------------------------------------------------------------------------------------------------------------------
-def test_existing_installation(tmp_path: Path) -> None:
+def test_existing_installation(
+    tmp_path: Path,
+    ) -> None:
 
-    """Preserve private configs byte-for-byte and retain their original relative-path base.
+    """
+    Preserve private configs byte-for-byte and retain their original relative-path base.
 
     :param tmp_path: Isolated existing installation and output root.
     :type tmp_path: Path
@@ -126,13 +145,15 @@ def test_existing_installation(tmp_path: Path) -> None:
     assert all(path.read_bytes() == data for path, data in before.items())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Preview и отдельные предложения обновления
 #------------------------------------------------------------------------------------------------------------------
-def test_dry_run_and_updates(tmp_path: Path) -> None:
+def test_dry_run_and_updates(
+    tmp_path: Path,
+    ) -> None:
 
-    """Avoid all writes during preview and keep updates outside operational configuration.
+    """
+    Avoid all writes during preview and keep updates outside operational configuration.
 
     :param tmp_path: Isolated output parent.
     :type tmp_path: Path
@@ -156,7 +177,6 @@ def test_dry_run_and_updates(tmp_path: Path) -> None:
     assert all(state == "identical" for _, state in deploy(options))
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Полная проверка аргументов до записи
 #------------------------------------------------------------------------------------------------------------------
@@ -169,9 +189,10 @@ def test_dry_run_and_updates(tmp_path: Path) -> None:
 def test_validation(
     tmp_path: Path,
     change: dict,
-) -> None:
+    ) -> None:
 
-    """Reject invalid choices before the installation directory exists.
+    """
+    Reject invalid choices before the installation directory exists.
 
     :param tmp_path: Isolated output parent.
     :type tmp_path: Path
@@ -188,13 +209,15 @@ def test_validation(
     assert not root.exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет записи через ссылки
 #------------------------------------------------------------------------------------------------------------------
-def test_output_links(tmp_path: Path) -> None:
+def test_output_links(
+    tmp_path: Path,
+    ) -> None:
 
-    """Refuse linked output directories without modifying the link destination.
+    """
+    Refuse linked output directories without modifying the link destination.
 
     :param tmp_path: Isolated symlink and destination.
     :type tmp_path: Path
@@ -216,13 +239,15 @@ def test_output_links(tmp_path: Path) -> None:
     assert list(target.iterdir()) == []
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отказ от перезаписи при конкурентном создании
 #------------------------------------------------------------------------------------------------------------------
-def test_exclusive_write(tmp_path: Path) -> None:
+def test_exclusive_write(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep a file that appeared after the deployment preflight unchanged.
+    """
+    Keep a file that appeared after the deployment preflight unchanged.
 
     :param tmp_path: Isolated output directory.
     :type tmp_path: Path
@@ -236,13 +261,15 @@ def test_exclusive_write(tmp_path: Path) -> None:
     assert path.read_bytes() == b"PRIVATE"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Явное владение Caddy и сохранение его конфига
 #------------------------------------------------------------------------------------------------------------------
-def test_managed(tmp_path: Path) -> None:
+def test_managed(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retain existing Caddy storage/config paths without executing the binary.
+    """
+    Retain existing Caddy storage/config paths without executing the binary.
 
     :param tmp_path: Isolated fake Caddy and output directory.
     :type tmp_path: Path
@@ -263,16 +290,16 @@ def test_managed(tmp_path: Path) -> None:
     assert not options.caddy_data.exists() and not (options.directory / "Caddyfile").exists()
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Безопасный вывод ошибок и различий
 #------------------------------------------------------------------------------------------------------------------
 def test_cli(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-) -> None:
+    ) -> None:
 
-    """Print fixed filenames and codes without disclosing arguments or private file contents.
+    """
+    Print fixed filenames and codes without disclosing arguments or private file contents.
 
     :param tmp_path: Isolated deployment directory.
     :type tmp_path: Path
@@ -296,13 +323,15 @@ def test_cli(
     assert "current_preserved" in output.out and "deployment_failed" in output.out
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий запуск PowerShell или POSIX shell из другой папки
 #------------------------------------------------------------------------------------------------------------------
-def test_launchers(tmp_path: Path) -> None:
+def test_launchers(
+    tmp_path: Path,
+    ) -> None:
 
-    """Pass config and action as separate arguments through a real platform shell.
+    """
+    Pass config and action as separate arguments through a real platform shell.
 
     :param tmp_path: Isolated generated kit containing spaces and a quote in its path.
     :type tmp_path: Path
@@ -326,13 +355,15 @@ def test_launchers(tmp_path: Path) -> None:
     assert str(Path(sys.executable)).replace("'", "''") in scripts["start.ps1"].decode("utf-8-sig")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Проверка всего плана перед первой записью
 #------------------------------------------------------------------------------------------------------------------
-def test_preflight_conflict(tmp_path: Path) -> None:
+def test_preflight_conflict(
+    tmp_path: Path,
+    ) -> None:
 
-    """Reject a directory occupying an output filename before creating other files.
+    """
+    Reject a directory occupying an output filename before creating other files.
 
     :param tmp_path: Existing installation directory.
     :type tmp_path: Path
@@ -345,8 +376,6 @@ def test_preflight_conflict(tmp_path: Path) -> None:
     assert [item.name for item in tmp_path.iterdir()] == ["START_HERE.md"]
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,26 +1,48 @@
 ﻿# Контракт gateway-клиента: строгий JSON, сроки, корреляция и настоящие HTTP-запросы на loopback.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
+#
+# Функции:
+# -> fresh_delivery(): Попытка со свежим сроком UTC
 #
 # Тесты:
-# -> fresh_delivery(): Попытка со свежим сроком UTC.
-# -> test_wire_roundtrip(): Сохранение identity и корреляции при передаче JSON.
-# -> test_invalid_wire(): Отклонение неоднозначных и неверных запросов.
-# -> test_invalid_response(): Отклонение неверного подтверждения gateway.
-# -> test_notification_gateway_configuration(): Ленивое назначение и согласованные сроки клиента.
-# -> test_notification_gateway_http(): Настоящий HTTP-клиент и подставной gateway на loopback.
-# -> test_no_request_after_budget_expiry(): Запрет новой отправки при исчерпании остатка времени.
-# -> test_runtime_budget_and_mixed_modes(): Общие повторы runtime для direct и gateway назначений.
-# -> test_gateway_names(): Отсутствие старых модулей, имён классов и значений режима.
+# -> test_wire_roundtrip(): Сохранение identity и корреляции при передаче JSON
+#
+# -> test_invalid_wire(): Отклонение неоднозначных и неверных запросов
+#
+# -> test_invalid_response(): Отклонение неверного подтверждения gateway
+#
+# -> test_notification_gateway_configuration(): Ленивое назначение и согласованные сроки клиента
+#
+# -> test_notification_gateway_http(): Настоящий HTTP-клиент и подставной gateway на loopback
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#       Вложенные объявления:
+#       -> respond(): Ответ локального сервера в выбранном режиме
+#
+# -> test_no_request_after_budget_expiry(): Запрет новой отправки при исчерпании остатка времени
+#    Вложенные объявления:
+#    -> scenario(): Выполнение асинхронного сценария проверки
+#
+# -> test_runtime_budget_and_mixed_modes(): Общие повторы runtime для direct и gateway назначений
+#    Вложенные объявления:
+#    -> Channel: Подставной канал для проверки срока попытки
+#       Интерфейс:
+#       -> open(): Открытие канала в принадлежащем ему цикле событий
+#       -> send(): Одна попытка отправки без собственного цикла повторов
+#       -> close(): Закрытие канала и освобождение временных данных
+#
+# -> test_gateway_names(): Новые имена не оставляют неявных переходников старого API
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -56,13 +78,22 @@ from remote_watch.notifications.gateway_protocol import (
     encode_response,
 )
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ФУНКЦИЯ : Попытка со свежим сроком UTC
 #------------------------------------------------------------------------------------------------------------------
-def fresh_delivery(notification: Notification) -> Delivery:
+def fresh_delivery(
+    notification: Notification,
+    ) -> Delivery:
 
-    """Create a delivery whose UTC expiry has not passed during the current run.
+    """
+    Create a delivery whose UTC expiry has not passed during the current run.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -79,12 +110,19 @@ def fresh_delivery(notification: Notification) -> Delivery:
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение identity и корреляции при передаче JSON
 #------------------------------------------------------------------------------------------------------------------
-def test_wire_roundtrip(notification: Notification) -> None:
+def test_wire_roundtrip(
+    notification: Notification,
+    ) -> None:
 
-    """Preserve identity and delivery correlation without exposing local destination routing.
+    """
+    Preserve identity and delivery correlation without exposing local destination routing.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -105,7 +143,6 @@ def test_wire_roundtrip(notification: Notification) -> None:
     assert result.source is ResultSource.GATEWAY and result.provider_message_id == "receipt-1"
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение неоднозначных и неверных запросов
 #------------------------------------------------------------------------------------------------------------------
@@ -113,9 +150,10 @@ def test_wire_roundtrip(notification: Notification) -> None:
 def test_invalid_wire(
     notification: Notification,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Reject ambiguous envelopes and unsafe or inconsistent budgets.
+    """
+    Reject ambiguous envelopes and unsafe or inconsistent budgets.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -148,7 +186,6 @@ def test_invalid_wire(
         NotificationGatewayRequest.from_bytes(data)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Отклонение неверного подтверждения gateway
 #------------------------------------------------------------------------------------------------------------------
@@ -156,9 +193,10 @@ def test_invalid_wire(
 def test_invalid_response(
     notification: Notification,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Do not accept a mismatched or contradictory gateway receipt.
+    """
+    Do not accept a mismatched or contradictory gateway receipt.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -187,13 +225,14 @@ def test_invalid_response(
         decode_response(payload, delivery)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Ленивое назначение и согласованные сроки клиента
 #------------------------------------------------------------------------------------------------------------------
 def test_notification_gateway_configuration() -> None:
 
-    """Keep a lazy gateway factory and require room for the network within attempt timeout."""
+    """
+    Keep a lazy gateway factory and require room for the network within attempt timeout.
+    """
 
     config = NotificationGatewayClientConfig(
         endpoint="https://gateway.invalid", alias="phone", token_env="RW_GATEWAY_TEST")
@@ -229,7 +268,6 @@ def test_notification_gateway_configuration() -> None:
         replace(config, alias="https://provider.invalid/chat")
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий HTTP-клиент и подставной gateway на loopback
 #------------------------------------------------------------------------------------------------------------------
@@ -240,9 +278,10 @@ def test_notification_gateway_http(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
-) -> None:
+    ) -> None:
 
-    """Exercise the real HTTP client against a temporary loopback gateway stub.
+    """
+    Exercise the real HTTP client against a temporary loopback gateway stub.
 
     :param literal: Select direct credential instead of the environment reference.
     :type literal: bool
@@ -257,6 +296,9 @@ def test_notification_gateway_http(
     :type mode: str
     """
 
+    # literal — проверяемый вариант настройки с токеном непосредственно в конфиге.
+
+
     # notification - уведомление с заданными тестовыми данными.
     # monkeypatch - фикстура подмены зависимостей и окружения.
     # mode - выбранный сценарий ответа сервера.
@@ -269,16 +311,21 @@ def test_notification_gateway_http(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Serve one request and verify its fixed endpoint, bearer credential and schema."""
+        """
+        Serve one request and verify its fixed endpoint, bearer credential and schema.
+        """
 
         deliveries = []
 
         #----------------------------------------------------------------------------------------------------------
         # ФУНКЦИЯ : Ответ локального сервера в выбранном режиме
         #----------------------------------------------------------------------------------------------------------
-        async def respond(request: web.Request) -> web.Response:
+        async def respond(
+            request: web.Request,
+            ) -> web.Response:
 
-            """Model receipt loss and malformed responses without a real provider.
+            """
+            Model receipt loss and malformed responses without a real provider.
 
             :param request: Incoming loopback HTTP request.
             :type request: web.Request
@@ -344,16 +391,16 @@ def test_notification_gateway_http(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Запрет новой отправки при исчерпании остатка времени
 #------------------------------------------------------------------------------------------------------------------
 def test_no_request_after_budget_expiry(
     notification: Notification,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Do not start a request when the remaining runtime budget cannot cover the network margin.
+    """
+    Do not start a request when the remaining runtime budget cannot cover the network margin.
 
     :param notification: Immutable notification fixture.
     :type notification: Notification
@@ -373,7 +420,9 @@ def test_no_request_after_budget_expiry(
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Open a client without connecting and exercise a locally exhausted budget."""
+        """
+        Open a client without connecting and exercise a locally exhausted budget.
+        """
 
         channel = NotificationGatewayChannel(NotificationGatewayClientConfig(
             endpoint="https://gateway.invalid", alias="phone",
@@ -389,16 +438,16 @@ def test_no_request_after_budget_expiry(
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Общие повторы runtime для direct и gateway назначений
 #------------------------------------------------------------------------------------------------------------------
 def test_runtime_budget_and_mixed_modes(
     identity: Identity,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    ) -> None:
 
-    """Keep retries in runtime while direct and gateway destinations receive one event independently.
+    """
+    Keep retries in runtime while direct and gateway destinations receive one event independently.
 
     :param identity: Explicit application identity.
     :type identity: Identity
@@ -416,14 +465,20 @@ def test_runtime_budget_and_mixed_modes(
     # КЛАСС : Подставной канал для проверки срока попытки
     #--------------------------------------------------------------------------------------------------------------
     class Channel:
-        """Capture the actual budget assigned to each runtime attempt."""
+        """
+        Capture the actual budget assigned to each runtime attempt.
+        """
 
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Открытие канала в принадлежащем ему цикле событий
         #----------------------------------------------------------------------------------------------------------
-        async def open(self) -> None:
+        async def open(
+            self,
+            ) -> None:
 
-            """Avoid external resources."""
+            """
+            Avoid external resources.
+            """
 
             pass
         #----------------------------------------------------------------------------------------------------------
@@ -434,9 +489,10 @@ def test_runtime_budget_and_mixed_modes(
         async def send(
             self,
             delivery: Delivery,
-        ) -> DeliveryResult:
+            ) -> DeliveryResult:
 
-            """Fail the first gateway attempt and accept its runtime-owned retry.
+            """
+            Fail the first gateway attempt and accept its runtime-owned retry.
 
             :param delivery: Immutable delivery attempt.
             :type delivery: Delivery
@@ -456,9 +512,13 @@ def test_runtime_budget_and_mixed_modes(
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Закрытие канала и освобождение временных данных
         #----------------------------------------------------------------------------------------------------------
-        async def close(self) -> None:
+        async def close(
+            self,
+            ) -> None:
 
-            """Avoid external cleanup."""
+            """
+            Avoid external cleanup.
+            """
 
             pass
         #----------------------------------------------------------------------------------------------------------
@@ -480,13 +540,14 @@ def test_runtime_budget_and_mixed_modes(
     assert runtime.stats("direct").accepted == runtime.stats("gateway").accepted == 1
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Новые имена не оставляют неявных переходников старого API
 #------------------------------------------------------------------------------------------------------------------
 def test_gateway_names() -> None:
 
-    """Reject retired modules, enum values and type aliases instead of silently accepting legacy config."""
+    """
+    Reject retired modules, enum values and type aliases instead of silently accepting legacy config.
+    """
 
     # Проверяем именно установленную поверхность API: старый режим требует явной миграции.
     adapter = importlib.import_module("remote_watch.adapters.notification_gateway")
@@ -505,8 +566,6 @@ def test_gateway_names() -> None:
             enum("relay")
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

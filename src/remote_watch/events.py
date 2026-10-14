@@ -1,31 +1,32 @@
 ﻿# Сведения о приложении и данные уведомления: проверка полей и преобразование в словарь.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-131902
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> Identity: Сведения о приложении и его размещении.
+# -> Identity: Сведения о приложении и его размещении
 #    Специальные методы:
-#    -> __post_init__(): Проверка сведений о приложении.
+#    -> __post_init__(): Проверка сведений о приложении
 #
-# -> SnapshotLimits: Ограничения размера уведомления.
+# -> SnapshotLimits: Ограничения размера уведомления
 #    Специальные методы:
-#    -> __post_init__(): Проверка ограничений.
+#    -> __post_init__(): Проверка ограничений
 #
-# -> Notification: Данные уведомления без ссылок на исходный LogRecord.
+# -> Notification: Подготовленное уведомление для отправки
 #    Интерфейс:
-#    -> to_dict(): Копия данных уведомления для передачи.
-#    -> from_dict(): Чтение уведомления из словаря с проверкой формата.
+#    -> to_dict(): Копия данных уведомления для передачи
+#    -> from_dict(): Чтение уведомления из словаря с проверкой формата
 #    Специальные методы:
-#    -> __post_init__(): Проверка полей и размера уведомления.
+#    -> __post_init__(): Проверка полей и размера уведомления
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -36,21 +37,39 @@ from typing import ClassVar
 
 from remote_watch._validation import require_int, require_text, text_tuple
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Сведения о приложении и его размещении
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Identity:
-    """Identify an application independently of provider display names.
+    """
+    Identify an application independently of provider display names.
 
     Fields service/environment identify the application and deployment tier;
     region/host identify its placement; instance_id identifies a logical instance.
     Every field is an explicitly supplied nonblank string of at most 256 UTF-8 bytes.
+
+    :param service: Explicit application service name.
+    :type service: str
+
+    :param environment: Explicit application deployment environment.
+    :type environment: str
+
+    :param region: Explicit application region.
+    :type region: str
+
+    :param host: Explicit application host or component listener address.
+    :type host: str
+
+    :param instance_id: Explicit logical application instance identifier.
+    :type instance_id: str
     """
 
     service: str        # Название приложения.
@@ -62,9 +81,13 @@ class Identity:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка сведений о приложении
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate all explicit identity fields."""
+        """
+        Validate all explicit identity fields.
+        """
 
         # Все сведения задаёт приложение: имя сервера и экземпляра не угадываем по окружению.
         for item in fields(self):
@@ -72,17 +95,29 @@ class Identity:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Ограничения размера уведомления
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SnapshotLimits:
-    """Bound serialized event, text, exception and metadata sizes in UTF-8 bytes.
+    """
+    Bound serialized event, text, exception and metadata sizes in UTF-8 bytes.
 
     event_max_bytes bounds the complete compact JSON representation;
     message_max_bytes and exception_max_bytes bound individual strings;
     metadata_max_bytes bounds all other serialized event fields together.
+
+    :param event_max_bytes: Maximum serialized notification size, in UTF-8 bytes.
+    :type event_max_bytes: int
+
+    :param message_max_bytes: Maximum notification text size, in UTF-8 bytes.
+    :type message_max_bytes: int
+
+    :param exception_max_bytes: Maximum exception description size, in UTF-8 bytes.
+    :type exception_max_bytes: int
+
+    :param metadata_max_bytes: Maximum notification metadata size, in UTF-8 bytes.
+    :type metadata_max_bytes: int
     """
 
     event_max_bytes: int = 16384        # Предел размера всего уведомления, байт.
@@ -93,9 +128,13 @@ class SnapshotLimits:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка ограничений
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Reject nonpositive budgets and fields exceeding the event budget."""
+        """
+        Reject nonpositive budgets and fields exceeding the event budget.
+        """
 
         # Отдельное поле не может занимать больше, чем разрешено всему уведомлению.
         for item in fields(self):
@@ -106,13 +145,13 @@ class SnapshotLimits:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Подготовленное уведомление для отправки
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Notification:
-    """Store rendered notification data, never a LogRecord or traceback object.
+    """
+    Store rendered notification data, never a LogRecord or traceback object.
 
     event_id/session_id identify the event and runtime session. Identity is explicit.
     created_at/expires_at are aware datetimes normalized to UTC. level_no/level_name
@@ -121,6 +160,60 @@ class Notification:
     notify is a tri-state eligibility hint. truncated_fields names shortened texts.
     limits is a local validation policy and is not serialized. SCHEMA_VERSION is 1.
     Construction validates but never truncates, performs I/O or generates identity.
+
+    :param SCHEMA_VERSION: Wire format version shared by serialized notifications.
+    :type SCHEMA_VERSION: ClassVar[int]
+
+    :param event_id: Stable notification or source event identifier.
+    :type event_id: str
+
+    :param session_id: Identifier of the original application session.
+    :type session_id: str
+
+    :param identity: Explicit application identity used for routing and authorization.
+    :type identity: Identity
+
+    :param created_at: Timezone-aware event creation time.
+    :type created_at: datetime
+
+    :param expires_at: Expiration time in the clock domain described by this contract.
+    :type expires_at: datetime
+
+    :param level_no: Numeric logging severity captured from the original record.
+    :type level_no: int
+
+    :param level_name: Standard logging level name captured from the original record.
+    :type level_name: str
+
+    :param logger_name: Original standard logger name.
+    :type logger_name: str
+
+    :param message: Prepared notification text or latest bounded child status message.
+    :type message: str
+
+    :param exception: Prepared exception description, or None.
+    :type exception: str | None
+
+    :param topic: Notification topic or routing topic selector.
+    :type topic: str | None
+
+    :param tags: Explicit notification tags used for routing or provider presentation.
+    :type tags: tuple[str, ...]
+
+    :param correlation_id: Optional identifier associating related operations.
+    :type correlation_id: str | None
+
+    :param trace_id: Optional trace identifier associating calls.
+    :type trace_id: str | None
+
+    :param notify: Whether remote notification is explicitly requested.
+    :type notify: bool | None
+
+    :param truncated_fields: Names of text fields shortened during notification preparation.
+    :type truncated_fields: tuple[str, ...]
+
+    :param limits: Validated size limits applied to this notification.
+    :type limits: SnapshotLimits
     """
 
     SCHEMA_VERSION: ClassVar[int] = 1   # Версия формата передачи данных.
@@ -133,13 +226,13 @@ class Notification:
     level_name: str                     # Название уровня важности.
     logger_name: str                    # Имя исходного логгера.
     message: str = field(repr=False)    # Готовый текст сообщения.
-    exception: str | None = field(default=None, repr=False)     # Готовое описание ошибки, если есть.
+    exception: str | None = field(default=None, repr=False)  # Готовое описание ошибки, если есть.
     topic: str | None = None            # Тема для выбора получателей.
     tags: tuple[str, ...] = ()          # Метки для выбора получателей.
     correlation_id: str | None = None   # Идентификатор связанной операции.
     trace_id: str | None = None         # Идентификатор цепочки вызовов.
     notify: bool | None = None          # Указание на отправку; None — по правилам.
-    truncated_fields: tuple[str, ...] = ()      # Имена ранее сокращённых текстовых полей.
+    truncated_fields: tuple[str, ...] = ()  # Имена ранее сокращённых текстовых полей.
     limits: SnapshotLimits = field(     # Ограничения размера при проверке.
         default_factory=SnapshotLimits,
         repr=False,
@@ -149,9 +242,12 @@ class Notification:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Копия данных уведомления для передачи
     #--------------------------------------------------------------------------------------------------------------
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(
+        self,
+        ) -> dict[str, object]:
 
-        """Return a fresh JSON-compatible payload with explicit schema version.
+        """
+        Return a fresh JSON-compatible payload with explicit schema version.
 
         :return: Detached primitive data; mutations cannot affect this notification.
         :rtype: dict[str, object]
@@ -182,9 +278,10 @@ class Notification:
         payload: Mapping[str, object],
         *,
         limits: SnapshotLimits | None = None,
-    ) -> Notification:
+        ) -> Notification:
 
-        """Validate a schema-1 payload using local size limits.
+        """
+        Validate a schema-1 payload using local size limits.
 
         :param payload: JSON-compatible notification data.
         :type payload: Mapping[str, object]
@@ -241,9 +338,13 @@ class Notification:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка полей и размера уведомления
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Normalize immutable fields and validate types, time bounds and sizes."""
+        """
+        Normalize immutable fields and validate types, time bounds and sizes.
+        """
 
         # Сначала проверяем вложенные настройки и сведения об отправителе.
         # Они нужны для последующих проверок текста и служебных полей.
@@ -312,8 +413,6 @@ class Notification:
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

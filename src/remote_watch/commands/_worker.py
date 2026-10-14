@@ -1,36 +1,37 @@
 ﻿# Последовательные операции постоянного журнала с ограниченным ожиданием.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-112210
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> StoreLifecycle: Контракт ресурсов рабочего потока хранения.
+# -> StoreLifecycle: Контракт ресурсов рабочего потока хранения
 #    Интерфейс:
-#    -> open(): Открытие принадлежащего журналу ресурса.
-#    -> close(): Закрытие ресурса после последней операции.
+#    -> open(): Открытие принадлежащего журналу ресурса
+#    -> close(): Закрытие ресурса после последней операции
 #
-# -> StoreWorker: Последовательное хранение без блокировки цикла событий.
+# -> StoreWorker: Последовательное хранение без блокировки цикла событий
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> journal_status(): Чтение кэша агрегатов без обращения к SQLite.
-#    -> open(): Открытие принадлежащих объекту ресурсов.
-#    -> call(): Ограниченное ожидание с сохранением владения после отмены caller.
-#    -> close(): Остановка фоновой работы и закрытие ресурсов.
+#    -> journal_status(): Чтение кэша агрегатов без обращения к SQLite
+#    -> open(): Открытие принадлежащих объекту ресурсов
+#    -> call(): Ограниченное ожидание с сохранением владения после отмены caller
+#    -> close(): Остановка фоновой работы и закрытие ресурсов
 #    Служебные методы:
-#    -> _execute(): Обновление диагностики в той же storage lane после операции.
-#    -> _completed(): Освобождение исполнителя после фактического завершения операции.
+#    -> _execute(): Обновление диагностики в той же storage lane после операции
+#    -> _completed(): Освобождение исполнителя после фактического завершения операции
 #
 # Функции:
-# -> _consume(): Извлечение поздней ошибки без записи её деталей в лог.
+# -> _consume(): Извлечение поздней ошибки без записи её деталей в лог
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -47,21 +48,40 @@ from remote_watch.commands.journal_stats import JournalStats, validate_stats, va
 from remote_watch.commands.storage import StoreConflict, StoreError, StoreFull
 from remote_watch.commands.transport import CommandError
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 T = TypeVar("T")
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Контракт ресурсов рабочего потока хранения
 #------------------------------------------------------------------------------------------------------------------
 class StoreLifecycle(Protocol):
-    """Describe the resources owned by a bounded storage worker."""
+    """
+    Describe the resources owned by a bounded storage worker.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащего журналу ресурса
     #--------------------------------------------------------------------------------------------------------------
-    def open(self) -> None:
+    def open(
+        self,
+        ) -> None:
 
-        """Open the journal on the worker's thread."""
+        """
+        Open the journal on the worker's thread.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
@@ -69,24 +89,39 @@ class StoreLifecycle(Protocol):
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие ресурса после последней операции
     #--------------------------------------------------------------------------------------------------------------
-    def close(self) -> None:
+    def close(
+        self,
+        ) -> None:
 
-        """Close the journal after the last submitted operation."""
+        """
+        Close the journal after the last submitted operation.
+        """
 
         ...
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# КОНСТАНТЫ
+#******************************************************************************************************************
+
 S = TypeVar("S", bound=StoreLifecycle)
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Последовательное хранение без блокировки цикла событий
 #------------------------------------------------------------------------------------------------------------------
 class StoreWorker(Generic[S]):
-    """Run at most one synchronous store operation without blocking the command loop."""
-
+    """
+    Run at most one synchronous store operation without blocking the command loop.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -97,9 +132,10 @@ class StoreWorker(Generic[S]):
         timeout: float,
         *,
         max_waiters: int = 0,
-    ) -> None:
+        ) -> None:
 
-        """Configure a single storage lane without creating threads.
+        """
+        Configure a single storage lane without creating threads.
 
         :param store: Owned bounded persistent journal with a matching generation.
         :type store: S
@@ -134,13 +170,15 @@ class StoreWorker(Generic[S]):
         self._observing = False
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Чтение кэша агрегатов без обращения к SQLite
     #--------------------------------------------------------------------------------------------------------------
-    def journal_status(self) -> dict:
+    def journal_status(
+        self,
+        ) -> dict:
 
-        """Read a bounded cached observation safely even from another application thread.
+        """
+        Read a bounded cached observation safely even from another application thread.
 
         :return: Fixed state, monotonic age and optional last successful aggregate.
         :rtype: dict
@@ -157,9 +195,13 @@ class StoreWorker(Generic[S]):
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащих объекту ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Create the one-worker executor and open the owned journal."""
+        """
+        Create the one-worker executor and open the owned journal.
+        """
 
         if self._pool is not None or self._closing:
             raise CommandError("closed")
@@ -172,16 +214,16 @@ class StoreWorker(Generic[S]):
             raise
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Ограниченное ожидание с сохранением владения после отмены caller
     #--------------------------------------------------------------------------------------------------------------
     async def call(
         self,
         operation: Callable[[], T],
-    ) -> T:
+        ) -> T:
 
-        """Reject excess work and retain ownership after timeout or caller cancellation.
+        """
+        Reject excess work and retain ownership after timeout or caller cancellation.
 
         :param operation: Single operation executed within the documented limits.
         :type operation: Callable[[], T]
@@ -254,16 +296,16 @@ class StoreWorker(Generic[S]):
             raise CommandError("unavailable") from None
     #--------------------------------------------------------------------------------------------------------------
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Остановка фоновой работы и закрытие ресурсов
     #--------------------------------------------------------------------------------------------------------------
     async def close(
         self,
         timeout: float,
-    ) -> None:
+        ) -> None:
 
-        """Queue only journal closure behind the active job and bound the async wait.
+        """
+        Queue only journal closure behind the active job and bound the async wait.
 
         :param timeout: Finite wait limit in seconds.
         :type timeout: float
@@ -300,16 +342,20 @@ class StoreWorker(Generic[S]):
         operation: Callable[[], T],
         completed: ThreadFuture[T],
         completed_at: list[float],
-    ) -> T:
+        ) -> T:
 
-        """Observe the owned journal periodically without adding executor submissions or changing results.
+        """
+        Observe the owned journal periodically without adding executor submissions or changing results.
 
         :param operation: Original serialized storage operation.
         :type operation: Callable[[], T]
+
         :param completed: Thread-safe original result, independent of subsequent diagnostic work.
         :type completed: ThreadFuture[T]
+
         :param completed_at: Single monotonic completion time published before completed is set.
         :type completed_at: list[float]
+
         :return: Original operation result, including unchanged exception semantics.
         :rtype: T
         """
@@ -359,9 +405,10 @@ class StoreWorker(Generic[S]):
     def _completed(
         self,
         future: asyncio.Future,
-    ) -> None:
+        ) -> None:
 
-        """Release the storage lane only after the actual executor future completes.
+        """
+        Release the storage lane only after the actual executor future completes.
 
         :param future: Actual storage completion, independent of caller cancellation.
         :type future: asyncio.Future
@@ -377,12 +424,19 @@ class StoreWorker(Generic[S]):
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Извлечение поздней ошибки без записи её деталей в лог
-#------------------------------------------------------------------------------------------------------------------
-def _consume(future: asyncio.Future) -> None:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Retrieve late storage failures without logging their private payloads.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Извлечение поздней ошибки без записи её деталей в лог
+#------------------------------------------------------------------------------------------------------------------
+def _consume(
+    future: asyncio.Future,
+    ) -> None:
+
+    """
+    Retrieve late storage failures without logging their private payloads.
 
     :param future: Possibly cancelled asynchronous storage result.
     :type future: asyncio.Future
@@ -394,7 +448,6 @@ def _consume(future: asyncio.Future) -> None:
         future.exception()
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

@@ -1,37 +1,38 @@
-﻿# Headless host службы: готовность SCM и штатная остановка единственного manager.
+﻿# Работа службы без GUI: передача состояния в Windows и штатная остановка сервера.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-124120
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> TransientServiceFailure: Временный startup отказ после полного rollback manager.
+# -> TransientServiceFailure: Временный отказ запуска после освобождения ресурсов сервера
 #
 # Функции:
-# -> supervise(): Связь событий SCM с обычным manager без второго event loop владельца.
-# -> run_service(): Подключение текущего Python-процесса к SCM через optional pywin32.
+# -> supervise(): Передача событий службы управляющему процессу без второго цикла asyncio
 #
-# Внутренний класс функции run_service:
-# -> Host: Один host SCM без запуска GUI.
-#    Конструктор:
-#    -> __init__(): Регистрация обработчика до загрузки конфигов.
-#    Интерфейс:
-#    -> SvcStop(): Штатная остановка по запросу SCM.
-#    -> SvcShutdown(): Остановка при завершении Windows.
-#    -> GetAcceptedControls(): Приём предварительной остановки ОС.
-#    -> SvcOtherEx(): Общая остановка для PRESHUTDOWN.
-#    -> SvcInterrogate(): Повтор текущего состояния без ложного RUNNING.
-#    -> SvcRun(): Работа службы до полной остановки manager.
-#    Служебные методы:
-#    -> _report(): Согласованный статус и checkpoint SCM.
-#    -> _watch_stop(): Конечные сроки запуска и остановки собственного host.
+# -> run_service(): Регистрация текущего Python-процесса в диспетчере служб Windows через pywin32
+#    Вложенные объявления:
+#    -> Host: Обработчик событий службы Windows без запуска GUI
+#       Конструктор:
+#       -> __init__(): Подготовка состояния объекта.
+#       Интерфейс:
+#       -> SvcStop(): Штатная остановка по запросу SCM
+#       -> SvcShutdown(): Остановка при завершении Windows
+#       -> GetAcceptedControls(): Приём предварительной остановки Windows
+#       -> SvcOtherEx(): Общая остановка для PRESHUTDOWN
+#       -> SvcInterrogate(): Повтор текущего состояния без ложного RUNNING
+#       -> SvcRun(): Работа службы до полной остановки управляющего процесса
+#       Служебные методы:
+#       -> _report(): Согласованный статус и checkpoint SCM
+#       -> _watch_stop(): Предельное время завершения службы
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -45,32 +46,48 @@ from .config import load_deployment_config
 from .manager import GatewayManager
 from .service import ServiceSpec
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# КЛАССЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
-# КЛАСС : Временный отказ начального запуска после полного отката manager
+# КЛАСС : Временный отказ запуска после освобождения ресурсов сервера
 #------------------------------------------------------------------------------------------------------------------
 class TransientServiceFailure(RuntimeError):
-    """Request the finite SCM crash recovery policy only after owned resources were released."""
+    """
+    Request the finite SCM crash recovery policy only after owned resources were released.
+    """
 #------------------------------------------------------------------------------------------------------------------
 
 
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
+
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Связь событий SCM с обычным manager без второго event loop владельца
+# ФУНКЦИЯ : Передача событий службы управляющему процессу без второго цикла asyncio
 #------------------------------------------------------------------------------------------------------------------
 async def supervise(
     spec: ServiceSpec,
     stopped: threading.Event,
     report: Callable[[str], None],
-) -> int:
+    ) -> int:
 
-    """Run one headless manager and preserve its original lifecycle and ownership.
+    """
+    Run one headless manager and preserve its original lifecycle and ownership.
 
     :param spec: Exact service config and explicit local operator binding.
     :type spec: ServiceSpec
+
     :param stopped: Thread-safe STOP/SHUTDOWN request from SCM.
     :type stopped: threading.Event
+
     :param report: Fixed service state reporter with bounded wait hints.
     :type report: Callable[[str], None]
+
     :return: Original manager shutdown result.
     :rtype: int
     """
@@ -95,8 +112,9 @@ async def supervise(
                 state = "stopping"
             elif manager.state in ("ready", "degraded"):
                 state = "running"
-            # Checkpoint растёт лишь во время pending. RUNNING отражает запуск
-            # manager, не подтверждает ingress/provider/application readiness.
+            # Счётчик checkpoint растёт только во время перехода между состояниями.
+            # RUNNING означает запуск управляющего процесса, но не подтверждает
+            # доступность HTTPS-входа, мессенджера или подключённых приложений.
             if monotonic() >= next_report:
                 report(state)
                 next_report = monotonic() + 1
@@ -105,8 +123,9 @@ async def supervise(
         if result and not stopped.is_set() and manager.reason in (
                 "startup_timeout", "time_unavailable", "source_unavailable", "crash", "hang",
                 "heartbeat_timeout", "caddy_unavailable", "unavailable"):
-            # manager.run уже завершил свой rollback. Повторяется весь запуск
-            # ОС-службы с теми же журналами, а не callback/незавершённая команда.
+            # manager.run() уже освободил ресурсы неудачного запуска. Windows может
+            # повторить запуск службы с прежними журналами. Обработчики команд
+            # при этом не вызываются повторно; неизвестные исходы сохраняются.
             raise TransientServiceFailure("service_startup_transient")
         return result
     finally:
@@ -119,31 +138,37 @@ async def supervise(
             await task
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Подключение текущего Python-процесса к SCM через optional pywin32
+# ФУНКЦИЯ : Регистрация текущего Python-процесса в диспетчере служб Windows через pywin32
 #------------------------------------------------------------------------------------------------------------------
-def run_service(spec: ServiceSpec) -> int:
+def run_service(
+    spec: ServiceSpec,
+    ) -> int:
 
-    """Host the original venv interpreter directly, avoiding global PythonService DLL setup.
+    """
+    Host the original venv interpreter directly, avoiding global PythonService DLL setup.
 
     :param spec: Explicit service name, operator and original config path.
     :type spec: ServiceSpec
+
     :return: Zero when the SCM dispatcher exits normally.
     :rtype: int
     """
 
-    # spec — никакие credentials не передаются C framework или Event Log.
+    # spec — токены и пароли не передаются обработчикам Windows и не записываются в Event Log.
     import servicemanager
     import win32serviceutil
 
-    # spec — класс создаётся после lazy import, поэтому --help/core и Linux import
-    # не требуют Windows DLL. C framework вызывает SvcRun в своём service thread.
+    # spec — класс создаётся после отложенного импорта, поэтому справка и импорт в Linux
+    # не требуют Windows DLL. Windows вызывает SvcRun в отдельном потоке службы.
+
     #--------------------------------------------------------------------------------------------------------------
-    # КЛАСС : Один host SCM без запуска GUI
+    # КЛАСС : Обработчик событий службы Windows без запуска GUI
     #--------------------------------------------------------------------------------------------------------------
     class Host(win32serviceutil.ServiceFramework):
-        """Translate native SCM controls without opening an additional deployment owner."""
+        """
+        Translate native SCM controls without opening an additional deployment owner.
+        """
 
         _svc_name_ = spec.name
 
@@ -153,9 +178,10 @@ def run_service(spec: ServiceSpec) -> int:
         def __init__(
             self,
             args: list[str],
-        ) -> None:
+            ) -> None:
 
-            """Register the control handler before loading deployment resources.
+            """
+            Register the control handler before loading deployment resources.
 
             :param args: SCM-provided service name, never application secrets.
             :type args: list[str]
@@ -176,9 +202,13 @@ def run_service(spec: ServiceSpec) -> int:
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Штатная остановка по запросу SCM
         #----------------------------------------------------------------------------------------------------------
-        def SvcStop(self) -> None:
+        def SvcStop(
+            self,
+            ) -> None:
 
-            """Signal shutdown promptly without blocking the SCM control handler."""
+            """
+            Signal shutdown promptly without blocking the SCM control handler.
+            """
 
             self.stopped.set()
             self._report("stopping")
@@ -187,9 +217,13 @@ def run_service(spec: ServiceSpec) -> int:
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Остановка при завершении Windows
         #----------------------------------------------------------------------------------------------------------
-        def SvcShutdown(self) -> None:
+        def SvcShutdown(
+            self,
+            ) -> None:
 
-            """Use the identical shutdown path for an operating-system shutdown."""
+            """
+            Use the identical shutdown path for an operating-system shutdown.
+            """
 
             self.SvcStop()
         #----------------------------------------------------------------------------------------------------------
@@ -197,9 +231,12 @@ def run_service(spec: ServiceSpec) -> int:
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Приём предварительной остановки Windows
         #----------------------------------------------------------------------------------------------------------
-        def GetAcceptedControls(self) -> int:
+        def GetAcceptedControls(
+            self,
+            ) -> int:
 
-            """Allow a bounded preshutdown interval before Windows' final shutdown deadline.
+            """
+            Allow a bounded preshutdown interval before Windows' final shutdown deadline.
 
             :return: STOP, SHUTDOWN and PRESHUTDOWN service controls.
             :rtype: int
@@ -216,19 +253,22 @@ def run_service(spec: ServiceSpec) -> int:
             control: int,
             event_type: int,
             data: object,
-        ) -> None:
+            ) -> None:
 
-            """Handle preshutdown without forwarding opaque event data to logs.
+            """
+            Handle preshutdown without forwarding opaque event data to logs.
 
             :param control: Native service control number.
             :type control: int
+
             :param event_type: Native event subtype, unused.
             :type event_type: int
+
             :param data: Native opaque payload, deliberately unused.
             :type data: object
             """
 
-            # control/event_type/data — только фиксированный номер влияет на lifecycle.
+            # control/event_type/data — только известный код события меняет порядок работы службы.
             if control == 15:
                 self.SvcStop()
         #----------------------------------------------------------------------------------------------------------
@@ -236,20 +276,28 @@ def run_service(spec: ServiceSpec) -> int:
         #----------------------------------------------------------------------------------------------------------
         # ИНТЕРФЕЙС : Повтор текущего состояния без ложного RUNNING
         #----------------------------------------------------------------------------------------------------------
-        def SvcInterrogate(self) -> None:
+        def SvcInterrogate(
+            self,
+            ) -> None:
 
-            """Report the actual pending state rather than the base class's unconditional RUNNING."""
+            """
+            Report the actual pending state rather than the base class's unconditional RUNNING.
+            """
 
             with self.lock:
                 self._report(self.state)
         #----------------------------------------------------------------------------------------------------------
 
         #----------------------------------------------------------------------------------------------------------
-        # ИНТЕРФЕЙС : Работа службы до полной остановки manager
+        # ИНТЕРФЕЙС : Работа службы до полной остановки управляющего процесса
         #----------------------------------------------------------------------------------------------------------
-        def SvcRun(self) -> None:
+        def SvcRun(
+            self,
+            ) -> None:
 
-            """Report pending until initial manager startup and sanitize every exception crossing SCM."""
+            """
+            Report pending until initial manager startup and sanitize every exception crossing SCM.
+            """
 
             self._report("starting")
             guard = threading.Thread(target=self._watch_stop, name="gateway-service-stop", daemon=True)
@@ -292,9 +340,10 @@ def run_service(spec: ServiceSpec) -> int:
         def _report(
             self,
             state: str,
-        ) -> None:
+            ) -> None:
 
-            """Serialize reports from the SCM handler and the manager loop.
+            """
+            Serialize reports from the SCM handler and the manager loop.
 
             :param state: Fixed starting/running/stopping service state.
             :type state: str
@@ -309,11 +358,15 @@ def run_service(spec: ServiceSpec) -> int:
         #----------------------------------------------------------------------------------------------------------
 
         #----------------------------------------------------------------------------------------------------------
-        # СЛУЖЕБНЫЙ МЕТОД : Конечный срок завершения собственного host
+        # СЛУЖЕБНЫЙ МЕТОД : Предельное время завершения службы
         #----------------------------------------------------------------------------------------------------------
-        def _watch_stop(self) -> None:
+        def _watch_stop(
+            self,
+            ) -> None:
 
-            """Terminate only this service process if graceful stop cannot finish within its bound."""
+            """
+            Terminate only this service process if graceful stop cannot finish within its bound.
+            """
 
             while not self.finished.wait(0.5):
                 if not self.stopped.is_set() and self.state != "stopping":
@@ -328,7 +381,7 @@ def run_service(spec: ServiceSpec) -> int:
                 if self.stop_at is None:
                     self.stop_at = monotonic()
                 if monotonic() - self.stop_at > self.stop_budget:
-                    # Последняя защита от зависшего manager: закрытие его handles
+                    # Последняя защита от зависшего управляющего процесса: закрытие его дескрипторов
                     # завершит собственные Job children. Чужих PID/Caddy не трогаем.
                     try:
                         servicemanager.LogErrorMsg("Remote Watch gateway service: code=service_shutdown_timeout.")
@@ -347,8 +400,6 @@ def run_service(spec: ServiceSpec) -> int:
     return 0
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Назначение модуля
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

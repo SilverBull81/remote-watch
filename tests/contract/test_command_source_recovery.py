@@ -1,21 +1,39 @@
 ﻿# Восстановление источника, откат времени и повтор только доставки результата.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-184110
+# Дата и время последнего изменения: 261014-142149
 #
 # Тесты:
-# -> test_source_restart_keeps_original_session(): Сохранение выбранной сессии после перезапуска источника.
-# -> test_command_http_internal_context(): Изоляция внутренних сетевых записей от уведомлений.
-# -> test_source_clock_rollback_after_prune(): Необратимая граница очистки при откате UTC.
-# -> test_source_reply_loss_only_retries_result(): Повтор ответа без повторного обработчика.
+# -> test_source_restart_keeps_original_session(): Сохранение выбранной сессии после перезапуска источника
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#
+# -> test_command_http_internal_context(): Изоляция внутренних сетевых записей от уведомлений
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#       Вложенные объявления:
+#       -> BrokenNetwork: Подставная сеть с проверкой контекста внутренней диагностики
+#          Интерфейс:
+#          -> request(): Подставной отказ внутри защищённого сетевого контекста
+#
+# -> test_source_clock_rollback_after_prune(): Необратимая граница очистки при откате UTC
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#
+# -> test_source_reply_loss_only_retries_result(): Повтор ответа без повторного обработчика
+#    Вложенные объявления:
+#    -> scenario(): Изолированный асинхронный сценарий проверки
+#       Вложенные объявления:
+#       -> lost_reply(): Потеря ответа после принятого провайдером результата
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import asyncio
@@ -38,13 +56,22 @@ from remote_watch.commands.time import TimeSample
 from remote_watch.commands.transport import CommandError
 from remote_watch.notifications._context import delivery_context
 
+#------------------------------------------------------------------------------------------------------------------
+
+
+#******************************************************************************************************************
+# ТЕСТЫ
+#******************************************************************************************************************
 
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Сохранение выбранной сессии после перезапуска источника
 #------------------------------------------------------------------------------------------------------------------
-def test_source_restart_keeps_original_session(tmp_path: Path) -> None:
+def test_source_restart_keeps_original_session(
+    tmp_path: Path,
+    ) -> None:
 
-    """Never retarget a reserved message to an application session created after source recovery.
+    """
+    Never retarget a reserved message to an application session created after source recovery.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -52,13 +79,14 @@ def test_source_restart_keeps_original_session(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Crash the reader before hub submission while a new application session appears."""
+        """
+        Crash the reader before hub submission while a new application session appears.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -90,14 +118,16 @@ def test_source_restart_keeps_original_session(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Изоляция внутренних сетевых записей от уведомлений
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["source", "client"])
-def test_command_http_internal_context(kind: str) -> None:
+def test_command_http_internal_context(
+    kind: str,
+    ) -> None:
 
-    """Suppress internal network logging without leaking the guard into application callbacks.
+    """
+    Suppress internal network logging without leaking the guard into application callbacks.
 
     :param kind: Selected synthetic failure or provider scenario.
     :type kind: str
@@ -105,23 +135,24 @@ def test_command_http_internal_context(kind: str) -> None:
 
     # kind — выбранный подставной сценарий провайдера или отказа.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Inject a transport failure while observing only the diagnostic context."""
+        """
+        Inject a transport failure while observing only the diagnostic context.
+        """
 
         observed = []
-
 
         #----------------------------------------------------------------------------------------------------------
         # КЛАСС : Подставная сеть с проверкой контекста внутренней диагностики
         #----------------------------------------------------------------------------------------------------------
         class BrokenNetwork:
-            """Fail inside the network operation after checking the shared notification guard."""
-
+            """
+            Fail inside the network operation after checking the shared notification guard.
+            """
 
             #------------------------------------------------------------------------------------------------------
             # ИНТЕРФЕЙС : Подставной отказ внутри защищённого сетевого контекста
@@ -130,9 +161,10 @@ def test_command_http_internal_context(kind: str) -> None:
                 self,
                 *args: Any,
                 **kwargs: Any,
-            ) -> Any:
+                ) -> Any:
 
-                """Reject a synthetic request under the internal-transport context.
+                """
+                Reject a synthetic request under the internal-transport context.
 
                 :param args: Positional arguments of the intercepted submission.
                 :type args: Any
@@ -182,13 +214,15 @@ def test_command_http_internal_context(kind: str) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Необратимая граница очистки при откате UTC
 #------------------------------------------------------------------------------------------------------------------
-def test_source_clock_rollback_after_prune(tmp_path: Path) -> None:
+def test_source_clock_rollback_after_prune(
+    tmp_path: Path,
+    ) -> None:
 
-    """Keep a durable rejection floor after deleting old event IDs and rolling trusted time back.
+    """
+    Keep a durable rejection floor after deleting old event IDs and rolling trusted time back.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -196,13 +230,14 @@ def test_source_clock_rollback_after_prune(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Advance source retention then replay the same event under an older UTC sample."""
+        """
+        Advance source retention then replay the same event under an older UTC sample.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -229,13 +264,15 @@ def test_source_clock_rollback_after_prune(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Повтор ответа без повторного обработчика
 #------------------------------------------------------------------------------------------------------------------
-def test_source_reply_loss_only_retries_result(tmp_path: Path) -> None:
+def test_source_reply_loss_only_retries_result(
+    tmp_path: Path,
+    ) -> None:
 
-    """Retry a retained reply after provider response loss without repeating the application callback.
+    """
+    Retry a retained reply after provider response loss without repeating the application callback.
 
     :param tmp_path: Isolated temporary test directory.
     :type tmp_path: Path
@@ -243,13 +280,14 @@ def test_source_reply_loss_only_retries_result(tmp_path: Path) -> None:
 
     # tmp_path — отдельный временный каталог теста.
 
-
     #--------------------------------------------------------------------------------------------------------------
     # ФУНКЦИЯ : Изолированный асинхронный сценарий проверки
     #--------------------------------------------------------------------------------------------------------------
     async def scenario() -> None:
 
-        """Execute once then lose the provider's first acknowledgement of the result."""
+        """
+        Execute once then lose the provider's first acknowledgement of the result.
+        """
 
         rig = Rig(tmp_path)
         await rig.start()
@@ -275,9 +313,10 @@ def test_source_reply_loss_only_retries_result(tmp_path: Path) -> None:
             async def lost_reply(
                 conversation_id: str,
                 text: str,
-            ) -> None:
+                ) -> None:
 
-                """Record actual delivery then simulate losing only its first response.
+                """
+                Record actual delivery then simulate losing only its first response.
 
                 :param conversation_id: Authenticated chat ID or configured private command topic.
                 :type conversation_id: str
@@ -311,7 +350,6 @@ def test_source_reply_loss_only_retries_result(tmp_path: Path) -> None:
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

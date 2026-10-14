@@ -1,35 +1,36 @@
 ﻿# Исходящие уведомления через JSON publish API сервера ntfy.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-142149
 #
 # Классы:
-# -> NtfyConfig: Настройки получателя ntfy.
+# -> NtfyConfig: Настройки получателя ntfy
 #    Интерфейс:
-#    -> destination(): Создание получателя с общей политикой таймаутов.
+#    -> destination(): Создание получателя с общей политикой таймаутов
 #    Специальные методы:
-#    -> __post_init__(): Проверка настроек до начала сетевой работы.
+#    -> __post_init__(): Проверка настроек до начала сетевой работы
 #
-# -> NtfyChannel: Публикация уведомления в ntfy.
+# -> NtfyChannel: Публикация уведомления в ntfy
 #    Конструктор:
-#    -> __init__(): Создание объекта.
+#    -> __init__(): Подготовка состояния объекта.
 #    Интерфейс:
-#    -> open(): Подготовка клиента и данных авторизации.
-#    -> send(): Одна попытка отправки и проверка ответа.
-#    -> close(): Закрытие клиента и освобождение ресурсов.
+#    -> open(): Подготовка клиента и данных авторизации
+#    -> send(): Одна попытка отправки и проверка ответа
+#    -> close(): Закрытие клиента и освобождение ресурсов
 #
 # Функции:
-# -> _encode_json(): Компактный JSON с кириллицей в UTF-8.
-# -> _publish_payload(): Ограничение текста и полного запроса перед отправкой.
+# -> _encode_json(): Компактный JSON с кириллицей в UTF-8
 #
+# -> _publish_payload(): Ограничение текста и полного запроса перед отправкой
 
 
 #******************************************************************************************************************
 # ИМПОРТ
 #******************************************************************************************************************
+
 from __future__ import annotations
 
 import json
@@ -51,28 +52,62 @@ from remote_watch.config import Destination, RetryPolicy
 from remote_watch.notifications.delivery import Delivery, DeliveryResult, DeliveryStatus
 from remote_watch.notifications.display import validate_display
 
+#------------------------------------------------------------------------------------------------------------------
+
+
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
-
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Настройки получателя ntfy
 #------------------------------------------------------------------------------------------------------------------
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NtfyConfig:
-    """Configure a fixed ntfy topic with explicit authenticated or anonymous access."""
+    """
+    Configure a fixed ntfy topic with explicit authenticated or anonymous access.
+
+    :param topic: Notification topic or routing topic selector.
+    :type topic: str
+
+    :param token_env: Environment variable name used instead of a literal credential.
+    :type token_env: str | None
+
+    :param token: Private literal credential excluded from representations.
+    :type token: str | None
+
+    :param endpoint: Provider or gateway base endpoint without credentials.
+    :type endpoint: str
+
+    :param title: Notification title shown by the provider.
+    :type title: str
+
+    :param priority: Provider notification priority.
+    :type priority: int
+
+    :param tags: Explicit notification tags used for routing or provider presentation.
+    :type tags: tuple[str, ...]
+
+    :param allow_http: Explicit opt-in to unencrypted HTTP for supported local tests.
+    :type allow_http: bool
+
+    :param display_mode: Full, compact or text presentation for this ntfy destination.
+    :type display_mode: str
+
+    :param display_fields: Selected presentation field groups, or None for mode defaults.
+    :type display_fields: tuple[str, ...] | None
+    """
 
     topic: str = field(repr=False)              # Тема на сервере ntfy; не тема маршрутизации.
-    token_env: str | None = field(default=None, repr=False)     # Имя переменной; оба None — без авторизации.
-    token: str | None = field(default=None, repr=False)         # Bearer-токен непосредственно в настройках.
+    token_env: str | None = field(default=None, repr=False)  # Имя переменной; оба None — без авторизации.
+    token: str | None = field(default=None, repr=False)  # Bearer-токен непосредственно в настройках.
     endpoint: str = "https://ntfy.sh"           # Корень выбранного сервера ntfy.
     title: str = "Remote Watch"                 # Заголовок уведомления на телефоне.
     priority: int = 3                           # Приоритет ntfy от 1 до 5.
     tags: tuple[str, ...] = ()                  # Метки отображения ntfy, отдельно от routing tags.
     allow_http: bool = False                    # Явное разрешение HTTP для своего сервера.
     display_mode: str = "full"                  # Полная шапка, компактный источник либо только текст.
-    display_fields: tuple[str, ...] | None = None   # Группы полей; None — состав выбранного режима.
+    display_fields: tuple[str, ...] | None = None  # Группы полей; None — состав выбранного режима.
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Создание получателя с общей политикой таймаутов
@@ -83,9 +118,10 @@ class NtfyConfig:
         *,
         retry: RetryPolicy | None = None,
         outstanding_capacity: int = 256,
-    ) -> Destination:
+        ) -> Destination:
 
-        """Create a destination whose channel and runtime share one timeout policy.
+        """
+        Create a destination whose channel and runtime share one timeout policy.
 
         :param destination_id: Logical routing identifier.
         :type destination_id: str
@@ -115,9 +151,13 @@ class NtfyConfig:
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка настроек до начала сетевой работы
     #--------------------------------------------------------------------------------------------------------------
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+        ) -> None:
 
-        """Validate a fixed topic and bounded display settings without side effects."""
+        """
+        Validate a fixed topic and bounded display settings without side effects.
+        """
 
         validate_endpoint(self.endpoint, self.allow_http)
         validate_credentials(self.token, self.token_env, "ntfy")
@@ -147,7 +187,9 @@ class NtfyConfig:
 # КЛАСС : Публикация уведомления в ntfy
 #------------------------------------------------------------------------------------------------------------------
 class NtfyChannel:
-    """Publish one bounded JSON message per call without hidden retries."""
+    """
+    Publish one bounded JSON message per call without hidden retries.
+    """
 
     #--------------------------------------------------------------------------------------------------------------
     # КОНСТРУКТОР
@@ -157,9 +199,10 @@ class NtfyChannel:
         config: NtfyConfig,
         *,
         retry: RetryPolicy | None = None,
-    ) -> None:
+        ) -> None:
 
-        """Keep settings locally until the channel is opened by the runtime.
+        """
+        Keep settings locally until the channel is opened by the runtime.
 
         :param config: Validated provider configuration.
         :type config: NtfyConfig
@@ -183,9 +226,13 @@ class NtfyChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Подготовка клиента и данных авторизации
     #--------------------------------------------------------------------------------------------------------------
-    async def open(self) -> None:
+    async def open(
+        self,
+        ) -> None:
 
-        """Resolve optional authentication and open an owned client in the worker loop."""
+        """
+        Resolve optional authentication and open an owned client in the worker loop.
+        """
 
         if self._opened:
             await self._http.open()
@@ -203,9 +250,10 @@ class NtfyChannel:
     async def send(
         self,
         delivery: Delivery,
-    ) -> DeliveryResult:
+        ) -> DeliveryResult:
 
-        """Publish a fixed-topic JSON message and validate the acknowledgement.
+        """
+        Publish a fixed-topic JSON message and validate the acknowledgement.
 
         :param delivery: Immutable delivery attempt.
         :type delivery: Delivery
@@ -250,9 +298,13 @@ class NtfyChannel:
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрытие клиента и освобождение ресурсов
     #--------------------------------------------------------------------------------------------------------------
-    async def close(self) -> None:
+    async def close(
+        self,
+        ) -> None:
 
-        """Close the owned client and clear authentication even if cleanup is cancelled."""
+        """
+        Close the owned client and clear authentication even if cleanup is cancelled.
+        """
 
         try:
             await self._http.close()
@@ -263,12 +315,19 @@ class NtfyChannel:
 #------------------------------------------------------------------------------------------------------------------
 
 
-#------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Компактный JSON с кириллицей в UTF-8
-#------------------------------------------------------------------------------------------------------------------
-def _encode_json(payload: object) -> str:
+#******************************************************************************************************************
+# ФУНКЦИИ
+#******************************************************************************************************************
 
-    """Serialize JSON without expanding Unicode characters into ASCII escapes.
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Компактный JSON с кириллицей в UTF-8
+#------------------------------------------------------------------------------------------------------------------
+def _encode_json(
+    payload: object,
+    ) -> str:
+
+    """
+    Serialize JSON without expanding Unicode characters into ASCII escapes.
 
     :param payload: JSON-compatible request data.
     :type payload: object
@@ -282,16 +341,16 @@ def _encode_json(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
 #------------------------------------------------------------------------------------------------------------------
 
-
 #------------------------------------------------------------------------------------------------------------------
-# ФУНКЦИЯ : Ограничение текста и полного запроса перед отправкой
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Ограничение текста и полного запроса перед отправкой
 #------------------------------------------------------------------------------------------------------------------
 def _publish_payload(
     config: NtfyConfig,
     message: str,
-) -> dict[str, object]:
+    ) -> dict[str, object]:
 
-    """Bound message bytes and serialized JSON bytes independently.
+    """
+    Bound message bytes and serialized JSON bytes independently.
 
     :param config: Validated destination metadata.
     :type config: NtfyConfig
@@ -341,8 +400,6 @@ def _publish_payload(
     return payload
 #------------------------------------------------------------------------------------------------------------------
 
-
-#------------------------------------------------------------------------------------------------------------------
 # СЛУЖЕБНЫЙ БЛОК : Сообщение о назначении файла
 #------------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
