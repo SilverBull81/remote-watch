@@ -1,10 +1,10 @@
 ﻿# Проверка публичных инструкций, ссылок, примеров и границы private-документации.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261014-202944
 #
 # Функции:
 # -> main(): Проверка пользовательских документов и поставляемых шаблонов
@@ -44,7 +44,7 @@ def main() -> int:
     """
 
     root = Path(__file__).resolve().parents[1]
-    documents = [root / "README.md", root / "AGENTS.md", root / "BACKLOG.md"]
+    documents = [root / "README.md", root / "AGENTS.md"]
     documents.extend(path for path in (root / "docs").rglob("*.md")
                      if "private" not in path.relative_to(root / "docs").parts)
     documents.extend((root / "src/remote_watch/gateway_server/templates").glob("*.md"))

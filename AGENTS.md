@@ -1,18 +1,19 @@
 ﻿# Repository Instructions
 
-Version 1.6.6
+Version 1.6.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-200855
+Дата и время последнего изменения: 261014-202944
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
-The current package version is in pyproject.toml. The first public production release
-and license have not been selected. Do not publish packages or add a license without
-the owner's decision. Functional milestone 0.4 is complete: owner field acceptance plus all eight CI jobs passed.
+The current package version is in pyproject.toml. The owner selected MIT; LICENSE and SPDX package metadata apply.
+The recommended first stable version is 1.0.0, with annotated v1.0.0 tag after
+final release checks. The package version is unchanged pending release preparation.
+Do not publish packages or create release tags without the owner's release decision. Functional milestone 0.4 is complete: owner field acceptance plus all eight CI jobs passed.
 CI run 38602660574 tested code commit 1c05538638156f04a0760b4bc714fe445de2358a,
 package 0.4.5.dev6. Subsequent result-documentation edits do not change runtime code.
 
@@ -24,13 +25,13 @@ field observation is explicitly deferred beyond 0.4. Current validation: docs/de
 
 ## Read relevant context
 
-- User entry points: README.md and docs/README.md; pending work: BACKLOG.md.
+- User entry points: README.md and docs/README.md; pending work: docs/BACKLOG.md.
 - Before changing runtime, protocol/security, ownership or package boundaries:
   docs/development/ARCHITECTURE.md and the corresponding source/tests.
 - Before changing code/docs: docs/development/CODE_STYLE.md and README.md in that folder.
 - Configuration, lifecycle and operations: docs/CLIENT.md, CONFIGURATION.md,
   COMMANDS.md, NOTIFICATIONS.md, GATEWAY.md, SERVICES.md, TLS.md and OPERATIONS.md.
-- Audit and license alternatives: docs/development/AUDIT.md and LICENSING.md.
+- Audit and licensing: docs/development/AUDIT.md and LICENSING.md.
 - Machine-specific runbooks and historical evidence belong only under ignored docs/private.
   Do not publish their contents in Git, build artifacts, diagnostics or PR descriptions.
 

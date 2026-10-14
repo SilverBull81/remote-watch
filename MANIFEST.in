@@ -1,4 +1,4 @@
-include AGENTS.md BACKLOG.md
+include AGENTS.md LICENSE
 include logo/remote_watch.png
 include logo/remote_watch.ico
 include .gitattributes .gitignore
