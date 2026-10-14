@@ -1,10 +1,10 @@
 ﻿# Постоянная позиция источника и защита от повторов после сбоев.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261001-185745
+# Дата и время последнего изменения: 261014-110259
 #
 # Классы:
 # -> ProcessLock: Исключительная блокировка владельца на уровне ОС.
@@ -19,6 +19,7 @@
 #    -> __init__(): Создание объекта.
 #    Интерфейс:
 #    -> open(): Открытие ресурсов и проверка владения.
+#    -> journal_stats(): Сводка replay-ID и незавершённого решения.
 #    -> bind(): Закрепление владельца журнала и провайдера.
 #    -> state(): Чтение позиции и одного незавершённого решения.
 #    -> contains(): Проверка уже обработанного ID события.
@@ -47,6 +48,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from remote_watch._validation import require_text
+from remote_watch.commands.journal_stats import JournalStats, read_stats
 from remote_watch.commands.protocol import CommandRequest, decode_command, encode_command
 from remote_watch.commands.source_protocol import SourceEvent, SourcePending
 from remote_watch.commands.storage import StoreConflict, StoreFull
@@ -205,6 +207,22 @@ class SourceJournal:
             raise
     #--------------------------------------------------------------------------------------------------------------
 
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Сводка replay-ID и незавершённого решения
+    #--------------------------------------------------------------------------------------------------------------
+    def journal_stats(self) -> JournalStats:
+
+        """Read source aggregates only through its serialized owner thread.
+
+        :return: Replay capacity and pending presence without provider identifiers.
+        :rtype: JournalStats
+        """
+
+        if self._db is None or self._closed:
+            raise StoreConflict("source journal closed")
+        return read_stats(self._db, source_limit=self._limit)
+    #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Закрепление владельца журнала и провайдера

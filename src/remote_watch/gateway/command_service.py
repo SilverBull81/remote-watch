@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261014-110259
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд.
@@ -169,7 +169,9 @@ class CommandGateway:
         # Статистика не запускает сетевых проб и не открывает журнал вторым владельцем.
         return {"closed": self._closed, "ready": reason is None, "reason": reason,
                 "fatal": hub["fatal"] or (self._started and not self._closed and stopped),
-                "hub": hub, "sources": sources}
+                "hub": hub, "sources": sources,
+                "journals": {"hub": self.hub.journal_status,
+                             "sources": [source.journal_status for source in self.sources]}}
     #--------------------------------------------------------------------------------------------------------------
 
 

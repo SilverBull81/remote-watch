@@ -1,10 +1,10 @@
 ﻿# Gateway doctor: проверка сервера и клиентского подключения
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-230511
+Дата и время последнего изменения: 261014-113001
 
 Начиная с **0.4.4.dev1** доступна конечная диагностика
 `python -m remote_watch.diagnostics.gateway_doctor`. Она не запускает и не останавливает
@@ -148,8 +148,12 @@ TLS-проверка имени, цепочки и срока обязатель
 
 ## Границы первой версии
 
-Doctor не читает SQLite и не перечисляет UNKNOWN: `journal_unknown_outcomes=skipped`
-не означает, что UNKNOWN нет. Их расследование остаётся отдельной операцией по
+С dev5 server --online читает числовую сводку журналов из кэша manager, без доступа
+к SQLite. Старый gateway без сводки оставляет `journal_unknown_outcomes=skipped`:
+это не означает отсутствия UNKNOWN. Для остановленной БД есть явный
+`--mode journal --journal PATH`, без --config/--online и без runtime recovery.
+Поля, warnings, примеры и пределы: [COMMAND_JOURNALS.md](COMMAND_JOURNALS.md).
+Расследование конкретной команды остаётся отдельной операцией по
 [COMMAND_STORAGE.md](COMMAND_STORAGE.md). Внешний command probe показывает состояние
 hub и сессии, но не доказывает работу reader бота, actor/chat ACL или callback;
 состояние источников дополнительно наблюдается через server manager.

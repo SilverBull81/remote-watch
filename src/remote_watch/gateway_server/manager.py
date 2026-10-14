@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-124741
+# Дата и время последнего изменения: 261014-110259
 #
 # Класс:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи.
@@ -22,6 +22,7 @@
 #    -> status(): Чтение безопасного состояния компонентов.
 #    -> run(): Работа до остановки с общим откатом неудачного запуска.
 #    Служебные методы:
+#    -> _component_status(): Копия статуса с возрастом последнего снимка журнала.
 #    -> _open_control(): Создание закрытого listener и файла текущего владельца.
 #    -> _read(): Проверка токена и ограниченное чтение локального запроса.
 #    -> _control(): Статус либо запрос общей остановки текущего запуска.
@@ -181,7 +182,7 @@ class GatewayManager:
                 and self.children["commands"].restarts else "not_verified",
                 "alerts": "failed" if self._alerts_failed else "enabled" if self.config.application.destinations
                 else "disabled", "alert_delivery": self._alerts.stats(),
-                "components": {name: dict(child.message, restarts=child.restarts)
+                "components": {name: self._component_status(child)
                                                for name, child in self.children.items()}}
     #--------------------------------------------------------------------------------------------------------------
 
@@ -273,7 +274,37 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # СЛУЖЕБНЫЙ МЕТОД : Создание закрытого listener и файла текущего владельца
+    # СЛУЖЕБНЫЙ МЕТОД : Копия статуса с возрастом последнего снимка журнала
+    #--------------------------------------------------------------------------------------------------------------
+    def _component_status(
+        self,
+        child: ChildState,
+    ) -> dict:
+
+        """Age cached journal observations without querying a child or changing its heartbeat.
+
+        :param child: Current owned component state.
+        :type child: ChildState
+        :return: Independent sanitized component snapshot.
+        :rtype: dict
+        """
+
+        # child — после последнего heartbeat возраст продолжает расти на часах
+        # manager. Ни смерть процесса, ни отсутствие новых сообщений его не обнуляют.
+        value = status_message(child.message)
+        if "journals" in value:
+            elapsed = max(0, int(monotonic() - child.contact)) if child.contacted else 0
+            journals = value["journals"]
+            for item in (journals["hub"], *journals["sources"]):
+                if item["age_seconds"] is not None:
+                    item["age_seconds"] = min(2**31 - 1, item["age_seconds"] + elapsed)
+                if value["state"] in ("failed", "stopped", "stopping", "starting", "restarting"):
+                    item["state"] = "unavailable"
+        return dict(value, restarts=child.restarts)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Открытие локального управления
     #--------------------------------------------------------------------------------------------------------------
     async def _open_control(self) -> None:
 
@@ -281,7 +312,7 @@ class GatewayManager:
 
         from aiohttp import web
 
-        app = web.Application(client_max_size=4096)
+        app = web.Application(client_max_size=16384)
         app.router.add_post("/control", self._control)
         app.router.add_post("/child/{name}", self._heartbeat)
         self._runner = web.AppRunner(app, access_log=None, shutdown_timeout=1,
@@ -310,6 +341,7 @@ class GatewayManager:
         self,
         request: object,
         token: str,
+        limit: int = 4096,
     ) -> dict:
 
         """Authenticate before bounded body reads and reject unrelated browser requests.
@@ -320,11 +352,15 @@ class GatewayManager:
         :param token: Expected secret for the precise current owner.
         :type token: str
 
+        :param limit: Body bound for control or the larger sanitized child heartbeat.
+        :type limit: int
+
         :return: Small decoded object.
         :rtype: dict
         """
 
         # request/token — только numeric loopback; Origin/redirect не создают browser API.
+        # limit — управляющий запрос остаётся 4 KiB, heartbeat допускает 16 KiB.
         from aiohttp import web
 
         supplied = request.headers.get("Authorization", "")
@@ -333,9 +369,13 @@ class GatewayManager:
             raise web.HTTPForbidden(text="denied")
         if self._active >= 8:
             raise web.HTTPServiceUnavailable(text="busy")
+        if request.content_length is not None and request.content_length > limit:
+            raise web.HTTPRequestEntityTooLarge(max_size=limit, actual_size=request.content_length)
         self._active += 1
         try:
             data = await asyncio.wait_for(request.read(), 2)
+            if len(data) > limit:
+                raise web.HTTPRequestEntityTooLarge(max_size=limit, actual_size=len(data))
             value = json.loads(data)
             if type(value) is not dict:
                 raise ValueError("invalid request")
@@ -400,7 +440,7 @@ class GatewayManager:
         child = self.children.get(request.match_info["name"])
         if child is None or child.process is None or child.process.poll() is not None:
             raise web.HTTPForbidden(text="denied")
-        value = await self._read(request, child.token)
+        value = await self._read(request, child.token, 16384)
         try:
             value = status_message(value)
         except (ValueError, TypeError):

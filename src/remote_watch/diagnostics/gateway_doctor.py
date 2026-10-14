@@ -1,10 +1,10 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-220456
+# Дата и время последнего изменения: 261014-110958
 #
 # Классы:
 # -> DoctorTarget: Закрытые параметры проверки одного канала.
@@ -13,6 +13,8 @@
 # -> load_targets(): Проверка отдельного клиентского JSON без чтения окружения.
 # -> client_checks(): Проверка CA, credentials и явно разрешённой сети.
 # -> server_checks(): Проверка deployment и наблюдение работающего manager.
+# -> _journal_rows(): Строки безопасных агрегатов без данных приложения.
+# -> journal_checks(): Чтение явно выбранного остановленного журнала.
 # -> _server_online(): Чтение локального status и проверка loopback listeners.
 # -> _tls_context(): Подготовка проверяющего TLS context из выбранного CA.
 # -> _row(): Формирование безопасной строки отчёта.
@@ -45,6 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from remote_watch._credentials import CredentialError, resolve_token, validate_credentials
+from remote_watch.commands.journal_stats import inspect_journal, validate_status
 from remote_watch.events import Identity
 from remote_watch.gateway.command_config import CommandConfigError, read_command_json
 from remote_watch.gateway.doctor_protocol import decode_probe
@@ -57,6 +60,14 @@ from ._doctor_network import network_checks
 # КОНСТАНТЫ
 #******************************************************************************************************************
 HINTS = {
+    "journal_ok": "Снимок содержит только числа; pending сам по себе не означает отказ gateway.",
+    "journal_unavailable": "Сводка владельца недоступна; сохранённый снимок может быть устаревшим.",
+    "journal_stale": "Снимок старше 30 секунд; проверьте владельца журнала и его storage lane.",
+    "journal_capacity": "Занято не менее 80% одного из пределов. Не удаляйте SQLite для освобождения места.",
+    "journal_unknown": "Есть UNKNOWN без административного решения; сверяйте исход, не повторяйте callback.",
+    "journal_read_failed": "Проверьте локальную остановленную БД и отсутствие sidecar; recovery не запускался.",
+    "journal_invalid": "Сводка не прошла проверку схемы; проверьте совместимость компонентов.",
+    "journal_limits_unknown": "Пределы source не записаны в БД; текущие значения доступны у её владельца.",
     "config_ok": "Структура настроек корректна; сеть и наличие секретов в окружении этим не проверяются.",
     "config_invalid": "Сверьте структуру файла с шаблоном doctor; значения в отчёт не включаются.",
     "dependency_missing": "Установите нужные extras в тот же venv; doctor ничего не устанавливает сам.",
@@ -101,7 +112,7 @@ HINTS = {
                                    "Проверьте локальную диагностику клиента."),
     "control_unavailable": "Manager недоступен через локальное управление; проверьте его запуск и control_dir.",
     "server_not_ready": "Manager или компонент ещё не готов; проверьте status и служебный журнал.",
-    "not_observed": "Эти данные не читаются doctor: журналы не открываются и recovery не запускается.",
+    "not_observed": "Данные не представлены владельцем; это не подтверждает отсутствие UNKNOWN.",
 }
 
 
@@ -335,8 +346,12 @@ async def _server_online(
     from remote_watch.gateway_server.manager import control_request
 
     rows = []
+    snapshot = {}
     try:
         snapshot = await asyncio.wait_for(control_request(config, "status"), timeout)
+        if type(snapshot) is not dict:
+            snapshot = {}
+            raise ValueError("invalid status")
         rows.append(_row("manager", "ok" if snapshot.get("state") == "ready" else "failed",
                          "ready" if snapshot.get("state") == "ready" else "server_not_ready"))
         for name in ("notifications", "commands", "caddy"):
@@ -366,8 +381,84 @@ async def _server_online(
                     await asyncio.wait_for(writer.wait_closed(), timeout)
                 except Exception:
                     pass
-    rows.append(_row("journal_unknown_outcomes", "skipped", "not_observed"))
+    components = snapshot.get("components", {})
+    command = components.get("commands", {}) if type(components) is dict else {}
+    journals = command.get("journals") if type(command) is dict else None
+    if journals is None:
+        rows.append(_row("journal_unknown_outcomes", "skipped", "not_observed"))
+    else:
+        try:
+            if (type(journals) is not dict or set(journals) != {"hub", "sources"}
+                    or type(journals["sources"]) is not list or len(journals["sources"]) > 8):
+                raise ValueError("invalid journals")
+            rows.extend(_journal_rows("commands.journal.hub", journals["hub"]))
+            for index, value in enumerate(journals["sources"]):
+                rows.extend(_journal_rows(f"commands.journal.source_{index + 1}", value))
+        except (ValueError, TypeError):
+            rows.append(_row("commands.journals", "failed", "journal_invalid"))
     return rows
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Строки сводки без раскрытия владельцев, курсоров или запросов
+#------------------------------------------------------------------------------------------------------------------
+def _journal_rows(
+    prefix: str,
+    value: object,
+) -> list[dict[str, Any]]:
+
+    """Render only validated journal aggregates and separate attention from server readiness.
+
+    :param prefix: Library-selected diagnostic row label.
+    :type prefix: str
+    :param value: Cached owner status with optional safe counts.
+    :type value: object
+    :return: Safe observation and optional capacity/unknown warnings.
+    :rtype: list[dict[str, Any]]
+    """
+
+    # prefix/value — имена source не берутся из конфига, только их порядковые номера.
+    item = validate_status(value)
+    state, age, snapshot = item["state"], item["age_seconds"], item["snapshot"]
+    code = ("journal_ok" if state == "available" else "not_observed" if state in (
+            "unsupported", "not_observed") else "journal_unavailable")
+    status = "ok" if state == "available" else "skipped" if code == "not_observed" else "warning"
+    if age is not None and age > 30:
+        code, status = "journal_stale", "warning"
+    row = _row(prefix, status, code)
+    row.update(age_seconds=age, journal=snapshot)
+    rows = [row]
+    if snapshot is not None:
+        if snapshot["capacity"] in ("near_limit", "at_limit"):
+            rows.append(_row(prefix + ".capacity", "warning", "journal_capacity"))
+        elif snapshot["capacity"] == "unknown":
+            rows.append(_row(prefix + ".capacity", "skipped", "journal_limits_unknown"))
+        if snapshot["unresolved_unknown"]:
+            rows.append(_row(prefix + ".unknown", "warning", "journal_unknown"))
+    return rows
+#------------------------------------------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Явное чтение остановленного локального журнала
+#------------------------------------------------------------------------------------------------------------------
+def journal_checks(path: Path) -> list[dict[str, Any]]:
+
+    """Inspect a stopped journal without migration, provider calls or acquiring its ownership.
+
+    :param path: Explicit existing local hub/client/source SQLite.
+    :type path: Path
+    :return: Shareable metrics or a fixed private failure category.
+    :rtype: list[dict[str, Any]]
+    """
+
+    # path — SQLite immutable не создаёт sidecar; работающая БД читается через manager.
+    try:
+        value = asdict(inspect_journal(path))
+        return _journal_rows("journal", {"state": "available", "age_seconds": 0, "snapshot": value})
+    except Exception:
+        return [_row("journal", "failed", "journal_read_failed")]
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -454,18 +545,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     # argv — секреты передаются только в приватном JSON/окружении; CLI не принимает токены.
     parser = DeploymentParser(description="Gateway doctor: безопасные проверки сервера и клиента.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
-    parser.add_argument("--mode", choices=("server", "client"), default="server")
-    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--mode", choices=("server", "client", "journal"), default="server")
+    parser.add_argument("--config", type=Path)
+    parser.add_argument("--journal", type=Path, help="Остановленный локальный SQLite для mode=journal.")
     parser.add_argument("--online", action="store_true", help="Разрешить конечные read-only сетевые проверки.")
     parser.add_argument("--timeout", type=float, default=5.0, help="Срок одного сетевого этапа, 0.1–10 секунд.")
     parser.add_argument("--json", action="store_true", help="Печатать безопасный JSON вместо текстовой сводки.")
     parser.add_argument("--report", type=Path, help="Создать новый JSON-файл; существующий не перезаписывается.")
     args = parser.parse_args(argv)
+    if args.mode == "journal":
+        if args.journal is None or args.config is not None or args.online:
+            parser.error("journal")
+    elif args.config is None or args.journal is not None:
+        parser.error("config")
     if not math.isfinite(args.timeout) or not 0.1 <= args.timeout <= 10:
         parser.error("timeout")
     try:
-        check = server_checks if args.mode == "server" else client_checks
-        rows = check(args.config, args.online, args.timeout)
+        if args.mode == "journal":
+            rows = journal_checks(args.journal)
+        else:
+            check = server_checks if args.mode == "server" else client_checks
+            rows = check(args.config, args.online, args.timeout)
     except Exception as error:
         rows = [_error_row(error)]
     for row in rows:
@@ -484,6 +584,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "http_status", "verify_code", "tls_reason", "config_code", "field",
                 "component_code", "component_field") if key in row)
             print(f"[{row['status']}] {row['check']}: {row['code']} {labels}\n  {row['hint']}", flush=True)
+            if row.get("journal") is not None:
+                metrics = row["journal"]
+                print("  " + " ".join(f"{key}={metrics[key]}" for key in (
+                    "records", "records_limit", "pending", "unknown", "unresolved_unknown", "execution_active",
+                    "payload_reserved_bytes", "payload_limit_bytes", "database_bytes", "database_limit_bytes"))
+                    + f" age_seconds={row['age_seconds']}", flush=True)
     if args.report is not None:
         try:
             _write_report(args.report, report)

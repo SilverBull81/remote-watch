@@ -1,10 +1,10 @@
 ﻿# Последовательные операции постоянного журнала с ограниченным ожиданием.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-235742
+# Дата и время последнего изменения: 261014-112210
 #
 # Классы:
 # -> StoreLifecycle: Контракт ресурсов рабочего потока хранения.
@@ -16,10 +16,12 @@
 #    Конструктор:
 #    -> __init__(): Создание объекта.
 #    Интерфейс:
+#    -> journal_status(): Чтение кэша агрегатов без обращения к SQLite.
 #    -> open(): Открытие принадлежащих объекту ресурсов.
 #    -> call(): Ограниченное ожидание с сохранением владения после отмены caller.
 #    -> close(): Остановка фоновой работы и закрытие ресурсов.
 #    Служебные методы:
+#    -> _execute(): Обновление диагностики в той же storage lane после операции.
 #    -> _completed(): Освобождение исполнителя после фактического завершения операции.
 #
 # Функции:
@@ -32,11 +34,16 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import Callable
+from concurrent.futures import Future as ThreadFuture
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
+from time import monotonic
 from typing import Generic, Protocol, TypeVar
 
 from remote_watch._validation import require_int
+from remote_watch.commands.journal_stats import JournalStats, validate_stats, validate_status
 from remote_watch.commands.storage import StoreConflict, StoreError, StoreFull
 from remote_watch.commands.transport import CommandError
 
@@ -119,8 +126,33 @@ class StoreWorker(Generic[S]):
         self._pool: ThreadPoolExecutor | None = None
         self._pending: asyncio.Future | None = None
         self._closing = False
+        self._journal_lock = threading.Lock()
+        self._journal_snapshot: JournalStats | None = None
+        self._journal_at: float | None = None
+        self._journal_next = 0.0
+        self._journal_state = "not_observed"
+        self._observing = False
     #--------------------------------------------------------------------------------------------------------------
 
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Чтение кэша агрегатов без обращения к SQLite
+    #--------------------------------------------------------------------------------------------------------------
+    def journal_status(self) -> dict:
+
+        """Read a bounded cached observation safely even from another application thread.
+
+        :return: Fixed state, monotonic age and optional last successful aggregate.
+        :rtype: dict
+        """
+
+        with self._journal_lock:
+            age = (None if self._journal_at is None else
+                   min(2**31 - 1, max(0, int(monotonic() - self._journal_at))))
+            return validate_status({"state": "closed" if self._closing else self._journal_state,
+                "age_seconds": age, "snapshot": None if self._journal_snapshot is None
+                else asdict(self._journal_snapshot)})
+    #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Открытие принадлежащих объекту ресурсов
@@ -166,7 +198,11 @@ class StoreWorker(Generic[S]):
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self.timeout
         if self._gate.locked() or self._waiters:
-            if self._waiters >= self._max_waiters:
+            # Если запись уже закончена, но ещё читается сводка, разрешаем одному
+            # caller дождаться её без обычного немедленного busy клиента/source.
+            with self._journal_lock:
+                waiting_limit = self._max_waiters or int(self._observing)
+            if self._waiters >= waiting_limit:
                 reason = "storage_busy" if self._max_waiters == 0 else "storage_queue_full"
                 raise CommandError("busy", busy_reason=reason)
             self._waiters += 1
@@ -186,7 +222,10 @@ class StoreWorker(Generic[S]):
                 raise CommandError("closed")
             if loop.time() >= deadline:
                 raise CommandError("busy", busy_reason="storage_wait_timeout")
-            future = loop.run_in_executor(self._pool, operation)
+            completed: ThreadFuture[T] = ThreadFuture()
+            completed_at: list[float] = []
+            operation_deadline = monotonic() + max(0, deadline - loop.time())
+            future = loop.run_in_executor(self._pool, lambda: self._execute(operation, completed, completed_at))
         except BaseException:
             self._gate.release()
             raise
@@ -194,7 +233,15 @@ class StoreWorker(Generic[S]):
         future.add_done_callback(self._completed)
 
         try:
-            return await asyncio.wait_for(asyncio.shield(future), max(0, deadline - loop.time()))
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), max(0, deadline - loop.time()))
+            except asyncio.TimeoutError:
+                # Наблюдение может задержаться в файловой системе после commit.
+                # Возвращаем только исход, полученный ДО срока реальной операции;
+                # executor/gate остаются закреплены за ещё выполняющимся чтением.
+                if completed.done() and completed_at[0] <= operation_deadline:
+                    return completed.result()
+                raise
         except StoreFull:
             raise CommandError("capacity") from None
         except (StoreConflict, ValueError, TypeError):
@@ -246,6 +293,67 @@ class StoreWorker(Generic[S]):
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Обновление диагностики в той же storage lane после операции
+    #--------------------------------------------------------------------------------------------------------------
+    def _execute(
+        self,
+        operation: Callable[[], T],
+        completed: ThreadFuture[T],
+        completed_at: list[float],
+    ) -> T:
+
+        """Observe the owned journal periodically without adding executor submissions or changing results.
+
+        :param operation: Original serialized storage operation.
+        :type operation: Callable[[], T]
+        :param completed: Thread-safe original result, independent of subsequent diagnostic work.
+        :type completed: ThreadFuture[T]
+        :param completed_at: Single monotonic completion time published before completed is set.
+        :type completed_at: list[float]
+        :return: Original operation result, including unchanged exception semantics.
+        :rtype: T
+        """
+
+        # operation/completed/completed_at — диагностический сбой после commit не должен превратить
+        # успешную запись в ошибку и спровоцировать повтор бизнес-действия.
+        try:
+            result = operation()
+        except BaseException as error:
+            completed_at.append(monotonic())
+            with self._journal_lock:
+                self._observing = True
+            completed.set_exception(error)
+            raise
+        else:
+            completed_at.append(monotonic())
+            with self._journal_lock:
+                self._observing = True
+            completed.set_result(result)
+            return result
+        finally:
+            now = monotonic()
+            if now >= self._journal_next:
+                self._journal_next = now + 5.0
+                try:
+                    reader = getattr(self.store, "journal_stats", None)
+                    sample = None if reader is None else reader()
+                    if sample is not None and type(sample) is not JournalStats:
+                        raise ValueError("invalid journal sample")
+                    if sample is not None:
+                        validate_stats(asdict(sample))
+                    with self._journal_lock:
+                        self._journal_state = "unsupported" if sample is None else "available"
+                        if sample is not None:
+                            self._journal_snapshot = sample
+                            self._journal_at = monotonic()
+                except (Exception, asyncio.CancelledError):
+                    # Только фиксированная категория; старый снимок не выдаётся
+                    # за новый, его возраст и state явно показывают отказ наблюдения.
+                    with self._journal_lock:
+                        self._journal_state = "unavailable"
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
     # СЛУЖЕБНЫЙ МЕТОД : Освобождение исполнителя после фактического завершения операции
     #--------------------------------------------------------------------------------------------------------------
     def _completed(
@@ -261,6 +369,8 @@ class StoreWorker(Generic[S]):
 
         # future — запись могла закончиться уже после timeout или отмены caller.
         _consume(future)
+        with self._journal_lock:
+            self._observing = False
         self._gate.release()
     #--------------------------------------------------------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 ﻿# Атомарный журнал команд, позиций источников и результатов в SQLite.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-000823
+# Дата и время последнего изменения: 261014-110259
 #
 # Классы:
 # -> SQLiteCommandStore: Журнал команд в локальной SQLite.
@@ -13,6 +13,7 @@
 #    Интерфейс:
 #    -> open(): Открытие и восстановление нового поколения журнала.
 #    -> close(): Освобождение соединения SQLite.
+#    -> journal_stats(): Агрегаты без изменения generation и состояния команд.
 #    -> bind_session(): Новая сессия при прежнем живом владельце журнала.
 #    -> cursor(): Чтение сохранённой позиции источника.
 #    -> admit(): Атомарная запись решения и позиции источника.
@@ -53,6 +54,7 @@ from pathlib import Path
 from time import monotonic
 
 from remote_watch._validation import require_int, require_number, require_text
+from remote_watch.commands.journal_stats import JournalStats, read_stats
 from remote_watch.commands.protocol import (
     MAX_COMMAND_BYTES,
     CommandClaim,
@@ -272,7 +274,29 @@ class SQLiteCommandStore:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Привязка новой сессии без смены владельца журнала
+    # ИНТЕРФЕЙС : Агрегаты без изменения generation и состояния команд
+    #--------------------------------------------------------------------------------------------------------------
+    def journal_stats(self) -> JournalStats:
+
+        """Read aggregates on the serialized owner connection without recovery or metadata writes.
+
+        :return: Bounded immutable journal capacity and pending counts.
+        :rtype: JournalStats
+        """
+
+        if not self._lock.acquire(timeout=self._limits.lock_timeout):
+            raise StoreError("store busy")
+        try:
+            db = self._connection
+            if db is None or self._failed:
+                raise StoreError("store unavailable")
+            return read_stats(db, owner_generation=self._generation)
+        finally:
+            self._lock.release()
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Новая сессия при прежнем живом владельце журнала
     #--------------------------------------------------------------------------------------------------------------
     def bind_session(
         self,

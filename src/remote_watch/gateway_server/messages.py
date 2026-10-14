@@ -1,10 +1,10 @@
 ﻿# Ограниченные сообщения состояния между manager и его дочерними процессами.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261008-203635
+# Дата и время последнего изменения: 261014-110259
 #
 # Функции:
 # -> status_message(): Проверка состояния без переноса произвольных подробностей.
@@ -17,6 +17,8 @@
 from __future__ import annotations
 
 import asyncio
+
+from remote_watch.commands.journal_stats import validate_status
 
 STATES = frozenset({"starting", "ready", "degraded", "failed", "stopping", "stopped", "restarting"})
 REASONS = frozenset({"time_unavailable", "source_stopped", "source_unavailable", "source_denied",
@@ -45,7 +47,7 @@ def status_message(value: object) -> dict:
 
     # value — heartbeat несёт только безопасные агрегаты, не полный stats провайдера.
     keys = {"state", "reason", "time_reason", "failure", "counters"}
-    if (type(value) is not dict or set(value) != keys or type(value["state"]) is not str
+    if (type(value) is not dict or set(value) - {"journals"} != keys or type(value["state"]) is not str
             or value["state"] not in STATES):
         raise ValueError("invalid status")
     for key in ("reason", "time_reason"):
@@ -59,7 +61,15 @@ def status_message(value: object) -> dict:
     if any(key not in {"active", "destinations_busy", "pending", "unknown", "received", "submitted", "failures"}
            or type(number) is not int or not 0 <= number <= 2**63 - 1 for key, number in counters.items()):
         raise ValueError("invalid counter")
-    return dict(value, counters=dict(counters))
+    result = dict(value, counters=dict(counters))
+    if "journals" in value:
+        journals = value["journals"]
+        if (type(journals) is not dict or set(journals) != {"hub", "sources"}
+                or type(journals["sources"]) is not list or len(journals["sources"]) > 8):
+            raise ValueError("invalid journals")
+        result["journals"] = {"hub": validate_status(journals["hub"]),
+                              "sources": [validate_status(item) for item in journals["sources"]]}
+    return result
 #------------------------------------------------------------------------------------------------------------------
 
 

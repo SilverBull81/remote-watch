@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.8
+Version 1.5.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-103404
+Дата и время последнего изменения: 261014-113035
 
 ## Project Intent
 
@@ -13,7 +13,31 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.4.dev4.
+The package version is 0.4.4.dev5.
+Dev5 closes journal observability R5: read docs/COMMAND_JOURNALS.md and ADR 0018.
+StoreWorker caches numeric hub/client/source aggregates after ordinary operations,
+at most once per 5 seconds, on the same executor lane with bounded read-only SQL.
+Observation errors cannot change an original operation result or committed outcome.
+CommandClient/Hub/SourceRunner.journal_status read the cache only. Private manager
+status/doctor server --online expose hub plus up to 8 unnamed source summaries;
+public client probes do not expose other applications' journal counts.
+Explicit doctor --mode journal --journal PATH uses stopped local SQLite immutable/ro,
+rejects sidecars, never opens a runtime owner, migrates, repairs, or creates locks/DBs.
+Source limits absent from file stay null. UNKNOWN/running/ACK/cursors remain intact.
+capacity/unknown/stale are warnings, not restart reasons. Manager ages cached samples
+after heartbeat loss; stale/failed observations never become fresh by being read.
+The owner changed order: finish journals before 0.4.5. A tray is REQUIRED for the
+future service solution; design a separate user-session controller for the headless
+Windows service, not a second gateway owner. Service installation remains future work.
+Dev5 final Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1125
+(73 skips, 2 live deselections), extras 1556 (2 live deselections), no warnings.
+Ruff/style: 154 Python files; all 11 installed CLIs passed. Reports:
+build/validation-0445-release-core and build/validation-0445-release-extras.
+All 89 packaged Python modules match final source bytes. Journal/reconnect targets:
+20 passed. An intermediate reconnect test timeout is recorded in VALIDATION.md;
+do not treat it as a proven field root cause. No new CI/Linux/Python 3.10/live run.
+Read-only client copy has records=13, pending=0, unknown=0, with identical bytes;
+this does not identify how the older outcome conflict was resolved in production.
 Dev4 adds passive NotificationRuntime.health() per destination and aggregate.
 Read docs/RUNTIME.md: lifecycle, last-observed delivery state and cumulative counters
 are distinct. A later provider acceptance clears current failure for that destination
@@ -30,8 +54,8 @@ C:/Work/runs/doctor-client-01.json has mode=client, online=true, passed=true and
 including both channel routes/TLS/permissions/readiness, trusted time and session presence.
 Server acceptance is conversation evidence, without a separately inspected server report.
 Do not keep the original doctor field test pending; service-mode verification is separate.
-Windows service is the next implementation step; command journal capacity/pending/UNKNOWN
-summary remains open. SpamBot source and production processes are unchanged here.
+Journal summaries are implemented in dev5; next is service support with a user-session tray.
+SpamBot source and production processes are unchanged here.
 Dev4 final Windows CPython 3.12.2 wheels passed core 1106 (73 skips, 2 live deselections)
 and extras 1537 (2 live deselections), without pytest warnings. Targeted health/runtime/retry:
 52 passed; Ruff/style: 152 files, no issues; all 11 installed CLIs passed.

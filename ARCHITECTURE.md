@@ -1,12 +1,22 @@
 ﻿# Remote Watch — архитектура
 
-Version 1.4.4
+Version 1.4.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-100251
+Дата и время последнего изменения: 261014-113001
 
 ## Статус и границы
+
+В 0.4.4.dev5 закрыт остаток R5 наблюдения журналов: неизменяемые числовые сводки
+hub/client/source кэшируются действующим storage worker. Наблюдение не создаёт
+новую очередь executor, не меняет исход операции и не запускается из status/health.
+Частный IPC передаёт только проверенные агрегаты; внешний doctor probe не раскрывает
+сводку других приложений. Для остановленной SQLite есть отдельный immutable/ro
+режим без recovery/миграции/locks. Схемы journal и командного wire сохранены.
+Операционные age/capacity/UNKNOWN warnings не запускают restart или повтор callback.
+Контракт: [COMMAND_JOURNALS.md](docs/COMMAND_JOURNALS.md), ADR 0018.
+Следующий сервисный слой должен сохранить отдельный пользовательский трей.
 
 В 0.4.4.dev4 `NotificationRuntime.health()` даёт неизменяемый снимок локального
 runtime_state и последних попыток доставки по назначениям. Наблюдения
@@ -18,7 +28,7 @@ unobserved/healthy/degraded отделены от накопительных Run
 Контракт и интеграция приложения: [RUNTIME.md](docs/RUNTIME.md).
 
 14.10 владелец принял полевые reconnect, deploy и работу gateway_server.
-Служба ОС и сводное наблюдение command journals остаются задачами 0.4:
+Служба ОС с пользовательским треем и её эксплуатационная приёмка остаются задачами 0.4:
 [REVIEW_0_4.md](docs/REVIEW_0_4.md).
 
 В 0.4.4.dev1 реализован `diagnostics.gateway_doctor`: offline-проверка по умолчанию,
@@ -27,7 +37,7 @@ unobserved/healthy/degraded отделены от накопительных Run
 не продлевает lease, не выполняет callback и не открывает journal. Новые POST-маршруты
 `/v1/notifications/probe` и `/v1/commands/probe` проверяют сервисный principal, точную
 Identity и запрошенные aliases/scopes. Границы и квоты: [ADR 0016](docs/adr/0016-read-only-gateway-doctor.md).
-Наблюдение полной ёмкости journal остаётся отдельной будущей задачей.
+Наблюдение ёмкости journal добавлено в dev5 через кэш владельца и явный offline-режим.
 В 0.4.4.dev3 локальная утилита сверки показывает pending и позволяет владельцу
 явно согласовать COMPLETED клиента с UNKNOWN hub после подтверждённой остановки.
 Исходный UNKNOWN сохраняется; отдельное решение схемы SQLite 2 разрешает точную

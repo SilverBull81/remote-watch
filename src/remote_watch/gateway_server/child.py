@@ -1,10 +1,10 @@
 ﻿# Закрытый bootstrap серверного компонента с heartbeat его рабочего event loop.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-164040
+# Дата и время последнего изменения: 261014-110259
 #
 # Функции:
 # -> failure_kind(): Классификация известных ошибок без их текста.
@@ -131,7 +131,7 @@ async def run_child(settings: dict) -> None:
                             current.update(state="failed" if fatal else "degraded" if reason else "ready",
                                            reason=reason, time_reason=(health["hub"].get("time_reason")
                                                if health["hub"].get("time_reason") in REASONS else None),
-                                           failure=failure)
+                                           failure=failure, journals=health["journals"])
                         elif name == "notifications":
                             stats = component.stats()
                             current.update(state="ready", reason=None,
