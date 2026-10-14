@@ -1,10 +1,10 @@
 ﻿# Проверки настоящего gateway на loopback без внешней сети и реальных credentials.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-194441
 #
 # Классы:
 # -> Channel: Управляемый канал проверки попыток и отмены
@@ -74,6 +74,10 @@
 # -> test_gateway_elapsed_budget(): Допуск часов не восстанавливает исчерпанное время запроса
 #    Вложенные объявления:
 #    -> scenario(): Проверка вычисления остатка без таймеров и ожиданий
+#
+# -> test_gateway_retry_after_precision(): Округление времени не удлиняет Retry-After сверх интервала
+#    Вложенные объявления:
+#    -> scenario(): Проверка границ частоты на управляемых монотонных часах
 
 
 #******************************************************************************************************************
@@ -88,7 +92,9 @@ import logging
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -1245,6 +1251,78 @@ def test_gateway_elapsed_budget(
         assert not channel.calls and gateway.stats()["expired"] == 1
 
     #--------------------------------------------------------------------------------------------------------------
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Округление времени не удлиняет Retry-After сверх интервала
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ["principal", "destination"])
+def test_gateway_retry_after_precision(
+    notification: Notification,
+    case: str,
+    ) -> None:
+
+    """
+    Bound Retry-After while preserving admission checks at and before the rate deadline.
+
+    :param notification: Synthetic notification with a fixed UTC lifetime.
+    :type notification: Notification
+
+    :param case: Principal or destination rate limiter selected independently.
+    :type case: str
+    """
+
+    # notification/case — воспроизводится погрешность float, не сдвиг часов машины.
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Проверка границ частоты на управляемых монотонных часах
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """
+        Keep actual HTTP scheduling while controlling only gateway rate timestamps.
+        """
+
+        channel = Channel()
+        config = settings(notification, channel)
+        principal = replace(config.principals[0], min_interval=10 if case == "principal" else 0)
+        config = replace(config, principals=(principal,), destination_interval=10 if case == "destination" else 0)
+        gateway = NotificationGateway(config, utc_now=lambda: notification.created_at)
+        await gateway.start(port=0)
+        url = f"http://127.0.0.1:{gateway.port}/v1/notifications"
+
+        # Эти числа гарантированно дают остаток больше десяти на один шаг float.
+        # Подменяется ссылка на модуль только у gateway; настоящие loop/HTTP timers
+        # и классы исключений остаются неизменными. Закрытие выполняется после подмены.
+        now = [7.996]
+        assert (now[0] + 10) - now[0] > 10
+        clocked = SimpleNamespace(**vars(asyncio))
+        clocked.get_running_loop = lambda: SimpleNamespace(time=lambda: now[0])
+        try:
+            with patch("remote_watch.gateway.notification_server.asyncio", clocked):
+                async with aiohttp.ClientSession(headers={"Authorization": "Bearer " + TOKEN}) as client:
+                    async with client.post(url, json=envelope(notification).to_dict()) as response:
+                        assert response.status == 200
+                        await response.read()
+                    async with client.post(url, json=envelope(notification).to_dict()) as response:
+                        assert response.status == 429
+                        assert response.headers["Retry-After"] == "10"
+
+                    # Меньшая подсказка не ослабляет серверный ограничитель частоты.
+                    now[0] = 7.996 + 9
+                    async with client.post(url, json=envelope(notification).to_dict()) as response:
+                        assert response.status == 429
+                    assert len(channel.calls) == 1
+                    now[0] = 7.996 + 10
+                    async with client.post(url, json=envelope(notification).to_dict()) as response:
+                        assert response.status == 200
+                        await response.read()
+                    assert len(channel.calls) == 2
+        finally:
+            await gateway.close()
+    #--------------------------------------------------------------------------------------------------------------
+
     asyncio.run(scenario())
 #------------------------------------------------------------------------------------------------------------------
 

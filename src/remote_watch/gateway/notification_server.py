@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.1.3
+# Version 1.1.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-194441
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки
@@ -577,7 +577,9 @@ class NotificationGateway:
         delay = self._principal_next.get(principal.name, 0) - now
         if delay > 0:
             self._counts["rate_limited"] += 1
-            return self._reject(429, "gateway_principal_rate", delay)
+            # При одинаковом тике часов вычитание float может дать interval + epsilon.
+            # Ограничиваем только HTTP-подсказку; точный deadline допуска не меняется.
+            return self._reject(429, "gateway_principal_rate", min(delay, principal.min_interval))
 
         self._principal_next[principal.name] = now + principal.min_interval
 
@@ -691,7 +693,7 @@ class NotificationGateway:
         delay = self._destination_next.get(alias, 0) - asyncio.get_running_loop().time()
         if delay > 0:
             self._counts["rate_limited"] += 1
-            return self._reject(429, "gateway_destination_rate", delay)
+            return self._reject(429, "gateway_destination_rate", min(delay, self._config.destination_interval))
 
         destination = next(item for item in self._config.destinations if item.destination_id == alias)
         now = self._utc_now()
