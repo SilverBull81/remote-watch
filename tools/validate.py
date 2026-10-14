@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261014-203720
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -121,6 +121,9 @@ def main() -> int:
             names = archive.getnames()
             assert any(name.endswith("tools/validate.py") for name in names)
             assert any(name.endswith("docs/GATEWAY.md") for name in names)
+            assert any(name.endswith("docs/BACKLOG.md") for name in names)
+            assert any(name.endswith("logo/remote_watch.ico") for name in names)
+            assert not any(name.endswith("logo/remote_watch.png") for name in names)
             assert any(name.endswith("tests/contract/test_gateway.py") for name in names)
             assert not any(name.endswith((".local.json", "gateway_config.json", "gateway_settings.py"))
                            or "/build/" in name or "/runs/" in name or "/docs/private/" in name for name in names)
@@ -130,6 +133,11 @@ def main() -> int:
         with zipfile.ZipFile(wheel) as archive:
             icon_entry = f"remote_watch-{version}.data/data/share/remote-watch/logo/remote_watch.ico"
             assert archive.read(icon_entry) == (root / "logo/remote_watch.ico").read_bytes()
+            assert not any(name.endswith(".png") for name in archive.namelist())
+            metadata = archive.read(f"remote_watch-{version}.dist-info/METADATA").decode("utf-8")
+            assert "License-Expression: MIT" in metadata
+            license_entry = f"remote_watch-{version}.dist-info/licenses/LICENSE"
+            assert archive.read(license_entry) == (root / "LICENSE").read_bytes()
             assert all(name == icon_entry or
                        name.startswith(("remote_watch/", f"remote_watch-{version}.dist-info/"))
                        for name in archive.namelist())

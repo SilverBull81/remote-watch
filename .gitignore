@@ -50,3 +50,6 @@ Thumbs.db
 
 # Machine-specific instructions and local documentation archives
 /docs/private/
+
+# Editable icon source is local; releases ship ICO only
+/logo/remote_watch.png

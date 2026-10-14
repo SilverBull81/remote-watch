@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "0.4.5.dev6"
-description = "Standard logging integration and bounded asynchronous remote notifications"
+version = "1.0.0"
+description = "Standard logging, asynchronous notifications and secure application commands"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -13,9 +13,8 @@ requires-python = ">=3.10"
 authors = [{name = "Sergey Fundobny", email = "silverbull@mail.ru"}]
 dependencies = []
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python :: 3",
-  "Private :: Do Not Upload",
 ]
 
 [project.optional-dependencies]
