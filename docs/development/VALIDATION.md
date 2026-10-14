@@ -1,84 +1,66 @@
 ﻿# Проверки и статус выпуска
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-203720
+Дата и время последнего изменения: 261014-205239
 
-## Этап 0.4 завершён
+## Первый стабильный выпуск 1.0.0
 
-Функциональная приёмка завершена: владелец подтвердил работу уведомлений/команд,
-reconnect, deploy/doctor, Windows-службы/tray/install/remove/reinstall, последующего
-reboot и crash-тестов, а также доставку служебных оповещений. Это свидетельство
-из переписки, не независимый отчёт по каждому сценарию. Повтор client doctor отдельно
-прочитан: все 16 checks ok, включая TLS, authorization, trusted time и session presence.
-
-Подробности конкретной инфраструктуры хранятся только в локальной private-документации.
-Приёмка не распространяется на private ntfy-команды, реальный systemd deployment,
-применение конкретной admin-resolution и отложенный полевой отказ → восстановление
-notification health. Эти проверки не блокируют 0.4 по решению владельца.
+Владелец утвердил MIT, выпуск **1.0.0** и аннотированный тег **v1.0.0**.
+[GitHub Release](https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0)
+содержит wheel, sdist и SHA256SUMS.txt. Публикация на PyPI и единый EXE не выполняются.
 
 ## Полная CI-матрица
 
-[GitHub Actions 38602660574](https://github.com/SilverBull81/remote-watch/actions/runs/38602660574), code commit `1c05538638156f04a0760b4bc714fe445de2358a`, пакет **0.4.5.dev6**.
+[GitHub Actions 38609427482](https://github.com/SilverBull81/remote-watch/actions/runs/38609427482),
+проверенный code commit `5ebf78c9378eaa8e8a6589b2e63fc31910357001`, пакет **1.0.0**.
 Все восемь jobs успешны. Каждый выполняет Ruff/style/docs checks, сборку sdist/wheel,
 чистую установку wheel из sdist, installed CLI и полные offline tests.
 
 | Платформа | CPython | Режим | Результат |
 | --- | --- | --- | --- |
-| Linux | 3.10.22 | core | 1180 passed, 89 skipped, 2 deselected in 22.90s |
-| Linux | 3.10.22 | extras | 1613 passed, 16 skipped, 2 deselected in 76.77s (0:01:16) |
-| Linux | 3.12.15 | core | 1180 passed, 89 skipped, 2 deselected in 26.00s |
-| Linux | 3.12.15 | extras | 1613 passed, 16 skipped, 2 deselected in 75.30s (0:01:15) |
-| Windows | 3.10.11 | core | 1194 passed, 75 skipped, 2 deselected in 191.35s (0:03:11) |
-| Windows | 3.10.11 | extras | 1629 passed, 2 deselected in 263.08s (0:04:23) |
-| Windows | 3.12.10 | core | 1194 passed, 75 skipped, 2 deselected in 114.10s (0:01:54) |
-| Windows | 3.12.10 | extras | 1629 passed, 2 deselected in 213.32s (0:03:33) |
+| Linux | 3.10.22 | core | 1180 passed, 89 skipped, 2 deselected in 28.68s |
+| Linux | 3.10.22 | extras | 1613 passed, 16 skipped, 2 deselected in 74.97s (0:01:14) |
+| Linux | 3.12.15 | core | 1180 passed, 89 skipped, 2 deselected in 25.15s |
+| Linux | 3.12.15 | extras | 1613 passed, 16 skipped, 2 deselected in 75.72s (0:01:15) |
+| Windows | 3.10.11 | core | 1194 passed, 75 skipped, 2 deselected in 122.56s (0:02:02) |
+| Windows | 3.10.11 | extras | 1629 passed, 2 deselected in 165.84s (0:02:45) |
+| Windows | 3.12.10 | core | 1194 passed, 75 skipped, 2 deselected in 100.40s (0:01:40) |
+| Windows | 3.12.10 | extras | 1629 passed, 2 deselected in 178.54s (0:02:58) |
 
-Два integration-теста live providers исключены, а не выполнены в CI.
-Платформенные/optional skips указаны в каждой строке. Уведомления на телефон и
-настоящие Windows-службы CI не запускает. Последующий коммит записи этих результатов
-меняет только документацию; code SHA тестирования указан выше явно.
+Два opt-in live-provider теста исключены; платформенные/optional skips видны в таблице.
+Настоящие службы Windows и уведомления на телефон CI не запускает.
+Release tag включает последующие правки только итоговых документов; Python-код,
+метаданные пакета и поставляемые шаблоны совпадают с проверенным code commit.
 
-Промежуточные матрицы выявили тестовые зависимости от canonical paths, uptime и
-100-мс создания SQLite, предположение о свободном соседнем порте и скорость fsync,
-а также погрешность Retry-After в gateway. Причины исправлены,
-не скрыты retry CI или ослаблением production-проверок. Для Retry-After два
-детерминированных HTTP-теста сначала воспроизвели 11 вместо 10, затем проверили
-исправление и сохранение запрета раннего допуска. Actions закреплены по SHA с Node 24.
+## Локальная проверка
 
-## Локальный контроль финального runtime
+Windows CPython 3.12.2, чистые wheel-from-sdist окружения:
 
-Windows CPython 3.12.2, wheel-from-sdist 0.4.5.dev6:
+- Core: 1194 passed, 75 skipped, 2 deselected in 67.88s (0:01:07).
+- Extras: 1629 passed, 2 deselected in 137.18s (0:02:17).
+- Отчёты: build/validation-100-core и build/validation-100-extras.
+- Стиль: 163 Python-файла; документация: 21 документ и 13 JSON-примеров.
+- Проверяются 93 Python-модуля, packaged resources, ICO и 12 installed CLIs.
 
-- Core: 1194 passed, 75 skipped, 2 deselected in 67.75s (0:01:07).
-- Extras: 1629 passed, 2 deselected in 136.99s (0:02:16).
-- Отчёты: build/validation-0456-core и build/validation-0456-extras.
-- 93 Python-модуля и packaged resources совпадают с исходниками; 12 installed CLIs.
-- Стиль: 163 файла. Документация: 21 документ и 13 JSON-примеров.
-- Проверен настоящий Windows short-path temp alias в чистом core venv.
+Финальные release-архивы заново строятся после записи результатов. Проверяются
+License-Expression=MIT и точный LICENSE, ICO без PNG, docs/BACKLOG.md и отсутствие
+private/runtime/credentials файлов. Локальный PNG сохраняется, но не входит в
+Git-дерево тега, автоматически создаваемые исходные архивы, wheel или sdist.
+Архив private-документов присутствовал при сборках и проверен на исключение.
 
-Архив прежних private-документов реально присутствовал при локальной сборке;
-sdist/wheel проверены на его отсутствие. Runtime credentials/SQLite/control,
-не относящиеся к проекту локальные файлы и private-instructions не включены.
+## Полевая приёмка и границы
 
-## Границы prod-релиза
+Владелец подтвердил работу уведомлений/команд, reconnect, deploy/doctor,
+Windows-службы/tray/install/remove/reinstall, reboot и crash-тестов, доставку
+служебных оповещений. Это свидетельство из переписки, а не независимый отчёт по
+каждому сценарию. Повтор client doctor отдельно прочитан: все 16 checks ok.
+Подробности конкретной инфраструктуры находятся только в локальной private-документации.
 
-После этой CI-матрицы владелец выбрал MIT. Лицензия и перенос backlog
-проверены отдельно сборкой; CI выше относится к указанному code commit.
-Владелец утвердил stable-релиз 1.0.0 и тег v1.0.0; его финальные проверки
-будут записаны отдельно от исторической матрицы 0.4.5.dev6.
-Список оставшихся работ — только docs/BACKLOG.md. Завершение 0.4 и зелёный CI не
-заменяют юридическую проверку зависимостей/assets и настройку целевого deployment.
-
-## MIT и перенос backlog после CI
-
-Сборка sdist и повторная сборка wheel из него прошли. Оба архива содержат
-точный текст LICENSE и metadata License-Expression=MIT, License-File=LICENSE.
-В sdist есть docs/BACKLOG.md, прежнего root BACKLOG.md нет; private-документы
-исключены. Все 93 Python-модуля wheel совпадают с исходниками.
-Отчёт: build/validation-mit/report.json. Изменений runtime-кода не было.
-
-Проверки: documentation — 21 документ/13 JSON, style — 163 файла, Ruff — без
-ошибок; 10 тестов документации прошли. Полная CI-матрица повторно не запускалась.
+Полевая приёмка private ntfy-команд, systemd deployment, конкретной admin-resolution
+и notification-health отказ → восстановление остаётся отдельной от реализации.
+Эти проверки не блокируют выпуск по решению владельца. Очереди уведомлений
+in-memory; приём провайдером не означает показ на телефоне; UNKNOWN не разрешается
+автоматически. Оставшиеся планы сведены в [BACKLOG.md](../BACKLOG.md).
