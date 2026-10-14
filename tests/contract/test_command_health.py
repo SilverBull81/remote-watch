@@ -1,10 +1,10 @@
 ﻿# Проверки готовности командного gateway и безопасной диагностики отказов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-191241
 #
 # Функции:
 # -> make_gateway(): Подготовка gateway с подставными временем и провайдером
@@ -64,6 +64,7 @@ from test_command_gateway_config import FakeTime, settings, write_config
 from test_command_sources import FakeProvider
 
 from remote_watch import CommandRegistry
+from remote_watch.commands.time import TimeSample
 from remote_watch.commands.transport import CommandError
 from remote_watch.diagnostics.command_smoke import main as smoke_main
 from remote_watch.gateway.command_config import (
@@ -228,6 +229,13 @@ def test_time_readiness(
 
         gateway = make_gateway(tmp_path)
         source = gateway.hub._source
+
+        # Новая VM может работать меньше sample_ttl. Поэтому начинаем собственные
+        # монотонные часы с 10 секунд и двигаем их вперёд, не создавая отрицательных дат.
+        now = [10.0]
+        clock = gateway.hub._trusted
+        clock._clock = lambda: now[0]
+        source.sample = AsyncMock(return_value=TimeSample(lower_utc=1000, upper_utc=1000.1, observed_at=now[0]))
         original = source.sample
         failed = AsyncMock(side_effect=RuntimeError("private-time-payload"))
         if mode == "startup":
@@ -241,9 +249,8 @@ def test_time_readiness(
                 source.sample = failed
                 await gateway.hub._update_time()
             elif mode == "expiry":
-                clock = gateway.hub._trusted
-                sample = clock.bounds()
-                clock._sample = replace(sample, observed_at=sample.observed_at - clock.policy.sample_ttl - 1)
+                assert clock.bounds() is not None
+                now[0] += clock.policy.sample_ttl + 1
             state = gateway.stats()
             assert state["reason"] == "time_unavailable"
             assert not state["ready"] and not state["fatal"]
@@ -254,6 +261,7 @@ def test_time_readiness(
             calls = failed.await_count
             gateway.stats()
             assert failed.await_count == calls
+            original.return_value = TimeSample(lower_utc=1000, upper_utc=1000.1, observed_at=now[0])
             source.sample = original
             await gateway.hub._update_time()
             assert gateway.stats()["ready"]

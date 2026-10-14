@@ -1,10 +1,10 @@
 ﻿# Проверка установленного пакета без импорта исходников из checkout.
 #
-# Version 1.2.0
+# Version 1.2.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-191241
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -178,7 +178,7 @@ def main() -> int:
         from remote_watch.gateway_server.config import load_deployment_config
         deployment = load_deployment_config(target / "gateway_server.local.json")
         assert deployment.commands.port == 8766
-        assert deployment.application.icon_path == target / "logo" / "remote_watch.ico"
+        assert deployment.application.icon_path == (target / "logo" / "remote_watch.ico").resolve()
         assert deployment.application.icon_path.read_bytes() == default_icon().read_bytes()
 
         # Doctor работает offline даже в core wheel и не разрешает token_env.
