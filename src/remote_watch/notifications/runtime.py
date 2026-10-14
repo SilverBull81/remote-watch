@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений: ограниченные очереди, один поток и отдельный asyncio loop.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261013-141219
+# Дата и время последнего изменения: 261014-095557
 #
 # Классы:
 # -> RuntimeState: Состояния фоновой отправки.
@@ -19,6 +19,7 @@
 #    Интерфейс:
 #    -> state(): Чтение текущего состояния runtime.
 #    -> stats(): Независимая копия счётчиков.
+#    -> health(): Последнее состояние доставки отдельно от истории ошибок.
 #    -> start(): Запуск фонового потока и подготовка клиентов.
 #    -> astart(): Асинхронный запуск без блокировки loop приложения.
 #    -> stop(): Ожидание завершения в пределах общего срока.
@@ -86,6 +87,7 @@ from remote_watch.notifications.delivery import (
     ResultSource,
 )
 from remote_watch.notifications.handler import NotificationHandler
+from remote_watch.notifications.health import DestinationHealth, NotificationHealth, observe_result
 from remote_watch.notifications.routing import PolicyRouter
 from remote_watch.notifications.timing import DeliveryClock, SystemDeliveryClock
 
@@ -253,6 +255,8 @@ class NotificationRuntime:
         self._state = RuntimeState.CREATED
         self._counts = {item.name: 0 for item in fields(RuntimeStats)}
         self._destination_counts = {item.destination_id: self._counts.copy() for item in config.destinations}
+        self._destination_health = {item.destination_id: DestinationHealth(item.destination_id)
+                                    for item in config.destinations}
         self._ingress: deque[tuple[Notification, float]] = deque()
         self._wake_pending = False
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -306,6 +310,34 @@ class NotificationRuntime:
         with self._lock:
             counts = self._counts if destination_id is None else self._destination_counts[destination_id]
             return RuntimeStats(**counts)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Последнее состояние доставки отдельно от истории ошибок
+    #--------------------------------------------------------------------------------------------------------------
+    def health(
+        self,
+        destination_id: str | None = None,
+    ) -> NotificationHealth:
+
+        """Read immutable passive observations without network I/O or resetting counters.
+
+        :param destination_id: Configured destination, or None for all destinations.
+        :type destination_id: str | None
+
+        :return: Coherent lifecycle and last-observed delivery snapshot.
+        :rtype: NotificationHealth
+        """
+
+        # destination_id — тот же выбор, что у stats(); неизвестное имя даёт KeyError.
+        # Не вызываем часы адаптера и не проверяем сеть при чтении мониторинга.
+        with self._lock:
+            values = (tuple(self._destination_health.values()) if destination_id is None
+                      else (self._destination_health[destination_id],))
+            states = {value.delivery_state for value in values}
+            state = ("degraded" if "degraded" in states else "unobserved"
+                     if not states or "unobserved" in states else "healthy")
+            return NotificationHealth(runtime_state=self._state.value, delivery_state=state, destinations=values)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -983,13 +1015,15 @@ class NotificationRuntime:
 
             # Самостоятельный CancelledError адаптера не должен остановить все будущие отправки.
             self._count("adapter_errors", destination_id=destination_id)
+            reason = "adapter_cancelled"
         except asyncio.TimeoutError:
-            pass
+            reason = "attempt_timeout"
         except Exception:
             self._count("adapter_errors", destination_id=destination_id)
+            reason = "adapter_error"
 
         source = ResultSource.GATEWAY if state.destination.mode is DeliveryMode.GATEWAY else ResultSource.PROVIDER
-        return DeliveryResult(status=DeliveryStatus.UNKNOWN, source=source)
+        return DeliveryResult(status=DeliveryStatus.UNKNOWN, source=source, reason_code=reason)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -1033,6 +1067,12 @@ class NotificationRuntime:
 
             timeout = min(ttl_remaining, stop_remaining, policy.attempt_timeout)
             result = await self._attempt(state, delivery, timeout)
+
+            # Каждое назначение отправляет последовательно. Фиксируем результат
+            # до счётчика accepted, чтобы его наблюдатель уже видел новое health.
+            with self._lock:
+                self._destination_health[destination_id] = observe_result(
+                    self._destination_health[destination_id], result, time.monotonic())
 
             if result.status is DeliveryStatus.PROVIDER_ACCEPTED:
                 self._count("accepted", destination_id=destination_id)

@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.5.6
+Version 1.5.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-001413
+Дата и время последнего изменения: 261014-100251
 
 ## Project Intent
 
@@ -13,7 +13,26 @@ delivery, and optional secure command routing for distributed Python
 applications.
 
 The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.4.dev3.
+The package version is 0.4.4.dev4.
+Dev4 adds passive NotificationRuntime.health() per destination and aggregate.
+Read docs/RUNTIME.md: lifecycle, last-observed delivery state and cumulative counters
+are distinct. A later provider acceptance clears current failure for that destination
+only; history survives recovery/close. No probes, payloads, provider message IDs,
+delivery policy or wire changes. Local drops remain historical stats, not connectivity.
+The owner accepted field reconnect, deploy and gateway_server operation on 2026-10-14.
+Fresh SpamBot logs independently show reconnects=1 at 06:12:24 and =2 at 08:17:27,
+with ready=true and no pending results. The owner identifies the latter as a manual
+gateway restart. Do not infer resolution apply, new notification-health acceptance,
+OS service/reboot/crash acceptance or private ntfy commands from these observations.
+Remaining 0.4 scope and explicit deferred work: docs/REVIEW_0_4.md.
+Windows service is the next implementation step; command journal capacity/pending/UNKNOWN
+summary remains open. SpamBot source and production processes are unchanged here.
+Dev4 final Windows CPython 3.12.2 wheels passed core 1106 (73 skips, 2 live deselections)
+and extras 1537 (2 live deselections), without pytest warnings. Targeted health/runtime/retry:
+52 passed; Ruff/style: 152 files, no issues; all 11 installed CLIs passed.
+Reports: build/validation-0444-core-final and build/validation-0444-extras.
+No new CI/Linux/Python 3.10/live-provider or notification-health field acceptance.
+Version notes below preserve their historical evidence; latest field acceptance is above.
 Dev3 adds explicit offline diagnostics.command_resolution (list/export/preview/apply).
 Read docs/COMMAND_RESOLUTION.md and ADR 0017 before changing reconciliation.
 Only operator-confirmed stopped execution with client COMPLETED and exact hub UNKNOWN

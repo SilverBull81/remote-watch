@@ -1,10 +1,10 @@
 ﻿# Фоновая отправка уведомлений
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 260928-184929
+Дата и время последнего изменения: 261014-100251
 
 ## Реализовано в 0.1.0
 
@@ -261,6 +261,64 @@ asyncio.run(run_async_example())
 ```
 
 ## Наблюдение за результатом
+
+С **0.4.4.dev4** `runtime.health()` возвращает отдельный неизменяемый
+`NotificationHealth`. `runtime.health("destination_id")` выбирает одно назначение;
+неизвестное имя даёт KeyError. Чтение согласовано одной короткой блокировкой,
+не обращается к сети, адаптерам или SQLite и не сбрасывает счётчики.
+
+- `runtime_state`: местный жизненный цикл `created/running/stopping/closed/failed`.
+- `delivery_state`: `unobserved` до первого результата, `healthy` после принятия
+  сервисом, `degraded` после неудачной/неопределённой попытки. Для всех назначений
+  приоритет имеет degraded, затем unobserved; healthy означает успех для каждого.
+  Без назначений состояние остаётся unobserved.
+- `destinations`: tuple снимков `DestinationHealth`. В каждом есть имя назначения,
+  `current_error`, исторический `last_error`, `last_attempt_at`, `last_success_at`,
+  `last_failure_at`, `consecutive_failures`, `recoveries` и собственный delivery_state.
+
+Следующее `PROVIDER_ACCEPTED` для **этого же назначения** снимает current_error,
+обнуляет consecutive_failures и увеличивает recoveries, если ранее был degraded.
+Это работает и при повторе той же доставки, и при успехе следующего уведомления.
+Другие назначения и история ошибок не меняются. Timeout, исключение адаптера,
+неверный результат и самовольная отмена получают постоянные коды
+`attempt_timeout`, `adapter_error`, `adapter_cancelled` без текста исключений.
+`NotificationFailure` сохраняет только категорию, source, машинный reason_code,
+числовые HTTP/provider/TLS коды и безопасные error_kind/tls_reason. ID сообщений,
+уведомления и ответы провайдера в health не входят. Custom adapters по-прежнему
+обязаны соблюдать контракт безопасного reason_code в DeliveryResult.
+
+Отметки времени используют `time.monotonic()` процесса наблюдателя: их можно
+вычитать из текущего time.monotonic(), но нельзя сравнивать между VM или запусками.
+Это момент завершения попытки. Health не является активной проверкой доступности:
+при простое старое наблюдение не обновляется, а возвращение сети само по себе
+не снимает degraded — нужен следующий успех. Healthy не доказывает показ на телефоне.
+После остановки наблюдения сохраняются, но runtime_state становится closed/failed.
+
+Локальный overflow, ошибка нормализации, истечение TTL до попытки и отмена при
+shutdown учитываются отдельно в RuntimeStats. Они не объявляются сетевым отказом.
+Счётчики потерь нужно сохранять и сравнивать по интервалам для отдельных сообщений
+о потерях: восстановление связи не возвращает уже отброшенное уведомление.
+
+Для интеграции SpamBot замените проверку накопительных ошибок в `Monitor.health()`:
+
+```python
+snapshot = runtime.health()
+notifications_degraded = (
+    snapshot.runtime_state != "running" or snapshot.delivery_state == "degraded"
+)
+```
+
+Начальные enabled/closed/failed/starting проверки приложения остаются прежними.
+В `Monitor.health()` используйте `self.watcher.runtime` и присваивайте
+`result["notifications"] = "degraded"`, если notifications_degraded равен True.
+`unobserved` допустимо показывать как running местного runtime с отдельным
+уточнением «доставка ещё не наблюдалась». Для диагностики выводите
+`dataclasses.asdict(snapshot)` и `dataclasses.asdict(runtime.stats())`, а при
+нескольких назначениях — также `runtime.stats(destination_id)`.
+О потере очереди/TTL сообщайте по **приросту** счётчиков, не удерживая из-за старого
+инцидента текущий сетевой статус навсегда. Счётчики не следует сбрасывать вручную.
+Обновления библиотеки в приложении достаточно; конфиги и gateway для нового API
+менять не требуется. Код SpamBot в этой доработке не меняется.
 
 `runtime.stats()` возвращает неизменяемый RuntimeStats со счётчиками от момента создания.
 Это безопасная копия под блокировкой, без секретов и текстов ошибок. Без аргумента

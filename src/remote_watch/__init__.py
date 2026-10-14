@@ -1,10 +1,10 @@
 ﻿# Общие типы Remote Watch, доступные приложениям при импорте пакета.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261007-112702
+# Дата и время последнего изменения: 261014-095557
 #
 # Экспорт:
 # -> Identity, Notification, SnapshotLimits: Данные приложения и уведомления.
@@ -14,6 +14,7 @@
 # -> CommandCallback, ArgumentValidator, CommandContext, CommandRegistry, CommandSpec: Регистрация команд.
 # -> NotificationHandler, PolicyRouter: Подготовка записей logging и выбор получателей.
 # -> NotificationRuntime, RuntimeState, RuntimeStats: Фоновая отправка, состояние и счётчики.
+# -> NotificationHealth, DestinationHealth, NotificationFailure: Наблюдения доставки и восстановления.
 # -> DeliveryClock, SystemDeliveryClock: Подменяемые часы доставки и ожидания повторов.
 # -> RemoteWatcher, ConsoleConfig, RotatingFileConfig: Подключение logger и локальных журналов.
 # -> DailyFileConfig, DailyFileHandler: Локальные журналы по дням, годам и месяцам.
@@ -44,6 +45,9 @@ from remote_watch.notifications.delivery import DeliveryResult as DeliveryResult
 from remote_watch.notifications.delivery import DeliveryStatus as DeliveryStatus
 from remote_watch.notifications.delivery import ResultSource as ResultSource
 from remote_watch.notifications.handler import NotificationHandler as NotificationHandler
+from remote_watch.notifications.health import DestinationHealth as DestinationHealth
+from remote_watch.notifications.health import NotificationFailure as NotificationFailure
+from remote_watch.notifications.health import NotificationHealth as NotificationHealth
 from remote_watch.notifications.routing import PolicyRouter as PolicyRouter
 from remote_watch.notifications.runtime import NotificationRuntime as NotificationRuntime
 from remote_watch.notifications.runtime import RuntimeState as RuntimeState
