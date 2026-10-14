@@ -44,11 +44,13 @@
       "identity": {
         "service": "app1",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
-      "aliases": ["app1-telegram"]
+      "aliases": [
+        "app1-telegram"
+      ]
     },
     {
       "name": "app2",
@@ -56,11 +58,13 @@
       "identity": {
         "service": "app2",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
-      "aliases": ["app2-telegram"]
+      "aliases": [
+        "app2-telegram"
+      ]
     },
     {
       "name": "app3",
@@ -68,11 +72,13 @@
       "identity": {
         "service": "app3",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
-      "aliases": ["app3-telegram"]
+      "aliases": [
+        "app3-telegram"
+      ]
     },
     {
       "name": "app4",
@@ -80,11 +86,13 @@
       "identity": {
         "service": "app4",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
-      "aliases": ["app4-telegram"]
+      "aliases": [
+        "app4-telegram"
+      ]
     }
   ]
 }

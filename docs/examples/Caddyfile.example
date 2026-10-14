@@ -1,0 +1,37 @@
+{
+    admin 127.0.0.1:2019
+    auto_https disable_redirects
+    skip_install_trust
+    storage file_system "/var/lib/remote-watch/caddy"
+    log {
+        output file "/var/log/remote-watch-caddy/runtime.jsonl" {
+            roll_size 10MiB
+            roll_keep 5
+        }
+        format json
+    }
+    servers {
+        max_header_size 16KB
+        timeouts {
+            read_header 5s
+            read_body 15s
+            idle 2m
+        }
+    }
+}
+
+https://gateway.example.test:8443 {
+    tls internal
+    request_body {
+        max_size 128KB
+    }
+    handle /v1/notifications* {
+        reverse_proxy 127.0.0.1:8765
+    }
+    handle /v1/commands* {
+        reverse_proxy 127.0.0.1:8766
+    }
+    handle {
+        respond 404
+    }
+}

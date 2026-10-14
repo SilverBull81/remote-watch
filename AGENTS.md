@@ -1,626 +1,91 @@
 ﻿# Repository Instructions
 
-Version 1.6.3
+Version 1.6.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-165214
+Дата и время последнего изменения: 261014-184253
 
-## Project Intent
+## Intent and current status
 
-Remote Watch provides standard-logging integration, asynchronous notification
-delivery, and optional secure command routing for distributed Python
-applications.
+Remote Watch integrates standard Python logging with bounded asynchronous notifications
+and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
+The current package version is in pyproject.toml. The first public production release
+and license have not been selected. Do not publish packages or add a license without
+the owner's decision. Functional milestone 0.4 awaits the final agreed CI result.
 
-The private 0.1 baseline and the functional outbound-relay scope of 0.2 are complete.
-The package version is 0.4.5.dev4.
-Dev4 repairs complete final main-guard banners, Russian argument-comment spacing and
-semantic body spacing, with AST-equivalence checks and negative style regressions.
-Owner confirms tray and service reinstall, and notification_health in SpamBot status.
-Read-only live status showed alerts enabled, both components ready and zero delivery
-attempts in that manager generation; this does not prove live alert delivery.
-Routine start/stop is silent; isolated crash instructions are shipped in SERVICE.md.
-Production configuration/processes/credentials/journals were not modified.
-Dev4 clean Windows CPython 3.12.2 wheel-from-sdist checks: core 1191 passed, 75 skipped, 2 deselected in 68.04s (0:01:08); extras 1624 passed, 2 deselected in 135.23s (0:02:15). Ruff/style: 161 files, no issues; 17 style
-regressions passed. Reports: build/validation-0454-core and -extras.
-No new CI/Linux/live-provider or actual crash/reboot acceptance.
-Dev3 follows owner-reported service field tests: both channels, single manager/readers,
-tray stop, console start and client reconnect worked; remove deleted the service.
-Read-only LV inspection confirmed SCM 1060, service/System full control, operator read,
-and manager.lock rb allowed / r+b denied. Installer now locks the existing file read-only,
-retains the exact OS exclusion and distinguishes ownership access/I/O from a live manager.
-Sufficient existing service grants are checked per descendant before skipping ACL writes.
-The owner selected a persistent interactive controller: hide icon on stopped/not_found/headless,
-restore on the next active SCM state, remove Exit tray. start/sync-tray request this operator's
-hidden pythonw controller; no cross-session GUI or second manager is created.
-The server doctor report doctor-journals.local.json passed all 12 checks: hub pending=0,
-unresolved_unknown=0, execution_active=0, capacity=ok; historical unknown=1/resolutions=1
-do not prove a specific administrative reconciliation. Owner reports SpamBot health integration,
-and fixed reinstall/UI are now accepted by the owner. Notification-health field recovery
-is explicitly deferred beyond 0.4; reboot and isolated crash/budget acceptance remain pending.
-Production services/configs/ACL/journals and SpamBot source remain unchanged by this work.
-Dev3 validation on Windows CPython 3.12.2: core 1189 passed, 75 skipped, 2 deselected in 67.14s (0:01:07);
-extras 1622 passed, 2 deselected in 136.89s (0:02:16). Both clean wheel-from-sdist, no pytest warnings.
-Ruff/style: 161 files, zero issues; 93 wheel modules/resources match source;
-12 installed CLIs passed. Targeted service/tray recovery: 60 passed (19.72s).
-Reports: build/validation-0453-core and build/validation-0453-extras.
-Native own-file ACL/locking tests do not prove a new production install or GUI acceptance.
+The owner accepted field notifications/commands/reconnect, deploy/doctor, Windows service,
+tray, install/remove/reinstall, reboot, crash tests and delivery of gateway owner alerts.
+These are conversation evidence, not a claim of independently inspected logs for every test.
+Do not infer private ntfy command or real systemd acceptance. Notification-health recovery
+field observation is explicitly deferred beyond 0.4. Current validation: docs/development/VALIDATION.md.
 
+## Read relevant context
 
-Dev2 unifies Python formatting with SpamBot CODE_STYLE 1.0.8 by owner request.
-Read docs/CODE_STYLE.md: next-line docstrings, vertical single-argument signatures,
-closing parenthesis at argument indentation, per-field dataclass contracts,
-explicit sections/inventories and one blank line within a group; no package main guards.
-The AST checker now enforces these rules; negative regressions cover prior gaps.
-Russian comments receive a separate readability pass. No application, journal, wire,
-service registration, production configuration or SpamBot source is changed.
-Dev2 clean Windows CPython 3.12.2 wheel-from-sdist checks: core 1166 passed, 74 skipped, 2 deselected in 66.54s (0:01:06);
-extras 1598 passed, 2 deselected in 134.31s (0:02:14). Both without pytest warnings; Ruff/style: 160 files, zero issues.
-15 negative style regressions passed. All 93 modules of each final wheel match source bytes;
-12 installed CLIs passed. AST comparison preserved executable expressions in 158 prior files,
-apart from package guards; checker and new tests are separate changes. Reports:
-build/validation-0452-verified-core and build/validation-0452-verified-extras.
-No new CI/Linux/Python 3.10/live-provider or OS-service acceptance is claimed.
-Dev1 operational acceptance below remains separate from this formatting-only revision.
-Stage 0.4.5 adds explicit Windows service CLI (optional service/pywin32 extra),
-passwordless per-service virtual account, exact binary/config/operator ownership,
-bounded SCM crash recovery and separate user-session tray. application.ui controls
-tray/headless; the service itself is always headless. Install/remove launchers and
-SERVICE.md are mandatory deploy resources; deploy never installs/starts services.
-Read docs/GATEWAY_SERVICE.md and ADR 0019 before changing OS integration or ACL.
-Operator query/start/stop cannot change ImagePath/account; control/log access stays
-private to service/System plus explicit operator read access. Installation refuses
-active manager ownership, existing service and linked recursive ACL targets.
-Partial ACL grants may remain on failed install/removal; never reset/delete journals.
-Service installation requires a dedicated log_dir (new default logs/gateway_server).
-The existing LV deployment uses shared logs with external Caddy: service_shared_logs
-refuses that root or foreign log entries before registration/ACL. Operator changes
-only the operational log_dir explicitly; SQLite/CA/old logs stay at original paths.
-Production processes/configs/SCM/Caddy are unchanged. Current process is not elevated:
-real service installation, Session 0 account/DLL/ACL, RDP/reboot/crash and systemd
-acceptance must be recorded separately from fake and native console tests.
-Dev1 final Windows CPython 3.12.2 wheels: core final suite 1151 passed (74 skips,
-2 live deselections), extras 1583 passed (2 live deselections), no pytest warnings.
-Reports: build/validation-0451-release-core/report.json plus suite-final.json,
-and build/validation-0451-final-extras/report.json. Ruff/style: 159 files, 0 issues;
-12 installed CLIs and actual CMD service dry-run passed. 93 Python modules and
-packaged resources match final source bytes. Service/deploy targets: 48 passed.
-Reconnect fixture races (3-second observation vs commit, and local closed vs remote
-503 for an in-flight fake RPC) are fixed only in tests; production client deadlines
-and closed handling are unchanged. 21 reconnect tests and 40 consecutive dispatcher
-reconnects passed. Read VALIDATION.md for intermediate failures and exact coverage.
-No service installation, production ACL/config/process change, new CI/Linux/Python
-3.10/live-provider or real service/reboot acceptance occurred.
-Dev5 closes journal observability R5: read docs/COMMAND_JOURNALS.md and ADR 0018.
-StoreWorker caches numeric hub/client/source aggregates after ordinary operations,
-at most once per 5 seconds, on the same executor lane with bounded read-only SQL.
-Observation errors cannot change an original operation result or committed outcome.
-CommandClient/Hub/SourceRunner.journal_status read the cache only. Private manager
-status/doctor server --online expose hub plus up to 8 unnamed source summaries;
-public client probes do not expose other applications' journal counts.
-Explicit doctor --mode journal --journal PATH uses stopped local SQLite immutable/ro,
-rejects sidecars, never opens a runtime owner, migrates, repairs, or creates locks/DBs.
-Source limits absent from file stay null. UNKNOWN/running/ACK/cursors remain intact.
-capacity/unknown/stale are warnings, not restart reasons. Manager ages cached samples
-after heartbeat loss; stale/failed observations never become fresh by being read.
-The owner changed order: finish journals before 0.4.5. A tray is REQUIRED for the
-service solution; its separate user-session controller is implemented in 0.4.5.
-The owner then made its presence optional through application.ui; support remains required.
-Dev5 final Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1125
-(73 skips, 2 live deselections), extras 1556 (2 live deselections), no warnings.
-Ruff/style: 154 Python files; all 11 installed CLIs passed. Reports:
-build/validation-0445-release-core and build/validation-0445-release-extras.
-All 89 packaged Python modules match final source bytes. Journal/reconnect targets:
-20 passed. An intermediate reconnect test timeout is recorded in VALIDATION.md;
-do not treat it as a proven field root cause. No new CI/Linux/Python 3.10/live run.
-Read-only client copy has records=13, pending=0, unknown=0, with identical bytes;
-this does not identify how the older outcome conflict was resolved in production.
-Dev4 adds passive NotificationRuntime.health() per destination and aggregate.
-Read docs/RUNTIME.md: lifecycle, last-observed delivery state and cumulative counters
-are distinct. A later provider acceptance clears current failure for that destination
-only; history survives recovery/close. No probes, payloads, provider message IDs,
-delivery policy or wire changes. Local drops remain historical stats, not connectivity.
-The owner accepted field reconnect, deploy and gateway_server operation on 2026-10-14.
-Fresh SpamBot logs independently show reconnects=1 at 06:12:24 and =2 at 08:17:27,
-with ready=true and no pending results. The owner identifies the latter as a manual
-gateway restart. Do not infer resolution apply, new notification-health acceptance,
-OS service/reboot/crash acceptance or private ntfy commands from these observations.
-Remaining 0.4 scope and explicit deferred work: docs/REVIEW_0_4.md.
-The owner subsequently accepted gateway_doctor on server and client. The inspected
-C:/Work/runs/doctor-client-01.json has mode=client, online=true, passed=true and 16 checks ok,
-including both channel routes/TLS/permissions/readiness, trusted time and session presence.
-Server acceptance is conversation evidence, without a separately inspected server report.
-Do not keep the original doctor field test pending; service-mode verification is separate.
-Journal summaries are implemented in dev5; next is service support with a user-session tray.
-SpamBot source and production processes are unchanged here.
-Dev4 final Windows CPython 3.12.2 wheels passed core 1106 (73 skips, 2 live deselections)
-and extras 1537 (2 live deselections), without pytest warnings. Targeted health/runtime/retry:
-52 passed; Ruff/style: 152 files, no issues; all 11 installed CLIs passed.
-Reports: build/validation-0444-core-final and build/validation-0444-extras.
-No new CI/Linux/Python 3.10/live-provider or notification-health field acceptance.
-Version notes below preserve their historical evidence; latest field acceptance is above.
-Dev3 adds explicit offline diagnostics.command_resolution (list/export/preview/apply).
-Read docs/COMMAND_RESOLUTION.md and ADR 0017 before changing reconciliation.
-Only operator-confirmed stopped execution with client COMPLETED and exact hub UNKNOWN
-may be reconciled. The original UNKNOWN remains; SQLite schema 2 stores separate acceptance,
-fences prior hub handles and preserves owner/cursors. Existing schema 1 migrates on open;
-old runtimes reject schema 2. No HTTP admin endpoint or wire change is introduced.
-Clients still require exact authenticated receipts; no manual local ACK or callback replay.
-Health exposes operator_action_required/recovery_hint even after close. Actual field
-resolution and post-resolution reconnect remain unverified; production journals/processes
-and SpamBot source are not changed by this implementation. Validation is in docs/VALIDATION.md.
-Final dev3 Windows CPython 3.12.2 wheels passed core 1093 (73 skips, 2 live deselections)
-and extras 1524 (2 live deselections), without pytest warnings. Ruff/style: 150 files;
-all 11 installed CLIs passed. Reports: build/validation-0443-core-final and
-build/validation-0443-extras-final. Read-only preview matched the field request/claim;
-no administrative apply, CI/Linux/Python 3.10 or live-provider run was performed.
-Dev2 includes prior-process unacknowledged results in client health and retries only
-completed, nonrunning results of the same Identity with their original refs/claims.
-Matching durable receipts remain mandatory; old UNKNOWN/running work is not resolved.
-Read docs/COMMAND_RECONNECT.md: the 2026-10-13 SpamBot field journal has a prior
-kill_bot COMPLETED without ACK, while the LV hub retains the same request/claim as
-UNKNOWN/timeout with execution_active. Both journals were inspected read-only.
-The field reconnect blocks after one attempt; dev2 fixes hidden pending state and
-skipped old results, but does not resolve this real outcome conflict. No journal
-deletion, manual ACK/reset or implicit UNKNOWN adjudication is authorized. A separate
-explicit administrative resolution workflow is provided by dev3; do not claim field recovery.
-Dev2 clean Windows CPython 3.12.2 wheel-from-sdist checks passed: core 1074 tests
-(73 skips, 2 live deselections), extras 1505 (2 live deselections), no warnings.
-Ruff/style: 147 files, no issues. Targeted reconnect/health: 25 passed. Reports:
-build/validation-0442-core and build/validation-0442-extras. No new CI/Linux/Python 3.10,
-live-provider or field acceptance; production processes and journals remain unchanged.
-Stage 0.4.4 provides diagnostics.gateway_doctor with explicit server/client modes,
-offline default and opt-in --online. Client checks use separate authenticated probe
-endpoints, never registration/heartbeat/poll/send as a ping. Probe Identity and all
-requested aliases/scopes must match the configured principal; no actor selection,
-callback execution, lease renewal or journal access occurs. Existing wire schemas
-are unchanged. Read docs/GATEWAY_DOCTOR.md and ADR 0016 before extending this boundary.
-Deploy ships doctor launchers/client template and the notification probe Caddy route.
-Existing Caddy/configs remain preserved. UNKNOWN and full journal capacity are not
-observed; trusted time comes from existing health, not a fresh provider request.
-The owner is independently repeating the SpamBot reconnect pilot; do not claim this
-doctor implementation fixes or confirms the still-unresolved field reconnect incident.
-Dev 0.4.4.dev1 passed clean Windows CPython 3.12.2 wheel-from-sdist checks:
-core 1070 tests (73 skips, 2 live deselections), extras 1501 (2 live deselections),
-without pytest warnings. Ruff/style passed for 147 Python files; ten installed CLIs
-passed help/encoding checks. Final core evidence is validation-0441-core-final;
-extras evidence is validation-0441-extras. Caddy adapt accepted a synthetic generated
-config; no production reload, new CI/Linux/Python 3.10 or live-provider run occurred.
-Read docs/VALIDATION.md for precise coverage and remaining field checks.
-Dev3 copies the canonical ICO into deployment logo/remote_watch.ico and sets a
-relative application.icon_path in new server configs. Existing configs/icons
-remain untouched on repeat deploy. Tray has About and Stop gateway server.
-The owner reports gateway_server startup, tray, remote SpamBot notifications and
-commands working; reconnect field acceptance is still under investigation.
-Dev3 passed clean Windows CPython 3.12.2 wheel checks: core 1050 tests (72 skips),
-extras 1460 tests, each with 2 live deselections and no warnings. Local synthetic
-reconnect passed with normal heartbeat pacing and separately with real monotonic
-clocks, TLS and dispatcher; this does not resolve the owner's failed reconnect.
-SpamBot logs only broad monitoring transitions; fresh degraded-state client
-diagnostics are needed. See COMMAND_RECONNECT.md and VALIDATION.md. No new CI.
-Dev2 preserves safe component_code/component_field and loader hints in deployment
-configuration errors. Linked JSON contents, unknown keys and supplied values stay
-private. PowerShell script policy does not prevent direct venv Python CLI usage;
-deployment instructions document this route without policy changes.
-Dev2 passed clean Windows CPython 3.12.2 wheels: core 1050 tests (72 skips),
-extras 1460 tests, each with 2 live deselections and no pytest warnings.
-Ruff/style passed for 142 files. No new CI/Linux/live-provider run; see VALIDATION.
-Stage 0.4.3 adds python -m remote_watch.gateway_server.deploy and packaged resources.
-Read docs/GATEWAY_DEPLOY.md and ADR 0015 before changing deployment behavior.
-Deploy never launches components, opens journals or reads environment credentials.
-Existing configs stay at their original paths; external Caddy is the default.
-Existing files are never overwritten. Dry-run writes nothing; update-templates
-creates separate versioned proposals with a safe file-level difference report.
-Doctor, OS services and field acceptance remain subsequent work.
-Dev1 passed clean Windows CPython 3.12.2 wheel checks: core 1043 tests (72 skips),
-extras 1453 tests, each with 2 live deselections. Both runs had two old pytest
-temporary-directory cleanup warnings; no test failures. Ruff/style: 142 files.
-Installed checks exercise nine CLIs and offline deploy outside the checkout.
-A synthetic Caddyfile passed real local Caddy adaptation and storage validation;
-no service restart, CA generation or live TLS/provider test was performed.
-Read docs/VALIDATION.md for exact evidence; no new CI/Linux/Python 3.10 run.
-Dev5 unifies notification module and API names without legacy aliases. Shared
-notification wire types live in notifications.gateway_protocol; gateway server
-modules use notification_ prefixes and provider modules use _notifications.
-Use NotificationGatewayClientConfig for the adapter and
-NotificationGatewayServerConfig/NotificationGateway for the server.
-Command client/source JSON now uses display_mode; CommandRegistration and durable
-wire records retain command_display_mode with unchanged schemas and hashes.
-Read docs/NAMING_MIGRATION.md before upgrading applications or component JSON.
-Existing CLI entry points are unchanged. Deploy remains the next stage 0.4.3;
-the running SpamBot pilot and production configuration were not modified.
-Final Windows CPython 3.12.2 wheel passed core 1022 tests (72 skips) and extras
-1432 tests, each with 2 live deselections. Core reported 3 Windows permission
-warnings while cleaning old pytest directories; final extras used a dedicated
-temporary directory and passed without warnings. Ruff/style: 139 files, no issues.
-See docs/VALIDATION.md for exact reports. No CI/Linux/live-provider run was added.
-Dev4 implements automatic command-client recovery after successful initial startup.
-Read docs/COMMAND_RECONNECT.md and ADR 0014 before changing this boundary.
-Live journal generation remains fixed; bind_session changes only future admissions
-after pending/running work is settled. One heartbeat coordinator uses bounded jittered
-backoff and one candidate nonce; dispatcher survives stale_session and remote closed/503.
-No callback retry, journal reopen/cursor reset or UNKNOWN resolution is introduced.
-Old-epoch result calls only acknowledge an exactly matching durable outcome under
-current principal Identity authorization; they cannot write results or release execution.
-Conflicting late outcomes block recovery and retain evidence. Server-ready is not
-application-ready. Default ICO is canonical in root logo/; src assets is removed.
-Wheel installs it as a data file in the Python environment, source runs use root logo.
-Production deployment, ongoing SpamBot pilot and Caddy are not modified.
-Final Windows CPython 3.12.2 wheel passed core 1020 tests (72 skips) and extras
-1430 tests, each with 2 live deselections. Ruff/style: 139 Python files, no issues.
-The same final wheel was reinstalled into the isolated extras environment before
-its full final rerun. Real pip --target installation also locates the ICO.
-One new test was corrected to handle legitimate concurrent storage busy before
-asserting outcome_conflict; no callback retry was added. Exact reports and limits
-are in docs/VALIDATION.md. No new CI/Linux/live provider or field reconnect acceptance.
-Historical version notes below retain their original scope;
-no stable 0.2.0 tag is implied.
+- User entry points: README.md and docs/README.md; pending work: BACKLOG.md.
+- Before changing runtime, protocol/security, ownership or package boundaries:
+  docs/development/ARCHITECTURE.md and the corresponding source/tests.
+- Before changing code/docs: docs/development/CODE_STYLE.md and README.md in that folder.
+- Configuration, lifecycle and operations: docs/CLIENT.md, CONFIGURATION.md,
+  COMMANDS.md, NOTIFICATIONS.md, GATEWAY.md, SERVICES.md, TLS.md and OPERATIONS.md.
+- Audit and license alternatives: docs/development/AUDIT.md and LICENSING.md.
+- Machine-specific runbooks and historical evidence belong only under ignored docs/private.
+  Do not publish their contents in Git, build artifacts, diagnostics or PR descriptions.
 
-Dev3 history:
-Dev3 replaces RelayConfig/RelayChannel/RelayRequest with NotificationGatewayClientConfig,
-NotificationGatewayChannel and NotificationGatewayRequest. Modules are now
-adapters.notification_gateway and notification_gateway_protocol. DeliveryMode/ResultSource
-use GATEWAY="gateway"; provider/diagnostic CLI/settings select gateway. Removed extra
-relay is replaced by gateway; fixed diagnostic codes use gateway_* / invalid_gateway_response.
-The owner explicitly rejected legacy aliases: do not restore old imports or enum names.
-Historical entries below retain the names used at that time; current API is in ADR 0013.
-POST /v1/notifications, envelope schemas 1/2/3, commands, SQLite and Caddy CA are unchanged;
-there is no alternate route, downgrade POST or new reconnect. See docs/GATEWAY_FOLLOW_UP.md
-for the breaking migration. SpamBot/LV deployment was not modified. Owner reports that
-the week-long SpamBot run continues without remote-watch issues; it is not final acceptance.
-The updated purple robot icon uses robot_quik.png as face reference; logo/remote_watch.ico
-is an exact export of the packaged ICO. Reference logos remain untracked and are not shipped.
-Dev3 clean Windows CPython 3.12.2 wheels passed core 1004 tests (71 skips)
-and extras 1413 tests, each with 2 live deselections. Ruff/style: 138 files, no issues.
-No new CI/Linux, live-provider or production update was performed. See docs/VALIDATION.md.
-Dev2 bundles a multi-resolution robot tray icon and accepts application.icon_path
-relative to the deployment JSON. Null/absent selects the packaged default; headless
-does not decode images. Configuration checks file presence without importing Pillow.
-User reference logos are not package assets. See docs/GATEWAY_FOLLOW_UP.md for the
-terminology map and reconnect plan; renaming is implemented in dev3 above, reconnect is not.
-Direct/gateway is currently a notification-destination choice; messenger commands
-use the command gateway, whose replies do not depend on notification logging routes.
-Dev2 clean Windows CPython 3.12.2 wheels passed core 1002 tests (71 skips)
-and extras 1411 tests, each with 2 live deselections. Ruff/style: 138 files, no issues.
-Icon loading/menu tests use a fake GUI; no new CI/Linux/live or production changes.
-Stage 0.4.2 now implements gateway_server --start/--status/--stop with independent
-notification/command processes, loop-owned heartbeats, finite recovery and startup rollback.
-Windows x64 uses per-component kill-on-close Jobs; Linux uses gated parent-death protection.
-Private numeric loopback control has per-generation and per-child tokens, protected on disk.
-Never kill by a stale PID or touch external Caddy. Managed Caddy verifies explicit filesystem
-storage, runs a private effective-config snapshot and probes its local admin API; ingress
-remains unverified. Config application holds optional Windows tray and explicit direct
-Telegram/ntfy owner destinations. The owner selected messenger notices, not application events.
-SourceStats.ready/receive_error/reply_error track current source failures independently
-of last_error history. No command re-registration, callback retry, wire or journal change.
-Read docs/GATEWAY_DEPLOYMENT.md for limits and docs/VALIDATION.md for exact acceptance.
-The production deployment and SpamBot were not changed; deploy/doctor/OS service remain later work.
-Dev 0.4.2.dev1 clean Windows CPython 3.12.2 wheels passed core 994 tests (71 skips)
-and extras 1403 tests, both with 2 live deselections. Ruff/style passed 138 files.
-Real process tests cover both gateways with synthetic provider/time edges; actual
-Caddy 2.11.4 passed isolated managed startup, verifying TLS, restart and root retention
-from the installed wheel. Tray wiring uses a fake GUI backend. No new Linux/CI,
-live-provider, visual tray, reboot or long manager observation was performed.
-Dev12 serializes normal hub storage contention through a bounded FIFO async wait:
-max_storage_waiters=64 (1..256), one executor operation, one shared storage_timeout
-for admission plus execution. Cancelled/expired queued calls never reach the store;
-active operations stay pinned until actual completion. Client/source workers retain
-immediate rejection. busy_reason adds allowlisted local/HTTP 429 diagnostics and
-StageHealth details; legacy clients still see busy via status. Successful command
-wire schemas and stored request hashes are unchanged.
-TrustedClock keeps a still-valid anchor while refresh is in flight, checking original
-TTL/uncertainty/drift; actual failure or cancellation still invalidates it. Local hub
-health and command CLI expose time_reason, never source exception text or fallback UTC.
-See docs/COMMAND_HUB.md and docs/COMMAND_TIME.md. No live pilot incident log was inspected;
-the two failure mechanisms were reproduced locally, not proven as the only field causes.
-Dev11 adds DailyFileConfig/DailyFileHandler for YYYY/MM. EnglishMonth/prefix_log_YYMMDD.txt.
-RemoteWatcher(file=...) supports it alongside the unchanged RotatingFileConfig.
-Record.created selects the day in the configured tzinfo or OS local timezone;
-the default formatter uses that timezone too. Relative roots freeze at configuration.
-One stream per handler, thread-safe switching, append, no archive deletion and no reopen
-after close. Files are per-process; no multi-process coordination is promised.
-See docs/LOCAL_LOGGING.md before changing local calendar logging.
-Dev10 retains safe local TLS error_kind/verify_code/tls_reason in CommandError,
-sync startup errors, current StageHealth and DeliveryResult. Existing command codes
-and relay wire schemas are unchanged. Never infer a failing chain depth from code 10.
-Read docs/CADDY_RECOVERY.md for the recurring Windows Caddy incident and evidence;
-console selection was confirmed; Esc restored API and renewed leaf/intermediate
-without changing PID/root. RemoteWatchCaddy now runs on LV as LocalService with
-automatic startup, recovery and runtime file logging; verified TLS still uses the
-original root. On 2026-10-06 the owner rebooted LV: boot 16:58:02.500 UTC,
-Caddy serving 16:58:24.378 UTC, Auto/LocalService, unchanged root and verified TLS.
-The owner manually started both Python gateways; local listeners and credential-free
-HTTPS GET probes to both routes returned 405/Allow: POST. This is not command-session
-or RU/provider acceptance. The old observation contains 123 successful samples over
-two hours, with no renewal; a new bounded 25-hour observation started at 17:26 UTC.
-Scheduled renewal remains pending. See docs/CADDY_RECOVERY.md for observation limits.
-On 2026-10-06 the owner accepted the first real-application pilot: notifications and
-commands work as intended. This is conversation evidence, not a newly inspected report;
-do not infer acceptance of the subsequent dev9 presentation changes or ntfy commands.
-Dev9 adds English messenger notices, -> /command help lines and built-in /help.
-command_display_mode is independent of outbound display_mode. Explicit client mode
-is registered and persisted in the original request; results never look up a newer session's mode.
-Command wire schema 2 extends only registration/request/grant with explicit mode;
-absent mode retains byte-identical schema 1 and old hashes. Results/receipts are unchanged.
-Source JSON defaults to full; client override needs dev9 gateway/client, with no downgrade retry.
-Config JSON schema remains 1. Retain existing journals/cursors on upgrade; old code cannot
-read new schema 2 records. See docs/COMMAND_SOURCES.md and docs/COMMAND_STORAGE.md.
-Dev9 passed 1299 local tests (2 live deselections) on Windows Python 3.12.2;
-clean core/extras wheels passed 902/1299 tests. Ruff/style: 123 Python files, no issues.
-Real local TLS, source-journal recovery and independent two-client presentation are covered.
-No new CI/Linux/live-provider run; exact evidence is in docs/VALIDATION.md.
-Dev8 adds client RelayConfig display_mode/display_fields, carried only by relay schema 3.
-Absent mode inherits gateway presentation; explicit mode replaces it only for that delivery.
-The owner chose client config changes with application restart, not live config reload.
-Upgrade notification gateway once; later client display changes do not restart it.
-Schemas 1/2 retain their exact envelope; no downgrade/repeated POST fallback is allowed.
-Identity, routing, credentials, ACL and execution contracts are unchanged. See docs/NOTIFICATION_GATEWAY.md.
-Dev8 passed 1235 local tests (2 live deselections) on Windows Python 3.12.2;
-clean core/extras wheel checks passed 842/1235 tests. Ruff/style: 121 Python files,
-no issues. No CI/Linux/live-provider rerun; schema 3 field acceptance is pending.
-Exact evidence is recorded in docs/VALIDATION.md.
-Dev7 implements the first-pilot wishes: Telegram Help and implicit-target slash commands
-use the statically configured actor/chat ACL, never the sole currently live instance.
-Ambiguity requires explicit /rw alias; original session binding and replay protection remain.
-Telegram/ntfy notification destinations support full/compact/text and fixed display field
-groups. The gateway provider renders relay output, with optional dev8 client presentation overrides.
-CommandClient.health and DispatcherStats.ready separate current poll/heartbeat/storage/result
-failures from last_error history. Successful callbacks cannot hide heartbeat or result failure.
-No implicit command session re-registration or callback retry is introduced.
-See docs/COMMAND_SOURCES.md, docs/ADAPTERS.md and docs/COMMAND_EXECUTION.md.
-Dev7 passed 1213 local tests (2 live deselections), plus clean Windows Python 3.12.2
-core/extras wheel checks: 823/1213 passed. Ruff/style: 119 Python files, no issues.
-No CI/Linux/live providers were rerun. Owner pilot acceptance of these new features
-remains pending; exact evidence is in docs/VALIDATION.md.
-RelayConfig now accepts either a private literal token or token_env, exclusively.
-Both use the gateway credential validator; neither value nor reference is exposed in repr.
-Local validation: 1099 passed, 2 live deselected; 33 relay contract cases, no live providers.
-Synchronous command startup now copies only a safe known exception category into
-CommandError.__cause__, never the original message, traceback, notes or chain.
-Exact CommandError causes retain validated code/http_status. HTTP errors accept only
-a bounded single-code JSON envelope matching the status; stale_session survives HTTPS.
-Unknown bodies keep the status fallback, and body failures retain an observed http_status.
-See docs/COMMAND_EXECUTION.md. SpamBot's field root cause remains unconfirmed.
-Dev6 passed 1148 local tests (2 live deselections), plus clean Windows Python 3.12.2
-core/extras wheel checks: 768/1148 passed. Ruff/style: 116 Python files, no issues.
-Those dev6 checks did not rerun CI/Linux/live providers; dev7 validation is recorded separately.
-Core provides standard logging integration, bounded queues/retries/TTL, independent
-destinations, sync/async lifecycle, local handlers and polling statistics. Telegram,
-ntfy, relay and gateway have isolated optional dependencies. JSON and Python server
-configuration support literal token or token_env with private diagnostics.
+## Runtime invariants
 
-On 2026-09-30 the owner accepted direct delivery after about 12 hours: RU ntfy 26/26,
-LV Telegram and ntfy 26/26 each, all first-attempt provider acceptance. The first 25
-samples per host were confirmed on Android; full 24 hours and powered-off phone were
-waived. The ntfy long-text issue was fixed and confirmed in two 10-message rechecks.
-The owner then confirmed RU -> HTTPS gateway on LV -> Telegram -> phone after
-updating the LV venv to dev9: provider_accepted and immediate phone receipt. This
-last evidence comes from the conversation, not a newly inspected field report.
-Do not infer the exact clock allowance, wire schema or provider HTTP status from it.
+Constructors do not start I/O. Preserve external Logger levels/handlers/filters.
+Use explicit Identity(service, environment, region, host, instance_id), never guessed routing.
+Bound queues, outstanding work, retries, TTL, cleanup, startup and shutdown.
+No durable notification outbox is promised; provider acceptance is not phone receipt.
+Current health, historical errors/counters and lifecycle are distinct.
 
-Dev9 explicitly allows bounded UTC clock skew for outbound relay; relative request
-budgets remain bounded. It weakens server UTC age checks and is not command replay
-protection. Actual VM clocks differ by more than a minute. See ADR 0008.
-Long regional mixed delivery, autostart/reboot and operational recovery remain
-unverified and do not block starting 0.3. Scope/evidence: docs/REVIEW_0_1_0_2.md.
-Dev9 passed 576 local tests and clean core/extras wheel installation on Windows
-Python 3.12.2. The eight Windows/Linux Python 3.10/3.12 CI jobs passed for dev7;
-do not claim those matrix runs were repeated for dev9. See docs/VALIDATION.md.
+Commands retain actor/chat/target/scopes/session/epoch/claim checks. No implicit broadcast
+or target selection by the sole currently live instance. User callbacks remain application-owned,
+registered by mapping/partial or CommandSpec; resume/suspend need no second confirmation.
+Never automatically retry a possibly executed callback. UNKNOWN/running slots, durable receipts,
+owner generations and source high-water marks survive timeouts/restarts/cleanup.
 
-Stages 0.3.1/0.3.2 provide command wire/state contracts and bounded SQLite journals.
-SQLite atomically persists source decisions/cursors, compares revisions before
-STARTED, recovers old generations, retains unknown running executions and keeps
-source high-water marks after payload cleanup. See docs/COMMAND_STORAGE.md.
-Later stages add authenticated endpoints and callback execution as described below.
-The owner requires resume/suspend in a single message, without confirmation.
-TrustedClock uses an explicit trusted UTC interval, max age 120 seconds and
-monotonic remaining budgets. Optional HttpsDateTimeSource requires an explicitly
-trusted HTTPS origin and declared accuracy. In dev3 the owner selected TimeAPI.io;
-TimeApiTimeSource reads its UTC JSON with an explicit one-second accuracy assumption.
-LV HTTPS reachability was verified; this is not a provider clock-accuracy guarantee.
-No alternate public source or automatic fallback is enabled.
-See docs/COMMAND_TIME.md and ADR 0011. Never reuse a journal generation after process
-restart, reset source cursors to replay events, or release unknown execution merely
-because its timeout elapsed. The old confirmation helper is an unused prototype.
-Dev2 passed 769 local tests and clean core/extras wheel checks on Windows Python
-3.12.2. Real local TLS and abrupt subprocess crashes were tested; no live time
-origin, real command source or new CI matrix was exercised. See docs/VALIDATION.md.
-Stage 0.3.3 now provides command-only ACL, durable hub/client handshakes, heartbeat
-and HTTPS long polling. Fake callback execution over real local TLS is verified.
-Stage 0.3.4 now provides CommandDispatcher and explicit RemoteWatcher(command_client=...).
-Sync callbacks/validators use one dedicated worker; async callbacks use the application's
-astart loop. Timed-out work retains its slot until actual termination; only result
-delivery is retried. Durable release proof and pre-grant rejection extend hub operations.
-Old unknown executions remain pinned for review. Stage 0.3.5 now provides Telegram
-and private-topic ntfy sources, strict command JSON, a separate gateway.commands CLI
-and diagnostics.command_smoke. Source decisions bind the original session before
-hub submission. Source SQLite retains opaque provider IDs, a pending decision and
-an irreversible pruning cutoff. Local OS locks prevent a second deployment owner.
-The owner explicitly selected ntfy commands for private topics; the existing free
-unreserved notification topic must not authorize commands. Provider write ACL is
-an operator prerequisite; anonymous read probes alone do not prove it.
-Read docs/COMMAND_SOURCES.md and docs/REVIEW_0_1_0_3.md before changing this boundary.
-On 2026-10-02 the owner confirmed Telegram command smoke with one and two
-concurrent synthetic applications via RU -> LV Caddy:8443. Evidence is the chat,
-not newly inspected report files; do not infer exact counts, exit codes or recovery
-scenarios. Live private-topic ntfy command testing is deferred indefinitely by the
-owner and does not block Telegram deployment; outbound ntfy acceptance is unchanged.
-Real application migration and unattended recovery testing remain pending.
-Read docs/COMMAND_HUB.md and docs/COMMAND_EXECUTION.md before changing these boundaries.
-The old root smoke/field_smoke/ntfy_diagnostic launchers are removed; diagnostics
-are launched only under remote_watch.diagnostics. Existing callback registration remains compatible. The owner explicitly requires both status/check_load and resume_load/suspend_load
-in the first usable version. All names/callbacks remain application-defined through
-mapping/partial or CommandSpec. Read-only is the first vertical slice, not the whole
-milestone. ADR 0009 records the overall scope; ADR 0010 defines the implemented contract.
-Model duplicate delivery, persistent execution records, unknown outcomes, callback
-thread/loop ownership and unsynchronized clocks before enabling mutations. Never
-retry a possibly executed callback automatically. Outbound grants do not enable commands.
+Reconnect after successful initial start is automatic but never resets a journal or replays a
+callback. Conflicting outcomes require operator action. Offline resolution requires stopped
+owners and exact client COMPLETED versus hub UNKNOWN, preserving original evidence/fencing.
+No HTTP admin endpoint or manual local ACK. Existing SQLite schema 1 migrates to 2; old
+runtimes reject 2. Wire schemas/hashes must not change accidentally.
 
-Real application migration remains deferred until this command path is ready.
-Legacy fin-data TelegramBot API compatibility is not required. The target phone is
-Android; ntfy uses a free account without topic reservation. Telegram and explicitly private ntfy topics are command sources; Matrix follows. MAX and public distribution remain out of scope.
+Trusted time uses explicit provider UTC/accuracy assumptions and monotonic budgets, no silent
+fallback to OS UTC. TLS certificate and hostname verification are mandatory. Preserve safe
+allowlisted diagnostics, never raw exception messages/tracebacks/provider payloads or secrets.
+Command client and notification gateway credentials and ACL are independent.
 
-Dev3 passed 808 local tests (2 opt-in skips), clean core/extras wheel checks,
-and all 39 TimeAPI tests on Python 3.10.21 after fixing fractional-second parsing,
-and the formatting audit of 83 Python files. A live TimeAPI probe accepted 3/3
-samples through TrustedClock in the development environment. No new CI run or
-command hub integration was performed. See docs/VALIDATION.md.
+Use current NotificationGateway names, no Relay legacy aliases. Public provider modules use
+_notifications/_commands; gateway wire lives in notifications.gateway_protocol.
+Direct/gateway is a per-notification-destination choice; built-in messenger commands use gateway.
 
-Production modules are grouped under notifications, commands, gateway, adapters and
-diagnostics. Public root exports and existing CLI entry points are preserved.
-Diagnostics ship in the wheel; developer tests and tooling remain outside it.
-See ARCHITECTURE.md for migration paths and docs/COMMAND_TIME.md for the time probe.
+Manager owns exact current process handles, not stale PIDs; finite recovery and startup rollback.
+Control/log/state/CA ownership stays separate. Refuse foreign log entries before changing ACL.
+External Caddy is not owned/probed by manager. Deploy is offline, preserves existing files/CA/
+SQLite, and never installs/starts a service. Windows service is headless; tray is a separate
+operator-session controller and never starts another manager. Preserve explicit operator ACL.
 
-Dev 0.3.4.dev1 passed 892 tests (2 live skips) on Windows Python 3.10.21;
-clean Windows Python 3.12.2 core/extras wheel checks passed 592/892 tests.
-All 93 Python files passed style checks. CI/Linux/live providers were not rerun.
-Exact results and command-execution limits: docs/VALIDATION.md and docs/COMMAND_EXECUTION.md.
+## Work and validation
 
-Dev 0.3.5.dev1 passed 947 tests (2 live skips) on Windows Python 3.10.21;
-clean Windows Python 3.12.2 core/extras wheel checks passed 626/947 tests.
-All 107 Python files passed style checks. CI/Linux/live command providers were
-not exercised. Source replay and transport-log isolation regressions are covered.
-Exact results: docs/VALIDATION.md. Templates live under docs/examples and ship
-in sdist; no real credentials or runtime journals belong in distribution artifacts.
+Respect unrelated user edits. Never inspect or stage unrelated local files. Production processes,
+credentials, journals, CA and other repositories are unchanged unless separately authorized.
+Do not delete journals/locks, reset cursors/owners or weaken authorization to make tests pass.
+User supplied unrelated local files are not part of this change.
 
-Dev 0.3.5.dev2 passed all eight Windows/Linux, Python 3.10/3.12, core/extras
-jobs in GitHub Actions run 36899958770, tested code commit 6bee643.
-Each core job passed 630 tests (30 optional-dependency skips, 2 live deselections);
-each extras job passed 951 tests (2 live deselections), without warnings.
-CI exposed and fixed Windows CLI encoding, floating-point grant-bound comparisons,
-and timing/observation problems in contract tests. Live command-provider smoke
-remains owner-run; CI does not read credentials or send provider messages.
-See docs/VALIDATION.md for exact Python versions, run link and local reports.
+Russian comments/documentation, English docstrings/identifiers. File versions/timestamps,
+BOM/CRLF, full banners/closing order, vertical arguments and Russian argument/field comments
+follow CODE_STYLE. Separate logical steps with readable blank lines. Check both formal style
+and actual comment meaning; generic translations are not sufficient.
 
-A fresh review on 2026-10-02 found open operational gaps: hub maintenance task
-failure is not directly supervised, trusted-time readiness is absent from gateway
-stats, and command configuration errors are too coarse. Synthetic fault injection
-confirmed the first two; no runtime fix was made in that documentation change.
-The current source suite passed 951 tests (2 live deselections) on Windows Python
-3.12.2; Ruff/style passed (107 files). No new CI/build was run. See the updated
-docs/REVIEW_0_1_0_3.md and docs/VALIDATION.md. Proposed step 0.3.6 fixes observability;
-proposed 0.4 adds gateway_server, deployment resources, doctor and OS service support.
-Read docs/GATEWAY_OPERATIONS_PLAN.md before implementing these proposals. They are
-not existing CLIs or settled wire schemas. Preserve current command journal/CA state,
-separate component credentials and single-owner provider semantics during migration.
+Run relevant behavioral tests, Ruff, tools/check_style.py and tools/check_docs.py.
+Required release checks: tools/validate.py core/extras, installed CLIs and wheel-from-sdist.
+GitHub Actions is manual-only; use full Windows/Linux × 3.10/3.12 × core/extras for agreed
+major work, not every push. Tests are synthetic/offline unless integration explicitly requested.
+Keep exact test/field limits and CI commit/result distinct. Record only current evidence,
+not a growing version-by-version transcript in AGENTS or README.
 
-Stage 0.3.6.dev1 now closes review R1/R2/R3 and the noted code-comment part of R6:
-hub/source task failures, unexpected cancellation and early returns are observed;
-subsequent hub calls fail closed after maintenance failure. Local health exposes
-trusted-time readiness and maintenance storage errors without network/storage probes.
-The command CLI emits readiness transitions and exits on fatal failure; no automatic
-restart or public health endpoint is added. Config errors expose fixed codes, schema
-paths/indices and Russian hints, never supplied values. Old schemas and UNKNOWN
-semantics remain intact. Read docs/COMMAND_SOURCES.md for these local health APIs;
-R4/R5 and the proposed service/deploy/doctor remain 0.4 work. Validation below is
-historical unless explicitly recorded for dev1 in docs/VALIDATION.md.
-
-Dev 0.3.6.dev1 passed 985 local tests (2 live deselections) on Windows Python
-3.12.2. Clean wheel-from-sdist validation passed core 648 tests (46 optional skips,
-2 live deselections) and extras 985 tests (2 live deselections), without pytest
-warnings. Ruff and all 108 Python files passed style checks. No new CI, Linux,
-Python 3.10 or live-provider run was performed. See docs/VALIDATION.md and
-build/validation-0361-core / build/validation-0361-extras for exact results.
-
-Stage 0.4.1 provides typed deployment configuration, read-only linked-file validation
-through remote_watch.gateway_server --check-config and a finite per-component
-RestartBudget. Real process supervision/start/stop/status was added in 0.4.2 as described above;
-deploy, doctor and OS service installation are not implemented. Read
-docs/GATEWAY_DEPLOYMENT.md and ADR 0012 before changing ownership/recovery.
-Keep existing component config paths, journals and Caddy CA storage. External
-Caddy is never owned or stopped. Configuration checks do not open journals,
-resolve environment credentials, launch processes or query providers.
-Current command clients do not automatically re-register after a hub restart;
-server readiness does not prove restored application command routing. Preserve
-new-session lifecycle and UNKNOWN records; do not silently replay callbacks.
-Dev 0.4.1.dev1 passed 1058 local tests (2 live deselections) on Windows Python
-3.12.2. Clean core/extras wheels passed 721/1058 tests; all 114 Python files
-passed style checks and all eight installed CLIs passed help/encoding checks.
-No new CI/Linux/Python 3.10 or live provider checks were run. Actual process
-supervision and recovery remain unimplemented; see docs/VALIDATION.md.
-
-Dev 0.4.1.dev2 improves command configuration and CLI diagnostics: safe JSON
-line/column and fixed syntax explanations, missing-field/schema paths, distinct
-TLS/listener/storage hints and --version. It does not print JSON excerpts,
-unknown keys, exception payloads, arbitrary class names or credentials. Existing
-config schemas and command execution guarantees are unchanged. See
-docs/COMMAND_SOURCES.md for operator steps; source_id is a stable local source
-name, not a provider actor/chat ID. Do not rename an existing journal owner to
-bypass recovery or create a second reader for the same bot.
-Dev2 passed 1092 tests (2 live deselections), clean core/extras wheels with
-754/1092 passed and style checks of all 115 Python files on Windows Python
-3.12.2. No CI/Linux/Python 3.10 or live provider runs were added. The owner's
-configuration was checked read-only; neither deployment files nor its venv
-were modified. See docs/VALIDATION.md for exact evidence and limits.
-
-## Read the Relevant Design Context
-
-- Read `PROJECT_BRIEF.md` when planning features, milestones, or product scope.
-- Read `ARCHITECTURE.md` when changing public APIs, logging integration,
-  concurrency, delivery guarantees, channels, routing, commands, security, or
-  package boundaries.
-- Do not reread both documents for unrelated mechanical edits.
-- Read `docs/CODE_STYLE.md` and `docs/DEVELOPMENT.md` before creating code or
-  changing documentation conventions. See `docs/VALIDATION.md` for required checks.
-- Read `docs/GATEWAY.md` for relay/command boundaries and `docs/CHANNELS.md` for
-  the provider selection rationale. Keep planned and verified behavior distinct.
-- Read `docs/COMMANDS.md` before changing application-owned command registration.
-  Functions, partials and explicit CommandSpec declarations are supported.
-- Read `docs/RUNTIME.md` for the implemented lifecycle, counters and stage limitations.
-- Read `docs/ADAPTERS.md` for provider configuration, HTTP behavior and opt-in live tests.
-- Read `docs/NOTIFICATION_GATEWAY.md`, `docs/GATEWAY_SERVER.md` and ADRs 0005/0006 for relay behavior,
-  server admission/lifecycle and the external TCP/TLS ingress limits required for deployment.
-- Read `docs/FIELD_SMOKE.md` for finite field runs, reports and manual phone observations.
-- Read `docs/NTFY_DIAGNOSTIC.md` for bounded size probes and `docs/GATEWAY_TLS.md`
-  for deployment on company-owned VM infrastructure without physical-host access.
-- Read `docs/SMOKE.md` for explicit one-message checks. Local credentials.local.json
-  is ignored and must never be displayed, committed or included in build artifacts.
-
-## Architectural Constraints
-
-- Preserve `logging.Logger` as the primary application-facing logging API; do
-  not introduce a required `Logger` subclass.
-- Do not perform network I/O on application logging threads.
-- Keep outbound notifications separate from inbound commands.
-- Core modules depend on transport protocols, never concrete provider classes.
-- Keep provider dependencies optional and isolated in adapters.
-- Use a central gateway when multiple instances share a bidirectional bot or
-  conversation.
-- Never provide arbitrary remote shell or Python evaluation as a built-in
-  command.
-- Prevent internal transport failures from recursively entering the notification
-  pipeline.
-- Never commit real credentials or require them for unit tests.
-- Keep remote delivery independent of local handlers and bound all outstanding
-  work, including retries and loop wakeups. Do not promise at-least-once attempts
-  for events that can be dropped before their first attempt.
-- Make direct/relay a per-destination setting. Outbound relay and inbound commands
-  are separate capabilities; neither enables the other implicitly.
-
-## Development Expectations
-
-- Prefer small typed interfaces and composition over inheritance.
-- Keep application identity explicit: service, environment, region, host, and
-  `instance_id` must not be inferred from chat display text.
-- Make retries, timeouts, queue bounds, shutdown behavior, and failure semantics
-  explicit and testable.
-- Unit tests use fake transports and deterministic time; live-provider tests are
-  opt-in integration tests.
-- When a design decision materially changes `ARCHITECTURE.md`, update the
-  document or add an Architecture Decision Record in the same change.
-- Tooling is setuptools/build, pytest and Ruff; see docs/DEVELOPMENT.md and pyproject.toml.
-  GitHub Actions is manual-only by owner decision on 2026-09-30. Reserve CI runs
-  for substantial changes, not every push/commit; keep appropriate local checks.
-  Python 3.10+ is the declared target; runtime checks cover Windows/Linux and Python 3.10/3.12 in successful CI jobs.
-  Keep actual test results separate from unverified platforms and future features.
-- Configuration starts with typed Python objects; no required file format yet.
-- Follow Russian documentation/comments, English identifiers/docstrings, file
-  versions and Moscow timestamps, UTF-8 BOM/CRLF for Markdown/Python as specified
-  in CODE_STYLE.md. Do not copy neighboring projects' runtime dependencies.
-
-Dev5 adds RelayConfig.ssl_context for an explicit verifying client TLS context.
-No environment mutation, wire change or gateway upgrade is needed for this API.
-CERT_REQUIRED and hostname checks remain mandatory; contexts must not be mutated
-after handoff. Full local extras suite: 1102 passed, 2 opt-in live skips. Targeted
-relay/HTTP/TLS: 76 passed, including trusted/untrusted/expired/name/default-trust.
-Application field acceptance of explicit contexts is still pending.
+docs/private is ignored AND pruned from sdist; never link its files publicly. Sanitize
+examples/deploy templates and use generic domains/paths. A Git move does not erase history;
+history rewriting needs separate authorization. Review staged diff/archive contents before commit.

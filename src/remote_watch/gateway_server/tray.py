@@ -1,10 +1,10 @@
 ﻿# Необязательная иконка Windows: состояние сервера и общая команда остановки.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Классы:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows
@@ -124,7 +124,7 @@ class GatewayTray:
         with source.open("rb") as stream, Image.open(stream) as original:
             bitmap = original.convert("RGBA")
 
-        # About устроен как в SpamBot: статическое подменю, без отдельного окна
+        # About — статическое подменю с версией и описанием, без отдельного окна
         # и без обращения к конфигам или сети из GUI-потока.
         about = pystray.Menu(
             pystray.MenuItem("Remote Watch Gateway (v." + version("remote-watch") + ")", None, enabled=False),

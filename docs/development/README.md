@@ -1,0 +1,59 @@
+﻿# Сопровождение проекта
+
+Version 1.0.0
+
+Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
+
+Дата и время последнего изменения: 261014-184253
+
+Пользовательские инструкции начинаются с [docs/README.md](../README.md).
+Здесь остаются только правила изменения и проверки проекта:
+
+- [Архитектура и гарантии](ARCHITECTURE.md).
+- [Оформление кода](CODE_STYLE.md).
+- [Проверки и границы приёмки](VALIDATION.md).
+- [Аудит подготовки релиза](AUDIT.md).
+- [Варианты лицензии](LICENSING.md).
+- [Единый backlog](../../BACKLOG.md).
+
+## Среда и проверки
+
+```console
+python -m venv .venv
+python -m pip install -e ".[dev,telegram,ntfy,gateway,commands,service,tray]"
+python -m ruff check .
+python tools/check_style.py
+python tools/check_docs.py
+python -m pytest -q -m "not integration"
+python tools/validate.py --mode core --output build/check-core
+python tools/validate.py --mode extras --output build/check-extras
+```
+
+Выполняйте команды из venv. Каталоги output должны быть новыми. validate строит
+sdist/wheel, проверяет отсутствие private/runtime файлов, заново собирает wheel
+из sdist, устанавливает в чистый venv, проверяет installed CLI и выполняет тесты.
+`integration` — opt-in живые провайдеры, не часть обычного CI. В тестах нет production
+credentials, имитации не выдают за field acceptance. Windows и Linux, Python
+3.10/3.12, core/extras проверяются восемью ручными jobs `.github/workflows/validation.yml`.
+CI запускается для согласованных крупных изменений, не автоматически на каждый push.
+
+## Изменение
+
+Прочитайте AGENTS и относящийся контракт. Сохраняйте чужие изменения, не трогайте
+production процессы/SQLite/CA без отдельной авторизации. Исправление гарантии
+должно иметь тест поведения; механическая массовая правка — также сравнение AST.
+Проверяйте состав архивов и staged diff, затем создавайте локальный осмысленный commit.
+Не называйте реализацию релизом или успешной полевой проверкой без соответствующей записи.
+
+## Публичная и локальная документация
+
+README — краткий старт; docs — инструкции текущего API, examples — синтетические
+конфиги. Публичные материалы не содержат имён deployment, реальных путей/адресов,
+топологии, credentials и полевых журналов. Локальные инструкции оператора и старые
+подробные записи хранятся в игнорируемой docs/private. MANIFEST дополнительно
+исключает её из sdist; Git ignore сам по себе не исключает файлы из Python-поставки.
+
+Перенос в private не удаляет прежние сведения из истории Git. История не
+переписывается в рамках реорганизации: отдельный аудит/переписывание потребовали бы
+отдельного решения и плана синхронизации. Не дублируйте TODO по десяткам документов:
+нереализованные возможности — только BACKLOG, текущие ограничения — в руководстве.

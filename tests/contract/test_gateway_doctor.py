@@ -1,10 +1,10 @@
 ﻿# Проверки doctor без доступа к провайдерам и изменения рабочих сессий.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Функции:
 # -> configuration(): Отдельный закрытый JSON для проверки клиентского доступа
@@ -392,7 +392,7 @@ def test_deploy_doctor(
     deploy(DeployOptions(directory=root, endpoint="https://private.invalid:8443", components=components))
     targets = load_targets(root / "clients/gateway_doctor.client.example.json")
     assert len(targets) == (2 if components == "both" else 1)
-    assert all(item.identity.service == "app1" and item.identity.host == "ru-server-1" for item in targets)
+    assert all(item.identity.service == "app1" and item.identity.host == "app-host" for item in targets)
     for item in targets:
         if item.component == "commands":
             assert all(scope.startswith("command:") for scope in item.permissions)

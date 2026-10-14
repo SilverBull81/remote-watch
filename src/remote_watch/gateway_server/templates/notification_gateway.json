@@ -24,8 +24,8 @@
       "identity": {
         "service": "app1",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
       "aliases": [

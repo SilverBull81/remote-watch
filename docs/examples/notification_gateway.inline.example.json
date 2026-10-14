@@ -25,11 +25,14 @@
       "identity": {
         "service": "app1",
         "environment": "production",
-        "region": "ru",
-        "host": "ru-server-1",
+        "region": "region-1",
+        "host": "app-host",
         "instance_id": "one"
       },
-      "aliases": ["app1-telegram", "app1-ntfy"]
+      "aliases": [
+        "app1-telegram",
+        "app1-ntfy"
+      ]
     }
   ]
 }

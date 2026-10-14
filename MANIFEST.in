@@ -1,8 +1,9 @@
-include AGENTS.md ARCHITECTURE.md PROJECT_BRIEF.md
+include AGENTS.md BACKLOG.md
 include logo/remote_watch.png
 include logo/remote_watch.ico
 include .gitattributes .gitignore
 recursive-include docs *.md
+prune docs/private
 include docs/examples/notification_gateway.example.json
 include docs/examples/notification_gateway.inline.example.json
 include docs/examples/gateway-nginx.conf
@@ -10,7 +11,8 @@ include docs/examples/command_gateway.telegram.example.json
 include docs/examples/command_gateway.ntfy.example.json
 include docs/examples/command_client.example.json
 include docs/examples/gateway_server.example.json
-include docs/examples/collect_caddy_state.ps1
+include docs/examples/Caddyfile.example
+include docs/examples/gateway_doctor.client.example.json
 recursive-include tests *.py
 recursive-include tools *.py
 include .github/workflows/validation.yml

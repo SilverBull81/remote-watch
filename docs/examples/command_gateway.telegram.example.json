@@ -3,17 +3,17 @@
   "state_dir": "data/commands",
   "targets": {
     "one": {
-      "service": "command-smoke",
+      "service": "app1",
       "environment": "test",
-      "region": "ru",
-      "host": "ru-vm",
+      "region": "region-1",
+      "host": "app-host",
       "instance_id": "one"
     },
     "two": {
-      "service": "command-smoke",
+      "service": "app1",
       "environment": "test",
-      "region": "ru",
-      "host": "ru-vm",
+      "region": "region-1",
+      "host": "app-host",
       "instance_id": "two"
     }
   },

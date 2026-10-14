@@ -1,172 +1,86 @@
 ﻿# Remote Watch
 
-Version 1.4.4
+Version 1.4.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-164418
+Дата и время последнего изменения: 261014-184253
 
-Python-библиотека для стандартного логирования, уведомлений на телефон
-и адресных команд приложениям на удалённых серверах.
+Remote Watch подключает обычный Python `logging.Logger` к уведомлениям в Telegram
+и ntfy и позволяет управлять приложением через собственные команды в мессенджере.
+Можно оставить только локальные журналы, добавить уведомления или подключить оба канала.
 
-**Состояние: базовые 0.1/0.2 завершены; код этапов 0.3.1–0.3.5 реализован.
-Telegram smoke с одним и двумя приложениями подтверждён владельцем.
-Пакет 0.4.5.dev4 для личного использования.** Обычный logger передаёт выбранные
-уведомления через ограниченные очереди в каналы фонового runtime. Реализованы
-подготовка текста, маршрутизация, ограниченные повторы с full jitter и retry-after,
-TTL, sync/async запуск и остановка, счётчики по получателям и ограниченный atexit.
-По умолчанию разрешены три попытки; `max_attempts=1` отключает повторы.
-Core собирается без runtime-зависимостей; адаптеры подключают aiohttp через extras.
-Состояние доставки `runtime.health()` отделено от накопительных счётчиков ошибок:
-[контракт и интеграция](docs/RUNTIME.md). Полевые deploy/server/reconnect приняты
-владельцем 14.10; [итоги и остаток 0.4](docs/REVIEW_0_4.md).
-Gateway doctor проверяет сервер и клиентское подключение без доставки сообщений
-и регистрации сессий: [инструкция](docs/GATEWAY_DOCTOR.md). Deploy включает его
-launchers и отдельный клиентский шаблон; сеть включается только через `--online`.
-Сводки hub/client/source журналов доступны через кэш владельца и отдельный doctor
-для остановленного SQLite: [инструкция](docs/COMMAND_JOURNALS.md).
-Для блокировки reconnect из-за разных сохранённых результатов предусмотрена
-[явная сверка команд](docs/COMMAND_RESOLUTION.md): отдельное решение владельца,
-сохранение UNKNOWN и получение клиентом точной квитанции без повторного callback.
-RemoteWatcher подключает доставку и необязательные console/rotating-file handlers
-к обычному logger. Добавлены gateway-клиент и серверный outbound gateway с auth/ACL.
-В gateway JSON можно задать token прямо в локальном файле либо использовать token_env.
-Запуск и границы размещения: [GATEWAY_SERVER.md](docs/GATEWAY_SERVER.md).
-Прямая доставка принята по длительному RU/LV-сценарию; gateway RU → LV → Telegram
-подтверждён пользователем на телефоне. Длительный mixed и автозапуск VM пока
-не проверены. [Итоги и остаток](docs/REVIEW_0_1_0_2.md).
-Добавлены [модели, wire и правила исполнения команд](docs/COMMAND_PROTOCOL.md).
-Добавлены [проверка свежести без второго подтверждения](docs/COMMAND_TIME.md)
-и [постоянный журнал SQLite](docs/COMMAND_STORAGE.md). Реализованы отдельные
-[hub, HTTPS-клиент и права команд](docs/COMMAND_HUB.md). [Исполнитель пользовательских callbacks](docs/COMMAND_EXECUTION.md)
-подключён к RemoteWatcher. Добавлены [Telegram, закрытый ntfy, JSON/CLI и command smoke](docs/COMMAND_SOURCES.md).
-Поддержаны проверка состояния и resume/suspend одним сообщением.
-[Промежуточный review и оставшиеся шаги](docs/REVIEW_0_1_0_3.md).
+Python 3.10+, Windows и Linux. Core не имеет обязательных runtime-зависимостей;
+адаптеры и Windows UI устанавливаются через extras. Уведомления отправляются фоном
+через ограниченные очереди. Команды адресуются конкретному приложению/экземпляру
+и проверяются по правам; произвольный shell не предоставляется.
 
-Серверное приложение управляет обоими gateway, предоставляет status/stop,
-Windows tray и сообщения владельцу: [GATEWAY_DEPLOYMENT.md](docs/GATEWAY_DEPLOYMENT.md).
-Встроенный логотип и `application.icon_path` доступны с 0.4.2.dev2.
-В 0.4.2.dev3 имена `Relay*` заменены на `NotificationGateway*` без алиасов;
-режим и extra теперь `gateway`. До обновления приложения прочитайте
-[таблицу миграции](docs/GATEWAY_FOLLOW_UP.md). Новая фиолетовая иконка:
-[logo/remote_watch.ico](logo/remote_watch.ico).
-С 0.4.2.dev4 командные клиенты автоматически восстанавливают новую сессию
-после рестарта hub/expiry, сохраняя журнал и запрет повторного callback.
-[Правила восстановления и UNKNOWN](docs/COMMAND_RECONNECT.md).
-Стандартный логотип хранится только в корневой `logo/`; wheel устанавливает ICO
-в каталог данных Python-окружения. [Термины и дальнейший план](docs/GATEWAY_FOLLOW_UP.md).
+## Клиент: первые уведомления
 
-## Установка для локальной разработки
+Установка из репозитория в виртуальное окружение:
 
-Целевой Python — 3.10+. Матрица Windows/Linux × Python 3.10/3.12 × core/extras
-прошла все восемь jobs GitHub Actions; результаты — в [VALIDATION.md](docs/VALIDATION.md).
-Распространение пока закрыто:
-по решению владельца версия 0.1 используется только лично, публичной публикации нет.
-Открытая лицензия потребуется при отдельном решении о распространении.
-
-```powershell
-python -m pip install -e ".[dev,telegram,ntfy]"
-python -m ruff check .
-python tools/check_style.py
-python -m pytest -q
-python -m build
+```console
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install "remote-watch[telegram] @ git+https://github.com/SilverBull81/remote-watch.git"
 ```
 
-Минимальные объекты: Identity, Notification, Delivery, DeliveryResult,
-NotificationChannel, Destination, Route, RetryPolicy, RuntimeConfig, WatcherConfig.
-Их создание валидирует данные, но не запускает сеть, фоновые потоки или callbacks.
-Настройки и правила фабрик каналов: [CONFIGURATION.md](docs/CONFIGURATION.md).
-Исполняемый пример с тестовым каналом, подключение к существующему logger и
-описание ограничений: [RUNTIME.md](docs/RUNTIME.md).
-Рекомендуемый интерфейс подключения и sync/async-примеры: [WATCHER.md](docs/WATCHER.md).
-Подключение Telegram/ntfy и явный тест реальной отправки: [ADAPTERS.md](docs/ADAPTERS.md).
-Проверка одной командой с локальным credentials-файлом: [SMOKE.md](docs/SMOKE.md).
-Настройка токена и закрытой темы ntfy: [NTFY_SETUP.md](docs/NTFY_SETUP.md).
+В Linux вместо `.venv\Scripts\python.exe` используйте `.venv/bin/python`.
+Следующие команды также выполняйте Python созданного venv. Для production закрепляйте
+проверенный commit/tag в Git URL через `@<commit-or-tag>`.
+Задайте `APP_TELEGRAM_TOKEN` и `APP_TELEGRAM_CHAT_ID` в окружении приложения:
 
-## Пользовательские команды
+```python
+import logging
+import os
 
-WatcherConfig принимает `commands={"имя": callback}`; поддерживаются функции,
-bound methods, `functools.partial`, callable objects и async-функции.
-Для контекста запроса, аргументов, описания и политики используется CommandSpec.
-Нет встроенного фиксированного списка команд и нет автоматически выданных прав.
+from remote_watch import ConsoleConfig, Identity, RemoteWatcher, Route, WatcherConfig
+from remote_watch.adapters.telegram_notifications import TelegramConfig
 
-Это регистрация локальных обработчиков. Отдельные авторизация и HTTPS-обмен уже
-реализованы в CommandHub/CommandClient. Для исполнения передайте отдельный
-command_client в RemoteWatcher. Входящие Telegram/ntfy-команды и запуск
-нескольких экземпляров описаны в [COMMAND_SOURCES.md](docs/COMMAND_SOURCES.md).
-Примеры регистрации: [COMMANDS.md](docs/COMMANDS.md).
-
-## Что проектируем
-
-- Обычный `logging.Logger`: консоль, файл и выбранные удалённые назначения.
-- Исходящие Telegram и ntfy в первой версии; Matrix — следующий чат для команд.
-- Независимую фоновую доставку с ограниченными очередями и явными потерями.
-- Пользовательские адаптеры без зависимости core от провайдеров.
-- Дополнительный режим `direct`/`gateway` для каждого remote-назначения.
-- Отдельный command hub для общего чата и нескольких instances.
-
-Совместимость с `fin-data.TelegramBot` не требуется. MAX в текущий план не входит.
-Получение smoke Telegram и ntfy на Android подтверждено пользователем. Для ntfy
-используется бесплатный аккаунт без резервирования темы; закрытый доступ не подтверждён.
-30.09.2026 владелец принял базовую прямую доставку после примерно 12 часов
-полевого наблюдения RU/LV и проверки Android. Результаты и границы —
-в [FIELD_SMOKE.md](docs/FIELD_SMOKE.md); основной gateway RU → LV также подтверждён,
-длительный mixed-сценарий остаётся отдельной эксплуатационной проверкой.
-
-## Документация
-
-| Документ | Назначение |
-| --- | --- |
-| [PROJECT_BRIEF.md](PROJECT_BRIEF.md) | Задача, границы релизов и критерии результата |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Потоки данных, модели, гарантии и lifecycle |
-| [CHANNELS.md](docs/CHANNELS.md) | ntfy, Matrix, альтернативы и условия выбора |
-| [CONFIGURATION.md](docs/CONFIGURATION.md) | Типизированные настройки и исходные лимиты |
-| [WATCHER.md](docs/WATCHER.md) | RemoteWatcher, локальные журналы и примеры приложений |
-| [REVIEW_0_1.md](docs/REVIEW_0_1.md) | Итоговое ревью и оставшиеся внешние проверки |
-| [RUNTIME.md](docs/RUNTIME.md) | Работающий путь logging → очереди → тестовые каналы |
-| [ADAPTERS.md](docs/ADAPTERS.md) | Telegram/ntfy, токены, ошибки HTTP и реальная отправка |
-| [FIELD_SMOKE.md](docs/FIELD_SMOKE.md) | Суточный сценарий на трёх серверах и отчёт |
-| [NOTIFICATION_GATEWAY.md](docs/NOTIFICATION_GATEWAY.md) | Gateway-клиент, wire-контракт и границы текущей итерации |
-| [NAMING_MIGRATION.md](docs/NAMING_MIGRATION.md) | Новые имена API и конфигов в 0.4.2.dev5, обновление приложений |
-| [GATEWAY_DEPLOY.md](docs/GATEWAY_DEPLOY.md) | Подготовка новой установки и подключение прежних конфигов LV без переноса SQLite/CA |
-| [SMOKE.md](docs/SMOKE.md) | Одна пробная отправка выбранному сервису |
-| [NTFY_SETUP.md](docs/NTFY_SETUP.md) | Закрытый topic, права отправителя/телефона и токен |
-| [COMMAND_HUB.md](docs/COMMAND_HUB.md) | Hub, HTTPS-клиент, права, сроки и границы этапа 0.3.3 |
-| [COMMANDS.md](docs/COMMANDS.md) | Пользовательские callbacks, partial и расширенный контракт |
-| [GATEWAY.md](docs/GATEWAY.md) | Необязательный gateway и отдельный command hub |
-| [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Порядок реализации и результаты этапов |
-| [VALIDATION.md](docs/VALIDATION.md) | Приёмка, тестовые сценарии и статус проверки |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Tooling, Git и рабочий процесс |
-| [CODE_STYLE.md](docs/CODE_STYLE.md) | Оформление будущего кода и документов |
-| [ADR](docs/adr/README.md) | Обоснование архитектурных решений |
-| [AGENTS.md](AGENTS.md) | Правила работы в репозитории |
-
-В 0.3.6 добавлены контроль фоновых задач команд, готовность доверенного времени
-и понятные безопасные ошибки конфигурации. В 0.4.1 появились
-[общие настройки deployment](docs/GATEWAY_DEPLOYMENT.md), локальный
-`gateway_server --check-config` и правила ограниченного перезапуска.
-В 0.4.2 добавлены `--start/--status/--stop`, независимые процессы gateway,
-контроль зависаний, ограниченное восстановление, Windows tray и прямые оповещения владельца.
-Работающий отдельно Caddy можно оставить в режиме `external`. Далее —
-[deploy, диагностика и служба ОС](docs/GATEWAY_OPERATIONS_PLAN.md).
-
-Windows service и отдельный tray по application.ui, установка/удаление из deploy:
-[GATEWAY_SERVICE.md](docs/GATEWAY_SERVICE.md). Реальные service/reboot/RDP проверки
-фиксируются отдельно; обычный deploy не изменяет службы ОС.
-Реальные командные проверки закрытого ntfy отложены владельцем; исходящие ntfy
-уведомления уже проверены. Владелец подтвердил работающий пилот SpamBot;
-эксплуатационные проверки новой службы остаются отдельными задачами.
-
-## Структура и проверка времени в 0.3.0.dev3
-
-Код сгруппирован в notifications, commands, gateway, adapters и diagnostics.
-Основные импорты из remote_watch и прежние команды запуска сохранены; прямые
-импорты перенесённых модулей обновляются по [ARCHITECTURE.md](ARCHITECTURE.md).
-Для команд выбран TimeAPI; проверка установленной библиотеки:
-
-```powershell
-python -m remote_watch.diagnostics.time_probe
+logger = logging.getLogger("my-app")
+logger.setLevel(logging.INFO)
+destination = TelegramConfig(
+    token_env="APP_TELEGRAM_TOKEN",
+    chat_id=os.environ["APP_TELEGRAM_CHAT_ID"],
+    display_mode="compact",
+).destination("phone")
+config = WatcherConfig(
+    identity=Identity(service="my-app", environment="production", region="region-1",
+                      host="app-host", instance_id="one"),
+    destinations=(destination,),
+    routes=(Route(destination_ids=("phone",), min_level=logging.WARNING),),
+)
+with RemoteWatcher(config, logger=logger, console=ConsoleConfig()):
+    logger.info("Application started")
+    logger.warning("An event needs attention")
 ```
 
-Проверка не меняет часы ОС и не отправляет уведомления.
-Допущения точности и состояние интеграции: [COMMAND_TIME.md](docs/COMMAND_TIME.md).
+INFO останется в консоли, WARNING также отправится в Telegram. Уровень исходного
+logger задаёт приложение. Создание watcher не запускает сеть: её запускает вход
+в контекст либо явный `start()`; завершение выполняется через `stop()`.
+
+Для ntfy установите extra `ntfy` и используйте `NtfyConfig`. Подключение callbacks
+`status`/`resume`/`suspend` и JSON командного клиента: [команды](docs/COMMANDS.md).
+Полный пример жизненного цикла: [клиент](docs/CLIENT.md).
+
+## Сервер: необязательный компонент
+
+Для прямых Telegram/ntfy-уведомлений свой сервер не нужен. Gateway полезен, если
+нужна централизованная маршрутизация или у приложения нет прямого доступа к провайдеру.
+Встроенный приём команд из мессенджеров работает через command gateway.
+
+```console
+python -m pip install "remote-watch[gateway,commands,telegram,ntfy] @ git+https://github.com/SilverBull81/remote-watch.git"
+python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https://gateway.example.test:8443 --dry-run
+```
+
+После проверки плана повторите deploy без `--dry-run`, заполните локальные JSON
+и настройте HTTPS. Deploy создаёт комплект, но ничего не запускает и не перезаписывает
+существующие файлы. Инструкции: [gateway](docs/GATEWAY.md), [TLS](docs/TLS.md),
+[службы](docs/SERVICES.md), [диагностика](docs/OPERATIONS.md).
+
+[Все инструкции и конфиги](docs/README.md) · [План дальнейших работ](BACKLOG.md)
+
+Уведомления не являются постоянной очередью: при переполнении, истечении TTL или
+остановке возможны потери. Приём сообщения провайдером не означает показ на телефоне.
+Неопределённый исход команды сохраняется как UNKNOWN; callback автоматически не повторяется.
+Лицензия ещё не выбрана; публичный prod-релиз пока не объявлен.

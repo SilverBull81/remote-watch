@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -28,6 +28,7 @@
 #    -> _spawn(): Запуск под контролем ОС до передачи настроек компоненту
 #    -> _tick(): Контроль зависаний и резервирование конечного числа перезапусков
 #    -> _report(): Запись переходов состояния и оповещение владельца
+#    -> _log_component_status(): Стабильные признаки компонента для журнала переходов
 #    -> _shutdown(): Общая остановка с конечными сроками ожидания
 #
 # Функции:
@@ -57,7 +58,7 @@ from time import monotonic
 
 from remote_watch.commands.source_store import ProcessLock
 from remote_watch.gateway_server.application import OperatorAlerts
-from remote_watch.gateway_server.config import DeploymentConfig
+from remote_watch.gateway_server.config import DeploymentConfig, check_log_directory
 from remote_watch.gateway_server.messages import read_limited, status_message
 from remote_watch.gateway_server.policy import FailureKind, RestartBudget
 from remote_watch.gateway_server.processes import ProcessGroup, private_directory
@@ -259,6 +260,8 @@ class GatewayManager:
 
         # До открытия существующей lock запрещаем ссылки: раннее получение lock
         # не должно обойти прежний запрет private_directory и записать чужой файл.
+
+        check_log_directory(self.config.log_dir)
 
         for path in (self.config.control_dir, self.config.control_dir / "manager.lock"):
             if path.is_symlink() or path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 0x400:
@@ -688,7 +691,7 @@ class GatewayManager:
         # Счётчики меняются часто; логируем переходы, а полный снимок доступен через status.
         transition = json.dumps({"state": self.state, "reason": self.reason, "alerts": snapshot["alerts"],
                                  "ui": snapshot["ui"], "logging": snapshot["logging"],
-                                 "components": {name: {k: v for k, v in item.items() if k != "counters"}
+                                 "components": {name: self._log_component_status(item)
                                                 for name, item in snapshot["components"].items()}}, sort_keys=True)
         if transition != self._last_log:
             self._log.info(json.dumps({"observed_at": datetime.now(timezone.utc).isoformat(),
@@ -707,6 +710,39 @@ class GatewayManager:
 
         if self._tray is not None:
             self._tray.update(self.state)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Стабильные признаки компонента для журнала переходов
+    #--------------------------------------------------------------------------------------------------------------
+    def _log_component_status(
+        self,
+        component: dict,
+        ) -> dict:
+
+        """
+        Retain health transitions without logging changing journal counters or sample ages.
+
+        :param component: Already sanitized component snapshot from manager status.
+        :type component: dict
+
+        :return: Independent stable projection suitable for transition comparison.
+        :rtype: dict
+        """
+
+        # component — полный снимок остаётся доступен через status/doctor. Для журнала
+        # важны отказ наблюдения и ёмкость, а не изменение возраста каждую секунду.
+
+        value = {key: item for key, item in component.items() if key not in {"counters", "journals"}}
+        if "journals" in component:
+            journals = component["journals"]
+            summaries = []
+            for entry in (journals["hub"], *journals["sources"]):
+                summaries.append({"state": entry["state"],
+                                  "capacity": (entry.get("snapshot") or {}).get("capacity")})
+            value["journals"] = {"hub": summaries[0], "sources": summaries[1:]}
+
+        return value
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Проверки ежедневных журналов, смены даты, владения файлами и интеграции с watcher.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Функции:
 # -> record_at(): Запись logging с явно заданным временем создания
@@ -114,20 +114,20 @@ def test_calendar_paths(
     # Относительный путь закрепляется при создании конфига; смена cwd его не меняет.
 
     monkeypatch.chdir(tmp_path)
-    config = DailyFileConfig(directory="log", prefix="spambot", timezone=timezone(timedelta(hours=3)))
+    config = DailyFileConfig(directory="log", prefix="application", timezone=timezone(timedelta(hours=3)))
     monkeypatch.chdir(tmp_path.parent)
     months = ("January", "February", "March", "April", "May", "June",
               "July", "August", "September", "October", "November", "December")
     stamp = datetime(2028, month, 1, tzinfo=timezone.utc).timestamp()
     path = config.path_for(stamp)
     expected = tmp_path / "log" / "2028" / f"{month:02d}. {months[month-1]}"
-    assert path == expected / f"spambot_log_28{month:02d}01.txt"
+    assert path == expected / f"application_log_28{month:02d}01.txt"
     assert not (tmp_path / "log").exists()
 
     # На UTC ещё декабрь, но в заданном поясе уже январь следующего года.
     stamp = datetime(2027, 12, 31, 22, 30, tzinfo=timezone.utc).timestamp()
     relative = config.path_for(stamp).relative_to(config.directory).as_posix()
-    assert relative == "2028/01. January/spambot_log_280101.txt"
+    assert relative == "2028/01. January/application_log_280101.txt"
     local = DailyFileConfig(directory=tmp_path, prefix="local")
     assert local.path_for(stamp).name == f"local_log_{datetime.fromtimestamp(stamp):%y%m%d}.txt"
 #------------------------------------------------------------------------------------------------------------------

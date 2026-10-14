@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "endpoint": "https://lv.example.test:8443",
+  "endpoint": "https://gateway.example.test:8443",
   "control_dir": "control",
   "log_dir": "logs/gateway_server",
   "notifications": {

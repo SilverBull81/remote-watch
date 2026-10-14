@@ -1,146 +1,178 @@
-﻿# Пользовательские команды
+﻿# Команды приложения из мессенджера
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261001-185629
+Дата и время последнего изменения: 261014-184253
 
-## Объём первой рабочей 0.3
+## Как устроен канал
 
-30.09.2026 владелец подтвердил: нужны и проверка состояния, и resume_load /
-suspend_load. Read-only status — первый шаг проверки общего механизма, а не
-граница всей 0.3. В 0.3.0.dev1 добавлен [контракт wire/состояний/времени](COMMAND_PROTOCOL.md).
-Ниже описана регистрация; сетевой клиент и исполнитель реализованы в 0.3.3/0.3.4.
-Направление: [ADR 0009](adr/0009-command-scope-and-safety.md),
-порядок реализации: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Командный gateway читает Telegram updates либо закрытый ntfy topic, проверяет
+отправителя/чат/target/scopes и хранит решения в SQLite. Приложение само подключается
+к gateway по HTTPS, получает адресную команду и исполняет зарегистрированный callback.
+Входящие соединения к приложению не нужны. Встроенного direct-приёма Telegram
+без command gateway сейчас нет.
 
-## Что уже работает
+Ответ на команду отправляет командный канал. Он не зависит от notification Route
+и может работать при отключённых удалённых логах. Канал уведомлений нужен для
+событий самого приложения; канал команд — для запроса, исполнения и связанного ответа.
+Один Telegram bot может обслуживать оба направления, но updates должен читать
+ровно один командный источник, не несколько gateway с одинаковым bot token.
 
-Приложение само определяет все имена и обработчики. Реализованы CommandSpec,
-CommandRegistry, CommandContext и параметр commands у WatcherConfig.
-Конфигурация копирует состав реестра, проверяет дубликаты, типы и сигнатуры,
-но не вызывает callbacks, не запускает сеть и не предоставляет удалённый доступ.
+## Регистрация callbacks
 
-RemoteWatcher и NotificationRuntime принимают WatcherConfig при создании.
-В 0.1 они обеспечивают исходящую доставку; наличие commands не запускает приём
-или выполнение команд. В 0.3.4 нужен отдельный command_client:
-[подключение исполнителя](COMMAND_EXECUTION.md). Реальное приложение будет подключено
-после приёмки пути из Telegram, по решению владельца от 28.09.2026.
-
-## Простой словарь и partial
-
-Для команд без аргументов словарь остаётся самым коротким вариантом. Существующие
-on_start_load_cmd/on_stop_load_cmd можно привязать partial, как в приложении
-пользователя. Следующий самостоятельный пример использует непосредственно Event:
+Простой вариант — функции без аргументов или `functools.partial`. Они могут вернуть
+строку ответа. Настоящие действия и состояние принадлежат приложению.
 
 ```python
 from functools import partial
 from threading import Event
 
-from remote_watch import Identity, WatcherConfig
+from remote_watch import CommandRegistry
 
-load_stop_event = Event()
-check_event = Event()
-config = WatcherConfig(
-    identity=Identity(
-        service="loader", environment="production", region="ru",
-        host="loader-host", instance_id="loader-01",
-    ),
-    commands={
-        "resume_load": partial(Event.clear, load_stop_event),
-        "suspend_load": partial(Event.set, load_stop_event),
-        "check_load": partial(Event.set, check_event),
-    },
-)
-assert set(config.commands) == {"resume_load", "suspend_load", "check_load"}
-assert not load_stop_event.is_set()
+paused = Event()
+
+def status():
+    return "suspended" if paused.is_set() else "running"
+
+def set_paused(event, value):
+    event.set() if value else event.clear()
+    return "suspended" if value else "running"
+
+commands = CommandRegistry.from_callbacks({
+    "status": status,
+    "suspend_load": partial(set_paused, paused, True),
+    "resume_load": partial(set_paused, paused, False),
+})
 ```
 
-Поддерживаются обычные функции, bound methods, partial, callable objects и async
-callbacks. Обработчик словаря вызывается в форме callback(), поэтому все обязательные
-аргументы должны быть привязаны. Регистрация проверяет сигнатуру через inspect,
-не вызывая обработчик. Для callable без доступной сигнатуры нужна явная Python-обёртка.
-Генераторы и классы как command callbacks не принимаются.
-Источник поведения inspect: [Python documentation](https://docs.python.org/3.10/library/inspect.html#inspect.Signature.bind).
-
-Registry сохраняет ссылки на callbacks, а не сериализует функции и привязанные Event.
-Состав реестра неизменяем; состояние, захваченное callback, по-прежнему принадлежит
-приложению и может меняться. Изменение исходного словаря не меняет зарегистрированный набор.
-
-## Когда нужен CommandSpec
-
-Для описания команды, контекста, аргументов и политики используйте явную спецификацию.
+Для контекста, проверки аргументов, описания и timeout используйте `CommandSpec`:
 
 ```python
 from collections.abc import Mapping
-
 from remote_watch import CommandContext, CommandRegistry, CommandSpec
 
-def validate_arguments(arguments: Mapping[str, str]) -> None:
-    """Require a bounded count argument."""
+def validate(arguments: Mapping[str, str]) -> None:
     if set(arguments) != {"count"} or not 1 <= int(arguments["count"]) <= 100:
-        raise ValueError("count must be between 1 and 100")
+        raise ValueError("invalid count")
 
-def check_load(context: CommandContext) -> str:
-    """Return a correlated application-specific status."""
-    return f"{context.identity.instance_id}: requested {context.arguments['count']} entries"
+def check(context: CommandContext) -> str:
+    return f"Requested {context.arguments['count']} items"
 
-commands = CommandRegistry(specs=(
-    CommandSpec(
-        name="check_load", callback=check_load, takes_context=True,
-        validate_arguments=validate_arguments,
-        description="Проверить состояние загрузки",
-        required_scope="load:read", timeout=5,
-        read_only=True, idempotent=True,
-    ),
-))
+commands = CommandRegistry(specs=(CommandSpec(
+    name="check_load", callback=check, takes_context=True,
+    validate_arguments=validate, description="Check loading state", timeout=5,
+    required_scope="load:read", read_only=True, idempotent=True,
+),))
 ```
 
-Такой registry передаётся как commands при создании WatcherConfig. Смешанный набор
-строится из CommandSpec; простой вариант для одной команды — спецификация только
-с name и callback. Декоратор регистрации возможен позже как удобство поверх того же
-контракта; отдельная система классов команд пока не нужна.
+Имена имеют вид `[a-z][a-z0-9_]{0,63}`, без начального `/`. Аргументы — строки.
+`CommandContext` содержит Identity, actor/chat IDs, session ID и arguments.
+`read_only`/`idempotent` описывают операцию, но не дают разрешение повторять callback.
+Если задаёте свой required_scope (например load:read), разрешите его и в principal
+приложения, и в actor/chat ACL источника; стандартный command:check_load его не заменяет.
 
-| Поле | Значение |
-| --- | --- |
-| name | Точное имя, `[a-z][a-z0-9_]{0,63}`; без `/`, пробелов и скрытых aliases |
-| callback | Локальная функция или callable; не сериализуется, исключён из repr |
-| takes_context | False: callback(); True: callback(context) |
-| validate_arguments | Синхронная функция mapping строк → None либо ValueError |
-| required_scope | По умолчанию command:<name>; это требование, а не выданное право |
-| timeout | Положительный конечный срок выполнения; default 10 секунд |
-| read_only / idempotent | Явные заявления приложения; оба False по умолчанию |
+## Подключение к RemoteWatcher
 
-Если validate_arguments отсутствует, dispatcher отклоняет любые
-аргументы удалённого запроса. Валидатор допускается только с takes_context=True;
-он проверяет разрешённые имена, обязательность, диапазоны и формат. Неизвестные
-аргументы не должны незаметно игнорироваться. Приведение к доменному типу делает
-приложение после проверки; автоматическое доверие аннотациям callback не предусмотрено.
-Context хранит только именованные строки: максимум 32 аргумента, 64 байта имени,
-1024 байта значения и 4096 байт суммарных имён/значений в UTF-8.
+Скопируйте [command_client.example.json](examples/command_client.example.json)
+в закрытый локальный файл. Подставьте ту же Identity и отдельный командный token,
+что разрешены на gateway. CA-файл содержит **root certificate**, не leaf и не key.
 
-## Исполнение через dispatcher 0.3.4
+```python
+from remote_watch import RemoteWatcher, WatcherConfig
+from remote_watch.gateway.command_config import load_command_client
 
-Сначала аутентификация actor/conversation, ACL и target/session, expiry/replay,
-проверка аргументов и аудит; затем вызов зарегистрированного обработчика.
-Отсутствие разрешения закрывает доступ. Наличие CommandSpec не включает command source.
-CommandContext сам по себе тоже не доказывает аутентификацию.
+client = load_command_client("command_client.local.json", commands)
+config = WatcherConfig(identity=client.registration.identity, commands=commands)
+with RemoteWatcher(config, command_client=client) as watcher:
+    # Основной цикл приложения; здесь пример ждёт штатного завершения оператором.
+    input("Press Enter to stop\n")
+```
 
-Все пользовательские команды допустимы к регистрации уже сейчас. Read-only status
-одному instance — первый сетевой приёмочный сценарий, не встроенное ограничение имён.
-Связь с мессенджером не нужна в сигнатуре callback, команды принадлежат приложению.
+`load_command_client` создаёт новую сессию, но сохраняет указанные state_file/owner_id.
+Сам callback не сериализуется. Менять набор команд нужно через новый экземпляр
+приложения/регистрацию, не изменением исходного dict после создания registry.
 
-Async callback должен исполняться в согласованном с приложением loop. Синхронные
-callbacks не исполняются в loop доставки уведомлений. С 0.3.4 sync callbacks и валидаторы
-исполняются в одном отдельном потоке; async callbacks — в loop вызова astart.
-Работу произвольного объекта приложения в другом потоке обеспечивает само приложение. Синхронный callback нельзя принудительно остановить
-по timeout. Отмена/таймаут могут оставить неизвестный исход операции.
+Sync callbacks/validators работают в одном выделенном worker; async callbacks
+при `astart()` работают в loop приложения. Приложение должно учитывать поток,
+если callback обращается к UI, asyncio.Event или объекту с привязкой к loop.
+Для async приложения используйте async lifecycle и подходящий async callback.
 
-required_scope проверяется hub по отдельным ACL; timeout ограничивает исполнение,
-но не убивает sync-поток. read_only/idempotent остаются заявлениями приложения:
-конструктор не может доказать свойства функции. Повтор callback запрещён даже
-при idempotent=True. Есть polling, SQLite, выполнение и доставка результата hub;
-ответ в Telegram или закрытый reply topic ntfy доставляют sources из 0.3.5.
-Настройка и проверка: [COMMAND_SOURCES.md](COMMAND_SOURCES.md).
-Подключение, UNKNOWN и остановка: [COMMAND_EXECUTION.md](COMMAND_EXECUTION.md).
+## Команды в Telegram
+
+```text
+/rw
+/rw one
+/rw one status
+/rw one check_load count=10
+```
+
+`/rw` показывает доступные пользователю назначения и подсказку; `/rw one`
+показывает help для назначения и полную форму вызова. Help содержит
+`Allowed Bot Commands:` и строки вида `-> /status`, включая `/help`.
+Встроенные ответы Remote Watch — на английском; текст callback выбирает приложение.
+
+Для отдельного чата с единственным **статически разрешённым** target доступны
+`Help` без учёта регистра, `/help`, `/status` и другие разрешённые `/command`.
+При двух разрешённых targets нужен явный alias. Временно отсутствующий второй
+instance не превращает команду в обращение к единственному живому instance.
+Неявной рассылки всем приложениям нет. Help сам бизнес-callback не запускает.
+
+## Права и идентификаторы
+
+- `actor_id` — числовой Telegram ID человека, отправившего сообщение.
+- `conversation_id` — ID разрешённого чата; `chat_id` используется в notification config.
+- В личном чате эти числа часто равны, но обозначают разные сущности. В группе
+  conversation_id относится к группе, actor_id — к человеку. Username не заменяет ID.
+- `targets` связывает aliases с полной Identity; `scopes` ограничивают команды.
+  Проверяются и права приложения, и права actor/chat. Описание callback не выдаёт ACL.
+- Для каждого приложения/instance используйте свой командный token. Один token
+  для двух principals приводит к отказу проверки. Notification token — другой секрет.
+
+Получите IDs из доверенного собственного Telegram update/клиента. Не публикуйте bot token
+через сторонние диагностические сайты. Не запускайте второй getUpdates reader параллельно
+работающему gateway. До включения прав на изменения проверьте status и help.
+
+## Закрытый ntfy
+
+Используйте [пример ntfy](examples/command_gateway.ntfy.example.json) только с topic,
+где сервер ntfy реально запрещает запись всем, кроме доверенного оператора.
+Входящий ntfy event не несёт проверенного Telegram-подобного actor ID; доверие
+опирается на write ACL. Публичный или только случайно названный topic не подходит.
+Нужны отдельные command topic и reply topic/права. Обычные исходящие ntfy-уведомления
+не дают права принимать команды. Полевая проверка private ntfy-команд отложена;
+поддержку этого канала нельзя считать подтверждённой реальным deployment.
+
+Для ntfy после проверки ACL подтвердите `private_topic_confirmed=true`.
+Adapter дополнительно требует отказ анонимного чтения обеих тем, но не публикует
+пробную команду для проверки write ACL. Настроенный actor_id обозначает всех
+разрешённых писателей topic, а не удостоверенную личность автора. Публикуйте обычный
+текст `/rw one status` в command topic; ответы приходят в reply_topic.
+
+## Свежесть, reconnect и неизвестный исход
+
+Для команд gateway использует TrustedClock с явно выбранным TimeAPI UTC-источником,
+монотонными бюджетами и ограничением возраста. Обычные часы двух ОС могут расходиться;
+намеренно отключать проверку свежести или TLS нельзя. При недоступном доверенном
+времени новые команды не допускаются. Проверка: `python -m remote_watch.diagnostics.time_probe`.
+
+После успешного начального старта клиент автоматически восстанавливается при обычном
+разрыве сети, expiry или перезапуске gateway. Одна heartbeat-задача выполняет backoff
+и регистрацию; ожидание зависит также от TTL сессии, поэтому 20 секунд — не гарантия.
+Первый старт при недоступном сервере возвращает ошибку, а не запускает бесконечное ожидание.
+
+Перед новой сессией должны быть урегулированы текущий callback и неподтверждённые
+результаты. Совпадающий сохранённый результат подтверждается квитанцией, без повторного
+callback. Конфликт исходов блокирует восстановление с `operator_action_required`.
+`UNKNOWN` сохраняется для ручного разбора. Истёкший timeout не доказывает, что
+callback прекратил внешнее действие. Не удаляйте SQLite, не меняйте owner_id и
+не сбрасывайте cursors для обхода этой защиты. [Диагностика и сверка](OPERATIONS.md).
+
+## Оформление ответов
+
+`display_mode` в command client JSON выбирает full/compact/text отдельно от
+уведомлений. `null` наследует default соответствующего `sources[].display_mode`.
+Измените конфиг и перезапустите приложение; gateway перезапускать не нужно.
+Режим фиксируется в исходном запросе: ответ старой команды не получает настройки
+случайно появившейся новой сессии. Изменение оформления не меняет ACL и журнал исполнения.

@@ -1,176 +1,113 @@
-﻿# Контракт конфигурации
+﻿# Настройки и идентификаторы
 
-Version 1.1.0
+Version 1.1.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261013-170523
+Дата и время последнего изменения: 261014-184253
 
-## Статус
+## Какие файлы нужны
 
-Реализованы Identity, SnapshotLimits, RetryPolicy, RuntimeConfig, Destination,
-Route и WatcherConfig. Они проверяют данные без запуска runtime. Добавлены
-TelegramConfig/NtfyConfig и их ленивые фабрики. RemoteWatcher, ConsoleConfig и
-RotatingFileConfig описаны в [WATCHER.md](WATCHER.md). Обязательного формата файла нет;
-для gateway/commands и диагностики есть отдельные JSON loaders, а приложение
-может собирать объекты настроек из собственного формата.
-В 0.1 конфигурация выражается типизированными Python-объектами; core не требует
-YAML, JSON, TOML или специальных URL. Интеграция со стандартным logging реализована
-через NotificationRuntime.handler; отдельный loader расширений dictConfig не входит
-в первую версию. Пример: [RUNTIME.md](RUNTIME.md).
-
-## Разделы
-
-| Раздел | Содержание |
-| --- | --- |
-| identity | service, environment, region, host, instance_id |
-| local logging | Явно запрошенные handlers, уровни, формат, rotation и владение |
-| destinations | Уникальные ID, provider kind, direct/gateway, policy |
-| routing | Remote-порог, topic/tags/identity predicates, destination IDs |
-| runtime | Входная очередь, lifecycle deadlines, лимит числа назначений |
-| delivery policy | Outstanding budget, TTL, attempts, timeouts, backoff |
-| redaction | Обработка чувствительных данных до очереди |
-| internal diagnostics | Локальный sink и ограничение частоты |
-| commands | Реализован: словарь callbacks или CommandRegistry из CommandSpec |
-
-Все реализованные policy/model-конструкторы доступны из remote_watch. Публичные имена:
-RuntimeConfig.snapshot_limits, Destination.outstanding_capacity, Destination.retry,
-WatcherConfig.routes и WatcherConfig.commands. Сами dataclasses очереди не создают
-и таймауты не исполняют. NotificationRuntime применяет ограничения при запуске.
-
-В версии 0.1.0 runtime применяет `RetryPolicy` полностью для очереди и повторов:
-по умолчанию три попытки, full jitter, backoff cap, retry-after и общий TTL.
-`max_attempts=1` отключает повторы. Общий attempt_timeout применяется к каждой попытке;
-connect_timeout отдельно соблюдает HTTP-клиент Telegram/ntfy, поскольку общий
-протокол send не раскрывает стадию установления соединения. Метод config.destination()
-передаёт одну политику обеим сторонам; см. [ADAPTERS.md](ADAPTERS.md).
-
-Для воспроизводимых проверок NotificationRuntime принимает `delivery_clock` с методами
-`monotonic()` и `async sleep(delay)`, а также `random_source()` с конечным значением
-от 0 до 1. Они должны быть быстрыми и поддерживать кооперативную отмену ожидания.
-Часы `clock()` задают только UTC-дату уведомления. Lifecycle и таймаут send остаются
-ограниченными реальным временем; виртуальные часы не могут отменить срок остановки.
-
-Identity — непустые строки; пустое/неизвестное значение не подставляется из сети
-или названия чата. Для неизвестной region/host допустим явный маркер unknown.
-Session ID создаётся на каждый runtime. Метаданные LogRecord не меняют identity.
-
-## Назначение и способ доставки
-
-Следующая таблица иллюстрирует будущие настройки, не является готовым config-файлом.
-
-| ID назначения | Provider | Mode | Где адресат и provider secret |
-| --- | --- | --- | --- |
-| operations-chat | telegram | gateway (0.2) | На gateway под разрешённым alias |
-| phone-alerts | ntfy | direct | В локальных настройках topic и secret reference |
-
-Для direct необходимы provider settings. Для gateway необходимы HTTPS gateway URL,
-service secret reference и remote alias; provider credentials у приложения не нужны.
-NotificationGatewayClientConfig не содержит provider credentials и создаёт gateway factory. В 0.2.0.dev3
-реализованы клиент и сервер: [GATEWAY_SERVER.md](GATEWAY_SERVER.md). Сам mode не подменяет произвольную
-пользовательскую фабрику. См. [NOTIFICATION_GATEWAY.md](NOTIFICATION_GATEWAY.md). Нет автоматического переключения
-на direct при недоступности gateway и нет автоматического выбора канала по стране.
-
-Для серверного процесса в 0.2.0.dev4 добавлена необязательная JSON-конфигурация:
-`python -m remote_watch.gateway --config notification_gateway.local.json`. Она преобразуется
-в обычные NotificationGatewayServerConfig/NotificationGatewayPrincipal; формат настроек приложений не меняется.
-Файл, пример четырёх приложений и проверка без запуска описаны в
-[GATEWAY_SERVER.md](GATEWAY_SERVER.md). Развёртывание Windows/HTTPS — в
-[GATEWAY_TLS.md](GATEWAY_TLS.md).
-
-На контрактном этапе Destination принимает destination_id, provider (описательное
-имя, по умолчанию custom), channel_factory, mode=DeliveryMode.DIRECT,
-outstanding_capacity и RetryPolicy. Фабрика — синхронный callable без аргументов,
-в том числе класс с пустым конструктором. Она должна вернуть NotificationChannel;
-создание конфигурации проверяет её сигнатуру, но не вызывает её и не доказывает
-соответствие возвращаемого объекта async-протоколу. Это проверяется contract tests.
-Provider settings и ссылки на секреты принадлежат фабрике; её repr не раскрывается.
-TelegramConfig/NtfyConfig/NotificationGatewayClientConfig создают готовые фабрики через destination(); токены читаются
-из переменных окружения при open. Общего secret resolver пока нет. Неизвестные provider-имена
-не импортируются: так подключаются пользовательские реализации без registry SDK.
-
-В 0.1 каждый adapter instance привязан к одному назначению. Разные destination IDs,
-указывающие на один chat/topic, считаются разными намеренными доставками; router
-дедуплицирует только ID. Пользователь обязан избегать непреднамеренных aliases.
-
-## Исходные лимиты 0.1
-
-Это проектные defaults для проверки прототипом, а не измеренные оптимальные значения.
-Все временные параметры — секунды; размер — байты UTF-8, KiB = 1024 байта.
-
-| Настройка | Default | Семантика |
+| Файл | Кто читает | Для чего |
 | --- | --- | --- |
-| ingress_capacity | 1024 | Снимки, ожидающие маршрутизации |
-| max_destinations | 16 | Проверяемый верхний предел настроенных назначений |
-| outstanding_per_destination | 256 | Ожидание + active send + retry вместе |
-| concurrent_sends_per_destination | 1 | В 0.1 фиксировано; последовательные попытки |
-| overflow | drop_newest | Без ожидания места, без исключения в logging caller |
-| event_max_bytes | 16 KiB | Максимальный сериализованный снимок |
-| message_max_bytes | 8 KiB | UTF-8-safe усечение с видимым маркером |
-| exception_max_bytes | 4 KiB | Текст исключения без traceback objects |
-| metadata_max_bytes | 2 KiB | Общий бюджет identity/topic/tags/correlation |
-| ttl | 300 | Срок с момента приёма в handler |
-| max_attempts | 3 | Включая первую; применяется и к unknown |
-| connect_timeout | 3 | Максимум соединения, внутри attempt timeout |
-| attempt_timeout | 10 | Вся попытка, включая чтение ответа |
-| backoff_base / cap | 1 / 30 | Full jitter для retry |
-| startup_timeout | 5 | Запуск worker/клиентов, без обязательного health request |
-| shutdown_timeout | 5 | Общее время drain, cancellation и close |
+| Настройки приложения в Python | Приложение | WatcherConfig, provider factories, logging |
+| `command_client.local.json` | `load_command_client` | HTTPS/Identity/token/SQLite командного клиента |
+| `notification_gateway.local.json` | Notification gateway | Получатели и сервисные principals |
+| `command_gateway.local.json` | Command gateway | Targets, principals/scopes, sources/actor/chat |
+| `gateway_server.local.json` | Manager/deploy/service | Пути компонентов, управление процессами, UI, оповещения владельцу |
+| `gateway_doctor.client.local.json` | Client doctor | Проверка внешнего маршрута и собственных прав приложения |
 
-В реализации SnapshotLimits.metadata_max_bytes ограничивает компактный JSON всех
-полей снимка, кроме message/exception; учитываются также IDs, timestamps, schema
-и признаки усечения. Notification валидирует уже подготовленный текст и не усекает
-его самостоятельно. Logging normalizer выполняет усечение до создания модели.
-From_dict принимает только schema_version=1 и не принимает limits из payload.
+Публичные [примеры](examples/) — шаблоны, не рабочие credentials.
+Общего JSON-загрузчика WatcherConfig нет. `notification_client.example.json` из
+deploy — памятка для создания `NotificationGatewayClientConfig` в приложении,
+а не отдельная команда загрузки. Command client JSON имеет настоящий загрузчик.
 
-TTL назначения хранится в RetryPolicy.ttl. Эффективный deadline — минимум срока
-снимка и created_at + TTL назначения; счёт с момента каждой новой попытки запрещён.
+## Identity, alias, token и source
 
-При первой неуспешной попытке задержка выбирается равномерно от 0 до base,
-далее верхняя граница удваивается до cap. Для rate limit задержка не меньше
-валидного retry-after. Deadline отдельной попытки ограничен оставшимися TTL
-и shutdown budget. Некорректный retry-after не допускает бесконечного ожидания.
+Полная Identity — пять полей `service/environment/region/host/instance_id`.
+Они должны совпадать в приложении, notification principal и командном target.
+Две одновременно работающие копии приложения различаются instance_id.
 
-Метаданные за пределом бюджета отклоняются, а не обрезают identity до совпадающего ID.
-После усечения текста проверяется общий размер снимка; если он всё ещё превышен,
-событие отклоняется с причиной oversize. Размер provider payload дополнительно
-ограничивается адаптером. В 0.1 длинное уведомление усекается с маркером; автоматическое
-разбиение на несколько provider messages отложено из-за частичных успехов.
+Alias notification gateway обозначает серверное назначение. Alias команды обозначает
+разрешённый target. Это не provider token, не chat ID и не имя локального destination.
+`destination_id` выбирается Route внутри одного watcher. `source_id` — стабильное
+локальное имя reader/журнала источника; его нельзя менять для обхода старых событий.
 
-Лимиты очередей не означают нулевого выделения памяти при форматировании чужого
-объекта. Должны проверяться именно пределы удерживаемых снимков и delivery state.
+Есть три разных вида секретов: provider token (бот/ntfy), notification gateway token
+и command gateway token. Для приложения создайте отдельные случайные gateway-секреты
+не короче 32 символов; используйте разные значения для разных командных principals.
+Provider token приложениям за gateway не нужен. `token_env` содержит **имя** переменной,
+а `token` — сам секрет. Они взаимоисключающие; repr/диагностика не должны их раскрывать.
+Служба Windows не наследует произвольные переменные интерактивного PowerShell.
 
-## Правила маршрутизации
+## Notification gateway JSON
 
-- Отсутствующий notify: порог ERROR, если конфигурация не задала другой.
-- notify=True: снять remote-порог, сохранить прочие predicates.
-- notify=False: запретить remote для этой записи.
-- Внутри правила — AND; между правилами — объединение выбранных destination IDs.
-- Без совпадения нет remote-отправки; локальные handlers не затрагиваются.
-- Logger level и его filters проверяются раньше handler; helper явно объясняет
-  их настройку и не обещает доставку отфильтрованных записей.
+`schema_version=1`. `destinations[]`: alias/provider/settings; settings относятся
+к Telegram или ntfy. `principals[]`: name, token либо token_env, точная identity,
+aliases разрешённых назначений. Чужой alias или другая Identity запрещены.
+Таймауты провайдера ограничиваются сервером и остатком бюджета клиента.
 
-Форматирование по умолчанию включает service/environment, region/host, instance ID
-и уровень. В локальном rotating file rotation задаётся пользователем; файл не
-используется как автоматический outbox и не перечитывается для повторной отправки.
+Пример literal token: [notification_gateway.inline.example.json](examples/notification_gateway.inline.example.json).
+Значения в примере синтетические; не используйте общедоступный placeholder как пароль.
 
-## Валидация, секреты и изменение настроек
+## Command gateway JSON
 
-Проверяются типы, положительные конечные бюджеты, уникальность IDs, ссылки правил,
-доступность optional adapter, взаимоисключение direct/gateway и безопасный URL.
-Неизвестные поля отклоняются. Сетевая проверка не является частью schema validation.
+`state_dir` — постоянная отдельная папка SQLite. `targets` связывает alias с Identity.
+`principals[]` задаёт name, отдельный token/token_env, targets и scopes приложения.
+`sources[]` задаёт source_id/provider/settings/access; access содержит actor_id,
+conversation_id, targets и scopes оператора. Права двух сторон пересекаются.
+`sources[].display_mode` — full/compact/text. `hub` необязателен: его defaults
+подходят для первого запуска. Не добавляйте туда произвольные поля приложения.
 
-Секрет задаётся через явно выбранный environment name или injected provider.
-Автоматический поиск произвольных credentials-файлов и чтение личных браузерных
-профилей не предусмотрены. Значение секрета не входит в repr конфигурации.
-Custom adapter обязан соблюдать тот же контракт.
+`command_client.local.json`: schema_version, identity, endpoint, state_file,
+owner_id; дополнительно token/token_env, ca_file, display_mode.
+endpoint — **внешний HTTPS origin**, например `https://gateway.example.test:8443`,
+без `/v1/commands`, query и credentials. Внутренний 8766 обычно не предоставляет HTTPS.
+`display_mode=null` наследует source default. `owner_id` и state_file сохраняются
+при обычном обновлении; не генерируйте новый owner для каждого запуска.
 
-Hot reload в 0.1 отсутствует. Для изменения настроек закрывается старый runtime
-и создаётся новый; перенос очереди между ними не обещается. Ротация credentials
-также требует пересоздания соответствующего runtime до появления reload-контракта.
+## Gateway server JSON
 
-Команды регистрируются локально через WatcherConfig.commands. Конфигурация принимает
-либо CommandRegistry, либо mapping имён на функции без оставшихся обязательных
-аргументов; partial позволяет привязать состояние приложения. Подробности:
-[COMMANDS.md](COMMANDS.md). Подключение сетевого CommandClient и dispatcher
-описано отдельно в [COMMAND_EXECUTION.md](COMMAND_EXECUTION.md).
+```json
+{
+  "schema_version": 1,
+  "endpoint": "https://gateway.example.test:8443",
+  "control_dir": "control",
+  "log_dir": "logs/gateway_server",
+  "notifications": {"config": "notification_gateway.local.json", "host": "127.0.0.1", "port": 8765},
+  "commands": {"config": "command_gateway.local.json", "host": "127.0.0.1", "port": 8766},
+  "caddy": {"mode": "external"},
+  "application": {"ui": "headless", "icon_path": "logo/remote_watch.ico"}
+}
+```
+
+Удалите notifications или commands, если компонент не нужен. Хотя бы один нужен.
+Относительные пути считаются от **файла, в котором записаны**, не от cwd. Ссылка
+manager на старый JSON не меняет базу относительных state_dir внутри старого JSON.
+
+control_dir, log_dir и command state_dir должны быть раздельными. Manager назначает
+своим control/log каталогам приватные права: не используйте общую папку Caddy или
+приложения. Новые шаблоны задают `logs/gateway_server`; для Caddy выберите `logs/caddy`.
+При чужих файлах обычный запуск завершается `log_directory_shared` до изменения ACL.
+
+Необязательные `lifecycle`: startup_timeout=60, shutdown_timeout=30, kill_timeout=5,
+heartbeat_interval=1, heartbeat_timeout=15. `restart`: max_restarts=3, window=300,
+initial_delay=2, max_delay=30. Все времена — секунды. Повторы конечны; ошибки
+конфигурации/прав/владения не исправляются бесконечными перезапусками.
+
+`application`: ui=headless/tray, icon_path (относительно общего JSON),
+log_max_bytes=1048576, log_backups=5; alerts содержит cooldown и destinations.
+Служебные сообщения владельцу: [GATEWAY.md](GATEWAY.md).
+
+## Проверка
+
+```console
+python -m remote_watch.gateway_server --config gateway_server.local.json --check-config
+python -m remote_watch.gateway --config notification_gateway.local.json --check-config
+python -m remote_watch.gateway.commands --config command_gateway.local.json --check-config
+```
+
+Это проверка структуры и ссылок без запуска, SQLite recovery или отправок провайдеру.
+Она не доказывает валидность provider token, доступность HTTPS и готовность приложения.
+Неизвестные/повторные ключи и неверные типы JSON отвергаются. Ошибка содержит
+фиксированный code/field и безопасную подсказку, а не введённые секреты.

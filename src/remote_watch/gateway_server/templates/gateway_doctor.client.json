@@ -1,20 +1,27 @@
 {
   "schema_version": 1,
-  "endpoint": "https://lv.example.test:8443",
+  "endpoint": "https://gateway.example.test:8443",
   "ca_file": "root.crt",
   "identity": {
     "service": "app1",
     "environment": "production",
-    "region": "ru",
-    "host": "ru-server-1",
+    "region": "region-1",
+    "host": "app-host",
     "instance_id": "one"
   },
   "notifications": {
     "token_env": "RW_NOTIFICATION_APP1_TOKEN",
-    "aliases": ["app1-telegram"]
+    "aliases": [
+      "app1-telegram"
+    ]
   },
   "commands": {
     "token_env": "RW_COMMAND_APP1_TOKEN",
-    "scopes": ["command:status", "command:check_load", "command:resume_load", "command:suspend_load"]
+    "scopes": [
+      "command:status",
+      "command:check_load",
+      "command:resume_load",
+      "command:suspend_load"
+    ]
   }
 }

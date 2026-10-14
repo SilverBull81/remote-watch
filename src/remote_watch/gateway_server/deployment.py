@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки установки
@@ -294,7 +294,7 @@ def prepare_files(
     if not re.fullmatch(r"[0-9][A-Za-z0-9.+-]{0,63}", package_version):
         raise DeployError("version_invalid")
 
-    # Внешний Caddy, особенно уже установленная служба LV, не становится нашим ребёнком.
+    # Внешний Caddy, включая уже установленную службу, не становится нашим ребёнком.
     caddy = {"mode": options.caddy_mode}
     if options.caddy_mode == "managed":
         if options.caddy_executable is None or options.caddy_data is None:

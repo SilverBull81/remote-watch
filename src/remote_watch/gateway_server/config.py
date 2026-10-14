@@ -1,10 +1,10 @@
 ﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига
@@ -28,6 +28,8 @@
 #    -> __post_init__(): Проверка согласованности настроек сервера
 #
 # Функции:
+# -> check_log_directory(): Отказ от чужих файлов до изменения прав папки журналов
+#
 # -> load_control_directory(): Поиск локального управления без чтения связанных конфигов
 #
 # -> load_deployment_config(): Чтение общего конфига и проверка связанных файлов
@@ -111,7 +113,7 @@ class DeploymentConfigError(ValueError):
         # component_error — копируем только безопасную диагностику штатного загрузчика.
 
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
-                 "component_config", "path_unavailable", "operation_failed")
+                 "component_config", "path_unavailable", "operation_failed", "log_directory_shared")
         fields = ("config", "schema_version", "endpoint", "control_dir", "log_dir", "notifications",
                   "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path")
         self.code = code if code in codes else "config_value"
@@ -194,7 +196,7 @@ class ComponentConfig:
 @dataclass(frozen=True, slots=True)
 class CaddyConfig:
     """
-    External Caddy is observed only; managed Caddy requires explicit persistent storage.
+    External Caddy remains independently owned; managed Caddy requires explicit persistent storage.
 
     :param mode: Explicit delivery or process ownership mode.
     :type mode: str
@@ -497,6 +499,36 @@ def load_deployment_config(
         raise
     except (OSError, ValueError, TypeError, OverflowError, RecursionError):
         raise DeploymentConfigError("config_value", section) from None
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Отказ от чужих файлов до изменения прав папки журналов
+#------------------------------------------------------------------------------------------------------------------
+def check_log_directory(
+    path: Path,
+    ) -> None:
+
+    """
+    Refuse shared log directories before the manager replaces their access permissions.
+
+    :param path: Dedicated directory containing only the manager's rotated log files.
+    :type path: Path
+    """
+
+    # path — проверяется до private_directory: посторонний writer не должен потерять
+    # доступ даже при неудачном запуске manager. Чужие имена в ошибку не попадают.
+
+    try:
+        if not path.exists():
+            return
+
+        for index, entry in enumerate(path.iterdir()):
+            if (index >= 32 or not re.fullmatch(r"gateway_server\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?", entry.name)
+                    or entry.is_symlink() or not entry.is_file()
+                    or getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
+                raise DeploymentConfigError("log_directory_shared", "log_dir")
+    except OSError:
+        raise DeploymentConfigError("path_unavailable", "log_dir") from None
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

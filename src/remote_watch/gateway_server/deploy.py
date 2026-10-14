@@ -1,10 +1,10 @@
 ﻿# Команда подготовки файлов gateway server без запуска и перезаписи установки.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Функции:
 # -> main(): Подготовка установки и вывод безопасного перечня изменений
@@ -53,7 +53,8 @@ def main(
     parser = DeploymentParser(description="Подготовка gateway server без запуска и перезаписи файлов.")
     parser.add_argument("--version", action="version", version=version("remote-watch"))
     parser.add_argument("--directory", required=True, type=Path, help="Папка комплекта установки.")
-    parser.add_argument("--endpoint", required=True, help="Внешний HTTPS-адрес, например https://lv.example:8443.")
+    parser.add_argument("--endpoint", required=True,
+                        help="Внешний HTTPS-адрес: https://gateway.example.test:8443.")
     parser.add_argument("--python", type=Path, default=Path(sys.executable),
                         help="Python/venv для команд запуска.")
     parser.add_argument("--components", choices=("both", "notifications", "commands"), default="both")

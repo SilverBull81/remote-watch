@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-185741
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -114,15 +114,16 @@ def main() -> int:
     try:
         # Проверяется исходный архив, а устанавливается wheel, заново построенный из него.
         run("style", [sys.executable, str(root / "tools/check_style.py")])
+        run("documentation", [sys.executable, str(root / "tools/check_docs.py")])
         run("build", [sys.executable, "-m", "build", "--outdir", str(output / "dist"), str(root)])
         sdist = next((output / "dist").glob("*.tar.gz"))
         with tarfile.open(sdist) as archive:
             names = archive.getnames()
             assert any(name.endswith("tools/validate.py") for name in names)
-            assert any(name.endswith("docs/GATEWAY_SERVER.md") for name in names)
+            assert any(name.endswith("docs/GATEWAY.md") for name in names)
             assert any(name.endswith("tests/contract/test_gateway.py") for name in names)
             assert not any(name.endswith((".local.json", "gateway_config.json", "gateway_settings.py"))
-                           or "/build/" in name or "/runs/" in name for name in names)
+                           or "/build/" in name or "/runs/" in name or "/docs/private/" in name for name in names)
         run("wheel-from-sdist", [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir",
                                  str(output / "wheel"), str(sdist)])
         wheel = next((output / "wheel").glob("*.whl"))

@@ -47,3 +47,6 @@ runtime.json
 .agents/
 .DS_Store
 Thumbs.db
+
+# Machine-specific instructions and local documentation archives
+/docs/private/

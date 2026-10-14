@@ -2,13 +2,13 @@
   "schema_version": 1,
   "display_mode": null,
   "identity": {
-    "service": "command-smoke",
+    "service": "app1",
     "environment": "test",
-    "region": "ru",
-    "host": "ru-vm",
+    "region": "region-1",
+    "host": "app-host",
     "instance_id": "one"
   },
-  "endpoint": "https://REPLACE-LV-ADDRESS:8766",
+  "endpoint": "https://gateway.example.test:8443",
   "token": "REPLACE_WITH_RANDOM_COMMAND_SECRET_ONE_32_PLUS",
   "state_file": "data/command-client-one.sqlite",
   "owner_id": "command-client-one",
