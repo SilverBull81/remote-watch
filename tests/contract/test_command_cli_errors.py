@@ -1,10 +1,10 @@
 ﻿# Понятные ошибки командного CLI без раскрытия секретов и приватных путей.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261014-204532
 #
 # Тесты:
 # -> test_shape_errors(): Точное поле при ошибке структуры связанного JSON
@@ -288,7 +288,11 @@ def test_real_port_conflict(
         Occupy a loopback port and verify both the error classification and cleanup.
         """
 
-        config = load_command_gateway(write_config(tmp_path / "config.json", settings()))
+        # Проверяем bind занятого порта, а не скорость создания SQLite на CI.
+        # Подготовке журнала даём отдельный конечный бюджет; рабочие defaults прежние.
+        value = settings()
+        value["hub"]["storage_timeout"] = 10
+        config = load_command_gateway(write_config(tmp_path / "config.json", value))
         gateway = CommandGateway(config, time_source=FakeTime())
         with socket.socket() as blocker:
             blocker.bind(("127.0.0.1", 0))
