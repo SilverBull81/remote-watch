@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных
@@ -24,6 +24,8 @@
 #    -> _commit(): Завершение сохранённого решения без выбора новой сессии
 #    -> _receive(): Получение событий с конечными паузами после отказа
 #    -> _respond(): Доставка сохранённых ответов без повторного callback
+#    -> _record_failure(): Сохранение этапа и безопасных признаков отказа.
+#    -> _recovered(): Снятие текущего отказа без удаления истории.
 #    -> _finished(): Учёт неожиданного завершения фоновой задачи
 
 
@@ -44,6 +46,7 @@ from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.hub import CommandHub
 from remote_watch.commands.hub_config import CommandSource
 from remote_watch.commands.protocol import CommandRef, CommandRequest
+from remote_watch.commands.source_health import source_failure
 from remote_watch.commands.source_protocol import (
     CommandProvider,
     SourceEvent,
@@ -94,6 +97,21 @@ class SourceStats:
 
     :param reply_error: Current persisted-result reply failure, or None.
     :type reply_error: str | None
+
+    :param receive_failure: Current receive-loop failure details, or None.
+    :type receive_failure: dict | None
+
+    :param reply_failure: Current result-delivery failure details, or None.
+    :type reply_failure: dict | None
+
+    :param last_failure: Last historical failure details, retained after recovery.
+    :type last_failure: dict | None
+
+    :param failures: Number of observed failed operations in this process.
+    :type failures: int
+
+    :param recoveries: Number of loop recoveries after a recorded failure.
+    :type recoveries: int
     """
 
     accepted: int           # Команды, впервые принятые hub в текущем запуске.
@@ -104,6 +122,11 @@ class SourceStats:
     ready: bool = True      # Текущая работа обоих циклов; история ошибок не мешает восстановлению.
     receive_error: str | None = None  # Текущий отказ приёма, отдельно от доставки ответов.
     reply_error: str | None = None  # Текущий отказ цикла доставки сохранённых результатов.
+    receive_failure: dict | None = None  # Этап и безопасные признаки текущего отказа приёма.
+    reply_failure: dict | None = None    # Признаки отказа доставки результата, отдельно от приёма.
+    last_failure: dict | None = None     # Последний исторический отказ сохраняется после восстановления.
+    failures: int = 0                    # Число неудачных операций в текущем запуске.
+    recoveries: int = 0                  # Число восстановлений циклов после отказа.
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -199,6 +222,11 @@ class CommandSourceRunner:
         self._error: str | None = None
         self._receive_error: str | None = None
         self._reply_error: str | None = None
+        self._receive_stage = "storage"
+        self._receive_failure: dict | None = None
+        self._reply_failure: dict | None = None
+        self._last_failure: dict | None = None
+        self._failures = self._recoveries = 0
         self._reply_position = 0
     #--------------------------------------------------------------------------------------------------------------
 
@@ -225,7 +253,11 @@ class CommandSourceRunner:
                            closed=self._stopping, last_error=self._error,
                            ready=bool(self._tasks) and not self._stopping
                            and self._receive_error is None and self._reply_error is None,
-                           receive_error=self._receive_error, reply_error=self._reply_error)
+                           receive_error=self._receive_error, reply_error=self._reply_error,
+                           receive_failure=dict(self._receive_failure) if self._receive_failure else None,
+                           reply_failure=dict(self._reply_failure) if self._reply_failure else None,
+                           last_failure=dict(self._last_failure) if self._last_failure else None,
+                           failures=self._failures, recoveries=self._recoveries)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -343,7 +375,9 @@ class CommandSourceRunner:
         """
 
         journal = self._worker.store
+        self._receive_stage = "hub"
         cutoff = self.hub.source_cutoff(self.policy.token)
+        self._receive_stage = "storage"
         await self._worker.call(lambda: journal.prune(cutoff))
         _, cursor, pending = await self._worker.call(journal.state)
 
@@ -353,6 +387,7 @@ class CommandSourceRunner:
             await self._commit(pending)
             return
 
+        self._receive_stage = "provider_poll"
         events = await self.provider.poll(cursor)
 
         if type(events) is not tuple or len(events) > 32:
@@ -361,10 +396,12 @@ class CommandSourceRunner:
         for event in events:
             if type(event) is not SourceEvent:
                 raise CommandError("invalid")
+            self._receive_stage = "storage"
             if await self._worker.call(lambda: journal.contains(event.event_id)):
                 # ID уже обработан: перемещаем только позицию провайдера.
                 # Новый command_id здесь создал бы повтор побочного действия.
                 await self._worker.call(lambda: journal.skip_duplicate(event.event_id))
+                self._receive_stage = "provider_ack"
                 await self.provider.acknowledge(event.event_id)
                 self._ignored += 1
                 continue
@@ -372,6 +409,7 @@ class CommandSourceRunner:
             retired = await self._worker.call(lambda: journal.retired(event.message_date))
             pending = (SourcePending(position=position + 1, event=event, request=None)
                        if retired else self._prepare(event, position + 1))
+            self._receive_stage = "storage"
             await self._worker.call(lambda: journal.reserve(pending))
             await self._commit(pending)
     #--------------------------------------------------------------------------------------------------------------
@@ -471,8 +509,10 @@ class CommandSourceRunner:
 
         # pending — выбранный запрос вместе с исходным событием провайдера.
 
+        self._receive_stage = "storage"
         retired = await self._worker.call(lambda: self._worker.store.retired(pending.event.message_date))
 
+        self._receive_stage = "hub"
         if pending.request is None or retired:
             admitted = await self.hub.skip_source(self.policy.token, position=pending.position,
                                                   expected_cursor=pending.position - 1)
@@ -483,10 +523,12 @@ class CommandSourceRunner:
         if admitted.cursor != pending.position:
             raise CommandError("conflict")
 
+        self._receive_stage = "storage"
         await self._worker.call(lambda: self._worker.store.commit(pending))
 
         # Подтверждение провайдеру идёт последним. Если его ответ потеряется,
         # повторное чтение найдёт уже сохранённый ID в журнале источника.
+        self._receive_stage = "provider_ack"
         await self.provider.acknowledge(pending.event.event_id)
 
         if admitted.inserted:
@@ -500,6 +542,7 @@ class CommandSourceRunner:
             notice = "Command rejected: authorization, freshness or trusted time check failed."
 
         if notice is not None and pending.event.conversation_id is not None:
+            self._receive_stage = "provider_reply"
             # Справка/отказ не запускают приложение. Их ответ — одна попытка после
             # постоянного решения; потеря такого ответа не повторяет входящую команду.
             # Все разрешённые команды должны попасть в справку. Максимум 64 имени
@@ -531,11 +574,10 @@ class CommandSourceRunner:
         while not self._stopping:
             try:
                 await self.step()
-                self._receive_error = None
+                self._recovered("receive")
                 await asyncio.sleep(0.1)
             except CommandError as error:
-                self._error = error.code
-                self._receive_error = error.code
+                self._record_failure("receive", error, self._receive_stage)
                 if error.code not in ("busy", "capacity", "unavailable"):
                     self._stopping = True
                     return
@@ -555,6 +597,7 @@ class CommandSourceRunner:
 
         while not self._stopping:
             try:
+                stage = "hub"
                 rows = await self.hub.results(self.policy.token)
                 reply_error = None
                 # За проход отправляем не более 32 результатов. Начало сдвигается,
@@ -571,22 +614,80 @@ class CommandSourceRunner:
                     if not permitted:
                         continue
                     try:
+                        stage = "provider_reply"
                         await self.provider.reply(
                             request.conversation_id, source_result_text(
                                 request, row.record.result, mode=self._display_mode))
+                        stage = "hub"
                         await self.hub.acknowledge(self.policy.token, row.record.result)
                         self._replies += 1
                     except CommandError as error:
-                        self._error = error.code
+                        self._record_failure("reply", error, stage)
                         reply_error = error.code
                         if error.code in ("busy", "unavailable"):
                             break
-                self._reply_error = reply_error
+                if reply_error is None:
+                    self._recovered("reply")
                 await asyncio.sleep(self._retry)
             except CommandError as error:
-                self._error = error.code
-                self._reply_error = error.code
+                self._record_failure("reply", error, stage)
                 await asyncio.sleep(self._retry)
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Сохранение этапа и безопасных признаков отказа
+    #--------------------------------------------------------------------------------------------------------------
+    def _record_failure(
+        self,
+        direction: str,
+        error: CommandError,
+        stage: str,
+        ) -> None:
+
+        """
+        Retain current and historical classification independently for both source loops.
+
+        :param direction: Receive or reply loop selected by the runner.
+        :type direction: str
+
+        :param error: Failed operation with allowlisted diagnostics.
+        :type error: CommandError
+
+        :param stage: Operation that failed, independent of the loop direction.
+        :type stage: str
+        """
+
+        # direction/error/stage — два цикла независимы: успешный poll не скрывает отказ reply.
+
+        failure = source_failure(error, stage)
+        self._error = failure["code"]
+        self._last_failure = failure
+        self._failures = min(2**63 - 1, self._failures + 1)
+        setattr(self, "_" + direction + "_failure", failure)
+        setattr(self, "_" + direction + "_error", failure["code"])
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Снятие текущего отказа без удаления истории
+    #--------------------------------------------------------------------------------------------------------------
+    def _recovered(
+        self,
+        direction: str,
+        ) -> None:
+
+        """
+        Clear only one successful loop while preserving the last incident and counters.
+
+        :param direction: Receive or reply loop that completed its current operation.
+        :type direction: str
+        """
+
+        # direction — восстановление одного цикла не подтверждает работоспособность другого.
+
+        if getattr(self, "_" + direction + "_failure") is not None:
+            self._recoveries = min(2**63 - 1, self._recoveries + 1)
+        setattr(self, "_" + direction + "_failure", None)
+        setattr(self, "_" + direction + "_error", None)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

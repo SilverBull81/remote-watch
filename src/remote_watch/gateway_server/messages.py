@@ -1,10 +1,10 @@
 ﻿# Ограниченные сообщения состояния между управляющим и дочерними процессами.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Функции:
 # -> status_message(): Проверка состояния без переноса произвольных подробностей.
@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 
 from remote_watch.commands.journal_stats import validate_status
+from remote_watch.commands.source_health import validate_source_health
 
 #------------------------------------------------------------------------------------------------------------------
 
@@ -30,6 +31,7 @@ from remote_watch.commands.journal_stats import validate_status
 #******************************************************************************************************************
 
 STATES = frozenset({"starting", "ready", "degraded", "failed", "stopping", "stopped", "restarting"})
+MAX_STATUS_BYTES = 32768
 REASONS = frozenset({"time_unavailable", "source_stopped", "source_unavailable", "source_denied",
     "maintenance_failed", "storage_unavailable", "storage_capacity", "configuration", "authorization",
     "ownership", "storage", "crash", "hang", "restart_limit", "startup_timeout", "heartbeat_timeout",
@@ -66,7 +68,8 @@ def status_message(
     # value — heartbeat несёт только безопасные агрегаты, не полный stats провайдера.
 
     keys = {"state", "reason", "time_reason", "failure", "counters"}
-    if (type(value) is not dict or set(value) - {"journals"} != keys or type(value["state"]) is not str
+    if (type(value) is not dict or set(value) - {"journals", "source_health"} != keys
+            or type(value["state"]) is not str
             or value["state"] not in STATES):
         raise ValueError("invalid status")
 
@@ -86,6 +89,8 @@ def status_message(
         raise ValueError("invalid counter")
 
     result = dict(value, counters=dict(counters))
+    if "source_health" in value:
+        result["source_health"] = validate_source_health(value["source_health"])
     if "journals" in value:
         journals = value["journals"]
         if (type(journals) is not dict or set(journals) != {"hub", "sources"}

@@ -1,10 +1,10 @@
 ﻿# Сводки SQLite, кэш владельца и безопасная диагностика без изменения команд.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-192924
+# Дата и время последнего изменения: 261015-111157
 #
 # Тесты:
 # -> test_command_snapshot(): Подсчёт сохранённых фаз без записи в журнал
@@ -63,6 +63,7 @@ from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.journal_stats import inspect_journal
 from remote_watch.commands.protocol import callback_result
 from remote_watch.commands.resolution import reconcile
+from remote_watch.commands.source_health import source_failure
 from remote_watch.commands.source_store import SourceJournal
 from remote_watch.commands.transport import CommandError
 from remote_watch.diagnostics.gateway_doctor import _journal_rows, _server_online, journal_checks, main
@@ -354,6 +355,12 @@ def test_ipc_metrics(
                "journals": {"hub": status, "sources": [status] * 8}}
     safe = status_message(message)
     assert len(json.dumps(safe).encode()) < 14000
+    fault = source_failure(CommandError("busy", http_status=429, error_kind="tls_certificate",
+        verify_code=999999, busy_reason="transport_requests_full"), "provider_reply")
+    message["source_health"] = [{"index": index, "provider": "telegram", "ready": False,
+        "receive": fault, "reply": fault, "last_failure": fault, "failures": 2**63 - 1,
+        "recoveries": 2**63 - 1} for index in range(1, 9)]
+    assert len(json.dumps(status_message(message)).encode()) < 32768
     for key, invalid in (("private", "secret"), ("records", True), ("kind", "private"), ("records", -1)):
         forged = dict(value)
         forged[key] = invalid

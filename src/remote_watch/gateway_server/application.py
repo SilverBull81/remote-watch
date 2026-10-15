@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца
@@ -30,15 +30,18 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from remote_watch._validation import require_int, require_number
+from remote_watch.commands.source_health import validate_source_health
 from remote_watch.config import DeliveryMode, Destination, Route, RuntimeConfig, WatcherConfig
 from remote_watch.events import Identity
 from remote_watch.gateway.notification_json_config import _destination
 from remote_watch.gateway_server.messages import REASONS, STATES
+from remote_watch.gateway_server.presentation import operator_notice
 from remote_watch.watcher import RemoteWatcher
 
 #------------------------------------------------------------------------------------------------------------------
@@ -211,10 +214,11 @@ class OperatorAlerts:
         self.logger.propagate = False
         self.logger.addHandler(logging.NullHandler())
         self.watcher = None
-        self._seen: dict[str, tuple[str, str | None]] = {}
-        self._pending: dict[str, tuple[str, str | None]] = {}
+        self._seen: dict[str, tuple] = {}
+        self._pending: dict[str, tuple] = {}
         self._sent: dict[str, float] = {}
         self._troubled: set[str] = set()
+        self._since: dict[str, float] = {}
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -250,6 +254,8 @@ class OperatorAlerts:
         state: str,
         reason: str | None,
         now: float,
+        *,
+        sources: list | None = None,
         ) -> None:
 
         """
@@ -269,9 +275,13 @@ class OperatorAlerts:
 
         :param now: Manager monotonic observation time.
         :type now: float
+
+        :param sources: Optional bounded source diagnostics from the current child heartbeat.
+        :type sources: list | None
         """
 
         # name/state/reason — не содержимое провайдера; now задаёт cooldown без UTC VM.
+        # sources — повторная проверка не позволяет передать приватные поля в formatter.
 
         if name not in {"notifications", "commands", "caddy", "manager"}:
             return
@@ -279,26 +289,35 @@ class OperatorAlerts:
         if state not in STATES or (reason is not None and reason not in REASONS):
             return
 
-        current = (state, reason)
+        try:
+            details = validate_source_health([] if sources is None else sources)
+        except (ValueError, TypeError):
+            return
+
+        # Счётчики попыток не меняют подпись инцидента и не порождают поток одинаковых сообщений.
+        active = [{key: item[key] for key in ("index", "provider", "ready", "receive", "reply")}
+                  for item in details]
+        current = (state, reason, json.dumps(active, sort_keys=True))
         if self._seen.get(name) != current:
             self._seen[name] = current
             if state in {"failed", "degraded", "restarting"}:
                 self._troubled.add(name)
-                self._pending[name] = current
+                self._since.setdefault(name, now)
+                self._pending[name] = (state, reason, details, None)
             elif state == "ready" and name in self._troubled:
-                self._pending[name] = current
+                duration = min(2**63 - 1, int(max(0, now - self._since.get(name, now))))
+                self._pending[name] = (state, reason, [], duration)
             else:
                 self._pending.pop(name, None)
 
         if name in self._pending and now - self._sent.get(name, -float("inf")) >= self.config.cooldown:
-            state, reason = self._pending.pop(name)
+            state, reason, details, duration = self._pending.pop(name)
             self._sent[name] = now
             if state == "ready":
                 self._troubled.discard(name)
+                self._since.pop(name, None)
             self.logger.log(logging.INFO if state == "ready" else logging.ERROR,
-                            "Gateway server: %s is %s; reason=%s%s", name, state, reason or "none",
-                            ". Applications need new command sessions after a hub restart."
-                            if name == "commands" and state == "restarting" else "")
+                            operator_notice(name, state, reason, sources=details, duration=duration))
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

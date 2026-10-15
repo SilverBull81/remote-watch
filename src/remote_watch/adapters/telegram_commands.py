@@ -1,10 +1,10 @@
 ﻿# Приём исходных сообщений Telegram с проверкой отправителя и чата.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> TelegramCommandConfig: Настройки единственного получателя сообщений bot
@@ -301,7 +301,8 @@ class TelegramCommandProvider:
                 parameters = value.get("parameters")
                 delay = parameters.get("retry_after") if type(parameters) is dict else None
                 self._http.defer(delay if type(delay) is int else 2)
-            raise CommandError("busy" if code == 429 else "conflict" if code == 409 else "denied")
+            raise CommandError("busy" if code == 429 else "conflict" if code == 409 else "denied",
+                               http_status=code if type(code) is int and 400 <= code <= 599 else None)
 
         if "result" not in value:
             raise CommandError("invalid")

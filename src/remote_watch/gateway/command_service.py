@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд
@@ -34,6 +34,7 @@ from remote_watch.adapters.timeapi import TimeApiTimeSource
 from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.hub import CommandHub
 from remote_watch.commands.source import CommandSourceRunner
+from remote_watch.commands.source_health import validate_source_health
 from remote_watch.commands.source_store import ProcessLock, SourceJournal
 from remote_watch.commands.sqlite_store import SQLiteCommandStore
 from remote_watch.commands.storage import StoreRole
@@ -166,6 +167,12 @@ class CommandGateway:
 
         hub = self.hub.health()
         sources = [asdict(source.stats) for source in self.sources]
+        source_health = validate_source_health([
+            {"index": index, "provider": "ntfy" if isinstance(binding.settings, NtfyCommandConfig) else "telegram",
+             "ready": source["ready"], "receive": source["receive_failure"], "reply": source["reply_failure"],
+             "last_failure": source["last_failure"], "failures": source["failures"],
+             "recoveries": source["recoveries"]}
+            for index, (binding, source) in enumerate(zip(self.config.providers, sources), 1)])
         stopped = any(source["closed"] for source in sources)
         reason = hub["reason"]
         if self._closed:
@@ -182,6 +189,7 @@ class CommandGateway:
         return {"closed": self._closed, "ready": reason is None, "reason": reason,
                 "fatal": hub["fatal"] or (self._started and not self._closed and stopped),
                 "hub": hub, "sources": sources,
+                "source_health": source_health,
                 "journals": {"hub": self.hub.journal_status,
                              "sources": [source.journal_status for source in self.sources]}}
     #--------------------------------------------------------------------------------------------------------------

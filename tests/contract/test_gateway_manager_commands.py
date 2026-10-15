@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-195820
+# Дата и время последнего изменения: 261015-111157
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -263,18 +263,25 @@ def test_source_current_health(
                 assert monotonic() < end
                 await asyncio.sleep(.01)
             assert not runner.stats.ready
+            assert runner.stats.receive_failure["stage"] == "provider_poll"
+            assert runner.stats.reply_failure["stage"] == "hub"
+            assert runner.stats.failures >= 2
             provider.poll = normal_poll
             end = monotonic() + 3
             while runner.stats.receive_error is not None:
                 assert monotonic() < end
                 await asyncio.sleep(.01)
             assert not runner.stats.ready and runner.stats.reply_error == "unavailable"
+            assert runner.stats.receive_failure is None
+            assert runner.stats.reply_failure["stage"] == "hub"
+            assert runner.stats.recoveries >= 1
             rig.hub.results = normal_results
             end = monotonic() + 3
             while not runner.stats.ready:
                 assert monotonic() < end
                 await asyncio.sleep(.01)
             assert runner.stats.last_error in ("busy", "unavailable")
+            assert runner.stats.last_failure is not None and runner.stats.recoveries >= 2
         finally:
             await runner.close()
             await rig.close()

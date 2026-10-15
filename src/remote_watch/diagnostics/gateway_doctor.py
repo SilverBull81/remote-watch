@@ -1,10 +1,10 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> DoctorTarget: Закрытые параметры проверки одного канала
@@ -59,6 +59,7 @@ from typing import Any
 
 from remote_watch._credentials import CredentialError, resolve_token, validate_credentials
 from remote_watch.commands.journal_stats import inspect_journal, validate_status
+from remote_watch.commands.source_health import validate_source_health
 from remote_watch.events import Identity
 from remote_watch.gateway.command_config import CommandConfigError, read_command_json
 from remote_watch.gateway.doctor_protocol import decode_probe
@@ -75,6 +76,8 @@ from ._doctor_network import network_checks
 #******************************************************************************************************************
 
 HINTS = {
+    "source_unavailable": "Источник команд не готов; смотрите этап и безопасную причину в source_health.",
+    "source_health_invalid": "Некорректная сводка источников; проверьте совместимость версий gateway и doctor.",
     "journal_ok": "Снимок содержит только числа; pending сам по себе не означает отказ gateway.",
     "journal_unavailable": "Сводка владельца недоступна; сохранённый снимок может быть устаревшим.",
     "journal_stale": "Снимок старше 30 секунд; проверьте владельца журнала и его storage lane.",
@@ -457,6 +460,15 @@ async def _server_online(
     components = snapshot.get("components", {})
     command = components.get("commands", {}) if type(components) is dict else {}
     journals = command.get("journals") if type(command) is dict else None
+    if type(command) is dict and "source_health" in command:
+        try:
+            for source in validate_source_health(command["source_health"]):
+                row = _row(f"commands.source_{source['index']}", "ok" if source["ready"] else "failed",
+                           "ready" if source["ready"] else "source_unavailable")
+                row["source_health"] = source
+                rows.append(row)
+        except (ValueError, TypeError):
+            rows.append(_row("commands.sources", "failed", "source_health_invalid"))
     if journals is None:
         rows.append(_row("journal_unknown_outcomes", "skipped", "not_observed"))
     else:

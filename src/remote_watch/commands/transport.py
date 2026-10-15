@@ -1,10 +1,10 @@
 ﻿# Контракт обмена командами без зависимости от сетевой библиотеки.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> CommandError: Ошибка с безопасным фиксированным кодом
@@ -72,7 +72,7 @@ class CommandError(RuntimeError):
         :param http_status: Optional HTTP response status, without server text or headers.
         :type http_status: int | None
 
-        :param error_kind: Allowlisted local TLS category; not server-provided text.
+        :param error_kind: Allowlisted local transport category; not server-provided text.
         :type error_kind: str | None
 
         :param verify_code: Bounded OpenSSL certificate verification number.
@@ -98,11 +98,12 @@ class CommandError(RuntimeError):
         # Для TLS оставляем прежний code, но сохраняем причину отдельно и в str(error).
         # Неизвестные строки, bool и произвольные объекты не проходят эту границу.
         self.error_kind = (error_kind if type(error_kind) is str
-                           and error_kind in {"tls_certificate", "tls_handshake"} else None)
+                           and error_kind in {"tls_certificate", "tls_handshake", "dns", "timeout",
+                                              "connection", "network"} else None)
         self.verify_code = (verify_code if self.error_kind == "tls_certificate"
                             and type(verify_code) is int and 0 <= verify_code <= 999999 else None)
         self.tls_reason = (tls_reason(self.verify_code) if self.error_kind == "tls_certificate"
-                           else "handshake_failed" if self.error_kind else None)
+                           else "handshake_failed" if self.error_kind == "tls_handshake" else None)
 
         # busy_reason — только известная категория конкуренции, без имён/текста запроса.
         reasons = {"storage_busy", "storage_queue_full", "storage_wait_timeout", "session_poll_active",

@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -59,7 +59,7 @@ from time import monotonic
 from remote_watch.commands.source_store import ProcessLock
 from remote_watch.gateway_server.application import OperatorAlerts
 from remote_watch.gateway_server.config import DeploymentConfig, check_log_directory
-from remote_watch.gateway_server.messages import read_limited, status_message
+from remote_watch.gateway_server.messages import MAX_STATUS_BYTES, read_limited, status_message
 from remote_watch.gateway_server.policy import FailureKind, RestartBudget
 from remote_watch.gateway_server.processes import ProcessGroup, private_directory
 
@@ -402,7 +402,7 @@ class GatewayManager:
 
         from aiohttp import web
 
-        app = web.Application(client_max_size=16384)
+        app = web.Application(client_max_size=MAX_STATUS_BYTES)
         app.router.add_post("/control", self._control)
         app.router.add_post("/child/{name}", self._heartbeat)
         self._runner = web.AppRunner(app, access_log=None, shutdown_timeout=1,
@@ -451,7 +451,7 @@ class GatewayManager:
         """
 
         # request/token — только numeric loopback; Origin/redirect не создают browser API.
-        # limit — управляющий запрос остаётся 4 KiB, heartbeat допускает 16 KiB.
+        # limit — управляющий запрос остаётся 4 KiB; сводки восьми источников и журналов — до 32 KiB.
 
         from aiohttp import web
 
@@ -542,7 +542,7 @@ class GatewayManager:
         if child is None or child.process is None or child.process.poll() is not None:
             raise web.HTTPForbidden(text="denied")
 
-        value = await self._read(request, child.token, 16384)
+        value = await self._read(request, child.token, MAX_STATUS_BYTES)
         try:
             value = status_message(value)
         except (ValueError, TypeError):
@@ -702,11 +702,17 @@ class GatewayManager:
             self._alerts.observe("manager", "degraded", "logging_failed", monotonic())
         elif self._tray is not None and not self._tray.ready and self.state not in ("stopping", "stopped"):
             self._alerts.observe("manager", "degraded", "tray_unavailable", monotonic())
+        elif self.state == "degraded" and self.reason is None and any(
+                child.message["state"] != "ready" for child in self.children.values()):
+            # Общий degraded уже объясняется отдельным сообщением компонента.
+            # Не дублируем его вторым неопределённым «supervisor needs attention».
+            pass
         else:
             self._alerts.observe("manager", self.state, self.reason, monotonic())
 
         for name, child in self.children.items():
-            self._alerts.observe(name, child.message["state"], child.message["reason"], monotonic())
+            self._alerts.observe(name, child.message["state"], child.message["reason"], monotonic(),
+                                 sources=child.message.get("source_health", []))
 
         if self._tray is not None:
             self._tray.update(self.state)
@@ -734,6 +740,12 @@ class GatewayManager:
         # важны отказ наблюдения и ёмкость, а не изменение возраста каждую секунду.
 
         value = {key: item for key, item in component.items() if key not in {"counters", "journals"}}
+        if "source_health" in component:
+            # Повтор той же ошибки не создаёт запись раз в heartbeat. Счётчики
+            # доступны в status/doctor; журнал фиксирует смену причины и восстановление.
+            value["source_health"] = [{key: item for key, item in source.items()
+                                       if key not in {"failures", "recoveries"}}
+                                      for source in component["source_health"]]
         if "journals" in component:
             journals = component["journals"]
             summaries = []
@@ -853,8 +865,8 @@ async def control_request(
                                  headers={"Authorization": "Bearer " + record["token"]},
                                  json={"action": action, "generation": record["generation"]},
                                  allow_redirects=False) as response:
-                data = await read_limited(response.content, 16384)
-                if response.status != 200 or len(data) > 16384:
+                data = await read_limited(response.content, MAX_STATUS_BYTES)
+                if response.status != 200 or len(data) > MAX_STATUS_BYTES:
                     raise ValueError("control unavailable")
                 value = json.loads(data)
                 if value.get("generation") != record["generation"]:

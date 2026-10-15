@@ -1,10 +1,10 @@
 ﻿# Ограниченный HTTP-обмен для приёма команд и отправки ответов.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261015-111157
 #
 # Классы:
 # -> SourceHttp: Два ограниченных сетевых слота одного получателя
@@ -33,10 +33,14 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import socket
+import ssl
+import sys
 from time import monotonic
 from typing import Any
 from urllib.parse import urlsplit
 
+from remote_watch._tls import tls_diagnostics
 from remote_watch.adapters._common import validate_endpoint
 from remote_watch.commands.transport import CommandError
 from remote_watch.notifications._context import delivery_context
@@ -175,8 +179,10 @@ class SourceHttp:
         if self._client is None:
             raise CommandError("closed")
 
-        if self._active >= 2 or monotonic() < self._blocked_until:
-            raise CommandError("busy")
+        if self._active >= 2:
+            raise CommandError("busy", busy_reason="transport_requests_full")
+        if monotonic() < self._blocked_until:
+            raise CommandError("busy", http_status=429)
 
         self._active += 1
         headers = {} if token is None else {"Authorization": "Bearer " + token}
@@ -210,15 +216,15 @@ class SourceHttp:
                         except (CommandError, AttributeError):
                             pass
                     self.defer(seconds)
-                    raise CommandError("busy")
+                    raise CommandError("busy", http_status=429)
                 if status in (401, 403):
-                    raise CommandError("denied")
+                    raise CommandError("denied", http_status=status)
                 if status == 409:
-                    raise CommandError("conflict")
+                    raise CommandError("conflict", http_status=status)
                 if status >= 500:
-                    raise CommandError("unavailable")
+                    raise CommandError("unavailable", http_status=status)
                 if status != 200 or response.headers.get("Content-Encoding", "identity") != "identity":
-                    raise CommandError("invalid")
+                    raise CommandError("invalid", http_status=status)
                 if response.headers.get("X-Messages-Truncated") == "1":
                     raise CommandError("capacity")
                 if stream:
@@ -250,9 +256,25 @@ class SourceHttp:
         except asyncio.TimeoutError:
             if stream and opened_stream:
                 return 200, []
-            raise CommandError("unavailable") from None
-        except Exception:
-            raise CommandError("unavailable") from None
+            raise CommandError("unavailable", error_kind="timeout") from None
+        except Exception as error:
+            # aiohttp может оборачивать ssl/DNS в собственные исключения. Берём
+            # только известные типы и числовой TLS-код, никогда URL или str(error).
+            # В core-тесте сторонний provider может подставить клиент без aiohttp.
+            # Не импортируем optional extra только ради классификации исключения.
+            aiohttp = sys.modules.get("aiohttp")
+            native = error
+            if aiohttp is not None:
+                if isinstance(error, aiohttp.ClientConnectorCertificateError):
+                    native = error.certificate_error
+                elif isinstance(error, aiohttp.ClientConnectorError):
+                    native = error.os_error
+            if isinstance(native, ssl.SSLError):
+                raise CommandError("unavailable", **tls_diagnostics(native)) from None
+            kind = ("dns" if isinstance(native, socket.gaierror) else
+                    "connection" if isinstance(error, ConnectionError) or
+                    (aiohttp is not None and isinstance(error, aiohttp.ClientConnectionError)) else "network")
+            raise CommandError("unavailable", error_kind=kind) from None
         finally:
             self._active -= 1
             delivery_context.reset(context_token)

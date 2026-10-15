@@ -1,17 +1,23 @@
 ﻿# Repository Instructions
 
-Version 1.7.3
+Version 1.7.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-004416
+Дата и время последнего изменения: 261015-112606
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable patch 1.0.1 is published under immutable annotated tag v1.0.1:
+Version 1.0.2 improves source diagnostics and English owner alerts. Up to eight indexed
+sources retain receive/reply stages, allowlisted network/TLS/HTTP classifications,
+current failures and historical counters. Private IPC/status is bounded at 32 KiB;
+control requests remain 4 KiB. No public command wire/hash/SQLite/ACL changes.
+Clean Windows core/extras and current evidence: docs/development/VALIDATION.md.
+No new CI/Linux or field acceptance is claimed for 1.0.2. Production was not modified.
+Previous stable patch 1.0.1 is published under immutable annotated tag v1.0.1:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.1
 Release commit: be8099c0189e80c947d88fb561690f3978e6a62a. Public wheel, sdist and
 SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
@@ -24,7 +30,7 @@ reserve rc for substantial or uncertain work. Release policy: docs/development/R
 Use immutable annotated vMAJOR.MINOR.PATCH tags. Full CI is for agreed major work,
 not every push. Publish on GitHub; no PyPI or EXE is requested. Production installation
 is operator-owned and was unchanged by this release. MIT applies.
-Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.0.1.
+Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.0.2.
 The first production release 1.0.0 is published under annotated tag v1.0.0:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
 Release commit is 80eca708337202aae871322a4cb60919e9d90d4e. Public downloads of
