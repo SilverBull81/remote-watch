@@ -1,17 +1,17 @@
 ﻿# Repository Instructions
 
-Version 1.7.6
+Version 1.7.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-122518
+Дата и время последнего изменения: 261026-123012
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Version 1.0.3 simplifies tray labels to Stop Server and the static Remote Watch Gateway
+Stable 1.0.3 simplifies tray labels to Stop Server and the static Remote Watch Gateway
 tooltip. Stop/SCM/controller ownership is unchanged; GUI acceptance remains pending.
 Source diagnostics and English owner alerts from 1.0.2 remain: up to eight indexed
 sources retain receive/reply stages, allowlisted network/TLS/HTTP classifications,
@@ -19,9 +19,9 @@ current failures and historical counters. Private IPC/status is bounded at 32 Ki
 control requests remain 4 KiB. No public command wire/hash/SQLite/ACL changes.
 Clean Windows core/extras and current evidence: docs/development/VALIDATION.md.
 No new CI/Linux or field acceptance is claimed for 1.0.3. Production was not modified.
-Previous release 1.0.2 is published under immutable annotated tag v1.0.2:
-https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.2
-Release commit: 4087a30ecc15087432083fe5e5d48cfaaa16d5aa. Public wheel, sdist and
+Release 1.0.3 is published under immutable annotated tag v1.0.3:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.3
+Release commit: 0dad7bd8d7ac9e453faa37c44c49d134350453e2. Public wheel, sdist and
 SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
 Clean Windows core/extras passed; no new CI/Linux run was requested for this patch.
 The owner previously confirmed the 1.0.1 tray fix in the real GUI; this is conversation evidence,
