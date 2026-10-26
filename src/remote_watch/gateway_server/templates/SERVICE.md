@@ -1,10 +1,10 @@
 ﻿# Служба gateway server
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-001857
+Дата и время последнего изменения: 261026-121655
 
 ## Windows
 
@@ -52,7 +52,8 @@ application.ui=headless/tray управляет иконкой. Служба в�
 отдельный controller пользователя запускается при входе, start и sync-tray.
 Если нужно: sync-tray.cmd или service CLI --tray из обычного сеанса оператора.
 Повторный controller не создаёт второй manager. При остановке иконка скрывается,
-при running возвращается. Меню: About и Stop gateway server; Exit tray нет.
+при running возвращается. Меню: About и Stop Server; Exit tray нет.
+Подпись иконки постоянна: Remote Watch Gateway. Состояние службы смотрите через service-status.
 Выход пользователя/RDP disconnect не останавливает службу. Tooltip — SCM state,
 не проверка всей сети. При ui=headless controller скрывает иконку и ждёт смены режима.
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "remote-watch"
-version = "1.0.2"
+version = "1.0.3"
 description = "Standard logging, asynchronous notifications and secure application commands"
 readme = "README.md"
 license = "MIT"

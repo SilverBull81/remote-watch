@@ -1,10 +1,10 @@
-﻿# Необязательная иконка Windows: состояние сервера и общая команда остановки.
+﻿# Необязательная иконка Windows: сведения о gateway и общая команда остановки.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261026-121655
 #
 # Классы:
 # -> GatewayTray: Иконка состояния и команда общей остановки в Windows
@@ -13,7 +13,7 @@
 #    Интерфейс:
 #    -> start(): Подготовка ресурсов и запуск фоновой работы
 #    -> set_visible(): Показ и скрытие иконки без завершения пользовательского контроллера
-#    -> update(): Обновление подписи иконки по состоянию сервера
+#    -> update(): Сохранение состояния без изменения постоянной подписи
 #    -> ready(): Проверка живого цикла трея без обращения к GUI
 #    -> close(): Освобождение только собственных ресурсов
 #    Служебные методы:
@@ -61,8 +61,6 @@ class GatewayTray:
         self,
         stop: Callable[[], None],
         icon_path: Path | None = None,
-        *,
-        title_prefix: str = "Remote Watch: ",
         ) -> None:
 
         """
@@ -74,16 +72,12 @@ class GatewayTray:
         :param icon_path: Custom local ICO or PNG file, or None for the packaged icon.
         :type icon_path: Path | None
 
-        :param title_prefix: Fixed tooltip prefix distinguishing SCM state from manager readiness.
-        :type title_prefix: str
         """
 
         # stop — иконка не убивает PID; остановка совпадает с CLI и сигналом ОС.
         # icon_path — файл читается только при явном запуске GUI.
-        # title_prefix — служебный контроллер работает отдельно от управляющего процесса.
 
         self._stop = stop
-        self._title_prefix = title_prefix
         self._icon_path = icon_path
         self._icon = None
         self._thread = None
@@ -132,8 +126,8 @@ class GatewayTray:
             pystray.MenuItem(f"(C) SilverBull, {date.today().year}", None, enabled=False),
         )
         items = [pystray.MenuItem("About", about),
-                 pystray.MenuItem("Stop gateway server", self._request_stop)]
-        self._icon = pystray.Icon("remote-watch-gateway", bitmap, self._title_prefix + "starting",
+                 pystray.MenuItem("Stop Server", self._request_stop)]
+        self._icon = pystray.Icon("remote-watch-gateway", bitmap, "Remote Watch Gateway",
                                   menu=pystray.Menu(*items))
         self._thread = threading.Thread(target=self._run, name="gateway-tray", daemon=True)
         self._thread.start()
@@ -168,7 +162,7 @@ class GatewayTray:
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
-    # ИНТЕРФЕЙС : Обновление подписи иконки по состоянию сервера
+    # ИНТЕРФЕЙС : Сохранение состояния без изменения постоянной подписи
     #--------------------------------------------------------------------------------------------------------------
     def update(
         self,
@@ -176,20 +170,16 @@ class GatewayTray:
         ) -> None:
 
         """
-        Update the tooltip from fixed supervisor state only.
+        Retain observed lifecycle state without changing the static gateway tooltip.
 
         :param state: Sanitized manager lifecycle state.
         :type state: str
         """
 
-        # state — никакие идентификаторы чатов или токены в UI не передаются.
+        # state — состояние остаётся доступно контроллеру; постоянная подпись
+        # иконки не выдаёт RUNNING службы за готовность всех каналов gateway.
 
-        if state != self._state and self._icon is not None:
-            try:
-                self._icon.title = self._title_prefix + state
-                self._state = state
-            except Exception:
-                self._failed = True
+        self._state = state
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

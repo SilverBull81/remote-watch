@@ -1,10 +1,10 @@
 ﻿# Gateway server: первый запуск
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-212332
+Дата и время последнего изменения: 261026-121655
 
 Комплект создан remote-watch **@@VERSION@@**. Он не устанавливает зависимости,
 не запускает процессы, не регистрирует службы и не читает environment credentials.
@@ -65,7 +65,8 @@ python -m remote_watch.gateway.commands --config command_gateway.local.json --ch
 ## Работа и обновление
 
 Остановка: stop.ps1/.sh либо Python CLI --stop. Для 24/7 см. SERVICE.md.
-При application.ui=tray меню содержит About и Stop gateway server. В службе это
+При application.ui=tray меню содержит About и Stop Server. Подпись иконки —
+Remote Watch Gateway. В службе это
 отдельный пользовательский controller, не второй manager.
 После обновления пакета выполните sync-tray.cmd. Явный перезапуск только иконки —
 restart-tray.cmd; службу он не останавливает. Однократный переход со старого

@@ -1,10 +1,10 @@
 ﻿# Постоянный запуск и Windows tray
 
-Version 1.0.2
+Version 1.0.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-001857
+Дата и время последнего изменения: 261026-121655
 
 ## Windows-служба gateway
 
@@ -60,11 +60,13 @@ manager.lock не удаляют. Проверяется реальная бло
 Контроллер запускается при входе оператора, а также start/sync-tray в его активном
 сеансе. Служба Windows из Session 0 сама не показывает пользовательский GUI.
 
-Меню: About и Stop gateway server. Stop вызывает SCM stop. При stopped/not_found
+Меню: About и Stop Server. Подпись иконки — Remote Watch Gateway.
+Stop Server вызывает SCM stop. При stopped/not_found
 иконка скрывается; при следующем running/starting возвращается обычно за две секунды.
 Контроллер остаётся в фоне, новый manager не запускает. Нет пункта Exit tray.
-RDP disconnect/logoff не должны останавливать службу. Tooltip показывает SCM,
-не готовность каждого gateway. Состояния UI и сервера проверяйте раздельно.
+RDP disconnect/logoff не должны останавливать службу. Постоянная подпись иконки
+не отражает готовность каналов. Состояние службы проверяйте через service-status,
+а готовность gateway — через status/doctor; состояние UI проверяется отдельно.
 
 Для изменения ui отредактируйте JSON и выполните sync-tray.cmd. При запуске через
 services.msc уже работающий контроллер увидит службу; новый GUI-процесс SCM не создаёт.

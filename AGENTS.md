@@ -1,23 +1,25 @@
 ﻿# Repository Instructions
 
-Version 1.7.5
+Version 1.7.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-113127
+Дата и время последнего изменения: 261026-122518
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.0.2 improves source diagnostics and English owner alerts. Up to eight indexed
+Version 1.0.3 simplifies tray labels to Stop Server and the static Remote Watch Gateway
+tooltip. Stop/SCM/controller ownership is unchanged; GUI acceptance remains pending.
+Source diagnostics and English owner alerts from 1.0.2 remain: up to eight indexed
 sources retain receive/reply stages, allowlisted network/TLS/HTTP classifications,
 current failures and historical counters. Private IPC/status is bounded at 32 KiB;
 control requests remain 4 KiB. No public command wire/hash/SQLite/ACL changes.
 Clean Windows core/extras and current evidence: docs/development/VALIDATION.md.
-No new CI/Linux or field acceptance is claimed for 1.0.2. Production was not modified.
-Release 1.0.2 is published under immutable annotated tag v1.0.2:
+No new CI/Linux or field acceptance is claimed for 1.0.3. Production was not modified.
+Previous release 1.0.2 is published under immutable annotated tag v1.0.2:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.2
 Release commit: 4087a30ecc15087432083fe5e5d48cfaaa16d5aa. Public wheel, sdist and
 SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
@@ -30,7 +32,7 @@ reserve rc for substantial or uncertain work. Release policy: docs/development/R
 Use immutable annotated vMAJOR.MINOR.PATCH tags. Full CI is for agreed major work,
 not every push. Publish on GitHub; no PyPI or EXE is requested. Production installation
 is operator-owned and was unchanged by this release. MIT applies.
-Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.0.2.
+Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.0.3.
 The first production release 1.0.0 is published under annotated tag v1.0.0:
 https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
 Release commit is 80eca708337202aae871322a4cb60919e9d90d4e. Public downloads of

@@ -1,10 +1,10 @@
 ﻿# Отдельный интерактивный controller службы, не владеющий gateway и журналами команд.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-212332
+# Дата и время последнего изменения: 261026-121655
 #
 # Функции:
 # -> launch_tray(): Запрос запуска контроллера в сеансе выбранного оператора
@@ -186,7 +186,7 @@ def run_tray(
     stop = threading.Event()
     generation = token_hex(16)
     replace_controller = False
-    tray = GatewayTray(stop.set, icon_path=icon, title_prefix="Remote Watch service: ")
+    tray = GatewayTray(stop.set, icon_path=icon)
     try:
         backend = WindowsService(spec)
         tray.start(visible=False)
