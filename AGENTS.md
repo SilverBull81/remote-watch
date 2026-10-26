@@ -1,17 +1,17 @@
 ﻿# Repository Instructions
 
-Version 1.7.8
+Version 1.7.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-130534
+Дата и время последнего изменения: 261026-131240
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Version 1.1.0 adds command-gateway scope_sets and mutually exclusive explicit scopes/scope_set
+Stable 1.1.0 adds command-gateway scope_sets and mutually exclusive explicit scopes/scope_set
 selection per principal and actor access rule. Up to 64 named sets expand into existing
 immutable grants, with at most 64 distinct scopes / 128 raw entries per set. No inheritance,
 merging, wildcard or fallback grants; all definitions are validated, even unused ones.
@@ -19,11 +19,11 @@ Inline schema-1 configs remain supported; public wire/hash/SQLite/ACL semantics 
 Examples/deploy templates and public configuration instructions use named sets.
 Current clean Windows core/extras evidence: docs/development/VALIDATION.md.
 No new CI/Linux or field acceptance is claimed. Production was not modified.
-Previous release 1.0.3 is published under immutable annotated tag v1.0.3:
-https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.3
-Release commit: 0dad7bd8d7ac9e453faa37c44c49d134350453e2. Public wheel, sdist and
+Release 1.1.0 is published under immutable annotated tag v1.1.0:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.1.0
+Release commit: 4224c7b3fef9ed04ab69ed057f0d5e343ed2d2b3. Public wheel, sdist and
 SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
-Clean Windows core/extras passed; no new CI/Linux run was requested for this patch.
+Clean Windows core/extras passed; no new CI/Linux run was requested for this compatible extension.
 The owner previously confirmed the 1.0.1 tray fix in the real GUI; this is conversation evidence,
 not a new independently inspected field report. Legacy 1.0.0 needs one manual
 controller-only transition. See docs/SERVICES.md and docs/development/VALIDATION.md.
