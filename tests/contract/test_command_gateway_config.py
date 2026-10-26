@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261026-124820
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети
@@ -236,9 +236,11 @@ class FakeTime:
 # ТЕСТ : Команды двум экземплярам в одном чате через настоящий HTTP
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("client_modes", [False, True])
+@pytest.mark.parametrize("named_scopes", [False, True])
 def test_gateway_two_applications(
     tmp_path: Path,
     client_modes: bool,
+    named_scopes: bool,
     ) -> None:
 
     """
@@ -249,9 +251,13 @@ def test_gateway_two_applications(
 
     :param client_modes: Whether two clients independently override the source's full display.
     :type client_modes: bool
+
+    :param named_scopes: Whether both independent ACL boundaries use named scope definitions.
+    :type named_scopes: bool
     """
 
     # client_modes — независимые настройки отображения на стороне клиентов.
+    # named_scopes — одинаковые команды должны работать и после разворачивания ссылок.
 
 
     # tmp_path — отдельный временный каталог теста.
@@ -268,6 +274,11 @@ def test_gateway_two_applications(
         """
 
         raw = settings()
+        if named_scopes:
+            raw["scope_sets"] = {"control": raw["principals"][0]["scopes"]}
+            for entry in [*raw["principals"], *raw["sources"][0]["access"]]:
+                entry.pop("scopes")
+                entry["scope_set"] = "control"
 
         # Проверяем доставку, а не скорость диска CI: длинный poll будится новой командой.
         raw["hub"]["poll_timeout"] = 5.0

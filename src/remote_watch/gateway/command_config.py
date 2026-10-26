@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261026-124820
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек
@@ -29,6 +29,10 @@
 # -> read_command_json(): Чтение ограниченного строгого JSON
 #
 # -> _gateway(): Проверка разделов серверного JSON
+#
+# -> _scope_sets(): Проверка именованных наборов без раскрытия их имён в ошибках.
+#
+# -> _scopes(): Выбор явного списка либо одного именованного набора прав.
 #
 # -> _credential(): Проверка и разрешение выбранного секрета
 #
@@ -64,7 +68,13 @@ from remote_watch.adapters.command_http import HttpsCommandTransport
 from remote_watch.adapters.ntfy_commands import NtfyCommandConfig
 from remote_watch.adapters.telegram_commands import TelegramCommandConfig
 from remote_watch.commands.client import CommandClient
-from remote_watch.commands.hub_config import CommandAccess, CommandHubConfig, CommandPrincipal, CommandSource
+from remote_watch.commands.hub_config import (
+    CommandAccess,
+    CommandHubConfig,
+    CommandPrincipal,
+    CommandSource,
+    _strings,
+)
 from remote_watch.commands.protocol import CommandRegistration, describe_commands
 from remote_watch.commands.registry import CommandRegistry
 from remote_watch.commands.source_protocol import SourceTargets
@@ -125,24 +135,26 @@ class CommandConfigError(ValueError):
         # column — номер столбца; сам фрагмент строки не выводится.
         # json_reason — известная причина ошибки JSON, без текста и значений файла.
 
-        pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|sources))?|schema|"
+        pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|sources|scope_sets))?|schema|"
                    r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
-                   r"hub|state_dir|"
+                   r"hub|state_dir|scope_sets(?:\[[0-9]{1,2}\])?|"
                    r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
                    r"state_file|owner_id|allow_loopback_http|display_mode))?|"
-                   r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes))?|"
+                   r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes|scope_set))?|"
                    r"sources(?:\[[0-9]\])?(?:\.source_id|\.provider|\.display_mode|"
                    r"\.settings(?:\.(?:token|token_env|topic|reply_topic|actor_id|private_topic_confirmed))?|"
-                   r"\.access(?:\[[0-9]{1,3}\])?(?:\.(?:targets|scopes|actor_id|conversation_id))?)?)")
+                   r"\.access(?:\[[0-9]{1,3}\])?(?:\.(?:targets|scopes|scope_set|actor_id|conversation_id))?)?)")
         self.field = field if type(field) is str and re.fullmatch(pattern, field) else "config"
         known = {"config_value", "config_read", "config_json", "config_size", "config_schema",
                  "duplicate_principal_token", "duplicate_principal_name", "duplicate_identity",
                  "unknown_target", "unassigned_target", "duplicate_source", "duplicate_provider",
                  "credential_source", "credential_environment", "credential_value", "source_acl",
                  "ca_read", "ca_invalid", "endpoint_invalid", "config_missing", "config_unknown",
-                 "config_object", "config_list"}
+                 "config_object", "config_list", "scope_source", "unknown_scope_set"}
         self.code = code if type(code) is str and code in known else "config_value"
         self.hint = {
+            "scope_source": "Укажите ровно одно поле: scopes со списком или scope_set с именем набора.",
+            "unknown_scope_set": "Указанный набор отсутствует в scope_sets; проверьте определение и ссылку.",
             "duplicate_principal_token": "У каждого приложения должен быть свой командный токен.",
             "duplicate_principal_name": "Имена principals должны различаться.",
             "duplicate_identity": "Каждая Identity должна принадлежать ровно одному principal.",
@@ -494,9 +506,10 @@ def _gateway(
     try:
         path = path.resolve()
         value = read_command_json(path)
-        _keys(value, {"schema_version", "state_dir", "targets", "principals", "sources"}, {"hub"})
+        _keys(value, {"schema_version", "state_dir", "targets", "principals", "sources"}, {"hub", "scope_sets"})
         field_name = "schema"
         _schema(value)
+        scope_sets = _scope_sets(value.get("scope_sets", {}))
         field_name = "targets"
         # Адрес из сообщения не заменяет Identity. Проверяем полную таблицу целей
         # прежде, чем выдавать кому-либо права на одно из этих приложений.
@@ -521,7 +534,8 @@ def _gateway(
         # Ссылки на окружение разрешаются только при настоящем запуске, не в check.
         for index, raw in enumerate(_items(value["principals"], 64, field_name)):
             field_name = f"principals[{index}]"
-            _keys(raw, {"name", "targets", "scopes"}, {"token", "token_env"}, field_name)
+            _keys(raw, {"name", "targets"}, {"token", "token_env", "scopes", "scope_set"}, field_name)
+            scopes = _scopes(raw, scope_sets, field_name)
             token = _credential(raw, resolve_environment)
             environment = raw.get("token_env")
             if token in seen_tokens or (environment is not None and environment in seen_environment):
@@ -541,7 +555,7 @@ def _gateway(
             seen_identities.update(identities)
             field_name = f"principals[{index}]"
             principal = CommandPrincipal(name=raw["name"], token=token, identities=identities,
-                                         scopes=frozenset(_items(raw["scopes"], 128, field_name + ".scopes")))
+                                         scopes=scopes)
             if principal.name in seen_names:
                 raise CommandConfigError(field_name + ".name", "duplicate_principal_name")
             seen_names.add(principal.name)
@@ -585,7 +599,8 @@ def _gateway(
             field_name = f"sources[{index}].access"
             for rule_index, rule in enumerate(_items(raw["access"], 256, field_name)):
                 field_name = f"sources[{index}].access[{rule_index}]"
-                _keys(rule, {"actor_id", "conversation_id", "targets", "scopes"}, set(), field_name)
+                _keys(rule, {"actor_id", "conversation_id", "targets"}, {"scopes", "scope_set"}, field_name)
+                scopes = _scopes(rule, scope_sets, field_name)
                 for name in _items(rule["targets"], 64, field_name + ".targets"):
                     if type(name) is not str or name not in targets.aliases:
                         raise CommandConfigError(field_name + ".targets", "unknown_target")
@@ -593,7 +608,7 @@ def _gateway(
                         raise ValueError("source access capacity")
                     access.append(CommandAccess(actor_id=rule["actor_id"], conversation_id=rule["conversation_id"],
                         identity=targets.aliases[name],
-                        scopes=frozenset(_items(rule["scopes"], 128, field_name + ".scopes"))))
+                        scopes=scopes))
                 if isinstance(config, NtfyCommandConfig):
                     if rule["actor_id"] != config.actor_id or rule["conversation_id"] != config.topic:
                         raise CommandConfigError(field_name, "source_acl")
@@ -622,6 +637,93 @@ def _gateway(
         raise CommandConfigError(field_name + "." + error.field, "credential_" + error.reason) from None
     except Exception:
         raise CommandConfigError(field_name) from None
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка именованных наборов без раскрытия их имён в ошибках
+#------------------------------------------------------------------------------------------------------------------
+def _scope_sets(
+    value: object,
+    ) -> dict[str, frozenset[str]]:
+
+    """
+    Validate every finite named scope list before any principal or actor rule references it.
+
+    :param value: Optional scope_sets JSON object, or an empty mapping when omitted.
+    :type value: object
+
+    :return: Immutable validated scope sets indexed by configuration-local names.
+    :rtype: dict[str, frozenset[str]]
+    """
+
+    # value — имена служат только ссылками внутри JSON. В ошибке вместо имени
+    # выводится его позиция: ошибочно вставленный секрет не попадёт в diagnostics.
+
+    if type(value) is not dict or len(value) > 64:
+        raise CommandConfigError("scope_sets", "config_object")
+
+    result = {}
+    for index, (name, scopes) in enumerate(value.items()):
+        field_name = f"scope_sets[{index}]"
+        if type(name) is not str or re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name) is None:
+            raise CommandConfigError(field_name)
+        try:
+            result[name] = _strings(frozenset(_items(scopes, 128, field_name)))
+        except (ValueError, TypeError) as error:
+            if isinstance(error, CommandConfigError):
+                raise
+            raise CommandConfigError(field_name) from None
+
+    return result
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Выбор явного списка либо одного именованного набора прав
+#------------------------------------------------------------------------------------------------------------------
+def _scopes(
+    value: dict[str, Any],
+    scope_sets: dict[str, frozenset[str]],
+    field_name: str,
+    ) -> frozenset[str]:
+
+    """
+    Resolve exactly one explicit scope source without merging, inheritance or default grants.
+
+    :param value: Principal or actor access rule with scopes or scope_set.
+    :type value: dict[str, Any]
+
+    :param scope_sets: Already validated named sets from the same gateway file.
+    :type scope_sets: dict[str, frozenset[str]]
+
+    :param field_name: Fixed indexed principal or access-rule path for diagnostics.
+    :type field_name: str
+
+    :return: The same immutable scope values accepted by existing runtime policies.
+    :rtype: frozenset[str]
+    """
+
+    # value — наличие двух полей, даже с null, неоднозначно и запрещено.
+    # scope_sets — только обычные списки, без ссылок на другие наборы и рекурсии.
+    # field_name — не содержит имён наборов, токенов или текста пользовательской команды.
+
+    if "scopes" in value and "scope_set" in value:
+        raise CommandConfigError(field_name, "scope_source")
+    if "scope_set" in value:
+        name = value["scope_set"]
+        if type(name) is not str or re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name) is None:
+            raise CommandConfigError(field_name + ".scope_set")
+        if name not in scope_sets:
+            raise CommandConfigError(field_name + ".scope_set", "unknown_scope_set")
+        return scope_sets[name]
+
+    if "scopes" not in value:
+        raise CommandConfigError(field_name + ".scopes", "config_missing")
+    try:
+        return _strings(frozenset(_items(value["scopes"], 128, field_name + ".scopes")))
+    except (ValueError, TypeError) as error:
+        if isinstance(error, CommandConfigError):
+            raise
+        raise CommandConfigError(field_name + ".scopes") from None
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

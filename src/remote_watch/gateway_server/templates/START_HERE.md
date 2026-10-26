@@ -1,10 +1,10 @@
 ﻿# Gateway server: первый запуск
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-121655
+Дата и время последнего изменения: 261026-124820
 
 Комплект создан remote-watch **@@VERSION@@**. Он не устанавливает зависимости,
 не запускает процессы, не регистрирует службы и не читает environment credentials.
@@ -17,7 +17,9 @@ Version 1.0.7
    loopback-порты. Выделите manager log_dir=logs/gateway_server, не общую logs.
 3. Заполните notification_gateway.local.json: provider settings, principals/Identity/aliases.
 4. Заполните command_gateway.local.json: targets/Identity, отдельные principal tokens,
-   sources/actor/chat/scopes. actor_id — ID человека, conversation_id — ID чата.
+   sources/actor/chat. Общие права задайте в scope_sets.control; scope_set выбирается
+   отдельно в principal и actor/chat access. Можно оставить явные списки scopes;
+   scopes и scope_set одновременно запрещены. actor_id — ID человека, conversation_id — ID чата.
    Двум instances нужны отдельные Identity/principals/tokens. Updates читает один reader.
 5. token_env — имя переменной окружения. Вместо него допустим literal token в
    закрытом локальном JSON; оба ключа одновременно запрещены. Notification и

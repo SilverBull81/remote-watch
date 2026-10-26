@@ -1,10 +1,10 @@
 ﻿# Развёртывание gateway
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-184253
+Дата и время последнего изменения: 261026-124820
 
 ## Когда он нужен
 
@@ -62,7 +62,9 @@ python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https
 ## Настройка и первый запуск
 
 1. Заполните provider settings и principals notification gateway.
-2. Заполните command targets, principals, source actor/chat/scopes, если нужны команды.
+2. Заполните command targets, principals и source actor/chat ACL, если нужны команды.
+   Повторяющиеся права задайте один раз в scope_sets и выберите scope_set в каждом
+   principal/access; явные списки scopes также поддерживаются. Примеры уже используют набор control.
 3. Согласуйте Identity, aliases и отдельные gateway tokens с приложениями.
 4. Проверьте общий JSON и отдельные компоненты через --check-config.
 5. Настройте [HTTPS](TLS.md), сохраняя явное CA storage и отдельную папку логов Caddy.

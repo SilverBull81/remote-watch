@@ -10,18 +10,21 @@
       "instance_id": "one"
     }
   },
+  "scope_sets": {
+    "control": [
+      "command:status",
+      "command:check_load",
+      "command:suspend_load",
+      "command:resume_load"
+    ]
+  },
   "principals": [
     {
       "name": "one",
       "targets": [
         "one"
       ],
-      "scopes": [
-        "command:status",
-        "command:check_load",
-        "command:suspend_load",
-        "command:resume_load"
-      ],
+      "scope_set": "control",
       "token_env": "RW_COMMAND_APP1_TOKEN"
     }
   ],
@@ -40,12 +43,7 @@
           "targets": [
             "one"
           ],
-          "scopes": [
-            "command:status",
-            "command:check_load",
-            "command:suspend_load",
-            "command:resume_load"
-          ]
+          "scope_set": "control"
         }
       ]
     }

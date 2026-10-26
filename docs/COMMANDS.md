@@ -1,10 +1,10 @@
 ﻿# Команды приложения из мессенджера
 
-Version 1.0.7
+Version 1.0.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-200855
+Дата и время последнего изменения: 261026-124820
 
 ## Как устроен канал
 
@@ -72,6 +72,8 @@ commands = CommandRegistry(specs=(CommandSpec(
 `read_only`/`idempotent` описывают операцию, но не дают разрешение повторять callback.
 Если задаёте свой required_scope (например load:read), разрешите его и в principal
 приложения, и в actor/chat ACL источника; стандартный command:check_load его не заменяет.
+Список прав можно задать напрямую через `scopes` либо именованным набором `scope_set`
+из командного gateway. Сам `CommandSpec.required_scope` остаётся строкой одного права.
 
 ## Подключение к RemoteWatcher
 
@@ -132,6 +134,9 @@ instance не превращает команду в обращение к ед�
 - В личном чате эти числа часто равны, но обозначают разные сущности. В группе
   conversation_id относится к группе, actor_id — к человеку. Username не заменяет ID.
 - `targets` связывает aliases с полной Identity; `scopes` ограничивают команды.
+- В gateway 1.1.0+ повторяющиеся списки можно вынести в `scope_sets` и явно выбрать
+  через `scope_set` независимо в principal и actor/chat ACL. Старые списки поддерживаются;
+  неизвестная ссылка и два поля одновременно запрещены. См. [CONFIGURATION](CONFIGURATION.md).
   Проверяются и права приложения, и права actor/chat. Описание callback не выдаёт ACL.
 - Для каждого приложения/instance используйте свой командный token. Один token
   для двух principals приводит к отказу проверки. Notification token — другой секрет.

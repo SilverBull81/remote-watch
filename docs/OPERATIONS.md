@@ -1,10 +1,10 @@
 ﻿# Диагностика и эксплуатация
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-111157
+Дата и время последнего изменения: 261026-124820
 
 ## Что означает готовность
 
@@ -158,6 +158,8 @@ hub handles. Клиент получает точную authenticated квита
 | tcp_refused | Проверить внешний порт, Caddy running/listener/firewall |
 | TLS verify_code | Проверить CA/имя/часы/renew; не отключать TLS |
 | denied | Сверить token, Identity, aliases/targets/scopes; не расширять ACL вслепую |
+| unknown_scope_set | Проверить определение в scope_sets и ссылку scope_set в указанном principal/access |
+| scope_source | Оставить ровно одно поле: scopes либо scope_set; они не объединяются |
 | busy / HTTP 429 | Сверить busy_reason и этап; временное пересечение должно восстанавливаться |
 | time_unavailable | Проверить time_reason и доступ к выбранному trusted source |
 | stale_session | Смотреть heartbeat/reconnect, дать время TTL/backoff |
