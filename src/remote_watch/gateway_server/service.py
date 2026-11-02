@@ -1,10 +1,10 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-212332
+# Дата и время последнего изменения: 261102-183757
 #
 # Классы:
 # -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
@@ -39,7 +39,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from .__main__ import DeploymentParser
-from .config import DeploymentConfig, load_deployment_config
+from .config import DeploymentConfig, DeploymentConfigError, check_log_directory, load_deployment_config
 from .deployment import _path
 
 #------------------------------------------------------------------------------------------------------------------
@@ -224,10 +224,10 @@ def make_plan(
     if config.log_dir == spec.config.parent / "logs":
         raise ValueError("service_shared_logs")
 
-    if config.log_dir.exists():
-        for index, entry in enumerate(config.log_dir.iterdir()):
-            if index >= 32 or not re.fullmatch(r"gateway_server\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?", entry.name):
-                raise ValueError("service_shared_logs")
+    try:
+        check_log_directory(config.log_dir)
+    except DeploymentConfigError:
+        raise ValueError("service_shared_logs") from None
 
     get_drive = None
     if os.name == "nt":

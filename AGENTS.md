@@ -1,55 +1,45 @@
 ﻿# Repository Instructions
 
-Version 1.7.9
+Version 1.8.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-131240
+Дата и время последнего изменения: 261102-190841
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.1.0 adds command-gateway scope_sets and mutually exclusive explicit scopes/scope_set
-selection per principal and actor access rule. Up to 64 named sets expand into existing
-immutable grants, with at most 64 distinct scopes / 128 raw entries per set. No inheritance,
-merging, wildcard or fallback grants; all definitions are validated, even unused ones.
-Inline schema-1 configs remain supported; public wire/hash/SQLite/ACL semantics are unchanged.
-Examples/deploy templates and public configuration instructions use named sets.
+Stable 1.2.0 is prepared; publication verification is pending.
+Gateway Server now writes lazy calendar JSONL logs under year/English-month directories,
+retains size rotation within each day and preserves legacy flat logs. Dedicated log directory
+validation is shared by manager and service installer; foreign files, invalid calendar paths,
+symlink/reparse entries and trees over 100000 entries fail before ACL changes.
+Optional application.alerts.grace_period (0..3600s, default 0; deploy examples 180) delays only
+transient commands/degraded time_unavailable/source_unavailable owner notices. Health/logging
+and trusted-time admission remain immediate. Recovery of an unannounced incident stays quiet.
 Current clean Windows core/extras evidence: docs/development/VALIDATION.md.
 No new CI/Linux or field acceptance is claimed. Production was not modified.
-Release 1.1.0 is published under immutable annotated tag v1.1.0:
-https://github.com/SilverBull81/remote-watch/releases/tag/v1.1.0
-Release commit: 4224c7b3fef9ed04ab69ed057f0d5e343ed2d2b3. Public wheel, sdist and
-SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
-Clean Windows core/extras passed; no new CI/Linux run was requested for this compatible extension.
-The owner previously confirmed the 1.0.1 tray fix in the real GUI; this is conversation evidence,
-not a new independently inspected field report. Legacy 1.0.0 needs one manual
-controller-only transition. See docs/SERVICES.md and docs/development/VALIDATION.md.
+Named command scope_sets remain available since 1.1.0, expanding into existing immutable grants.
+No inheritance, merging, wildcard or fallback grants; unused definitions are validated too.
+Public wire/hash/SQLite/ACL semantics are unchanged. Inline schema-1 configs remain supported.
+
 The owner selected stable patch/minor versions after checks, without dev by default;
 reserve rc for substantial or uncertain work. Release policy: docs/development/README.md.
 Use immutable annotated vMAJOR.MINOR.PATCH tags. Full CI is for agreed major work,
 not every push. Publish on GitHub; no PyPI or EXE is requested. Production installation
-is operator-owned and was unchanged by this release. MIT applies.
-Historical 1.0.0 evidence follows; it is not a claim of new CI for 1.1.0.
-The first production release 1.0.0 is published under annotated tag v1.0.0:
-https://github.com/SilverBull81/remote-watch/releases/tag/v1.0.0
-Release commit is 80eca708337202aae871322a4cb60919e9d90d4e. Public downloads of
-wheel, sdist and SHA256SUMS.txt match the verified local hashes; the automatic
-GitHub source archive also contains ICO and no PNG/private files. No PyPI
-publication or bundled EXE was performed. Releases and source tags ship ICO only;
-the editable PNG remains ignored locally. Final 1.0.0 clean local core/extras and all eight CI jobs passed.
-Functional milestone 0.4 is complete: owner field acceptance plus all eight CI jobs passed.
-CI run 38609427482 tested code commit 5ebf78c9378eaa8e8a6589b2e63fc31910357001,
-package 1.0.0. The release tag also contains final result-documentation edits;
-runtime modules and packaged templates remain byte-identical to the tested commit.
+is operator-owned. MIT applies; releases and source tags ship ICO only, not editable PNG/private.
+Last full eight-job CI tested 1.0.0 code commit 5ebf78c9378eaa8e8a6589b2e63fc31910357001,
+run 38609427482. Do not claim that matrix covers later releases.
 
+Functional milestone 0.4 is complete by owner field acceptance and that CI evidence.
 The owner accepted field notifications/commands/reconnect, deploy/doctor, Windows service,
 tray, install/remove/reinstall, reboot, crash tests and delivery of gateway owner alerts.
-These are conversation evidence, not a claim of independently inspected logs for every test.
+These are conversation evidence, not independently inspected reports for every test.
 Do not infer private ntfy command or real systemd acceptance. Notification-health recovery
-field observation is explicitly deferred beyond 0.4. Current validation: docs/development/VALIDATION.md.
+field observation is deferred beyond 0.4. The owner confirmed the 1.0.1 tray fix in the GUI;
+legacy 1.0.0 needs one manual controller-only transition (docs/SERVICES.md).
 
 ## Read relevant context
 

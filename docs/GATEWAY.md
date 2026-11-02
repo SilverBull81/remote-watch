@@ -1,10 +1,10 @@
 ﻿# Развёртывание gateway
 
-Version 1.0.9
+Version 1.1.0
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-124820
+Дата и время последнего изменения: 261102-183757
 
 ## Когда он нужен
 
@@ -110,6 +110,7 @@ Manager проверяет filesystem storage, запускает собстве
   "icon_path": "logo/remote_watch.ico",
   "alerts": {
     "cooldown": 60,
+    "grace_period": 180,
     "destinations": [{"alias": "operator", "provider": "telegram",
       "settings": {"token_env": "GATEWAY_OWNER_BOT_TOKEN", "chat_id": 123456789, "display_mode": "text"}}]
   }

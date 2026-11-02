@@ -1,10 +1,10 @@
 ﻿# Проверки владения процессами, heartbeat, локального управления и оповещений manager.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261102-183757
 #
 # Функции:
 # -> setup_deployment(): Настройки только с синтетическими адресами и credentials.
@@ -204,7 +204,7 @@ def test_real_notification_lifecycle(
             assert await asyncio.wait_for(task, 5) == 0
             assert child.process.poll() is not None
             assert not (setup_deployment.control_dir / "runtime.json").exists()
-            assert list(setup_deployment.log_dir.glob("*.jsonl"))
+            assert list(setup_deployment.log_dir.rglob("*.jsonl"))
             with pytest.raises(RuntimeError, match="control_unavailable"):
                 await control_request(setup_deployment, "stop")
         finally:

@@ -1,14 +1,15 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261102-183757
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
 #    Интерфейс:
+#    -> emit(): Выбор ежедневного файла и ограничение его размера
 #    -> handleError(): Учёт отказа записи без traceback и рекурсивного logging
 #
 # -> ChildState: Состояние текущего дочернего процесса и его бюджет восстановления
@@ -62,6 +63,7 @@ from remote_watch.gateway_server.config import DeploymentConfig, check_log_direc
 from remote_watch.gateway_server.messages import MAX_STATUS_BYTES, read_limited, status_message
 from remote_watch.gateway_server.policy import FailureKind, RestartBudget
 from remote_watch.gateway_server.processes import ProcessGroup, private_directory
+from remote_watch.local_logging import DailyFileConfig
 
 #------------------------------------------------------------------------------------------------------------------
 
@@ -79,6 +81,53 @@ class StatusLog(RotatingFileHandler):
     """
 
     failed: bool = False
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ИНТЕРФЕЙС : Выбор ежедневного файла и ограничение его размера
+    #--------------------------------------------------------------------------------------------------------------
+    def emit(
+        self,
+        record: logging.LogRecord,
+        ) -> None:
+
+        """
+        Select a calendar file lazily and retain size rotation within each day.
+
+        :param record: Safe status snapshot with its original creation timestamp.
+        :type record: logging.LogRecord
+        """
+
+        # record — местная дата записи; пустые дни не создают файлов. Корень
+        # закрепляется один раз, иначе после полуночи получилась бы вложенная иерархия.
+
+        if self._closed:
+            return
+
+        try:
+            if not hasattr(self, "_daily"):
+                self._daily = DailyFileConfig(directory=Path(self.baseFilename).parent, prefix="gateway_server")
+
+            target = self._daily.path_for(record.created).with_suffix(".jsonl")
+            for directory in (target.parent.parent, target.parent):
+                if directory.is_symlink() or (directory.exists()
+                        and getattr(directory.lstat(), "st_file_attributes", 0) & 0x400):
+                    raise OSError("unsafe log directory")
+                directory.mkdir(exist_ok=True)
+
+            if target.is_symlink() or (target.exists()
+                    and getattr(target.lstat(), "st_file_attributes", 0) & 0x400):
+                raise OSError("unsafe log file")
+
+            if str(target) != self.baseFilename:
+                if self.stream is not None:
+                    self.stream.close()
+                    self.stream = None
+                self.baseFilename = str(target)
+
+            super().emit(record)
+        except Exception:
+            self.handleError(record)
+    #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
     # ИНТЕРФЕЙС : Учёт отказа записи без traceback и рекурсивного logging
@@ -285,7 +334,7 @@ class GatewayManager:
             private_directory(self.config.log_dir, self._operator_sid)
             handler = StatusLog(self.config.log_dir / "gateway_server.jsonl",
                                 maxBytes=self.config.application.log_max_bytes,
-                                backupCount=self.config.application.log_backups, encoding="utf-8")
+                                backupCount=self.config.application.log_backups, encoding="utf-8", delay=True)
             self._log_handler = handler
             self._log.addHandler(handler)
             await self._open_control()

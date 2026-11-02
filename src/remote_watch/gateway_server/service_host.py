@@ -1,10 +1,10 @@
 ﻿# Работа службы без GUI: передача состояния в Windows и штатная остановка сервера.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261102-185859
 #
 # Классы:
 # -> TransientServiceFailure: Временный отказ запуска после освобождения ресурсов сервера
@@ -329,7 +329,7 @@ def run_service(
                 # C framework фиксирует STOPPED с ненулевым exit code при исключении.
                 try:
                     servicemanager.LogErrorMsg("Remote Watch gateway service: code=service_runtime_failed. "
-                                              "Run --check-config and inspect gateway_server.jsonl.")
+                                              "Run --check-config and inspect the gateway server log directory.")
                 except Exception:
                     pass
                 raise RuntimeError("gateway_service_failed") from None

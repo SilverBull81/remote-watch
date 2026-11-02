@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261102-183757
 #
 # Классы:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца
@@ -71,6 +71,9 @@ class ApplicationConfig:
     :param cooldown: Minimum interval between owner notices for one component, in seconds.
     :type cooldown: float
 
+    :param grace_period: Delay before reporting transient command-source or trusted-time failures.
+    :type grace_period: float
+
     :param destinations: Notification destinations or their observed health snapshots.
     :type destinations: tuple[Destination, ...]
 
@@ -84,6 +87,7 @@ class ApplicationConfig:
     cooldown: float = 60.0                       # Минимальный интервал сообщений одного компонента.
     destinations: tuple[Destination, ...] = field(default=(), repr=False)  # Прямые каналы владельца.
     icon_path: Path | None = field(default=None, repr=False)  # Своя иконка; None — встроенный логотип.
+    grace_period: float = 0.0                    # Выдержка кратких сбоев команд; 0 — сообщать сразу.
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка типов и конечных пределов настроек
@@ -106,6 +110,9 @@ class ApplicationConfig:
         require_int(self.log_max_bytes, "log_max_bytes", 4096)
         require_int(self.log_backups, "log_backups", 1)
         require_number(self.cooldown, "cooldown")
+        require_number(self.grace_period, "grace_period", allow_zero=True)
+        if self.grace_period > 3600:
+            raise ValueError("invalid alert grace period")
         if self.log_max_bytes > 100 * 1024 * 1024 or self.log_backups > 20 or not 1 <= self.cooldown <= 86400:
             raise ValueError("invalid application limits")
 
@@ -167,7 +174,7 @@ def application_config(
         settings["icon_path"] = path.resolve()
 
     alerts = value.get("alerts", {})
-    if type(alerts) is not dict or set(alerts) - {"destinations", "cooldown"}:
+    if type(alerts) is not dict or set(alerts) - {"destinations", "cooldown", "grace_period"}:
         raise ValueError("invalid alert settings")
 
     destinations = alerts.get("destinations", [])
@@ -176,7 +183,8 @@ def application_config(
 
     # Малые независимые очереди; отправка напрямую, без обращения к себе через шлюз и без чтения команд бота.
     channels = tuple(replace(_destination(item), outstanding_capacity=16) for item in destinations)
-    return ApplicationConfig(**settings, cooldown=alerts.get("cooldown", 60), destinations=channels)
+    return ApplicationConfig(**settings, cooldown=alerts.get("cooldown", 60),
+                             grace_period=alerts.get("grace_period", 0), destinations=channels)
 #------------------------------------------------------------------------------------------------------------------
 
 
@@ -219,6 +227,7 @@ class OperatorAlerts:
         self._sent: dict[str, float] = {}
         self._troubled: set[str] = set()
         self._since: dict[str, float] = {}
+        self._announced: set[str] = set()
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -304,11 +313,22 @@ class OperatorAlerts:
                 self._troubled.add(name)
                 self._since.setdefault(name, now)
                 self._pending[name] = (state, reason, details, None)
-            elif state == "ready" and name in self._troubled:
+            elif state == "ready" and name in self._troubled and name in self._announced:
                 duration = min(2**63 - 1, int(max(0, now - self._since.get(name, now))))
                 self._pending[name] = (state, reason, [], duration)
             else:
                 self._pending.pop(name, None)
+                if state == "ready":
+                    self._troubled.discard(name)
+                    self._since.pop(name, None)
+
+        # Выдержка касается только сообщения владельцу. Готовность, журнал и запрет
+        # команд без доверенного времени меняются сразу. Смена временной причины
+        # не начинает ожидание заново; восстановление до порога остаётся только в логе.
+        transient = name == "commands" and state == "degraded" and reason in {
+            "time_unavailable", "source_unavailable"}
+        if transient and now - self._since.get(name, now) < self.config.grace_period:
+            return
 
         if name in self._pending and now - self._sent.get(name, -float("inf")) >= self.config.cooldown:
             state, reason, details, duration = self._pending.pop(name)
@@ -316,6 +336,9 @@ class OperatorAlerts:
             if state == "ready":
                 self._troubled.discard(name)
                 self._since.pop(name, None)
+                self._announced.discard(name)
+            else:
+                self._announced.add(name)
             self.logger.log(logging.INFO if state == "ready" else logging.ERROR,
                             operator_notice(name, state, reason, sources=details, duration=duration))
     #--------------------------------------------------------------------------------------------------------------

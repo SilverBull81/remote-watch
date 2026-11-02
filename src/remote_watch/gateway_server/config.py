@@ -1,10 +1,10 @@
 ﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261102-183757
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига
@@ -61,9 +61,12 @@ import ipaddress
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+from remote_watch.local_logging import _MONTHS
 
 from .._validation import require_int, require_text
 from .application import ApplicationConfig, application_config
@@ -511,7 +514,7 @@ def check_log_directory(
     """
     Refuse shared log directories before the manager replaces their access permissions.
 
-    :param path: Dedicated directory containing only the manager's rotated log files.
+    :param path: Dedicated directory containing legacy files and calendar log directories.
     :type path: Path
     """
 
@@ -522,11 +525,47 @@ def check_log_directory(
         if not path.exists():
             return
 
-        for index, entry in enumerate(path.iterdir()):
-            if (index >= 32 or not re.fullmatch(r"gateway_server\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?", entry.name)
-                    or entry.is_symlink() or not entry.is_file()
-                    or getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
-                raise DeploymentConfigError("log_directory_shared", "log_dir")
+        if path.is_symlink() or getattr(path.lstat(), "st_file_attributes", 0) & 0x400:
+            raise DeploymentConfigError("log_directory_shared", "log_dir")
+
+        pending = [path]
+        count = 0
+        while pending:
+            directory = pending.pop()
+            for entry in directory.iterdir():
+                count += 1
+                parts = entry.relative_to(path).parts
+                if (count > 100000 or entry.is_symlink()
+                        or getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
+                    raise DeploymentConfigError("log_directory_shared", "log_dir")
+
+                # Разрешаем только год/месяц/свои файлы. Ссылки и чужие подпапки
+                # отвергаются до рекурсивной выдачи прав, включая старые пустые дни.
+                if entry.is_dir():
+                    valid = len(parts) == 1 and re.fullmatch(r"[1-9][0-9]{3}", entry.name)
+                    if len(parts) == 2:
+                        valid = entry.name in {f"{i:02d}. {name}" for i, name in enumerate(_MONTHS, 1)}
+                    if not valid:
+                        raise DeploymentConfigError("log_directory_shared", "log_dir")
+                    pending.append(entry)
+                    continue
+
+                valid = len(parts) == 1 and re.fullmatch(
+                    r"gateway_server\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?", entry.name)
+                if len(parts) == 3:
+                    match = re.fullmatch(r"gateway_server_log_([0-9]{6})\.jsonl(?:\.(?:[1-9]|1[0-9]|20))?",
+                                         entry.name)
+                    if match:
+                        stamp = match[1]
+                        year, month = int(parts[0]), int(parts[1][:2])
+                        try:
+                            date(year, month, int(stamp[4:]))
+                            valid = stamp[:4] == f"{year % 100:02d}{month:02d}"
+                        except ValueError:
+                            valid = False
+                if not valid or not entry.is_file():
+                    raise DeploymentConfigError("log_directory_shared", "log_dir")
+
     except OSError:
         raise DeploymentConfigError("path_unavailable", "log_dir") from None
 #------------------------------------------------------------------------------------------------------------------

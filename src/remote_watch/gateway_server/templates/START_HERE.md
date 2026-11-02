@@ -1,10 +1,10 @@
 ﻿# Gateway server: первый запуск
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-124820
+Дата и время последнего изменения: 261102-183757
 
 Комплект создан remote-watch **@@VERSION@@**. Он не устанавливает зависимости,
 не запускает процессы, не регистрирует службы и не читает environment credentials.
@@ -15,6 +15,9 @@ Version 1.0.8
    Для Windows-службы добавьте service, для иконки — tray.
 2. В gateway_server.local.json проверьте внешний HTTPS endpoint и внутренние
    loopback-порты. Выделите manager log_dir=logs/gateway_server, не общую logs.
+   Внутри появятся год/месяц и непустые ежедневные JSONL; Caddy пишет отдельно.
+   application.alerts.grace_period=180 скрывает краткие сбои источников команд
+   и времени только в сообщениях владельцу; health и журналы меняются сразу.
 3. Заполните notification_gateway.local.json: provider settings, principals/Identity/aliases.
 4. Заполните command_gateway.local.json: targets/Identity, отдельные principal tokens,
    sources/actor/chat. Общие права задайте в scope_sets.control; scope_set выбирается

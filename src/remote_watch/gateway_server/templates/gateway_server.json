@@ -23,6 +23,7 @@
     "log_backups": 5,
     "alerts": {
       "cooldown": 60,
+      "grace_period": 180,
       "destinations": []
     }
   },
