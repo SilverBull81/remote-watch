@@ -1,17 +1,20 @@
 ﻿# Repository Instructions
 
-Version 1.8.0
+Version 1.8.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261102-190841
+Дата и время последнего изменения: 261102-195203
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.2.0 is prepared; publication verification is pending.
+Stable 1.2.0 is published under immutable annotated tag v1.2.0:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.2.0
+Release commit: f1b115d1f67b39ce57d8bc66132cd059c1a971fa. Public wheel, sdist and
+SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
 Gateway Server now writes lazy calendar JSONL logs under year/English-month directories,
 retains size rotation within each day and preserves legacy flat logs. Dedicated log directory
 validation is shared by manager and service installer; foreign files, invalid calendar paths,
