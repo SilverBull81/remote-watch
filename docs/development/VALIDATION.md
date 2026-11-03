@@ -1,10 +1,10 @@
 ﻿# Проверки и статус выпуска
 
-Version 1.1.2
+Version 1.1.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-092322
+Дата и время последнего изменения: 261103-111759
 
 ## Совместимое расширение 1.3.0: конфиги комплекта в config/
 
@@ -29,15 +29,37 @@ Wire/hash/SQLite/ACL и клиентский API не меняются; преж
 
 - Core: 1286 passed, 90 skipped, 2 deselected in 74.65s (0:01:14).
 - Extras: 1736 passed, 2 deselected in 175.11s (0:02:55).
-- Отчёты: build/validation-130-core и build/validation-130-extras.
+- Отчёты: .development/validation-130-final-core и .development/validation-130-final-extras.
 - Ruff/style: 171 файл; документация: 21 документ/13 JSON, без ошибок.
 - Проверяются 96 Python-модулей, packaged resources, ICO и 12 installed CLIs.
 
 Новая CI/Linux-матрица не запускалась; ниже сохранена последняя полная матрица 1.0.0.
-Провайдеры подставные, HTTP использует loopback; реальной миграции/службы с новой структурой нет.
-Production процессы, конфиги, credentials, службы, CA и журналы агентом не менялись.
+Провайдеры подставные, HTTP использует loopback; эта проверка не выполняла реальную
+миграцию или установку службы. Production при подготовке выпуска не менялся.
+Последующие разрешённые оператором локальные операции фиксируются только в docs/private
+и не подменяют результаты release-проверок или отдельную полевую приёмку.
 Runtime/шаблоны финального wheel сверяются с чистыми проверенными сборками.
 MIT/ICO-only и исключение private сохраняются; прежние теги и файлы не заменяются.
+
+## Проверка обслуживания рабочего каталога
+
+Рабочие артефакты перенесены в `.development/`; пути tools/CI, исключения Git/sdist
+и build_base setuptools согласованы с ней. Это не новый релиз: версия библиотеки
+остаётся 1.3.0, опубликованные файлы и теги не меняются.
+
+Чистые Windows CPython 3.12.2 проверки обслуженного дерева:
+
+- Core: 1286 passed, 90 skipped, 2 deselected in 75.81s.
+- Extras: 1736 passed, 2 deselected in 168.18s.
+- Отчёты: .development/maintenance-core и .development/maintenance-extras.
+- Ruff/style/docs без ошибок; installed CLI и wheel-from-sdist прошли.
+- Состав runtime/resources нового wheel побайтно совпал с опубликованным 1.3.0:
+  116 файлов внутри remote_watch/. Рабочая папка и private не попали в sdist.
+- Старый build/ не создан; --output внутри него отвергается до записи.
+
+Перенесённый Python 3.10.21 проверен запуском --version; это не полный прогон тестов
+на 3.10. Новая CI/Linux-матрица, provider field tests и публикация не выполнялись.
+Производственные установки при этом обслуживании не менялись.
 
 ## Первый стабильный выпуск 1.0.0
 
@@ -68,21 +90,13 @@ MIT/ICO-only и исключение private сохраняются; прежн�
 Release tag включает последующие правки только итоговых документов; Python-код,
 метаданные пакета и поставляемые шаблоны совпадают с проверенным code commit.
 
-## Локальная проверка
+## Состав поставки
 
-Windows CPython 3.12.2, чистые wheel-from-sdist окружения:
-
-- Core: 1194 passed, 75 skipped, 2 deselected in 67.88s (0:01:07).
-- Extras: 1629 passed, 2 deselected in 137.18s (0:02:17).
-- Отчёты: build/validation-100-core и build/validation-100-extras.
-- Стиль: 163 Python-файла; документация: 21 документ и 13 JSON-примеров.
-- Проверяются 93 Python-модуля, packaged resources, ICO и 12 installed CLIs.
-
-Финальные release-архивы заново строятся после записи результатов. Проверяются
-License-Expression=MIT и точный LICENSE, ICO без PNG, docs/BACKLOG.md и отсутствие
-private/runtime/credentials файлов. Локальный PNG сохраняется, но не входит в
-Git-дерево тега, автоматически создаваемые исходные архивы, wheel или sdist.
-Архив private-документов присутствовал при сборках и проверен на исключение.
+При подготовке пакетов проверяются License-Expression=MIT и точный LICENSE,
+ICO без PNG, docs/BACKLOG.md и отсутствие private/runtime/credentials файлов.
+Локальная `.development/` исключена из Git и sdist явно; каталог docs/private
+также pruned отдельно. Наличие локальных артефактов не должно менять состав wheel.
+Опубликованные архивы и теги не заменяются при обслуживании рабочего дерева.
 
 ## Полевая приёмка и границы
 

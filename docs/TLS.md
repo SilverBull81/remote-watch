@@ -1,10 +1,10 @@
 ﻿# HTTPS и Caddy
 
-Version 1.0.1
+Version 1.0.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-090725
+Дата и время последнего изменения: 261103-111759
 
 ## Общая схема
 
@@ -59,8 +59,8 @@ assert tls.verify_mode == ssl.CERT_REQUIRED
 ## Запуск и обновление
 
 ```console
-caddy validate --config Caddyfile --adapter caddyfile
-caddy run --config Caddyfile --adapter caddyfile
+caddy validate --config config/Caddyfile --adapter caddyfile
+caddy run --config config/Caddyfile --adapter caddyfile
 ```
 
 validate не запускает listener и не доказывает правильность сетевого доступа.
@@ -72,6 +72,11 @@ reload закончится отказом соединения с 2019; сна�
 Windows-консоли может остановить работу процесса; служба устраняет зависимость от окна.
 Официальные варианты: [Keep Caddy Running](https://caddyserver.com/docs/running).
 Не запускайте второй foreground Caddy поверх работающей службы.
+
+При переносе Caddyfile в config/ обновите также путь в собственной службе Caddy
+или systemd unit: перемещение файла не меняет зарегистрированную команду запуска.
+Проверьте права её аккаунта на новую папку/файл и сохраните прежний storage CA.
+Настройки external Caddy не изменяются установщиком службы Gateway Server.
 
 У аккаунта Caddy должны быть RX на бинарный файл, чтение Caddyfile, Modify на
 своё storage и **свою папку журналов**. Доступ к существующему файлу лога не означает

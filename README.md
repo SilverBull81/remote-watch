@@ -1,10 +1,10 @@
 ﻿# Remote Watch
 
-Version 1.5.5
+Version 1.5.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-090725
+Дата и время последнего изменения: 261103-111759
 
 Remote Watch подключает обычный Python `logging.Logger` к уведомлениям в Telegram
 и ntfy и позволяет управлять приложением через собственные команды в мессенджере.
@@ -76,7 +76,8 @@ python -m remote_watch.gateway_server.deploy --directory ./gateway --endpoint ht
 ```
 
 После проверки плана повторите deploy без `--dry-run`, заполните локальные JSON
-и настройте HTTPS. Deploy создаёт комплект, но ничего не запускает и не перезаписывает
+в `config/` и настройте HTTPS; образцы находятся в `config/examples/`.
+Deploy создаёт комплект, но ничего не запускает и не перезаписывает
 существующие файлы. Инструкции: [gateway](docs/GATEWAY.md), [TLS](docs/TLS.md),
 [службы](docs/SERVICES.md), [диагностика](docs/OPERATIONS.md).
 

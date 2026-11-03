@@ -2,6 +2,10 @@ include AGENTS.md LICENSE
 exclude logo/remote_watch.png
 include logo/remote_watch.ico
 include .gitattributes .gitignore
+include setup.cfg
+prune .development
+prune build
+prune dist
 recursive-include docs *.md
 prune docs/private
 include docs/examples/notification_gateway.example.json

@@ -1,10 +1,10 @@
 ﻿# Сопровождение проекта
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261015-001857
+Дата и время последнего изменения: 261103-111759
 
 Пользовательские инструкции начинаются с [docs/README.md](../README.md).
 Здесь остаются только правила изменения и проверки проекта:
@@ -25,8 +25,8 @@ python -m ruff check .
 python tools/check_style.py
 python tools/check_docs.py
 python -m pytest -q -m "not integration"
-python tools/validate.py --mode core --output build/check-core
-python tools/validate.py --mode extras --output build/check-extras
+python tools/validate.py --mode core --output .development/check-core
+python tools/validate.py --mode extras --output .development/check-extras
 ```
 
 Выполняйте команды из venv. Каталоги output должны быть новыми. validate строит
@@ -36,6 +36,24 @@ sdist/wheel, проверяет отсутствие private/runtime файло�
 credentials, имитации не выдают за field acceptance. Windows и Linux, Python
 3.10/3.12, core/extras проверяются восемью ручными jobs `.github/workflows/validation.yml`.
 CI запускается для согласованных крупных изменений, не автоматически на каждый push.
+
+## Рабочие артефакты
+
+Локальная папка `.development/` заменяет прежнюю `build/` как место для отчётов,
+проверочных окружений, релизных файлов и временной работы. Она исключена из Git,
+Ruff и sdist. Setuptools использует `.development/setuptools/` по setup.cfg;
+не переносите временные файлы в src/ или docs/ ради удобства.
+
+Сохраняйте опубликованные wheel/sdist/SHA256SUMS и результаты проверок, на которые
+ссылается VALIDATION.md. Одноразовые venv, промежуточные сборки, дубли архивов и
+каталоги синтетических тестов после проверки удаляются. Venv не переносится вместе
+с папкой: в его launchers записаны абсолютные пути, при необходимости создайте новый.
+Встроенные в старые логи абсолютные пути остаются историческими; сами отчёты
+после переезда находятся под `.development/`.
+
+Секреты, реальные журналы команд и машинные инструкции к рабочим артефактам не
+относятся. Их не удаляют при очистке; локальная документация хранится в docs/private/,
+рабочие данные — в явно выбранных приложением местах.
 
 ## Порядок выпуска
 

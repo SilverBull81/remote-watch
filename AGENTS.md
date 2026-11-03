@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.8.5
+Version 1.8.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-092913
+Дата и время последнего изменения: 261103-111759
 
 ## Intent and current status
 
@@ -25,7 +25,8 @@ Flat-root gateway_server.local.json blocks ordinary deploy before writes with la
 rebinds the service explicitly and retires the old per-config-path tray controller.
 Old explicit runtime CLI paths still work; package upgrade does not migrate production.
 Current clean Windows core/extras evidence: docs/development/VALIDATION.md.
-No new CI/Linux, native service migration or field acceptance is claimed. Production was not modified.
+No new CI/Linux, native service migration or field acceptance is claimed by release checks.
+Production was not modified by release publication; later authorized local maintenance is private evidence.
 Daily JSONL logs, bounded owner-alert grace and one planned-stop notice remain available.
 Scope sets expand into existing immutable grants; public wire/hash/SQLite/ACL semantics are unchanged.
 
@@ -93,6 +94,10 @@ SQLite, and never installs/starts a service. Windows service is headless; tray i
 operator-session controller and never starts another manager. Preserve explicit operator ACL.
 
 ## Work and validation
+
+Development artifacts live in ignored .development/, not build/. setup.cfg sends setuptools
+scratch there; MANIFEST prunes it. Preserve published assets/checksums and cited final reports,
+remove disposable environments and synthetic scratch only. Never relocate a venv as a usable environment.
 
 Respect unrelated user edits. Never inspect or stage unrelated local files. Production processes,
 credentials, journals, CA and other repositories are unchanged unless separately authorized.

@@ -1,10 +1,10 @@
 ﻿# Диагностика и эксплуатация
 
-Version 1.0.5
+Version 1.0.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-090725
+Дата и время последнего изменения: 261103-111759
 
 ## Что означает готовность
 
@@ -199,6 +199,7 @@ hub handles. Клиент получает точную authenticated квита
 | unresolved_results / outcome_conflict | Сохранить журналы и выполнить осознанный разбор |
 | ownership | Найти действующего владельца по актуальному состоянию, не удалить lock |
 | log_directory_shared / service_shared_logs | Выделить manager собственную папку, сохранить чужие данные/ACL |
+| layout_migration_required | Найден прежний общий JSON в корне; выполнить перенос по GATEWAY.md, сохранив пути SQLite/CA и перепривязав службу |
 
 Gateway status содержит `alerts` и `alert_delivery`: attempts=0 означает отсутствие
 попыток в текущем запуске; accepted — принятие провайдером, не телефон. failed/unknown

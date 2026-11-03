@@ -1,10 +1,10 @@
 ﻿# Проверка формальных правил оформления Python-файлов проекта без изменения исходников.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261103-111759
 #
 # Функции:
 # -> main(): Проверка всех поддерживаемых Python-файлов репозитория
@@ -54,7 +54,7 @@ def main() -> int:
     files = sorted(path for folder in folders for path in (root / folder).rglob("*.py"))
     issues = []
 
-    # Не читаем build, окружения или локальные credentials. Проверяем исходный код,
+    # Не читаем .development, окружения или локальные credentials. Проверяем исходный код,
     # включая новые ещё не добавленные в Git файлы; импортировать его не требуется.
     for path in files:
         for line, rule in _check_file(path):

@@ -1,10 +1,10 @@
 ﻿# Воспроизводимая сборка, чистая установка и тесты выбранной среды.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-203720
+# Дата и время последнего изменения: 261103-111759
 #
 # Функции:
 # -> main(): Запуск воспроизводимой проверки
@@ -52,12 +52,12 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Проверка wheel из sdist: core или все extras.")
     parser.add_argument("--mode", choices=("core", "extras"), required=True)
-    parser.add_argument("--output", type=Path, required=True, help="Новый каталог внутри build")
+    parser.add_argument("--output", type=Path, required=True, help="Новый каталог внутри .development")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
-    if (root / "build").resolve() not in output.parents:
-        parser.error("Каталог проверки должен находиться внутри build.")
+    if (root / ".development").resolve() not in output.parents:
+        parser.error("Каталог проверки должен находиться внутри .development.")
 
     output.mkdir(parents=True, exist_ok=False)
     match = re.search(r'^version = "([^"]+)"', (root / "pyproject.toml").read_text(encoding="utf-8"), re.M)
@@ -120,13 +120,15 @@ def main() -> int:
         with tarfile.open(sdist) as archive:
             names = archive.getnames()
             assert any(name.endswith("tools/validate.py") for name in names)
+            assert any(name.endswith("/setup.cfg") for name in names)
             assert any(name.endswith("docs/GATEWAY.md") for name in names)
             assert any(name.endswith("docs/BACKLOG.md") for name in names)
             assert any(name.endswith("logo/remote_watch.ico") for name in names)
             assert not any(name.endswith("logo/remote_watch.png") for name in names)
             assert any(name.endswith("tests/contract/test_gateway.py") for name in names)
             assert not any(name.endswith((".local.json", "gateway_config.json", "gateway_settings.py"))
-                           or "/build/" in name or "/runs/" in name or "/docs/private/" in name for name in names)
+                           or "/build/" in name or "/.development/" in name
+                           or "/runs/" in name or "/docs/private/" in name for name in names)
         run("wheel-from-sdist", [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir",
                                  str(output / "wheel"), str(sdist)])
         wheel = next((output / "wheel").glob("*.whl"))
@@ -141,7 +143,7 @@ def main() -> int:
             assert all(name == icon_entry or
                        name.startswith(("remote_watch/", f"remote_watch-{version}.dist-info/"))
                        for name in archive.namelist())
-            # После переноса модулей в wheel не должны остаться старые копии из build.
+            # В wheel не должны остаться устаревшие копии из промежуточной папки setuptools.
             expected_python = {path.relative_to(root / "src").as_posix()
                                for path in (root / "src/remote_watch").rglob("*.py")}
             installed_python = {name for name in archive.namelist() if name.endswith(".py")}
