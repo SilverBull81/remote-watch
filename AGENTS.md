@@ -1,17 +1,20 @@
 ﻿# Repository Instructions
 
-Version 1.8.4
+Version 1.8.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-092322
+Дата и время последнего изменения: 261103-092913
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.3.0 is prepared; publication verification is pending.
+Stable 1.3.0 is published under immutable annotated tag v1.3.0:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.3.0
+Release commit: 7859731a2b9f17787bc983edb1db90e8a8976a27. Public wheel, sdist and
+SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
 New deploy kits put operational configs in config/ and all server/client examples under
 config/examples/. Launchers, tray/service and systemd choose config/gateway_server.local.json.
 Template paths are based on working copies in config, preserving root control/logs/data/logo
