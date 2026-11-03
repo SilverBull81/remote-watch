@@ -1,17 +1,20 @@
 ﻿# Repository Instructions
 
-Version 1.8.2
+Version 1.8.3
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-084711
+Дата и время последнего изменения: 261103-085429
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.2.1 is prepared; publication verification is pending.
+Stable 1.2.1 is published under immutable annotated tag v1.2.1:
+https://github.com/SilverBull81/remote-watch/releases/tag/v1.2.1
+Release commit: b942f02e0913f86f3aeb0cfcc9bb4953544b987d. Public wheel, sdist and
+SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
 Planned stop queues one direct owner notice before component shutdown, bypassing cooldown/grace.
 Startup/supervisor rollback is not labelled planned. Existing two-second alert drain is retained;
 enqueue/close failures cannot cancel remaining cleanup. Delivery during OS/network shutdown is best effort.
