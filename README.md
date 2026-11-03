@@ -1,10 +1,10 @@
 ﻿# Remote Watch
 
-Version 1.5.3
+Version 1.5.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261102-190841
+Дата и время последнего изменения: 261103-084005
 
 Remote Watch подключает обычный Python `logging.Logger` к уведомлениям в Telegram
 и ntfy и позволяет управлять приложением через собственные команды в мессенджере.
@@ -21,7 +21,7 @@ Python 3.10+, Windows и Linux. Core не имеет обязательных ru
 
 ```console
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install "remote-watch[telegram] @ git+https://github.com/SilverBull81/remote-watch.git@v1.2.0"
+.venv\Scripts\python.exe -m pip install "remote-watch[telegram] @ git+https://github.com/SilverBull81/remote-watch.git@v1.2.1"
 ```
 
 В Linux вместо `.venv\Scripts\python.exe` используйте `.venv/bin/python`.
@@ -71,7 +71,7 @@ logger задаёт приложение. Создание watcher не запу
 подробности и переход существующего JSON — в [настройках](docs/CONFIGURATION.md).
 
 ```console
-python -m pip install "remote-watch[gateway,commands,telegram,ntfy] @ git+https://github.com/SilverBull81/remote-watch.git@v1.2.0"
+python -m pip install "remote-watch[gateway,commands,telegram,ntfy] @ git+https://github.com/SilverBull81/remote-watch.git@v1.2.1"
 python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https://gateway.example.test:8443 --dry-run
 ```
 
@@ -85,7 +85,7 @@ python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https
 Уведомления не являются постоянной очередью: при переполнении, истечении TTL или
 остановке возможны потери. Приём сообщения провайдером не означает показ на телефоне.
 Неопределённый исход команды сохраняется как UNKNOWN; callback автоматически не повторяется.
-Стабильный выпуск **1.2.0**, лицензия — [MIT](LICENSE), включая поставляемую ICO-иконку
+Стабильный выпуск **1.2.1**, лицензия — [MIT](LICENSE), включая поставляемую ICO-иконку
 проекта в пределах прав владельца. Зависимости сохраняют собственные лицензии.
 В ветке 1.x сохраняется совместимость публичного API; несовместимые изменения
 потребуют новой основной версии.

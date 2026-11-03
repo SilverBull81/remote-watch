@@ -1,10 +1,10 @@
 ﻿# Понятные владельцу сообщения о сбоях gateway без приватных подробностей.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261103-083907
 #
 # Функции:
 # -> operator_notice(): Описание сбоя или восстановления для мессенджера.
@@ -107,6 +107,9 @@ def operator_notice(
     if name not in COMPONENTS or state not in STATES or (reason is not None and reason not in REASONS):
         raise ValueError("invalid operator transition")
     sources = validate_source_health(sources)
+
+    if name == "manager" and state == "stopping":
+        return "Remote Watch gateway\nGateway server is stopping (planned shutdown)."
 
     title = COMPONENTS[name]
     if state == "ready":

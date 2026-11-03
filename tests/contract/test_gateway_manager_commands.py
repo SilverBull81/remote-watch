@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261026-121655
+# Дата и время последнего изменения: 261103-083907
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -446,6 +446,11 @@ def test_operator_delivery() -> None:
                 await asyncio.sleep(.02)
             assert len(received) == 4
             assert sum(b"time_unavailable" in body for body in received) == 2
+            alerts.notify_stopping()
+            alerts.notify_stopping()
+            await alerts.close()
+            assert alerts.stats()["accepted"] == 6
+            assert sum(b"planned shutdown" in body for body in received) == 2
         finally:
             await alerts.close()
             await runner.cleanup()

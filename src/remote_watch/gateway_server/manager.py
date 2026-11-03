@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261102-183757
+# Дата и время последнего изменения: 261103-083907
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -391,7 +391,7 @@ class GatewayManager:
                 self.state = "failed"
                 self._report()
             try:
-                await self._shutdown()
+                await self._shutdown(planned=result == 0 and self.reason is None)
             finally:
                 # Даже отказ закрытия UI/alert transport не оставляет bot reader без владельца.
                 for child in self.children.values():
@@ -811,11 +811,25 @@ class GatewayManager:
     #--------------------------------------------------------------------------------------------------------------
     async def _shutdown(
         self,
+        planned: bool = False,
         ) -> None:
 
         """
         Apply one graceful deadline, then kill only exact owned process groups.
+
+        :param planned: Explicit graceful stop without a startup or supervisor failure.
+        :type planned: bool
         """
+
+        # planned — аварийный откат не выдаётся за плановую остановку. Служебный
+        # канал прямой: сообщение не зависит от listeners, которые сейчас закрываем.
+
+        if planned and not self._alerts_failed:
+            try:
+                self._alerts.notify_stopping()
+            except Exception:
+                # Неисправное оповещение не должно оставить дочерние процессы живыми.
+                self._alerts_failed = True
 
         self.state = "stopping"
         self.stop_event.set()
@@ -852,7 +866,12 @@ class GatewayManager:
         if self._tray is not None:
             await asyncio.to_thread(self._tray.close)
 
-        await self._alerts.close()
+        try:
+            await self._alerts.close()
+        except Exception:
+            # Сеть уже может отключаться при завершении Windows. Ошибка служебной
+            # доставки не отменяет освобождение listeners, control-файла и журналов.
+            self._alerts_failed = True
         if self._runner is not None:
             await self._runner.cleanup()
 
