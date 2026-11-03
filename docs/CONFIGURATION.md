@@ -1,10 +1,10 @@
 ﻿# Настройки и идентификаторы
 
-Version 1.1.5
+Version 1.1.6
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-083907
+Дата и время последнего изменения: 261103-090725
 
 ## Какие файлы нужны
 
@@ -143,16 +143,20 @@ endpoint — **внешний HTTPS origin**, например `https://gateway.
 
 ## Gateway server JSON
 
+В новом комплекте это `config/gateway_server.local.json`. Рабочие конфиги
+компонентов лежат рядом, образцы — в `config/examples/`. Скрипты запуска находятся
+в корне приложения. Пример для такого расположения:
+
 ```json
 {
   "schema_version": 1,
   "endpoint": "https://gateway.example.test:8443",
-  "control_dir": "control",
-  "log_dir": "logs/gateway_server",
+  "control_dir": "../control",
+  "log_dir": "../logs/gateway_server",
   "notifications": {"config": "notification_gateway.local.json", "host": "127.0.0.1", "port": 8765},
   "commands": {"config": "command_gateway.local.json", "host": "127.0.0.1", "port": 8766},
   "caddy": {"mode": "external"},
-  "application": {"ui": "headless", "icon_path": "logo/remote_watch.ico"}
+  "application": {"ui": "headless", "icon_path": "../logo/remote_watch.ico"}
 }
 ```
 
@@ -194,9 +198,9 @@ log_max_bytes=1048576, log_backups=5; alerts содержит cooldown, grace_pe
 ## Проверка
 
 ```console
-python -m remote_watch.gateway_server --config gateway_server.local.json --check-config
-python -m remote_watch.gateway --config notification_gateway.local.json --check-config
-python -m remote_watch.gateway.commands --config command_gateway.local.json --check-config
+python -m remote_watch.gateway_server --config config/gateway_server.local.json --check-config
+python -m remote_watch.gateway --config config/notification_gateway.local.json --check-config
+python -m remote_watch.gateway.commands --config config/command_gateway.local.json --check-config
 ```
 
 Это проверка структуры и ссылок без запуска, SQLite recovery или отправок провайдеру.

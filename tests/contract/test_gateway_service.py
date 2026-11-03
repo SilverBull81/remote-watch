@@ -1,10 +1,10 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-212332
+# Дата и время последнего изменения: 261103-090725
 #
 # Функции:
 # -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
@@ -127,7 +127,7 @@ def service_plan(
     executable.with_name("pythonw.exe").write_bytes(b"synthetic-pythonw")
     (executable.parent.parent / "pyvenv.cfg").write_text("synthetic", encoding="utf-8")
     deploy(DeployOptions(directory=root, python=executable, endpoint="https://example.test:8443", ui="tray"))
-    return make_plan(ServiceSpec(root / "gateway_server.local.json", executable, SID))
+    return make_plan(ServiceSpec(root / "config/gateway_server.local.json", executable, SID))
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -189,7 +189,7 @@ def test_plan(
 
     # service_plan — читаем только конфиги; credentials из ENV не разрешаются.
 
-    root = service_plan.spec.config.parent
+    root = service_plan.spec.config.parent.parent
     before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
     assert make_plan(service_plan.spec) == service_plan
     assert before == {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
@@ -214,14 +214,14 @@ def test_plan(
 
     # Общая папка с логами внешнего Caddy не является runtime directory manager.
     value = json.loads(service_plan.spec.config.read_text())
-    value["log_dir"] = "logs"
+    value["log_dir"] = "../logs"
     service_plan.spec.config.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ValueError, match="service_shared_logs"):
         make_plan(service_plan.spec)
 
-    value["log_dir"] = "other-shared-log-folder"
+    value["log_dir"] = "../other-shared-log-folder"
     service_plan.spec.config.write_text(json.dumps(value), encoding="utf-8")
-    shared = root / value["log_dir"]
+    shared = (service_plan.spec.config.parent / value["log_dir"]).resolve()
     shared.mkdir()
     external = shared / "caddy-runtime.jsonl"
     external.write_bytes(b"synthetic-external-log")
@@ -357,7 +357,7 @@ def test_install_refusal(
         item.install(service_plan)
 
     item.api.DeleteService.assert_called_once()
-    assert not (service_plan.spec.config.parent / "data").exists()
+    assert not (service_plan.spec.config.parent.parent / "data").exists()
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -497,12 +497,12 @@ def test_dry_run(
 
     monkeypatch.setattr(sys, "executable", str(service_plan.spec.python))
     monkeypatch.setattr(WindowsService, "__init__", Mock(side_effect=AssertionError("SCM touched")))
-    before = {p: p.read_bytes() for p in service_plan.spec.config.parent.rglob("*") if p.is_file()}
+    before = {p: p.read_bytes() for p in service_plan.spec.config.parent.parent.rglob("*") if p.is_file()}
     assert main(["--config", str(service_plan.spec.config), "--operator-sid", SID, "--install", "--dry-run"]) == 0
     output = capsys.readouterr().out
     assert json.loads(output)["writes"] is False
     assert SID not in output and str(service_plan.spec.config) not in output
-    assert before == {p: p.read_bytes() for p in service_plan.spec.config.parent.rglob("*") if p.is_file()}
+    assert before == {p: p.read_bytes() for p in service_plan.spec.config.parent.parent.rglob("*") if p.is_file()}
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

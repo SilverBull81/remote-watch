@@ -1,18 +1,24 @@
 ﻿# Служба gateway server
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-121655
+Дата и время последнего изменения: 261103-090725
 
 ## Windows
 
 Нужны отдельный venv и extras service, а для UI — tray. Запускайте .cmd из этой
 папки либо указывайте Python venv и абсолютный путь к общему JSON.
 Install/remove требуют административного PowerShell обычного оператора.
+Рабочие конфиги находятся в config/, примеры — в config/examples/.
+При переносе из корня сначала stop/remove со старым путём, затем переезд и install
+с новым: service binding хранит точный config. Сохраните абсолютные пути SQLite/CA.
+Старый пользовательский pythonw --tray с прежним config завершите отдельно либо
+полностью выйдите из сеанса Windows; headless/RDP disconnect его не завершают.
+Полная последовательность переезда приведена в START_HERE.md.
 
-1. Задайте собственный log_dir=logs/gateway_server. Общая logs и Caddy logs не подходят.
+1. В общем JSON задайте log_dir=../logs/gateway_server. Общая logs и Caddy logs не подходят.
 2. Сохраните JSON/SQLite/CA и штатно остановите прежнего foreground владельца.
 3. Выполните install-service.cmd --dry-run, затем install-service.cmd.
 4. Запустите start-service.cmd и service-status.cmd; дополнительно status/doctor.
@@ -21,10 +27,10 @@ Install/remove требуют административного PowerShell об
 Прямой вариант (python — интерпретатор venv):
 
 ```console
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --install --dry-run
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --install
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --start
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --status
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --install --dry-run
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --install
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --start
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --status
 ```
 
 Default name RemoteWatchGateway, виртуальный account NT SERVICE\RemoteWatchGateway,
@@ -36,9 +42,9 @@ Default name RemoteWatchGateway, виртуальный account NT SERVICE\Remot
 Остановка и удаление:
 
 ```console
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --stop
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --remove --dry-run
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --remove
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --stop
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --remove --dry-run
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --remove
 ```
 
 Также есть stop-service.cmd/remove-service.cmd. Remove сохраняет JSON/SQLite/CA;
@@ -64,7 +70,7 @@ application.ui=headless/tray управляет иконкой. Служба в�
 же версии используйте restart-tray.cmd/.ps1 или прямую команду из venv:
 
 ```console
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --restart-tray
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --restart-tray
 ```
 
 Это только операция UI, без SCM stop/start, изменения автозапуска, gateway и журналов.

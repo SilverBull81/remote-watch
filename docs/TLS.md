@@ -1,10 +1,10 @@
 ﻿# HTTPS и Caddy
 
-Version 1.0.0
+Version 1.0.1
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261014-184253
+Дата и время последнего изменения: 261103-090725
 
 ## Общая схема
 
@@ -25,8 +25,9 @@ firewall только для выбранного HTTPS-порта и довер
 доверенный корневой CA. Само по себе владение VM не даёт права менять сеть провайдера;
 если VM не доступны друг другу по выбранному порту, потребуется настройка сети/VPN.
 
-[Пример Caddyfile](examples/Caddyfile.example) и generated Caddyfile.example из
-deploy показывают маршруты и ограничения. Замените host, порт и абсолютные пути.
+[Пример Caddyfile](examples/Caddyfile.example) и config/examples/Caddyfile.example из
+deploy показывают маршруты и ограничения. Для рабочего файла нового комплекта
+используйте config/Caddyfile. Замените host, порт и абсолютные пути.
 Для Windows путь storage можно писать с `/`, например `C:/Apps/RemoteWatch/caddy-data`.
 Путь журнала выделите отдельно: `C:/Apps/RemoteWatch/logs/caddy/caddy-runtime.jsonl`.
 

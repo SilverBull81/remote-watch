@@ -1,10 +1,10 @@
 ﻿# Развёртывание gateway
 
-Version 1.1.1
+Version 1.1.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-083907
+Дата и время последнего изменения: 261103-090725
 
 ## Когда он нужен
 
@@ -33,7 +33,7 @@ heartbeat, делает ограниченные восстановления и
 Укажите **Python этого venv**, который должен запускать сервер:
 
 ```console
-python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https://gateway.example.test:8443 --python /absolute/path/to/venv/bin/python --dry-run
+python -m remote_watch.gateway_server.deploy --directory ./gateway --endpoint https://gateway.example.test:8443 --python /absolute/path/to/venv/bin/python --dry-run
 ```
 
 На Windows `--python` выглядит как `C:\Apps\RemoteWatch\.venv\Scripts\python.exe`.
@@ -43,13 +43,46 @@ python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https
 SQLite, не разрешает environment credentials и не запускает процессы.
 
 В комплекте: общий JSON, конфиги компонентов, клиентские примеры, стандартный ICO
-в logo/, Caddyfile.example, start/status/stop/check/doctor launchers, Windows service
+в logo/, start/status/stop/check/doctor launchers, Windows service
 launchers и инструкции, Linux unit/scripts. В новые JSON прописан путь к ICO.
+
+Рабочие конфиги находятся в `config/`, примеры — в `config/examples/`:
+
+```text
+gateway/
+  config/
+    gateway_server.local.json
+    notification_gateway.local.json
+    command_gateway.local.json
+    Caddyfile                         # managed Caddy без внешнего конфига
+    examples/
+      gateway_server.example.json
+      notification_gateway.example.json
+      command_gateway.example.json
+      notification_client.example.json
+      command_client.example.json
+      gateway_doctor.client.example.json
+      Caddyfile.example
+  logo/
+  control/
+  data/
+  logs/
+  START_HERE.md
+  SERVICE.md
+```
+
+Control/data/logs создаются при работе, не самим deploy. Скрипты запуска остаются
+в корне комплекта и выбирают `config/gateway_server.local.json` независимо от cwd.
+JSON-пути считаются от папки своего файла: `../control`, `../logs/gateway_server`,
+`../logo/remote_watch.ico`, а в командном JSON — `../data/commands`.
+Примеры рассчитаны на **копирование в config/** с нужным рабочим именем и заполнение,
+а не на непосредственный запуск из examples. Клиентские примеры переносятся на
+клиентскую машину и настраиваются относительно её config/ и собственного CA.
 
 ## Подключение существующей установки
 
 ```console
-python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https://gateway.example.test:8443 --notifications-config /absolute/path/notification_gateway.local.json --commands-config /absolute/path/command_gateway.local.json --dry-run
+python -m remote_watch.gateway_server.deploy --directory ./gateway --endpoint https://gateway.example.test:8443 --notifications-config /absolute/path/notification_gateway.local.json --commands-config /absolute/path/command_gateway.local.json --dry-run
 ```
 
 Старые JSON и их относительные state/SQLite пути сохраняются. Существующие файлы
@@ -58,6 +91,39 @@ python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https
 рабочие настройки. Перед миграцией планово остановите прежних владельцев и сохраните
 журналы. Резервную копию SQLite делайте при остановленных владельцах/по согласованной
 процедуре SQLite, не случайным копированием одного файла при активном WAL.
+
+### Переезд прежней плоской структуры
+
+Обновление библиотеки само файлы не переносит. Старые явные пути CLI остаются
+действительными; новую структуру создаёт deploy. Если он видит прежний
+`gateway_server.local.json` в корне, обычный вызов, включая dry-run, завершается
+`layout_migration_required` до записи файлов. Это защита от второго набора настроек.
+`--update-templates` разрешён: он создаёт только предложения в `templates/<версия>/`
+с новой структурой комплекта; запускать сервер прямо из этой папки нельзя.
+
+1. Сохраните конфиги и при остановленных владельцах — журналы. Если сервер работает
+   как Windows-служба, выполните stop/remove **с прежним путём конфига до переноса**.
+   Завершите только пользовательский pythonw-процесс с `--tray` и прежним путём
+   конфига (как описано в инструкции службы), либо полностью выйдите из сеанса Windows.
+   Headless лишь скрывает иконку; простой RDP disconnect не завершает контроллер.
+2. Перенесите рабочие JSON в config/. Для каждого относительного пути сначала
+   определите прежний абсолютный путь, затем сохраните его новым относительным
+   либо абсолютным значением. Обычно control/logs/logo/state_dir получают `../`;
+   ссылки на компоненты в общем JSON остаются именами соседних файлов.
+   Сохраните также прежние пути CA, дополнительных файлов и внешних executable.
+3. Сравните новый комплект из templates/<версия> и вручную обновите launchers/
+   systemd unit/инструкции в корне. Перенесите публичные примеры в config/examples/.
+   Рабочие JSON, SQLite, Identity, tokens, owner_id и CA не заменяйте шаблонами.
+4. Проверьте новый общий JSON и совпадение абсолютных state/control/log/CA путей.
+   Windows-службу установите заново с новым путём: service binding хранит его точно.
+   Для systemd обновите ExecStart и выполните daemon-reload по инструкции службы.
+5. Запустите сервер, синхронизируйте трей и проверьте doctor, уведомления и команды.
+
+Внешний Caddy не управляется deploy: перенос его действующего Caddyfile требует
+отдельного обновления пути в его собственной службе/команде запуска. Storage CA
+должен остаться прежним; смена пути JSON не должна создавать новый root CA.
+Файлы, переданные через --notifications-config/--commands-config/--caddy-config,
+остаются на указанных местах. Для полного переезда в config их переносит оператор.
 
 ## Настройка и первый запуск
 
@@ -72,9 +138,9 @@ python -m remote_watch.gateway_server.deploy --target ./gateway --endpoint https
    тестовую отправку и безопасную команду status.
 
 ```console
-python -m remote_watch.gateway_server --config gateway_server.local.json --start
-python -m remote_watch.gateway_server --config gateway_server.local.json --status
-python -m remote_watch.gateway_server --config gateway_server.local.json --stop
+python -m remote_watch.gateway_server --config config/gateway_server.local.json --start
+python -m remote_watch.gateway_server --config config/gateway_server.local.json --status
+python -m remote_watch.gateway_server --config config/gateway_server.local.json --stop
 ```
 
 --start работает в foreground до остановки. Для 24/7 используйте [службу](SERVICES.md).
@@ -101,7 +167,7 @@ Manager проверяет filesystem storage, запускает собстве
 
 ## Оповещения владельцу
 
-Получатели задаются в общем файле **gateway_server.local.json**, а не в коде:
+Получатели задаются в общем файле **config/gateway_server.local.json**, а не в коде:
 раздел `application`, внутри него `alerts`, внутри него список `destinations`.
 Обозначение `application.alerts` описывает эту вложенность, это **не имя файла**.
 Поле `grace_period` находится в том же `alerts`, рядом с `cooldown` и `destinations`.
@@ -113,7 +179,7 @@ Manager проверяет filesystem storage, запускает собстве
 {
   "application": {
     "ui": "tray",
-    "icon_path": "logo/remote_watch.ico",
+    "icon_path": "../logo/remote_watch.ico",
     "alerts": {
       "cooldown": 60,
       "grace_period": 180,

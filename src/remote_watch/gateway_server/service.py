@@ -1,10 +1,10 @@
 ﻿# Явная установка службы Windows и управление отдельным пользовательским треем.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261102-183757
+# Дата и время последнего изменения: 261103-090725
 #
 # Классы:
 # -> ServiceSpec: Неизменяемая привязка службы к Python, конфигу и оператору
@@ -221,7 +221,10 @@ def make_plan(
     # Общую папку logs может использовать внешний Caddy или другое приложение.
     # Управляющий процесс целиком заменяет права своей папки: её нельзя делить с Caddy,
     # иначе смена service account отрежет внешнего writer при ротации его файла.
-    if config.log_dir == spec.config.parent / "logs":
+    shared_logs = {spec.config.parent / "logs"}
+    if spec.config.parent.name == "config":
+        shared_logs.add(spec.config.parent.parent / "logs")
+    if config.log_dir in shared_logs:
         raise ValueError("service_shared_logs")
 
     try:

@@ -1,37 +1,40 @@
 ﻿# Проверки и статус выпуска
 
-Version 1.1.1
+Version 1.1.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-084711
+Дата и время последнего изменения: 261103-092322
 
-## Исправление 1.2.1: оповещение о плановой остановке
+## Совместимое расширение 1.3.0: конфиги комплекта в config/
 
-Gateway Server ставит в прямые служебные очереди одно сообщение о начале
-плановой остановки без cooldown/grace_period. Ошибка запуска или supervisor
-не выдаётся за плановый stop. Прежний двухсекундный drain сохраняется;
-ошибка enqueue/close оповещений не отменяет остальную очистку ресурсов.
-Это best effort, без гарантии доставки при завершении ОС, сбое сети или crash.
-Получатели уже задавались через общий JSON; инструкции теперь показывают
-полную вложенность application/alerts/destinations и место grace_period.
-Wire/hash/SQLite/ACL, клиентский API и бюджеты восстановления не меняются.
+Новый deploy создаёт рабочие конфиги в config/, серверные/клиентские примеры и
+Caddyfile.example — в config/examples/. Скрипты остаются в корне, выбирают новый
+путь общего JSON из любой cwd. Обновлены Windows service/tray, POSIX launchers,
+systemd unit, installed CLI probes и публичные инструкции.
+Пути шаблонов рассчитаны на рабочую копию в config: control/logs/logo/state_dir
+через ../ продолжают указывать на прежние каталоги корня. SQLite/CA не переносятся.
+Явные --*-config ссылки сохраняют исходные файлы и относительную базу.
+Прежний корневой gateway_server.local.json вызывает layout_migration_required
+до записи обычного deploy; отдельные update-templates proposals разрешены.
+Ни deploy, ни обновление библиотеки не меняют service binding или рабочую установку.
+Wire/hash/SQLite/ACL и клиентский API не меняются; прежние явные CLI config-пути работают.
 
-Пять новых contract cases проверяют однократность, отсутствие выдержки,
-отказ от ложного планового stop при rollback, сбои enqueue и close.
-Существующий loopback-тест Telegram/ntfy дополнен отправкой обоим назначениям
-при drain; процессный lifecycle подтверждает вызов при обычном CLI stop.
+Четыре добавленных contract cases проверяют old-layout отказ с/без dry-run,
+безопасные предложения миграции, вложенный symlink/junction и новый managed Caddyfile.
+Расширены существующие проверки всех components, сохранения абсолютных data/control/log
+путей, doctor, installer, повторного deploy и реального запуска shell из другой cwd.
 
-Финальные чистые Windows CPython 3.12.2 wheel-from-sdist проверки **1.2.1**:
+Финальные чистые Windows CPython 3.12.2 wheel-from-sdist проверки **1.3.0**:
 
-- Core: 1282 passed, 90 skipped, 2 deselected in 74.09s (0:01:14).
-- Extras: 1732 passed, 2 deselected in 172.03s (0:02:52).
-- Отчёты: build/validation-121-core и build/validation-121-extras.
+- Core: 1286 passed, 90 skipped, 2 deselected in 74.65s (0:01:14).
+- Extras: 1736 passed, 2 deselected in 175.11s (0:02:55).
+- Отчёты: build/validation-130-core и build/validation-130-extras.
 - Ruff/style: 171 файл; документация: 21 документ/13 JSON, без ошибок.
 - Проверяются 96 Python-модулей, packaged resources, ICO и 12 installed CLIs.
 
 Новая CI/Linux-матрица не запускалась; ниже сохранена последняя полная матрица 1.0.0.
-Провайдеры подставные, HTTP использует loopback; полевой приёмки stop-уведомления нет.
+Провайдеры подставные, HTTP использует loopback; реальной миграции/службы с новой структурой нет.
 Production процессы, конфиги, credentials, службы, CA и журналы агентом не менялись.
 Runtime/шаблоны финального wheel сверяются с чистыми проверенными сборками.
 MIT/ICO-only и исключение private сохраняются; прежние теги и файлы не заменяются.

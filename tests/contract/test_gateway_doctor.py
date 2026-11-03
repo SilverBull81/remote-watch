@@ -1,10 +1,10 @@
 ﻿# Проверки doctor без доступа к провайдерам и изменения рабочих сессий.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261103-090725
 #
 # Функции:
 # -> configuration(): Отдельный закрытый JSON для проверки клиентского доступа
@@ -390,7 +390,7 @@ def test_deploy_doctor(
 
     root = tmp_path / "server"
     deploy(DeployOptions(directory=root, endpoint="https://private.invalid:8443", components=components))
-    targets = load_targets(root / "clients/gateway_doctor.client.example.json")
+    targets = load_targets(root / "config/examples/gateway_doctor.client.example.json")
     assert len(targets) == (2 if components == "both" else 1)
     assert all(item.identity.service == "app1" and item.identity.host == "app-host" for item in targets)
     for item in targets:
@@ -400,7 +400,7 @@ def test_deploy_doctor(
     assert "gateway_doctor" in (root / "doctor.ps1").read_text(encoding="utf-8-sig")
     assert "@args" in (root / "doctor.ps1").read_text(encoding="utf-8-sig")
     assert '"$@"' in (root / "doctor.sh").read_text(encoding="utf-8")
-    caddy = (root / "Caddyfile.example").read_text(encoding="utf-8")
+    caddy = (root / "config/examples/Caddyfile.example").read_text(encoding="utf-8")
     assert ("/v1/notifications/probe" in caddy) == (components != "commands")
 #------------------------------------------------------------------------------------------------------------------
 

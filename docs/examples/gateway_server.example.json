@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "endpoint": "https://gateway.example.test:8443",
-  "control_dir": "control",
-  "log_dir": "logs/gateway_server",
+  "control_dir": "../control",
+  "log_dir": "../logs/gateway_server",
   "notifications": {
     "config": "notification_gateway.example.json",
     "host": "127.0.0.1",
@@ -18,7 +18,7 @@
   },
   "application": {
     "ui": "headless",
-    "icon_path": null,
+    "icon_path": "../logo/remote_watch.ico",
     "log_max_bytes": 1048576,
     "log_backups": 5,
     "alerts": {

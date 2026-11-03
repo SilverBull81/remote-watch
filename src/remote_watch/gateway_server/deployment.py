@@ -1,10 +1,10 @@
 ﻿# Подготовка файлов установки без запуска серверов и перезаписи рабочих данных.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-212332
+# Дата и время последнего изменения: 261103-090725
 #
 # Классы:
 # -> DeployOptions: Параметры подготовки установки
@@ -300,7 +300,8 @@ def prepare_files(
         if options.caddy_executable is None or options.caddy_data is None:
             raise DeployError("managed_paths_required")
         caddy.update(executable=_reference(options.caddy_executable),
-                     config=_reference(options.caddy_config) if options.caddy_config else str(root / "Caddyfile"),
+                     config=(_reference(options.caddy_config) if options.caddy_config
+                             else str(root / "config/Caddyfile")),
                      data_dir=str(_path(options.caddy_data)))
     elif any(value is not None for value in (options.caddy_executable, options.caddy_config, options.caddy_data)):
         raise DeployError("external_paths_unused")
@@ -309,8 +310,8 @@ def prepare_files(
     deployment.update(endpoint=options.endpoint.rstrip("/"), caddy=caddy)
     deployment["application"]["ui"] = options.ui
 
-    # Сервер получает собственную копию логотипа рядом с конфигом. Путь остаётся
-    # относительным, чтобы комплект можно было перенести вместе с папкой logo.
+    # Конфиги находятся в config, данные и логотип — рядом с этой папкой.
+    # Пути примеров рассчитаны на рабочие копии в config, не на запуск из examples.
     result = {"logo/remote_watch.ico": default_icon().read_bytes()}
     routes = []
     for component, reference, port, template in (
@@ -325,8 +326,10 @@ def prepare_files(
         filename = template.replace(".json", ".local.json")
         deployment[component] = {"config": _reference(reference) if reference else filename,
                                  "host": "127.0.0.1", "port": port}
+        settings = json.loads(_resource(template))
+        result["config/examples/" + template.replace(".json", ".example.json")] = _json(settings)
         if reference is None:
-            result[filename] = _json(json.loads(_resource(template)))
+            result["config/" + filename] = _json(settings)
         route = "/v1/commands/*" if component == "commands" else "/v1/notifications"
         routes.append(f"    handle {route} {{\n        reverse_proxy 127.0.0.1:{port}\n    }}")
         if component == "notifications":
@@ -334,9 +337,10 @@ def prepare_files(
         client_name = "command_client.json" if component == "commands" else "notification_client.json"
         client = json.loads(_resource(client_name))
         client["endpoint"] = options.endpoint.rstrip("/")
-        result["clients/" + client_name.replace(".json", ".example.json")] = _json(client)
+        result["config/examples/" + client_name.replace(".json", ".example.json")] = _json(client)
 
-    result["gateway_server.local.json"] = _json(deployment)
+    result["config/gateway_server.local.json"] = _json(deployment)
+    result["config/examples/gateway_server.example.json"] = _json(deployment)
 
     # Примеры клиентов при миграции не извлекают секреты/Identity из рабочих конфигов.
     # Для существующих приложений сохраняются их настройки; примеры служат только памяткой.
@@ -352,9 +356,10 @@ def prepare_files(
     for key, value in replacements.items():
         caddy_text = caddy_text.replace(key, value)
 
-    caddy_name = ("Caddyfile" if options.caddy_mode == "managed" and not options.caddy_config
-                  else "Caddyfile.example")
-    result[caddy_name] = caddy_text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+    caddy_bytes = caddy_text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+    result["config/examples/Caddyfile.example"] = caddy_bytes
+    if options.caddy_mode == "managed" and not options.caddy_config:
+        result["config/Caddyfile"] = caddy_bytes
 
     # Пути не вставляются в исполняемый код без quoting. Скрипты работают из любой cwd.
     for action in ("start", "stop", "status", "check-config"):
@@ -378,7 +383,7 @@ def prepare_files(
         if options.components not in ("both", name):
             doctor.pop(name)
 
-    result["clients/gateway_doctor.client.example.json"] = _json(doctor)
+    result["config/examples/gateway_doctor.client.example.json"] = _json(doctor)
 
     # Служба регистрируется отдельной явной командой. Обычный deploy создаёт
     # только launchers/инструкцию, не меняет SCM, registry и ACL рабочего сервера.
@@ -400,7 +405,7 @@ def prepare_files(
     # по синтаксису unit. User/Group оператор указывает до явной установки на Linux.
     unit = _resource("systemd.service")
     for key, value in (("DIRECTORY", str(root)), ("PYTHON", python),
-                       ("CONFIG", str(root / "gateway_server.local.json"))):
+                       ("CONFIG", str(root / "config/gateway_server.local.json"))):
         quoted = '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
         if key != "DIRECTORY":
             quoted = quoted.replace("$", "$$")
@@ -517,6 +522,11 @@ def deploy(
 
     content = prepare_files(options)
     root = _path(options.directory)
+    if not update_templates and (root / "gateway_server.local.json").exists():
+        # Не создаём второй набор настроек рядом со старым manager/launchers.
+        # Миграция меняет service binding и базы относительных путей: её делает оператор.
+        raise DeployError("layout_migration_required")
+
     base = root / "templates" / version("remote-watch") if update_templates else root
     reports = []
     pending = []

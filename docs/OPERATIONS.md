@@ -1,10 +1,10 @@
 ﻿# Диагностика и эксплуатация
 
-Version 1.0.4
+Version 1.0.5
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-083907
+Дата и время последнего изменения: 261103-090725
 
 ## Что означает готовность
 
@@ -37,7 +37,7 @@ Doctor никогда не выполняет callback, не регистрир�
 и не использует send/poll/heartbeat как ping.
 
 ```console
-python -m remote_watch.diagnostics.gateway_doctor --mode server --config gateway_server.local.json --online --report doctor-server.local.json
+python -m remote_watch.diagnostics.gateway_doctor --mode server --config config/gateway_server.local.json --online --report doctor-server.local.json
 python -m remote_watch.diagnostics.gateway_doctor --mode client --config gateway_doctor.client.local.json --online --report doctor-client.local.json
 ```
 
@@ -98,7 +98,7 @@ Health, приём команд, status/doctor и журнал переходо�
 приложения не подписывает его чат на серверные сообщения автоматически.
 Местоположение Python-клиента не определяет адресата этих оповещений.
 Все эти настройки находятся внутри `application` → `alerts` в общем файле
-gateway_server.local.json. Отдельного файла application.alerts нет.
+config/gateway_server.local.json нового комплекта. Отдельного файла application.alerts нет.
 Плановая остановка даёт отдельное однократное сообщение без cooldown/grace_period;
 это попытка сообщить о начале завершения, а не гарантия доставки или успешной остановки.
 

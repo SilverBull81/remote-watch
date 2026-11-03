@@ -1,10 +1,10 @@
 ﻿# Архитектура и обязательные контракты
 
-Version 1.0.6
+Version 1.0.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-083907
+Дата и время последнего изменения: 261103-090725
 
 Это актуальная сводка решений, а не хронология этапов. Точные типы/лимиты определены
 в исходниках и regression tests. Пользовательская настройка — в [руководстве](../README.md).
@@ -138,6 +138,12 @@ manager отвергает чужие файлы. Это проверка исп
 
 Deploy offline, dry-run без записи, existing files не перезаписывает, proposals
 отдельны. Не открывает journals, не читает environment secrets и не запускает service.
+Новый комплект хранит рабочие конфиги в config/, примеры — в config/examples/;
+пути шаблонов рассчитаны на рабочие копии в config. Control/data/logs/logo/CA
+не переносятся в config. Launchers/systemd указывают новый путь общего JSON.
+Прежний корневой gateway_server.local.json блокирует обычный deploy до записи;
+разрешены отдельные update-templates proposals. Миграция service binding, относительных
+путей и старого tray-контроллера — явная операция владельца, не действие deploy.
 Managed Caddy требует явного filesystem storage и проверяет local admin API;
 external не принадлежит manager. Публичный HTTPS проверяется с клиента отдельно.
 

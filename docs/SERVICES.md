@@ -1,10 +1,10 @@
 ﻿# Постоянный запуск и Windows tray
 
-Version 1.0.3
+Version 1.0.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261026-121655
+Дата и время последнего изменения: 261103-090725
 
 ## Windows-служба gateway
 
@@ -12,12 +12,16 @@ Version 1.0.3
 для install/remove и собственные каталоги control/logs/state. Для иконки установите
 `tray`. Deploy создаёт launchers и SERVICE.md, но не регистрирует службу автоматически.
 Все команды ниже выполняются **Python нужного venv** из deployment-папки.
+Новый комплект хранит рабочие JSON в config/, примеры — в config/examples/.
+При переносе существующего общего JSON сначала stop/remove со старым путём:
+служба проверяет точную привязку config/binary/account. Порядок переезда с сохранением
+SQLite/CA и замены старого tray-контроллера описан в [GATEWAY.md](GATEWAY.md#переезд-прежней-плоской-структуры).
 
 ```console
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --install --dry-run
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --install
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --start
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --status
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --install --dry-run
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --install
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --start
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --status
 ```
 
 Для изменения ACL и SCM install/remove откройте административный PowerShell.
@@ -41,9 +45,9 @@ Install создаёт **остановленную** службу с automatic 
 ## Остановка, удаление и повторная установка
 
 ```console
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --stop
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --remove --dry-run
-python -m remote_watch.gateway_server.service --config gateway_server.local.json --remove
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --stop
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --remove --dry-run
+python -m remote_watch.gateway_server.service --config config/gateway_server.local.json --remove
 ```
 
 Remove не удаляет JSON/SQLite/CA и не сбрасывает права всей установки. Повторный
@@ -87,7 +91,7 @@ remove/install службы сами по себе не меняют загру�
 и `restart-tray.ps1`. Прямой вызов из venv:
 
 ```console
-python -I -B -m remote_watch.gateway_server.service --config gateway_server.local.json --restart-tray
+python -I -B -m remote_watch.gateway_server.service --config config/gateway_server.local.json --restart-tray
 ```
 
 Команда restart-tray только проверяет привязку службы и обращается к пользовательскому

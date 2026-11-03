@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "endpoint": "https://gateway.example.test:8443",
-  "ca_file": "root.crt",
+  "ca_file": "../secrets/root-ca.crt",
   "identity": {
     "service": "app1",
     "environment": "production",

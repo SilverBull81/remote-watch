@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-083907
+# Дата и время последнего изменения: 261103-091604
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -113,7 +113,8 @@ def test_command_process(
 
     pytest.importorskip("aiohttp")
     base = setup_deployment.control_dir.parent
-    config_path = base / "commands.json"
+    config_path = base / "config/commands.json"
+    config_path.parent.mkdir()
     example = Path(__file__).resolve().parents[2] / "docs/examples/command_gateway.telegram.example.json"
     config_path.write_bytes(example.read_bytes())
     script = base / "command_test_child.py"

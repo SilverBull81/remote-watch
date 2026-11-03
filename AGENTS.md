@@ -1,37 +1,30 @@
 ﻿# Repository Instructions
 
-Version 1.8.3
+Version 1.8.4
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-085429
+Дата и время последнего изменения: 261103-092322
 
 ## Intent and current status
 
 Remote Watch integrates standard Python logging with bounded asynchronous notifications
 and optional authenticated command routing. Python 3.10+, Windows/Linux, optional provider extras.
 The current package version is in pyproject.toml.
-Stable 1.2.1 is published under immutable annotated tag v1.2.1:
-https://github.com/SilverBull81/remote-watch/releases/tag/v1.2.1
-Release commit: b942f02e0913f86f3aeb0cfcc9bb4953544b987d. Public wheel, sdist and
-SHA256SUMS.txt downloads match local hashes; source archive contains ICO, no PNG/private.
-Planned stop queues one direct owner notice before component shutdown, bypassing cooldown/grace.
-Startup/supervisor rollback is not labelled planned. Existing two-second alert drain is retained;
-enqueue/close failures cannot cancel remaining cleanup. Delivery during OS/network shutdown is best effort.
-Owner destinations remain configurable in the common JSON application/alerts/destinations section.
-Current clean Windows core/extras evidence is in docs/development/VALIDATION.md; no new field/CI is claimed.
-Gateway Server now writes lazy calendar JSONL logs under year/English-month directories,
-retains size rotation within each day and preserves legacy flat logs. Dedicated log directory
-validation is shared by manager and service installer; foreign files, invalid calendar paths,
-symlink/reparse entries and trees over 100000 entries fail before ACL changes.
-Optional application.alerts.grace_period (0..3600s, default 0; deploy examples 180) delays only
-transient commands/degraded time_unavailable/source_unavailable owner notices. Health/logging
-and trusted-time admission remain immediate. Recovery of an unannounced incident stays quiet.
+Stable 1.3.0 is prepared; publication verification is pending.
+New deploy kits put operational configs in config/ and all server/client examples under
+config/examples/. Launchers, tray/service and systemd choose config/gateway_server.local.json.
+Template paths are based on working copies in config, preserving root control/logs/data/logo
+through ../; examples must be copied into config before use. Explicit external config references
+remain in place and are never copied or parsed for secrets. Default managed Caddyfile is config/Caddyfile.
+Flat-root gateway_server.local.json blocks ordinary deploy before writes with layout_migration_required;
+--update-templates may render separate proposals. Operator migration preserves exact SQLite/CA paths,
+rebinds the service explicitly and retires the old per-config-path tray controller.
+Old explicit runtime CLI paths still work; package upgrade does not migrate production.
 Current clean Windows core/extras evidence: docs/development/VALIDATION.md.
-No new CI/Linux or field acceptance is claimed. Production was not modified.
-Named command scope_sets remain available since 1.1.0, expanding into existing immutable grants.
-No inheritance, merging, wildcard or fallback grants; unused definitions are validated too.
-Public wire/hash/SQLite/ACL semantics are unchanged. Inline schema-1 configs remain supported.
+No new CI/Linux, native service migration or field acceptance is claimed. Production was not modified.
+Daily JSONL logs, bounded owner-alert grace and one planned-stop notice remain available.
+Scope sets expand into existing immutable grants; public wire/hash/SQLite/ACL semantics are unchanged.
 
 The owner selected stable patch/minor versions after checks, without dev by default;
 reserve rc for substantial or uncertain work. Release policy: docs/development/README.md.

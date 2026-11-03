@@ -1,10 +1,10 @@
 ﻿# Команда подготовки файлов gateway server без запуска и перезаписи установки.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-185741
+# Дата и время последнего изменения: 261103-090725
 #
 # Функции:
 # -> main(): Подготовка установки и вывод безопасного перечня изменений
@@ -77,9 +77,13 @@ def main(
     except (OSError, ValueError, TypeError, RuntimeError) as error:
         codes = {"linked_path", "directory_invalid", "reference_missing", "options_invalid", "port_invalid",
                  "port_conflict", "version_invalid", "managed_paths_required", "external_paths_unused",
-                 "disabled_reference", "caddy_path_invalid", "destination_invalid"}
+                 "disabled_reference", "caddy_path_invalid", "destination_invalid", "layout_migration_required"}
         code = str(error) if type(error) is DeployError and str(error) in codes else "deployment_failed"
         print(f"Ошибка deploy: code={code}. Проверьте параметры, наличие файлов и права доступа; значения скрыты.")
+        if code == "layout_migration_required":
+            print("Обнаружена прежняя структура. Выполните --update-templates и миграцию по новой "
+                  "templates/<версия>/START_HERE.md; "
+                  "рабочие конфиги и службы не изменены.")
         return 1
 
     for name, state in report:

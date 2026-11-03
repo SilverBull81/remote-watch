@@ -9,8 +9,8 @@
     "instance_id": "one"
   },
   "endpoint": "https://gateway.example.test:8443",
-  "state_file": "data/command-client-one.sqlite",
+  "state_file": "../data/command-client-one.sqlite",
   "owner_id": "command-client-one",
-  "ca_file": "secrets/root-ca.crt",
+  "ca_file": "../secrets/root-ca.crt",
   "token_env": "RW_COMMAND_APP1_TOKEN"
 }
