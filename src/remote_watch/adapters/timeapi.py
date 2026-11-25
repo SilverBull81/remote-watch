@@ -1,10 +1,10 @@
 ﻿# Получение UTC от выбранного сервиса TimeAPI без изменения часов операционной системы.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> TimeApiTimeSource: Время от TimeAPI с обязательной проверкой TLS
@@ -14,11 +14,14 @@
 #    -> sample(): Получение одного показания времени
 #    Служебные методы:
 #    -> _fetch(): Один HTTPS-запрос с ограничением размера и времени
+#    -> _parse_body(): Проверка формата UTC выбранного провайдера.
 #
 # Функции:
 # -> _unique_object(): Запрет неоднозначных полей ответа JSON
 #
 # -> _parse_time(): Проверка времени UTC и взаимного соответствия полей
+#
+# -> time_failure(): Безопасная классификация сетевого отказа.
 
 
 #******************************************************************************************************************
@@ -138,14 +141,14 @@ class TimeApiTimeSource:
         # Не копим очередь обновлений. Жизненным циклом и периодичностью управляет hub.
 
         if self._busy:
-            raise TimeUnavailable("trusted time unavailable")
+            raise TimeUnavailable(reason="busy", transient=True)
 
         self._busy = True
 
         try:
             return await asyncio.wait_for(self._fetch(), timeout=self._timeout)
-        except Exception:
-            raise TimeUnavailable("trusted time unavailable") from None
+        except Exception as error:
+            raise time_failure(error) from None
         finally:
             # Отмена запроса также освобождает объект для последующего обновления.
             self._busy = False
@@ -192,31 +195,57 @@ class TimeApiTimeSource:
                 allow_redirects=False,
                 headers={"Cache-Control": "no-cache, no-store", "Accept-Encoding": "identity"},
             ) as response:
+                if response.status != 200:
+                    raise TimeUnavailable(reason="http_status", http_status=response.status,
+                                          transient=response.status == 429 or response.status >= 500)
                 if (
-                    response.status != 200 or "Age" in response.headers
+                    "Age" in response.headers
                     or response.content_type != "application/json"
                     or response.headers.get("Content-Encoding", "identity") != "identity"
                 ):
-                    raise TimeUnavailable("trusted time unavailable")
+                    raise TimeUnavailable(reason="invalid_response")
 
                 body = bytearray()
                 async for chunk in response.content.iter_chunked(4096):
                     body.extend(chunk)
                     if len(body) > 16384:
-                        raise TimeUnavailable("trusted time unavailable")
+                        raise TimeUnavailable(reason="invalid_response")
 
                 # Отсчёт заканчивается после всего тела: медленная передача тоже
                 # расходует время и не должна искусственно омолаживать команды.
                 received = self._clock()
                 if received < started or received - started > self._timeout:
                     raise TimeUnavailable("trusted time unavailable")
-                stamp, resolution = _parse_time(bytes(body))
+                stamp, resolution = self._parse_body(bytes(body))
 
                 return TimeSample(
                     lower_utc=stamp - self._accuracy,
                     upper_utc=stamp + resolution + self._accuracy + received - started,
                     observed_at=received,
                 )
+    #--------------------------------------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------------------------------------------
+    # СЛУЖЕБНЫЙ МЕТОД : Проверка формата UTC выбранного провайдера
+    #--------------------------------------------------------------------------------------------------------------
+    def _parse_body(
+        self,
+        body: bytes,
+        ) -> tuple[float, float]:
+
+        """
+        Parse provider-specific fields after common transport checks.
+
+        :param body: Bounded JSON response body.
+        :type body: bytes
+
+        :return: UTC seconds and timestamp resolution.
+        :rtype: tuple[float, float]
+        """
+
+        # body — уже проверенное по размеру тело; HTTP-заголовки сюда не передаются.
+
+        return _parse_time(body)
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
@@ -303,6 +332,49 @@ def _parse_time(
     digits = len(fraction)
     resolution = 10 ** -min(digits, 6)
     return date.timestamp(), resolution
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Безопасная классификация сетевого отказа
+#------------------------------------------------------------------------------------------------------------------
+def time_failure(
+    error: Exception,
+    ) -> TimeUnavailable:
+
+    """
+    Classify only known transport types without reading their messages or provider payloads.
+
+    :param error: Local failure from one bounded time request.
+    :type error: Exception
+
+    :return: Fixed failure category and optional numeric codes.
+    :rtype: TimeUnavailable
+    """
+
+    # error — текст исключения, URL и данные ответа не используются.
+
+    if isinstance(error, TimeUnavailable):
+        return error
+    if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+        return TimeUnavailable(reason="timeout", transient=True)
+    if isinstance(error, (ValueError, TypeError, UnicodeError)):
+        return TimeUnavailable(reason="invalid_response")
+
+    # Сам классификатор нужен также для offline источников в установке без extras.
+    try:
+        import aiohttp
+    except ImportError:
+        return TimeUnavailable()
+    if isinstance(error, aiohttp.ClientConnectorCertificateError):
+        return TimeUnavailable(reason="tls_certificate",
+                               verify_code=getattr(error.certificate_error, "verify_code", None))
+    if isinstance(error, (ssl.SSLError, aiohttp.ClientSSLError)):
+        return TimeUnavailable(reason="tls")
+    if isinstance(error, aiohttp.ClientConnectorDNSError):
+        return TimeUnavailable(reason="dns", transient=True)
+    if isinstance(error, (aiohttp.ClientConnectionError, OSError)):
+        return TimeUnavailable(reason="connect", transient=True)
+    return TimeUnavailable(reason="invalid_response")
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

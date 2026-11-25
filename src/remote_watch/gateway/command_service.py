@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд
@@ -30,7 +30,7 @@ from typing import Any
 
 from remote_watch.adapters.ntfy_commands import NtfyCommandConfig, NtfyCommandProvider
 from remote_watch.adapters.telegram_commands import TelegramCommandConfig, TelegramCommandProvider
-from remote_watch.adapters.timeapi import TimeApiTimeSource
+from remote_watch.adapters.trusted_time import RedundantTimeSource
 from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.hub import CommandHub
 from remote_watch.commands.source import CommandSourceRunner
@@ -73,19 +73,20 @@ class CommandGateway:
         :param config: Explicit credentials, access rules and finite limits.
         :type config: CommandGatewayConfig
 
-        :param time_source: Explicit UTC provider; None selects the agreed TimeAPI source.
+        :param time_source: Injected UTC provider; None selects the configured redundant sources.
         :type time_source: TimeSource | None
         """
 
         # config — явные учётные данные, права и конечные пределы.
-        # time_source — источник UTC; None выбирает согласованный TimeAPI.
+        # time_source — источник UTC; None выбирает резервируемый набор из конфига.
 
         self.config = config
         epoch = token_hex(16)
         store = SQLiteCommandStore(config.state_dir / "hub.sqlite", owner_id="command-hub",
                                    generation=epoch, role=StoreRole.HUB)
+        self._time_source = RedundantTimeSource(config.time_sources) if time_source is None else time_source
         self.hub = CommandHub(config.hub, store, epoch=epoch, trusted_clock=TrustedClock(),
-                              time_source=TimeApiTimeSource() if time_source is None else time_source)
+                              time_source=self._time_source)
         self.server = CommandHubServer(self.hub)
         self._owner = StoreWorker(ProcessLock(config.state_dir / "gateway.lock"), 3.0)
         self.sources: list[CommandSourceRunner] = []
@@ -190,6 +191,8 @@ class CommandGateway:
                 "fatal": hub["fatal"] or (self._started and not self._closed and stopped),
                 "hub": hub, "sources": sources,
                 "source_health": source_health,
+                "time_health": (self._time_source.stats() if isinstance(self._time_source, RedundantTimeSource)
+                                else {"selected": None, "refresh_error": None, "sources": []}),
                 "journals": {"hub": self.hub.journal_status,
                              "sources": [source.journal_status for source in self.sources]}}
     #--------------------------------------------------------------------------------------------------------------

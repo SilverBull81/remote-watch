@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261026-124820
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек
@@ -67,6 +67,7 @@ from remote_watch._credentials import CredentialError, resolve_token, validate_c
 from remote_watch.adapters.command_http import HttpsCommandTransport
 from remote_watch.adapters.ntfy_commands import NtfyCommandConfig
 from remote_watch.adapters.telegram_commands import TelegramCommandConfig
+from remote_watch.adapters.trusted_time import TimeSourceSettings, parse_time_sources
 from remote_watch.commands.client import CommandClient
 from remote_watch.commands.hub_config import (
     CommandAccess,
@@ -135,9 +136,10 @@ class CommandConfigError(ValueError):
         # column — номер столбца; сам фрагмент строки не выводится.
         # json_reason — известная причина ошибки JSON, без текста и значений файла.
 
-        pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|sources|scope_sets))?|schema|"
+        pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|"
+                   r"sources|scope_sets|trusted_time))?|schema|"
                    r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
-                   r"hub|state_dir|scope_sets(?:\[[0-9]{1,2}\])?|"
+                   r"hub|state_dir|trusted_time|scope_sets(?:\[[0-9]{1,2}\])?|"
                    r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
                    r"state_file|owner_id|allow_loopback_http|display_mode))?|"
                    r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes|scope_set))?|"
@@ -267,12 +269,17 @@ class CommandGatewayConfig:
 
     :param providers: Configured command provider bindings.
     :type providers: tuple[ProviderBinding, ...]
+
+    :param time_sources: Explicit trusted UTC providers, independent of messenger credentials.
+    :type time_sources: tuple[TimeSourceSettings, ...]
     """
 
     state_dir: Path                             # Постоянный каталог журналов; общий для перезапусков.
     hub: CommandHubConfig = field(repr=False)   # Отдельные секреты приложений и права команд.
     targets: SourceTargets                      # Явные адреса всех приложений.
     providers: tuple[ProviderBinding, ...]      # Не более восьми отдельных источников.
+    time_sources: tuple[TimeSourceSettings, ...] = field(  # Независимые источники UTC, без I/O при создании.
+        default_factory=lambda: parse_time_sources(None))
 
     #--------------------------------------------------------------------------------------------------------------
     # СПЕЦИАЛЬНЫЙ МЕТОД : Проверка и фиксация настроек
@@ -304,6 +311,9 @@ class CommandGatewayConfig:
 
         object.__setattr__(self, "state_dir", Path(self.state_dir))
         object.__setattr__(self, "providers", tuple(self.providers))
+        if (type(self.time_sources) is not tuple or not 1 <= len(self.time_sources) <= 4
+                or any(type(item) is not TimeSourceSettings for item in self.time_sources)):
+            raise ValueError("invalid time sources")
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -506,7 +516,8 @@ def _gateway(
     try:
         path = path.resolve()
         value = read_command_json(path)
-        _keys(value, {"schema_version", "state_dir", "targets", "principals", "sources"}, {"hub", "scope_sets"})
+        _keys(value, {"schema_version", "state_dir", "targets", "principals", "sources"},
+              {"hub", "scope_sets", "trusted_time"})
         field_name = "schema"
         _schema(value)
         scope_sets = _scope_sets(value.get("scope_sets", {}))
@@ -626,11 +637,16 @@ def _gateway(
         # оставить более широкое значение по умолчанию вместо ожидаемого запрета.
         limits = value.get("hub", {})
         _keys(limits, set(), {"session_ttl", "poll_timeout", "storage_timeout", "shutdown_timeout",
-                             "refresh_interval", "max_sessions", "max_pending", "max_storage_waiters"}, field_name)
+                             "refresh_interval", "time_retry_interval", "max_sessions", "max_pending",
+                             "max_storage_waiters"}, field_name)
         hub = CommandHubConfig(principals=tuple(principals), sources=tuple(sources), **limits)
+        field_name = "trusted_time"
+        if "trusted_time" in value and value["trusted_time"] is None:
+            raise CommandConfigError(field_name)
+        time_sources = parse_time_sources(value.get("trusted_time"))
         field_name = "state_dir"
         return CommandGatewayConfig(state_dir=_path(path, value["state_dir"]), hub=hub,
-                                    targets=targets, providers=tuple(providers))
+                                    targets=targets, providers=tuple(providers), time_sources=time_sources)
     except CommandConfigError:
         raise
     except CredentialError as error:

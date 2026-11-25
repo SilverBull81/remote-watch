@@ -1,10 +1,10 @@
 ﻿# Проверки пересечений фонового обслуживания, HTTP-опроса и обновления времени.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Тесты:
 # -> test_worker_waiting(): Очередь, отмена, timeout и остановка без скрытого исполнения
@@ -383,11 +383,13 @@ def test_refresh_readiness(
                         await task
                 else:
                     await task
-            reason = {"failure": "source_failed", "wide": "uncertainty", "cancel": "refresh_cancelled",
+            reason = {"failure": "source_failed", "wide": "uncertainty",
                       "invalid": "invalid_sample"}.get(mode)
             health = rig.hub.health()
             assert health["time_reason"] == reason
             assert health["ready"] == (reason is None)
+            if mode == "cancel":
+                assert health["time_refresh_error"] == "refresh_cancelled"
             assert "private" not in json.dumps(health)
             if reason is not None:
                 assert rig.trusted.check(1000, rig.hub.epoch).deadline is None

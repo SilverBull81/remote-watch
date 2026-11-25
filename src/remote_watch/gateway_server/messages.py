@@ -1,10 +1,10 @@
 ﻿# Ограниченные сообщения состояния между управляющим и дочерними процессами.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261125-102159
 #
 # Функции:
 # -> status_message(): Проверка состояния без переноса произвольных подробностей.
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 
+from remote_watch.adapters.trusted_time import validate_time_health
 from remote_watch.commands.journal_stats import validate_status
 from remote_watch.commands.source_health import validate_source_health
 
@@ -68,7 +69,7 @@ def status_message(
     # value — heartbeat несёт только безопасные агрегаты, не полный stats провайдера.
 
     keys = {"state", "reason", "time_reason", "failure", "counters"}
-    if (type(value) is not dict or set(value) - {"journals", "source_health"} != keys
+    if (type(value) is not dict or set(value) - {"journals", "source_health", "time_health"} != keys
             or type(value["state"]) is not str
             or value["state"] not in STATES):
         raise ValueError("invalid status")
@@ -91,6 +92,8 @@ def status_message(
     result = dict(value, counters=dict(counters))
     if "source_health" in value:
         result["source_health"] = validate_source_health(value["source_health"])
+    if "time_health" in value:
+        result["time_health"] = validate_time_health(value["time_health"])
     if "journals" in value:
         journals = value["journals"]
         if (type(journals) is not dict or set(journals) != {"hub", "sources"}

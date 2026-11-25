@@ -1,13 +1,15 @@
 ﻿# Проверка возраста команд по достоверному времени без зависимости от часов VM.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> TimeUnavailable: Отказ при отсутствии достоверного времени
+#    Конструктор:
+#    -> __init__(): Сохранение только безопасной категории и числовых кодов.
 #
 # -> TimeSample: Границы UTC в момент получения показания
 #    Специальные методы:
@@ -68,6 +70,53 @@ class TimeUnavailable(RuntimeError):
     """
     Report unavailable trusted time without exposing provider details.
     """
+
+    #--------------------------------------------------------------------------------------------------------------
+    # КОНСТРУКТОР
+    #--------------------------------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        message: str = "trusted time unavailable",
+        *,
+        reason: str = "source_failed",
+        transient: bool = False,
+        http_status: int | None = None,
+        verify_code: int | None = None,
+        ) -> None:
+
+        """
+        Retain fixed diagnostics without preserving an exception message from a provider.
+
+        :param message: Compatibility argument; its contents are deliberately discarded.
+        :type message: str
+
+        :param reason: Allowlisted failure category.
+        :type reason: str
+
+        :param transient: Whether a still-valid previous anchor may survive this failure.
+        :type transient: bool
+
+        :param http_status: Numeric HTTP status, if known.
+        :type http_status: int | None
+
+        :param verify_code: Numeric certificate verification code, if known.
+        :type verify_code: int | None
+        """
+
+        # message — произвольный текст никогда не попадает в диагностику.
+        # reason — только заранее известная категория отказа.
+        # transient — разрешает сохранить показание, но не продлевает его срок.
+        # http_status — код ответа без заголовков и тела.
+        # verify_code — код проверки сертификата без имени сервера.
+
+        allowed = {"source_failed", "timeout", "dns", "connect", "tls_certificate", "tls",
+                   "http_status", "invalid_response", "uncertainty", "source_conflict", "busy"}
+        self.reason = reason if type(reason) is str and reason in allowed else "source_failed"
+        self.transient = transient is True
+        self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+        self.verify_code = verify_code if type(verify_code) is int and 0 <= verify_code <= 1000 else None
+        super().__init__("trusted time unavailable")
+    #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -281,6 +330,7 @@ class TrustedClock:
         self._sample: TimeSample | None = None
         self._last: float | None = None
         self.unavailable_reason: str | None = "missing_sample"
+        self.refresh_error: str | None = None
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -332,7 +382,7 @@ class TrustedClock:
         ) -> None:
 
         """
-        Replace the anchor explicitly; failure invalidates the previous estimate.
+        Retain a valid anchor only after a classified transient failure, without extending its life.
 
         :param source: Explicit trusted time provider.
         :type source: TimeSource
@@ -346,18 +396,30 @@ class TrustedClock:
         try:
             sample = await source.sample()
         except asyncio.CancelledError:
-            self._sample = None
-            self.unavailable_reason = "refresh_cancelled"
+            self.refresh_error = "refresh_cancelled"
+            try:
+                self.bounds()
+            except TimeUnavailable:
+                self.unavailable_reason = "refresh_cancelled"
             raise
-        except Exception:
-            self._sample = None
-            self.unavailable_reason = "source_failed"
-            raise TimeUnavailable("trusted time unavailable") from None
+        except Exception as error:
+            self.refresh_error = error.reason if isinstance(error, TimeUnavailable) else "source_failed"
+            if isinstance(error, TimeUnavailable) and error.transient:
+                try:
+                    self.bounds()
+                except TimeUnavailable:
+                    self.unavailable_reason = "source_failed"
+            else:
+                self._sample = None
+                self.unavailable_reason = "source_failed"
+            raise TimeUnavailable(reason=self.refresh_error) from None
 
         # Подмена происходит без await; ошибочный ответ снимает старое доверие.
         try:
             self.install(sample)
-        except (TypeError, ValueError):
+            self.refresh_error = None
+        except (TypeError, ValueError, TimeUnavailable):
+            self.refresh_error = self.unavailable_reason
             raise TimeUnavailable("trusted time unavailable") from None
     #--------------------------------------------------------------------------------------------------------------
 

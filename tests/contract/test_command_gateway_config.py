@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261026-124820
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети
@@ -18,6 +18,8 @@
 #
 # Тесты:
 # -> test_command_config(): Строгие настройки без сети и раскрытия значений
+#
+# -> test_time_configuration(): Загрузка UTC-настроек без сети и безопасный отказ от неверных полей.
 #
 # -> test_gateway_two_applications(): Команды двум экземплярам в одном чате через настоящий HTTP
 #    Вложенные объявления:
@@ -341,6 +343,57 @@ def test_gateway_two_applications(
     #--------------------------------------------------------------------------------------------------------------
 
     asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Загрузка UTC-настроек без сети и безопасный отказ от неверных полей
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ["default", "single", "multiple", "null", "empty", "unknown", "bad_retry"])
+def test_time_configuration(
+    tmp_path: Path,
+    case: str,
+    ) -> None:
+
+    """
+    Preserve old JSON while loading explicit UTC providers and rejecting unsafe settings offline.
+
+    :param tmp_path: Directory containing synthetic configuration only.
+    :type tmp_path: Path
+
+    :param case: Valid or invalid trusted_time configuration variant.
+    :type case: str
+    """
+
+    # tmp_path — тест не читает реальные credentials и не создаёт каталог журнала.
+    # case — старый конфиг также должен выбирать новый резервируемый default.
+
+    value = settings()
+    if case in {"single", "multiple"}:
+        value["trusted_time"] = {"sources": [{"provider": "utctime", "timeout": 1.5}]}
+        if case == "multiple":
+            value["trusted_time"]["sources"].append({"provider": "timeapi"})
+        value["hub"]["time_retry_interval"] = 10
+    elif case == "null":
+        value["trusted_time"] = None
+    elif case == "empty":
+        value["trusted_time"] = {"sources": []}
+    elif case == "unknown":
+        value["trusted_time"] = {"sources": [{"provider": "must-not-appear"}]}
+    elif case == "bad_retry":
+        value["hub"]["time_retry_interval"] = 0
+
+    path = write_config(tmp_path / "commands.json", value)
+    if case in {"default", "single", "multiple"}:
+        check_command_gateway(path)
+        loaded = load_command_gateway(path)
+        assert len(loaded.time_sources) == (1 if case == "single" else 2)
+        assert loaded.time_sources[0].provider == "utctime"
+    else:
+        with pytest.raises(CommandConfigError) as caught:
+            check_command_gateway(path)
+        assert "must-not-appear" not in str(caught.value)
+        assert caught.value.field == ("hub" if case == "bad_retry" else "trusted_time")
+    assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

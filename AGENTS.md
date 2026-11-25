@@ -1,10 +1,10 @@
 ﻿# Repository Instructions
 
-Version 1.8.6
+Version 1.8.7
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-111759
+Дата и время последнего изменения: 261125-105907
 
 ## Intent and current status
 
@@ -79,7 +79,12 @@ No HTTP admin endpoint or manual local ACK. Existing SQLite schema 1 migrates to
 runtimes reject 2. Wire schemas/hashes must not change accidentally.
 
 Trusted time uses explicit provider UTC/accuracy assumptions and monotonic budgets, no silent
-fallback to OS UTC. TLS certificate and hostname verification are mandatory; do not mutate an SSLContext after handoff. Preserve safe
+fallback to OS UTC. Command gateway defaults to UTCTime and TimeAPI; an explicit trusted_time
+list replaces defaults (1-4 HTTPS sources). Classified transient refresh failures/cancellation
+may retain only a still-valid original anchor, without renewing TTL or command freshness.
+Incompatible usable samples or a permanent failure without a usable alternate fail closed.
+Bound parallel requests and retry backoff; expose only allowlisted time_health diagnostics.
+TLS certificate and hostname verification are mandatory; do not mutate an SSLContext after handoff. Preserve safe
 allowlisted diagnostics, never raw exception messages/tracebacks/provider payloads or secrets.
 Command client and notification gateway credentials and ACL are independent.
 

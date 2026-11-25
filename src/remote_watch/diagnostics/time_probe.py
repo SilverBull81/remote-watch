@@ -1,10 +1,10 @@
 ﻿# Явная проверка TimeAPI и допуска показаний через TrustedClock без отправки уведомлений.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Функции:
 # -> _probe(): Конечная серия запросов к выбранному источнику времени
@@ -24,10 +24,14 @@ import json
 import sys
 from collections.abc import Sequence
 from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 
 from remote_watch.adapters.timeapi import TimeApiTimeSource
+from remote_watch.adapters.trusted_time import RedundantTimeSource, parse_time_sources
+from remote_watch.adapters.utctime import UtcTimeSource
 from remote_watch.commands.time import TimeUnavailable, TrustedClock
+from remote_watch.gateway.command_config import read_command_json
 
 #------------------------------------------------------------------------------------------------------------------
 
@@ -42,10 +46,12 @@ from remote_watch.commands.time import TimeUnavailable, TrustedClock
 async def _probe(
     samples: int,
     interval: float,
+    source_name: str = "redundant",
+    config: str | None = None,
     ) -> int:
 
     """
-    Check public TimeAPI samples against the default command-time policy.
+    Check configured UTC sources against the default command-time policy.
 
     :param samples: Bounded number of independent requests.
     :type samples: int
@@ -53,14 +59,29 @@ async def _probe(
     :param interval: Pause between requests in seconds.
     :type interval: float
 
+    :param source_name: Explicit single provider or the redundant configured set.
+    :type source_name: str
+
+    :param config: Optional command gateway JSON path; only trusted_time is used.
+    :type config: str | None
+
     :return: Zero if every sample was accepted, otherwise one.
     :rtype: int
     """
 
     # samples — число измерений; ни бесконечного цикла, ни фонового потока нет.
     # interval — пауза между измерениями, секунды.
+    # source_name — позволяет отдельно проверить каждый встроенный источник.
+    # config — прочие разделы не используются для регистрации или отправки сообщений.
 
-    source = TimeApiTimeSource()
+    settings = None
+    if config is not None:
+        raw = read_command_json(Path(config))
+        if "trusted_time" in raw and raw["trusted_time"] is None:
+            raise ValueError("invalid trusted time configuration")
+        settings = parse_time_sources(raw.get("trusted_time"))
+    source = (TimeApiTimeSource() if source_name == "timeapi" else UtcTimeSource()
+              if source_name == "utctime" else RedundantTimeSource(settings))
     clock = TrustedClock()
     failed = False
 
@@ -74,16 +95,25 @@ async def _probe(
             row = {
                 "sample": index + 1,
                 "status": "accepted",
-                "source": "timeapi.io",
+                "source": source_name,
                 "elapsed_seconds": round(monotonic() - started, 4),
                 "lower_utc": datetime.fromtimestamp(sample.lower_utc, timezone.utc).isoformat(),
                 "upper_utc": datetime.fromtimestamp(sample.upper_utc, timezone.utc).isoformat(),
                 "uncertainty_seconds": round(sample.upper_utc - sample.lower_utc, 6),
-                "assumed_accuracy_seconds": 1.0,
             }
         except TimeUnavailable:
             failed = True
-            row = {"sample": index + 1, "status": "time_unavailable", "source": "timeapi.io"}
+            anchor_valid = False
+            try:
+                clock.bounds()
+                anchor_valid = True
+            except TimeUnavailable:
+                pass
+            row = {"sample": index + 1, "status": "time_unavailable", "source": source_name,
+                   "anchor_valid": anchor_valid, "refresh_error": clock.refresh_error}
+
+        if isinstance(source, RedundantTimeSource):
+            row["time_health"] = source.stats()
 
         # Фиксированные поля не содержат токенов, паролей, исходных HTTP-ответов или исключений.
         print(json.dumps(row), flush=True)
@@ -112,14 +142,22 @@ def main(
 
     # argv — аргументы запуска; None означает обычный запуск через python -m.
 
-    parser = argparse.ArgumentParser(description="Проверка TimeAPI без изменения часов Windows/Linux.")
+    parser = argparse.ArgumentParser(description="Проверка источников UTC без изменения часов Windows/Linux.")
     parser.add_argument("--samples", type=int, default=3, help="Число запросов: 1–20")
     parser.add_argument("--interval", type=float, default=2.0, help="Пауза между запросами: 1–60 секунд")
+    parser.add_argument("--source", choices=("redundant", "timeapi", "utctime"), default="redundant")
+    parser.add_argument("--config", help="Командный JSON; используется только раздел trusted_time")
     args = parser.parse_args(argv)
     if not 1 <= args.samples <= 20 or not 1 <= args.interval <= 60:
         parser.error("Допустимы 1–20 запросов с паузой 1–60 секунд.")
 
-    return asyncio.run(_probe(args.samples, args.interval))
+    if args.config is not None and args.source != "redundant":
+        parser.error("--config используется только с --source redundant")
+    try:
+        return asyncio.run(_probe(args.samples, args.interval, args.source, args.config))
+    except Exception:
+        print(json.dumps({"status": "config_error"}), flush=True)
+        return 2
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

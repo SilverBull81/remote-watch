@@ -1,10 +1,10 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> DoctorTarget: Закрытые параметры проверки одного канала
@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from remote_watch._credentials import CredentialError, resolve_token, validate_credentials
+from remote_watch.adapters.trusted_time import validate_time_health
 from remote_watch.commands.journal_stats import inspect_journal, validate_status
 from remote_watch.commands.source_health import validate_source_health
 from remote_watch.events import Identity
@@ -78,6 +79,8 @@ from ._doctor_network import network_checks
 HINTS = {
     "source_unavailable": "Источник команд не готов; смотрите этап и безопасную причину в source_health.",
     "source_health_invalid": "Некорректная сводка источников; проверьте совместимость версий gateway и doctor.",
+    "time_source_degraded": "Есть отказы UTC-источников; действительное показание времени пока доступно.",
+    "time_health_invalid": "Некорректная сводка времени; проверьте совместимость gateway и doctor.",
     "journal_ok": "Снимок содержит только числа; pending сам по себе не означает отказ gateway.",
     "journal_unavailable": "Сводка владельца недоступна; сохранённый снимок может быть устаревшим.",
     "journal_stale": "Снимок старше 30 секунд; проверьте владельца журнала и его storage lane.",
@@ -460,6 +463,20 @@ async def _server_online(
     components = snapshot.get("components", {})
     command = components.get("commands", {}) if type(components) is dict else {}
     journals = command.get("journals") if type(command) is dict else None
+    if type(command) is dict and "time_health" in command:
+        try:
+            time_health = validate_time_health(command["time_health"])
+            time_ready = (command.get("reason") != "time_unavailable"
+                          and command.get("state") in {"ready", "degraded"})
+            partial = (time_health["refresh_error"] is not None
+                       or any(row["error_kind"] is not None for row in time_health["sources"]))
+            row = _row("commands.time", "warning" if time_ready and partial else "ok" if time_ready else "failed",
+                       "time_source_degraded" if time_ready and partial else "ready" if time_ready
+                       else "time_unavailable")
+            row["time_health"] = time_health
+            rows.append(row)
+        except (ValueError, TypeError):
+            rows.append(_row("commands.time", "failed", "time_health_invalid"))
     if type(command) is dict and "source_health" in command:
         try:
             for source in validate_source_health(command["source_health"]):

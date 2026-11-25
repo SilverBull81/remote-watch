@@ -1,10 +1,10 @@
 ﻿# Проверки TimeAPI через локальный TLS: формат UTC, границы ответа и отказ при сбое.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Тесты:
 # -> test_timeapi_tls(): Проверка времени через локальный HTTPS и обработка недопустимых ответов
@@ -40,6 +40,7 @@ from aiohttp import web
 from test_gateway_tls import certificates
 
 from remote_watch.adapters.timeapi import TimeApiTimeSource, _parse_time
+from remote_watch.adapters.utctime import UtcTimeSource
 from remote_watch.commands.time import TimeSample, TimeUnavailable, TrustedClock
 from remote_watch.diagnostics import time_probe
 
@@ -54,7 +55,7 @@ from remote_watch.diagnostics import time_probe
 # ТЕСТ : Проверка времени через локальный HTTPS и обработка недопустимых ответов
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("case", [
-    "ok", "cached", "redirect", "untrusted", "wrong_name", "expired", "timeout",
+    "ok", "utctime", "cached", "redirect", "untrusted", "wrong_name", "expired", "timeout",
     "disabled_verification", "wrong_zone", "dst", "mismatch", "bool_number", "bad_date",
     "duplicate", "oversized", "not_json", "compressed", "status", "cancel", "concurrent",
 ])
@@ -140,6 +141,8 @@ def test_timeapi_tls(
                 key, value = changes[case]
                 payload[key] = value
 
+            if case == "utctime":
+                payload = {"utc_iso": "2026-09-30T12:00:00Z", "unix": 1790769600, "unix_ms": 1790769600123}
             body = json.dumps(payload)
             if case == "duplicate":
                 body = body[:-1] + ', "timeZone": "UTC"}'
@@ -171,7 +174,8 @@ def test_timeapi_tls(
         site = web.TCPSite(runner, "127.0.0.1", 0, ssl_context=server_ssl)
         await site.start()
         port = site._server.sockets[0].getsockname()[1]
-        source = TimeApiTimeSource(
+        source_type = UtcTimeSource if case == "utctime" else TimeApiTimeSource
+        source = source_type(
             endpoint=f"https://127.0.0.1:{port}/time", ssl_context=client_ssl,
             timeout=0.05 if case == "timeout" else 5,
         )
@@ -195,9 +199,10 @@ def test_timeapi_tls(
                     release.set()
                 # Завершение и отмена запроса не оставляют объект навсегда занятым.
                 await source.sample()
-            elif case == "ok":
+            elif case in {"ok", "utctime"}:
                 first = await source.sample()
-                assert first.lower_utc == pytest.approx(1790769599.123456, abs=0.000001, rel=0)
+                expected = 1790769599.123 if case == "utctime" else 1790769599.123456
+                assert first.lower_utc == pytest.approx(expected, abs=0.000001, rel=0)
                 assert 2 <= first.upper_utc - first.lower_utc < 5
                 clock = TrustedClock()
                 clock.install(first)
@@ -209,6 +214,11 @@ def test_timeapi_tls(
                 with pytest.raises(TimeUnavailable) as caught:
                     await source.sample()
                 assert str(caught.value) == "trusted time unavailable"
+                if case == "status":
+                    assert caught.value.reason == "http_status" and caught.value.http_status == 503
+                    assert caught.value.transient
+                elif case == "timeout":
+                    assert caught.value.reason == "timeout" and caught.value.transient
                 assert len(seen) <= 1
         finally:
             release.set()

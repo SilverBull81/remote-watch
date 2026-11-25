@@ -63,5 +63,19 @@
         }
       ]
     }
-  ]
+  ],
+  "trusted_time": {
+    "sources": [
+      {
+        "provider": "utctime",
+        "accuracy": 1.0,
+        "timeout": 2.0
+      },
+      {
+        "provider": "timeapi",
+        "accuracy": 1.0,
+        "timeout": 2.0
+      }
+    ]
+  }
 }

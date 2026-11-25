@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.1.2
+# Version 1.1.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока
@@ -211,6 +211,7 @@ class CommandHub:
         self._closed = False
         self._last = 0.0
         self._refresh: asyncio.Task | None = None
+        self._time_failures = 0
         self._maintenance_failed = False
         self._maintenance_error: str | None = None
         self._failed_clock = False
@@ -331,7 +332,8 @@ class CommandHub:
 
         return {"ready": reason is None, "reason": reason, "fatal": self._maintenance_failed,
                 "maintenance_running": running, "time_ready": time_ready,
-                "time_reason": None if time_ready else self._trusted.unavailable_reason}
+                "time_reason": None if time_ready else self._trusted.unavailable_reason,
+                "time_refresh_error": self._trusted.refresh_error}
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -1492,8 +1494,9 @@ class CommandHub:
 
         try:
             await asyncio.wait_for(self._trusted.refresh(self._source), 5.0)
+            self._time_failures = 0
         except Exception:
-            pass
+            self._time_failures = min(16, self._time_failures + 1)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -1511,7 +1514,12 @@ class CommandHub:
 
         while not self._closed:
             await asyncio.sleep(min(1.0, self.config.refresh_interval))
-            if self._source is not None and self._clock() - refreshed >= self.config.refresh_interval:
+            # После отказа пробуем раньше обычного обновления: 15, 30, 60 секунд
+            # при стандартных настройках. Очередь запросов и параллельные refresh не создаются.
+            interval = self.config.refresh_interval
+            if self._time_failures:
+                interval = min(interval, self.config.time_retry_interval * 2 ** (self._time_failures - 1))
+            if self._source is not None and self._clock() - refreshed >= interval:
                 await self._update_time()
                 refreshed = self._clock()
             try:

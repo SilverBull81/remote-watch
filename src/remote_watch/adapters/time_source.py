@@ -1,10 +1,10 @@
 ﻿# Необязательный HTTPS-источник времени с проверкой TLS и ограничением ожидания.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> HttpsDateTimeSource: Получение времени от явно доверенного HTTPS-сервера
@@ -31,6 +31,7 @@ from time import monotonic
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from remote_watch._validation import require_number, require_text
+from remote_watch.adapters.timeapi import time_failure
 from remote_watch.commands.time import TimeSample, TimeUnavailable
 
 #------------------------------------------------------------------------------------------------------------------
@@ -130,8 +131,8 @@ class HttpsDateTimeSource:
         self._busy = True
         try:
             return await asyncio.wait_for(self._fetch(), timeout=self._timeout)
-        except Exception:
-            raise TimeUnavailable("trusted time unavailable") from None
+        except Exception as error:
+            raise time_failure(error) from None
         finally:
             self._busy = False
     #--------------------------------------------------------------------------------------------------------------
@@ -171,6 +172,9 @@ class HttpsDateTimeSource:
             ) as response:
                 received = self._clock()
                 dates = response.headers.getall("Date", [])
+                if response.status not in (200, 204):
+                    raise TimeUnavailable(reason="http_status", http_status=response.status,
+                                          transient=response.status == 429 or response.status >= 500)
                 if (response.status not in (200, 204) or len(dates) != 1 or "Age" in response.headers
                         or received < started or received - started > self._timeout):
                     raise TimeUnavailable("trusted time unavailable")

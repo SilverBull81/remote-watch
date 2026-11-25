@@ -1,10 +1,10 @@
 ﻿# Учётные данные и правила доступа к командам приложений.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> CommandPrincipal: Права приложения с отдельным секретом команд
@@ -263,6 +263,9 @@ class CommandHubConfig:
     :param refresh_interval: Trusted-time refresh interval, in seconds.
     :type refresh_interval: float
 
+    :param time_retry_interval: Initial retry delay after a failed time refresh, in seconds.
+    :type time_retry_interval: float
+
     :param max_sessions: Maximum live application sessions.
     :type max_sessions: int
 
@@ -280,6 +283,7 @@ class CommandHubConfig:
     storage_timeout: float = 3.0                # Ожидание операции журнала, секунды.
     shutdown_timeout: float = 5.0               # Общий срок остановки, секунды.
     refresh_interval: float = 60.0              # Период обновления внешнего времени, секунды.
+    time_retry_interval: float = 15.0           # Первая пауза после отказа времени; далее растёт до обычной.
     max_sessions: int = 256                     # Включая истёкшие сессии текущего запуска hub.
     max_storage_waiters: int = 64               # Ожидающие операции hub; executor выполняет только одну.
     max_pending: int = 1000                     # Неподтверждённые или ещё исполняемые команды.
@@ -317,7 +321,7 @@ class CommandHubConfig:
 
         for name, low, high in (
             ("session_ttl", 10, 300), ("poll_timeout", 0.01, 20), ("storage_timeout", 0.01, 30),
-            ("shutdown_timeout", 0.1, 30), ("refresh_interval", 0.1, 120),
+            ("shutdown_timeout", 0.1, 30), ("refresh_interval", 0.1, 120), ("time_retry_interval", 5, 120),
         ):
             value = getattr(self, name)
             require_number(value, name)

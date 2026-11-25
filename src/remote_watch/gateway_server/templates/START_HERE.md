@@ -1,11 +1,10 @@
 ﻿# Gateway server: первый запуск
 
-Version 1.1.1
+Version 1.1.2
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261103-090725
-
+Дата и время последнего изменения: 261125-102159
 Комплект создан remote-watch **@@VERSION@@**. Он не устанавливает зависимости,
 не запускает процессы, не регистрирует службы и не читает environment credentials.
 
@@ -33,6 +32,9 @@ config/command_gateway.local.json; для нового managed Caddy — config/
    sources/actor/chat. Общие права задайте в scope_sets.control; scope_set выбирается
    отдельно в principal и actor/chat access. Можно оставить явные списки scopes;
    scopes и scope_set одновременно запрещены. actor_id — ID человека, conversation_id — ID чата.
+   trusted_time.sources задаёт доверенные источники UTC; defaults — UTCTime и TimeAPI.
+   Одного пригодного ответа достаточно; конфликт пригодных показаний блокирует команды.
+   Проверка без регистрации: python -m remote_watch.diagnostics.time_probe --config config/command_gateway.local.json.
    Двум instances нужны отдельные Identity/principals/tokens. Updates читает один reader.
 5. token_env — имя переменной окружения. Вместо него допустим literal token в
    закрытом локальном JSON; оба ключа одновременно запрещены. Notification и

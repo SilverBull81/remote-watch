@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-083907
+# Дата и время последнего изменения: 261125-102159
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -795,6 +795,13 @@ class GatewayManager:
             value["source_health"] = [{key: item for key, item in source.items()
                                        if key not in {"failures", "recoveries"}}
                                       for source in component["source_health"]]
+        if "time_health" in component:
+            # Длительность запроса и ширина интервала видны в status/doctor, но их
+            # обычные колебания не должны создавать запись на каждом heartbeat.
+            health = component["time_health"]
+            value["time_health"] = {"selected": health["selected"], "refresh_error": health["refresh_error"],
+                "sources": [{key: item for key, item in source.items()
+                             if key not in {"elapsed_ms", "uncertainty_ms"}} for source in health["sources"]]}
         if "journals" in component:
             journals = component["journals"]
             summaries = []
