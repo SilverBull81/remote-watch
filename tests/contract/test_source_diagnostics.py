@@ -1,10 +1,10 @@
 ﻿# Проверки причин отказов источников и понятных служебных оповещений.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261127-000950
 #
 # Функции:
 # -> source_health(): Синтетические состояния двух разных Telegram-источников.
@@ -19,6 +19,7 @@
 # -> test_source_privacy(): Отказ от произвольных полей на границе IPC.
 # -> test_transition_history(): История сохраняется, повторы счётчиков не засоряют журнал.
 # -> test_owner_notice(): Понятные сообщения и длительность с сохранением cooldown.
+# -> test_telegram_conflict_notice(): Подсказка о конкурирующем чтении только для Telegram getUpdates.
 # -> test_doctor_source_health(): Безопасная причина доступна в серверном отчёте doctor.
 # -> test_component_alert(): Общий degraded не дублирует сообщение компонента.
 
@@ -47,6 +48,7 @@ from remote_watch.diagnostics.gateway_doctor import _server_online
 from remote_watch.gateway_server.application import ApplicationConfig, OperatorAlerts
 from remote_watch.gateway_server.manager import GatewayManager
 from remote_watch.gateway_server.messages import status_message
+from remote_watch.gateway_server.presentation import operator_notice
 from remote_watch.notifications._context import delivery_context
 
 #------------------------------------------------------------------------------------------------------------------
@@ -357,6 +359,50 @@ def test_component_alert() -> None:
     assert manager._alerts.observe.call_count == 1
     assert manager._alerts.observe.call_args.args[:3] == ("commands", "degraded", "source_unavailable")
     assert manager._alerts.observe.call_args.kwargs["sources"][1]["receive"]["error_kind"] == "dns"
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Подсказка о конкурирующем чтении только для Telegram getUpdates
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("provider,stage,expected", [
+    ("telegram", "provider_poll", True),
+    ("telegram", "provider_ack", True),
+    ("telegram", "provider_reply", False),
+    ("ntfy", "provider_poll", False),
+])
+def test_telegram_conflict_notice(
+    provider: str,
+    stage: str,
+    expected: bool,
+    ) -> None:
+
+    """
+    Explain Telegram getUpdates conflicts while preserving generic diagnostics for other HTTP 409.
+
+    :param provider: Synthetic source provider.
+    :type provider: str
+
+    :param stage: Stage that returned the synthetic HTTP status.
+    :type stage: str
+
+    :param expected: Whether the conflict is for Telegram update polling.
+    :type expected: bool
+    """
+
+    # provider — только id адаптера, без имени бота и секретов.
+    # stage — чтение и подтверждение используют getUpdates, отправка ответа не использует.
+    # expected — подсказка должна появляться только для соответствующего запроса.
+
+    sources = source_health()
+    failure = source_failure(CommandError("conflict", http_status=409), stage)
+    direction = "reply" if stage == "provider_reply" else "receive"
+    sources[1].update({"provider": provider, "receive": None, direction: failure, "last_failure": failure})
+    notice = operator_notice("commands", "failed", "configuration", sources=sources)
+
+    assert "HTTP 409" in notice and "source #2" in notice
+    assert "source #1" not in notice
+    assert ("another getUpdates reader or an active webhook" in notice) == expected
+    assert ("The component could not use its configuration." in notice) == (not expected)
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

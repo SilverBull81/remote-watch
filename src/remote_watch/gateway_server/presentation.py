@@ -1,10 +1,10 @@
 ﻿# Понятные владельцу сообщения о сбоях gateway без приватных подробностей.
 #
-# Version 1.0.2
+# Version 1.0.3
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-103736
+# Дата и время последнего изменения: 261127-000950
 #
 # Функции:
 # -> operator_notice(): Описание сбоя или восстановления для мессенджера.
@@ -111,6 +111,31 @@ def operator_notice(
     if name == "manager" and state == "stopping":
         return "Remote Watch gateway\nGateway server is stopping (planned shutdown)."
 
+    source_lines = []
+    telegram_conflict = False
+    for source in sources:
+        faults = [source[key] for key in ("receive", "reply") if source[key] is not None]
+        for fault in faults:
+            # HTTP 409 при отправке ответа или из другого провайдера не говорит
+            # о конкуренции за Telegram getUpdates. Для чтения и ACK это тот же метод Bot API.
+            explanation = ERROR_TEXT.get(fault["error_kind"])
+            if (source["provider"] == "telegram" and fault["http_status"] == 409
+                    and fault["stage"] in {"provider_poll", "provider_ack"}):
+                telegram_conflict = True
+                explanation = "Telegram refused getUpdates"
+            elif explanation is None:
+                explanation = ("the messenger asked to slow down" if fault["http_status"] == 429 else
+                    "the service returned an error" if fault["http_status"] else
+                    "the operation is temporarily busy" if fault["code"] == "busy" else
+                    "the operation could not finish")
+            line = (f"{source['provider'].title()} source #{source['index']}, "
+                    f"{STAGE_TEXT[fault['stage']]}: {explanation}")
+            if fault["http_status"] is not None:
+                line += f" (HTTP {fault['http_status']})"
+            if fault["verify_code"] is not None:
+                line += f" (TLS verification code {fault['verify_code']})"
+            source_lines.append(line + ".")
+
     title = COMPONENTS[name]
     if state == "ready":
         lines = ["Remote Watch gateway", f"{title} is ready again."]
@@ -123,24 +148,14 @@ def operator_notice(
         label = {"degraded": "is temporarily unavailable", "failed": "has stopped",
                  "restarting": "is restarting"}.get(state, "needs attention")
         lines = ["Remote Watch gateway", f"{title} {label}."]
-        lines.append(REASON_TEXT.get(reason, "The component needs attention; see the local gateway log."))
+        if reason == "configuration" and telegram_conflict:
+            lines.append("Telegram reported a conflict while the gateway was reading bot updates.")
+        else:
+            lines.append(REASON_TEXT.get(reason, "The component needs attention; see the local gateway log."))
 
-    for source in sources:
-        faults = [source[key] for key in ("receive", "reply") if source[key] is not None]
-        for fault in faults:
-            explanation = ERROR_TEXT.get(fault["error_kind"])
-            if explanation is None:
-                explanation = ("the messenger asked to slow down" if fault["http_status"] == 429 else
-                    "the service returned an error" if fault["http_status"] else
-                    "the operation is temporarily busy" if fault["code"] == "busy" else
-                    "the operation could not finish")
-            line = (f"{source['provider'].title()} source #{source['index']}, "
-                    f"{STAGE_TEXT[fault['stage']]}: {explanation}")
-            if fault["http_status"] is not None:
-                line += f" (HTTP {fault['http_status']})"
-            if fault["verify_code"] is not None:
-                line += f" (TLS verification code {fault['verify_code']})"
-            lines.append(line + ".")
+    lines.extend(source_lines)
+    if telegram_conflict:
+        lines.append("Check for another getUpdates reader or an active webhook for the indicated bot.")
 
     if state in {"degraded", "restarting"} and reason not in {
             "authorization", "configuration", "ownership", "storage", "restart_limit", "source_stopped"}:

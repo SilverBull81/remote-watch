@@ -1,10 +1,10 @@
 ﻿# Диагностика и эксплуатация
 
-Version 1.0.8
+Version 1.0.9
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261126-103736
+Дата и время последнего изменения: 261127-000950
 ## Что означает готовность
 
 Проверяйте четыре разных уровня: процесс запущен, компонент готов, HTTPS доступен
@@ -193,6 +193,7 @@ hub handles. Клиент получает точную authenticated квита
 | unknown_scope_set | Проверить определение в scope_sets и ссылку scope_set в указанном principal/access |
 | scope_source | Оставить ровно одно поле: scopes либо scope_set; они не объединяются |
 | busy / HTTP 429 | Сверить busy_reason и этап; временное пересечение должно восстанавливаться |
+| Telegram / HTTP 409 на provider_poll или provider_ack | Найти источник по номеру в `sources` командного JSON. Проверить, кто ещё вызывает getUpdates у этого бота и включён ли webhook |
 | time_unavailable | Проверить time_reason, time_health и доступ к каждому настроенному UTC source |
 | stale_session | Смотреть heartbeat/reconnect, дать время TTL/backoff |
 | unresolved_results / outcome_conflict | Сохранить журналы и выполнить осознанный разбор |
