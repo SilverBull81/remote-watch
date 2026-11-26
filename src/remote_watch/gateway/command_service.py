@@ -1,10 +1,10 @@
 ﻿# Совместный запуск hub, источников команд и постоянных журналов.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> CommandGateway: Владелец сервера, времени и всех источников команд
@@ -115,7 +115,7 @@ class CommandGateway:
         ) -> None:
 
         """
-        Acquire deployment ownership and validate every reader before activating any command source.
+        Acquire ownership and validate journals before activating the available command sources.
 
         :param host: Explicit listener address.
         :type host: str
@@ -143,9 +143,10 @@ class CommandGateway:
             await self.server.start(host=host, port=port, ssl_context=ssl_context,
                                      allow_loopback_http=allow_loopback_http)
             for source in self.sources:
-                await source.start(activate=False)
+                await source.start(activate=False, isolate_provider_failure=True)
             for source in self.sources:
-                source.activate()
+                if not source.stats.closed:
+                    source.activate()
             self._started = True
         except BaseException:
             await self.close()
@@ -174,21 +175,25 @@ class CommandGateway:
              "last_failure": source["last_failure"], "failures": source["failures"],
              "recoveries": source["recoveries"]}
             for index, (binding, source) in enumerate(zip(self.config.providers, sources), 1)])
-        stopped = any(source["closed"] for source in sources)
+        stopped = [source for source in sources if source["closed"]]
+        fatal_source = bool(stopped) and (len(stopped) == len(sources)
+                                         or any(not source["provider_stopped"] for source in stopped))
         reason = hub["reason"]
         if self._closed:
             reason = "closed"
-        elif stopped:
+        elif fatal_source and not hub["fatal"]:
             reason = "source_stopped"
         elif not self._started:
             reason = "not_started"
+        elif reason is None and stopped and any(source["ready"] for source in sources):
+            reason = "source_partial"
         elif reason is None and any(not source["ready"] for source in sources):
             reason = "source_unavailable"
 
         # Открытый listener сам по себе не означает пригодность времени и источников.
         # Статистика не запускает сетевых проб и не открывает журнал вторым владельцем.
         return {"closed": self._closed, "ready": reason is None, "reason": reason,
-                "fatal": hub["fatal"] or (self._started and not self._closed and stopped),
+                "fatal": hub["fatal"] or (self._started and not self._closed and fatal_source),
                 "hub": hub, "sources": sources,
                 "source_health": source_health,
                 "time_health": (self._time_source.stats() if isinstance(self._time_source, RedundantTimeSource)

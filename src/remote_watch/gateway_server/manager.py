@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.1.1
+# Version 1.1.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-235708
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -364,7 +364,12 @@ class GatewayManager:
             while not self.stop_event.is_set():
                 await self._tick(started)
                 if not started:
-                    if all(child.message["state"] == "ready" for child in self.children.values()):
+                    # Пригодный hub с одним остановленным читателем уже обслуживает
+                    # остальные источники. Такой запуск принимается как degraded.
+                    if all(child.message["state"] == "ready" or (
+                            child.name == "commands" and child.message["state"] == "degraded"
+                            and child.message["reason"] == "source_partial" and child.message["failure"] is None)
+                           for child in self.children.values()):
                         started = True
                     elif any(child.message["state"] == "failed" for child in self.children.values()):
                         self.reason = next(c.message["reason"] for c in self.children.values()
@@ -431,6 +436,9 @@ class GatewayManager:
         # manager. Ни смерть процесса, ни отсутствие новых сообщений его не обнуляют.
 
         value = status_message(child.message)
+        # Имена нужны только для текста оповещения. Status, doctor и JSONL
+        # продолжают ссылаться на номер источника в том же снимке.
+        value.pop("source_labels", None)
         if "journals" in value:
             elapsed = max(0, int(monotonic() - child.contact)) if child.contacted else 0
             journals = value["journals"]
@@ -766,7 +774,8 @@ class GatewayManager:
 
         for name, child in self.children.items():
             self._alerts.observe(name, child.message["state"], child.message["reason"], monotonic(),
-                                 sources=child.message.get("source_health", []))
+                                 sources=child.message.get("source_health", []),
+                                 source_labels=child.message.get("source_labels"))
 
         if self._tray is not None:
             self._tray.update(self.state)

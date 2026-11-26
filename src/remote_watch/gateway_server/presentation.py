@@ -1,10 +1,10 @@
 ﻿# Понятные владельцу сообщения о сбоях gateway без приватных подробностей.
 #
-# Version 1.0.3
+# Version 1.0.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261127-000950
+# Дата и время последнего изменения: 261127-003329
 #
 # Функции:
 # -> operator_notice(): Описание сбоя или восстановления для мессенджера.
@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from remote_watch.commands.source_health import validate_source_health
+from remote_watch.commands.source_health import validate_source_health, validate_source_labels
 from remote_watch.gateway_server.messages import REASONS, STATES
 
 #------------------------------------------------------------------------------------------------------------------
@@ -32,6 +32,7 @@ REASON_TEXT = {
     "source_unavailable": "A messenger command source is temporarily unavailable.",
     "time_unavailable": "The trusted time service is unavailable; command admission is paused.",
     "source_stopped": "A messenger command source has stopped.",
+    "source_partial": "One or more command sources have stopped. Ready sources can still receive commands.",
     "source_denied": "The messenger refused access; check the bot or topic permissions.",
     "authorization": "Access was refused; check credentials and permissions.",
     "configuration": "The component could not use its configuration.",
@@ -55,7 +56,8 @@ ERROR_TEXT = {"dns": "DNS lookup failed", "timeout": "the request timed out",
               "connection": "the connection failed or was interrupted", "network": "the network request failed",
               "tls_certificate": "TLS certificate verification failed",
               "tls_handshake": "the TLS handshake failed"}
-STAGE_TEXT = {"provider_poll": "receiving commands", "provider_reply": "sending a command reply",
+STAGE_TEXT = {"provider_open": "opening the source", "provider_poll": "receiving commands",
+              "provider_reply": "sending a command reply",
               "provider_ack": "acknowledging a messenger event", "storage": "accessing the local command journal",
               "hub": "exchanging command state with the hub"}
 
@@ -76,6 +78,7 @@ def operator_notice(
     *,
     sources: list,
     duration: int | None = None,
+    source_labels: list[str] | None = None,
     ) -> str:
 
     """
@@ -96,17 +99,22 @@ def operator_notice(
     :param duration: Observed interruption duration on a monotonic clock, in seconds.
     :type duration: int | None
 
+    :param source_labels: Ordered configured source identifiers for owner alerts.
+    :type source_labels: list[str] | None
+
     :return: Human-readable alert with a separate machine diagnostic code.
     :rtype: str
     """
 
     # name/state/reason — только известные коды; сообщения провайдера не переводим и не цитируем.
-    # sources — номера из порядка конфигурации, а не chat_id, имена приложений или токены.
+    # sources — номера из порядка конфигурации, без chat_id, имён приложений и токенов.
     # duration — наблюдённая длительность, не разность часов двух виртуальных машин.
+    # source_labels — разрешённые source_id из той же конфигурации, что и снимок.
 
     if name not in COMPONENTS or state not in STATES or (reason is not None and reason not in REASONS):
         raise ValueError("invalid operator transition")
     sources = validate_source_health(sources)
+    labels = None if source_labels is None else validate_source_labels(source_labels, len(sources))
 
     if name == "manager" and state == "stopping":
         return "Remote Watch gateway\nGateway server is stopping (planned shutdown)."
@@ -114,6 +122,8 @@ def operator_notice(
     source_lines = []
     telegram_conflict = False
     for source in sources:
+        number = source["index"]
+        source_label = f"#{number}" if labels is None else labels[number - 1]
         faults = [source[key] for key in ("receive", "reply") if source[key] is not None]
         for fault in faults:
             # HTTP 409 при отправке ответа или из другого провайдера не говорит
@@ -128,7 +138,7 @@ def operator_notice(
                     "the service returned an error" if fault["http_status"] else
                     "the operation is temporarily busy" if fault["code"] == "busy" else
                     "the operation could not finish")
-            line = (f"{source['provider'].title()} source #{source['index']}, "
+            line = (f"{source['provider'].title()} source {source_label}, "
                     f"{STAGE_TEXT[fault['stage']]}: {explanation}")
             if fault["http_status"] is not None:
                 line += f" (HTTP {fault['http_status']})"
@@ -147,6 +157,8 @@ def operator_notice(
     else:
         label = {"degraded": "is temporarily unavailable", "failed": "has stopped",
                  "restarting": "is restarting"}.get(state, "needs attention")
+        if state == "degraded" and reason == "source_partial":
+            label = "is partially available"
         lines = ["Remote Watch gateway", f"{title} {label}."]
         if reason == "configuration" and telegram_conflict:
             lines.append("Telegram reported a conflict while the gateway was reading bot updates.")
@@ -158,7 +170,8 @@ def operator_notice(
         lines.append("Check for another getUpdates reader or an active webhook for the indicated bot.")
 
     if state in {"degraded", "restarting"} and reason not in {
-            "authorization", "configuration", "ownership", "storage", "restart_limit", "source_stopped"}:
+            "authorization", "configuration", "ownership", "storage", "restart_limit", "source_stopped",
+            "source_partial"}:
         lines.append("Automatic recovery attempts continue.")
     if state == "restarting" and name == "commands":
         lines.append("Command clients will attempt to reconnect; executed callbacks are not replayed.")

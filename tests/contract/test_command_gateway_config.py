@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-232526
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети
@@ -21,6 +21,10 @@
 #
 # -> test_time_configuration(): Загрузка UTC-настроек без сети и безопасный отказ от неверных полей.
 #
+# -> test_independent_sources(): Продолжение команд после отказа одного провайдера.
+#    Вложенные объявления:
+#    -> scenario(): Приём новой команды через исправный источник и настоящий HTTP.
+#
 # -> test_gateway_two_applications(): Команды двум экземплярам в одном чате через настоящий HTTP
 #    Вложенные объявления:
 #    -> scenario(): Изолированный асинхронный сценарий проверки
@@ -33,10 +37,12 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from pathlib import Path
 from time import monotonic
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from test_command_dispatcher import until
@@ -45,6 +51,7 @@ from test_command_sources import FakeProvider
 from remote_watch import CommandRegistry, RemoteWatcher, WatcherConfig
 from remote_watch.commands.source_protocol import SourceEvent
 from remote_watch.commands.time import TimeSample
+from remote_watch.commands.transport import CommandError
 from remote_watch.diagnostics.command_smoke import SmokeApplication
 from remote_watch.gateway.command_config import (
     CommandConfigError,
@@ -338,6 +345,102 @@ def test_gateway_two_applications(
             assert not gateway.stats()["closed"]
         finally:
             for watcher in watchers:
+                await watcher.astop()
+            await gateway.close()
+    #--------------------------------------------------------------------------------------------------------------
+
+    asyncio.run(scenario())
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Продолжение команд после отказа одного провайдера
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ["open", "poll", "all", "storage"])
+def test_independent_sources(
+    tmp_path: Path,
+    case: str,
+    ) -> None:
+
+    """
+    Keep healthy readers functional while shared storage failures and loss of every reader remain fatal.
+
+    :param tmp_path: Isolated directory for synthetic journals and clients.
+    :type tmp_path: Path
+
+    :param case: Provider-open failure, polling failure, all readers lost or unsafe journal failure.
+    :type case: str
+    """
+
+    # tmp_path — настоящие SQLite и loopback HTTP, внешние сервисы подменены.
+    # case — различаем безусловную остановку hub и изоляцию одного провайдера.
+
+    pytest.importorskip("aiohttp")
+
+    #--------------------------------------------------------------------------------------------------------------
+    # ФУНКЦИЯ : Приём новой команды через исправный источник и настоящий HTTP
+    #--------------------------------------------------------------------------------------------------------------
+    async def scenario() -> None:
+
+        """
+        Fail one configured source and execute only the independent source's fresh callback.
+        """
+
+        raw = settings()
+        raw["sources"][0]["access"][0]["targets"] = ["one"]
+        independent = copy.deepcopy(raw["sources"][0])
+        independent.update(source_id="independent", settings={"token": "56789:" + "y" * 35})
+        independent["access"][0].update(conversation_id="-124", targets=["two"])
+        raw["sources"].append(independent)
+        cfg = load_command_gateway(write_config(tmp_path / "gateway.json", raw))
+        gateway = CommandGateway(cfg, time_source=FakeTime())
+        broken, healthy = FakeProvider(), FakeProvider()
+        gateway.sources[0].provider, gateway.sources[1].provider = broken, healthy
+        broken.open = AsyncMock(return_value="synthetic-broken-owner")
+        conflict = CommandError("conflict", http_status=409)
+        if case in {"open", "all"}:
+            broken.open.side_effect = conflict
+            if case == "all":
+                healthy.open = AsyncMock(side_effect=conflict)
+        elif case == "poll":
+            broken.poll = AsyncMock(side_effect=conflict)
+        else:
+            gateway.sources[0]._receive_stage = "storage"
+            gateway.sources[0].step = AsyncMock(side_effect=CommandError("conflict"))
+
+        watcher = None
+        try:
+            await gateway.start(port=0, allow_loopback_http=True)
+            await until(lambda: gateway.sources[0].stats.closed)
+            state = gateway.stats()
+            assert not state["ready"]
+            if case in {"all", "storage"}:
+                assert state["fatal"] and state["reason"] == "source_stopped"
+                return
+
+            assert not state["fatal"] and state["reason"] == "source_partial"
+            failure = state["source_health"][0]["receive"]
+            assert failure["http_status"] == 409 and failure["stage"] == f"provider_{case}"
+            assert state["source_health"][1]["ready"]
+
+            application = SmokeApplication()
+            registry = CommandRegistry.from_callbacks({"suspend_load": application.suspend_load})
+            client_path = write_config(tmp_path / "client.json", {
+                "schema_version": 1, "identity": raw["targets"]["two"],
+                "endpoint": f"http://127.0.0.1:{gateway.server.port}", "allow_loopback_http": True,
+                "state_file": "client.sqlite", "owner_id": "two", "token": raw["principals"][1]["token"],
+            })
+            client = load_command_client(client_path, registry)
+            watcher = RemoteWatcher(WatcherConfig(identity=client.registration.identity, commands=registry),
+                                    command_client=client)
+            await watcher.astart()
+            healthy.events.append(SourceEvent(event_id="1", message_date=1000, actor_id="42",
+                                               conversation_id="-124", text="/rw two suspend_load"))
+            await until(lambda: gateway.sources[1].stats.replies == 1, timeout=10)
+            assert application.paused.is_set() and application.report()["callback_count"] == 1
+            assert not broken.acks and not broken.replies
+            assert gateway.stats()["reason"] == "source_partial"
+        finally:
+            if watcher is not None:
                 await watcher.astop()
             await gateway.close()
     #--------------------------------------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ﻿# Ограниченные сообщения состояния между управляющим и дочерними процессами.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261127-003329
 #
 # Функции:
 # -> status_message(): Проверка состояния без переноса произвольных подробностей.
@@ -22,7 +22,7 @@ import asyncio
 
 from remote_watch.adapters.trusted_time import validate_time_health
 from remote_watch.commands.journal_stats import validate_status
-from remote_watch.commands.source_health import validate_source_health
+from remote_watch.commands.source_health import validate_source_health, validate_source_labels
 
 #------------------------------------------------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ from remote_watch.commands.source_health import validate_source_health
 
 STATES = frozenset({"starting", "ready", "degraded", "failed", "stopping", "stopped", "restarting"})
 MAX_STATUS_BYTES = 32768
-REASONS = frozenset({"time_unavailable", "source_stopped", "source_unavailable", "source_denied",
+REASONS = frozenset({"time_unavailable", "source_stopped", "source_unavailable", "source_denied", "source_partial",
     "maintenance_failed", "storage_unavailable", "storage_capacity", "configuration", "authorization",
     "ownership", "storage", "crash", "hang", "restart_limit", "startup_timeout", "heartbeat_timeout",
     "shutdown_timeout", "control_unavailable", "not_started", "closed", "caddy_unavailable", "logging_failed",
@@ -62,14 +62,15 @@ def status_message(
     :type value: object
 
 
-    :return: Safe status without tokens, paths, identities, source text or exception payloads.
+    :return: Safe status and optional configured labels for the private owner alert path.
     :rtype: dict
     """
 
     # value — heartbeat несёт только безопасные агрегаты, не полный stats провайдера.
 
     keys = {"state", "reason", "time_reason", "failure", "counters"}
-    if (type(value) is not dict or set(value) - {"journals", "source_health", "time_health"} != keys
+    optional = {"journals", "source_health", "time_health", "source_labels"}
+    if (type(value) is not dict or set(value) - optional != keys
             or type(value["state"]) is not str
             or value["state"] not in STATES):
         raise ValueError("invalid status")
@@ -92,6 +93,10 @@ def status_message(
     result = dict(value, counters=dict(counters))
     if "source_health" in value:
         result["source_health"] = validate_source_health(value["source_health"])
+    if "source_labels" in value:
+        if "source_health" not in result:
+            raise ValueError("source labels without health")
+        result["source_labels"] = validate_source_labels(value["source_labels"], len(result["source_health"]))
     if "time_health" in value:
         result["time_health"] = validate_time_health(value["time_health"])
     if "journals" in value:

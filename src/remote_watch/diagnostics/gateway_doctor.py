@@ -1,10 +1,10 @@
 ﻿# Проверка gateway на сервере и клиенте без доставки сообщений и регистрации сессий.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> DoctorTarget: Закрытые параметры проверки одного канала
@@ -78,6 +78,7 @@ from ._doctor_network import network_checks
 
 HINTS = {
     "source_unavailable": "Источник команд не готов; смотрите этап и безопасную причину в source_health.",
+    "source_partial": "Один или несколько источников команд остановились; остальные готовы принимать команды.",
     "source_health_invalid": "Некорректная сводка источников; проверьте совместимость версий gateway и doctor.",
     "time_source_degraded": "Есть отказы UTC-источников; действительное показание времени пока доступно.",
     "time_health_invalid": "Некорректная сводка времени; проверьте совместимость gateway и doctor.",
@@ -434,6 +435,9 @@ async def _server_online(
         for name in ("notifications", "commands", "caddy"):
             value = snapshot.get("components", {}).get(name)
             if type(value) is not dict:
+                continue
+            if name == "commands" and value.get("state") == "degraded" and value.get("reason") == "source_partial":
+                rows.append(_row("commands.component", "warning", "source_partial"))
                 continue
             ready = value.get("state") == "ready"
             code = "ready" if ready else "time_unavailable" if value.get("reason") == "time_unavailable" else (

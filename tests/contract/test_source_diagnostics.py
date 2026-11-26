@@ -1,10 +1,10 @@
 ﻿# Проверки причин отказов источников и понятных служебных оповещений.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261127-000950
+# Дата и время последнего изменения: 261127-003516
 #
 # Функции:
 # -> source_health(): Синтетические состояния двух разных Telegram-источников.
@@ -289,22 +289,26 @@ def test_owner_notice(
     alerts = OperatorAlerts(ApplicationConfig(cooldown=60))
     alerts.logger.addHandler(caplog.handler)
     sources = source_health()
-    alerts.observe("commands", "degraded", "source_unavailable", 0, sources=sources)
+    labels = ["healthy-reader", "reports-bot"]
+    alerts.observe("commands", "degraded", "source_unavailable", 0, sources=sources, source_labels=labels)
     assert len(caplog.records) == 1
     text = caplog.records[-1].getMessage()
-    assert "Command channel is temporarily unavailable" in text and "Telegram source #2" in text
+    assert "Command channel is temporarily unavailable" in text and "Telegram source reports-bot" in text
+    assert "source #" not in text and "healthy-reader" not in text
     assert "DNS lookup failed" in text and "Automatic recovery attempts continue" in text
     sources[1]["failures"] += 5
-    alerts.observe("commands", "degraded", "source_unavailable", 30, sources=sources)
+    alerts.observe("commands", "degraded", "source_unavailable", 30, sources=sources, source_labels=labels)
     assert len(caplog.records) == 1
     sources[1].update(ready=True, receive=None, recoveries=1)
-    alerts.observe("commands", "ready", None, 102, sources=sources)
+    alerts.observe("commands", "ready", None, 102, sources=sources, source_labels=labels)
     assert len(caplog.records) == 2
     assert "ready again" in caplog.records[-1].getMessage()
     assert "1 min 42 sec" in caplog.records[-1].getMessage()
     bad = copy.deepcopy(sources)
     bad[1]["secret"] = "private-token-and-host"
     alerts.observe("commands", "degraded", "source_unavailable", 200, sources=bad)
+    alerts.observe("commands", "degraded", "source_partial", 201, sources=sources,
+                   source_labels=["healthy-reader", "https://private-host"])
     assert len(caplog.records) == 2 and "private-token-and-host" not in json.dumps([r.msg for r in caplog.records])
 #------------------------------------------------------------------------------------------------------------------
 
@@ -325,9 +329,11 @@ def test_doctor_source_health(
     # monkeypatch — источники подставные, а пути TCP-компонентов отключены.
 
     snapshot = {"state": "degraded", "components": {"commands": {
-        "state": "degraded", "reason": "source_unavailable", "source_health": source_health()}}}
+        "state": "degraded", "reason": "source_partial", "source_health": source_health()}}}
     monkeypatch.setattr("remote_watch.gateway_server.manager.control_request", AsyncMock(return_value=snapshot))
     rows = asyncio.run(_server_online(SimpleNamespace(commands=None, notifications=None), .1))
+    assert any(row["check"] == "commands.component" and row["status"] == "warning"
+               and row["code"] == "source_partial" for row in rows)
     sources = [row for row in rows if "source_health" in row]
     assert len(sources) == 2
     assert sources[0]["status"] == "ok" and sources[1]["status"] == "failed"
@@ -403,6 +409,17 @@ def test_telegram_conflict_notice(
     assert "source #1" not in notice
     assert ("another getUpdates reader or an active webhook" in notice) == expected
     assert ("The component could not use its configuration." in notice) == (not expected)
+    if expected:
+        message = {"state": "degraded", "reason": "source_partial", "time_reason": None,
+                   "failure": None, "counters": {}, "source_health": sources}
+        for wrong in (["too-short"], ["one", "https://private-host"], ["private", "private"]):
+            with pytest.raises(ValueError, match="source label"):
+                status_message({**message, "source_labels": wrong})
+        notice = operator_notice("commands", "degraded", "source_partial", sources=sources,
+                                 source_labels=["healthy", "reports-bot"])
+        assert "Command channel is partially available." in notice
+        assert "Telegram source reports-bot" in notice and "source #" not in notice
+        assert "Ready sources can still receive commands." in notice
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

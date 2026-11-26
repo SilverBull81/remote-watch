@@ -1,10 +1,10 @@
 ﻿# Настройки интерфейса и независимых оповещений владельца gateway server.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-083907
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> ApplicationConfig: Трей, ротация журналов и прямые каналы владельца
@@ -37,7 +37,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from remote_watch._validation import require_int, require_number
-from remote_watch.commands.source_health import validate_source_health
+from remote_watch.commands.source_health import validate_source_health, validate_source_labels
 from remote_watch.config import DeliveryMode, Destination, Route, RuntimeConfig, WatcherConfig
 from remote_watch.events import Identity
 from remote_watch.gateway.notification_json_config import _destination
@@ -267,6 +267,7 @@ class OperatorAlerts:
         now: float,
         *,
         sources: list | None = None,
+        source_labels: list[str] | None = None,
         ) -> None:
 
         """
@@ -289,10 +290,14 @@ class OperatorAlerts:
 
         :param sources: Optional bounded source diagnostics from the current child heartbeat.
         :type sources: list | None
+
+        :param source_labels: Optional configured identifiers for the same source snapshot.
+        :type source_labels: list[str] | None
         """
 
         # name/state/reason — не содержимое провайдера; now задаёт cooldown без UTC VM.
         # sources — повторная проверка не позволяет передать приватные поля в formatter.
+        # source_labels — только source_id, взятые из того же heartbeat, что и ошибки.
 
         if name not in {"notifications", "commands", "caddy", "manager"}:
             return
@@ -302,22 +307,23 @@ class OperatorAlerts:
 
         try:
             details = validate_source_health([] if sources is None else sources)
+            labels = None if source_labels is None else validate_source_labels(source_labels, len(details))
         except (ValueError, TypeError):
             return
 
         # Счётчики попыток не меняют подпись инцидента и не порождают поток одинаковых сообщений.
         active = [{key: item[key] for key in ("index", "provider", "ready", "receive", "reply")}
                   for item in details]
-        current = (state, reason, json.dumps(active, sort_keys=True))
+        current = (state, reason, json.dumps(active, sort_keys=True), labels)
         if self._seen.get(name) != current:
             self._seen[name] = current
             if state in {"failed", "degraded", "restarting"}:
                 self._troubled.add(name)
                 self._since.setdefault(name, now)
-                self._pending[name] = (state, reason, details, None)
+                self._pending[name] = (state, reason, details, None, labels)
             elif state == "ready" and name in self._troubled and name in self._announced:
                 duration = min(2**63 - 1, int(max(0, now - self._since.get(name, now))))
-                self._pending[name] = (state, reason, [], duration)
+                self._pending[name] = (state, reason, [], duration, None)
             else:
                 self._pending.pop(name, None)
                 if state == "ready":
@@ -333,7 +339,7 @@ class OperatorAlerts:
             return
 
         if name in self._pending and now - self._sent.get(name, -float("inf")) >= self.config.cooldown:
-            state, reason, details, duration = self._pending.pop(name)
+            state, reason, details, duration, labels = self._pending.pop(name)
             self._sent[name] = now
             if state == "ready":
                 self._troubled.discard(name)
@@ -342,7 +348,8 @@ class OperatorAlerts:
             else:
                 self._announced.add(name)
             self.logger.log(logging.INFO if state == "ready" else logging.ERROR,
-                            operator_notice(name, state, reason, sources=details, duration=duration))
+                            operator_notice(name, state, reason, sources=details, duration=duration,
+                                            source_labels=labels))
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------

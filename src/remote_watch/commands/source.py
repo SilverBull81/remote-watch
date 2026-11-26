@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-103736
+# Дата и время последнего изменения: 261127-003329
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных
@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from secrets import token_hex
 
+from remote_watch._credentials import CredentialError
 from remote_watch._validation import require_number
 from remote_watch.commands._worker import StoreWorker
 from remote_watch.commands.hub import CommandHub
@@ -113,6 +114,9 @@ class SourceStats:
 
     :param recoveries: Number of loop recoveries after a recorded failure.
     :type recoveries: int
+
+    :param provider_stopped: Whether a known local provider failure stopped this reader.
+    :type provider_stopped: bool
     """
 
     accepted: int           # Команды, впервые принятые hub в текущем запуске.
@@ -128,6 +132,7 @@ class SourceStats:
     last_failure: dict | None = None     # Последний исторический отказ сохраняется после восстановления.
     failures: int = 0                    # Число неудачных операций в текущем запуске.
     recoveries: int = 0                  # Число восстановлений циклов после отказа.
+    provider_stopped: bool = False       # Читатель остановлен из-за отказа своего провайдера.
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -218,6 +223,7 @@ class CommandSourceRunner:
         self._retry = retry_interval
         self._tasks: tuple[asyncio.Task, ...] = ()
         self._stopping = False
+        self._provider_stopped = False
         self._loop: asyncio.AbstractEventLoop | None = None
         self._accepted = self._ignored = self._replies = 0
         self._error: str | None = None
@@ -258,7 +264,8 @@ class CommandSourceRunner:
                            receive_failure=dict(self._receive_failure) if self._receive_failure else None,
                            reply_failure=dict(self._reply_failure) if self._reply_failure else None,
                            last_failure=dict(self._last_failure) if self._last_failure else None,
-                           failures=self._failures, recoveries=self._recoveries)
+                           failures=self._failures, recoveries=self._recoveries,
+                           provider_stopped=self._provider_stopped)
     #--------------------------------------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------------------------------------------
@@ -286,6 +293,7 @@ class CommandSourceRunner:
         self,
         *,
         activate: bool = True,
+        isolate_provider_failure: bool = False,
         ) -> None:
 
         """
@@ -293,18 +301,25 @@ class CommandSourceRunner:
 
         :param activate: Whether to begin consuming after startup validation.
         :type activate: bool
+
+        :param isolate_provider_failure: Whether a classified provider-open failure may stop only this reader.
+        :type isolate_provider_failure: bool
         """
 
         # activate — начинать ли приём сразу после проверки источника.
+        # isolate_provider_failure — разрешает запуск других читателей после полного закрытия этого.
 
         if self._loop is not None or self._stopping:
             raise CommandError("closed")
 
         self._loop = asyncio.get_running_loop()
+        opening_provider = False
 
         try:
             await self._worker.open()
+            opening_provider = True
             fingerprint = await self.provider.open()
+            opening_provider = False
             owner = sha256((self.policy.source_id + "\0" + fingerprint).encode("utf-8")).hexdigest()
             reader_key = sha256(fingerprint.encode("utf-8")).hexdigest()
             await self._worker.call(lambda: self._worker.store.bind(owner, reader_key))
@@ -314,8 +329,16 @@ class CommandSourceRunner:
                 raise CommandError("conflict")
             if activate:
                 self.activate()
-        except BaseException:
+        except BaseException as error:
             await self.close()
+            if (isolate_provider_failure and opening_provider
+                    and isinstance(error, (CommandError, CredentialError))):
+                # Изолируем ошибку адаптера после успешной очистки. Ошибки журнала,
+                # общей авторизации hub и отмена запуска проходят наверх.
+                failure = error if isinstance(error, CommandError) else CommandError("denied")
+                self._record_failure("receive", failure, "provider_open")
+                self._provider_stopped = True
+                return
             raise
     #--------------------------------------------------------------------------------------------------------------
 
@@ -589,6 +612,9 @@ class CommandSourceRunner:
             except CommandError as error:
                 self._record_failure("receive", error, self._receive_stage)
                 if error.code not in ("busy", "capacity", "unavailable"):
+                    self._provider_stopped = self._receive_stage in {
+                        "provider_poll", "provider_ack", "provider_reply",
+                    }
                     self._stopping = True
                     return
                 await asyncio.sleep(self._retry)

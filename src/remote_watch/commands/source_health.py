@@ -1,14 +1,15 @@
 ﻿# Безопасные причины отказов источников команд для локального состояния gateway.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261127-003329
 #
 # Функции:
 # -> source_failure(): Снимок разрешённых признаков одного отказа.
 # -> validate_source_health(): Проверка ограниченного списка источников на границе IPC.
+# -> validate_source_labels(): Проверка имён источников для служебного оповещения.
 
 
 #******************************************************************************************************************
@@ -16,6 +17,8 @@
 #******************************************************************************************************************
 
 from __future__ import annotations
+
+import re
 
 from remote_watch.commands.transport import CommandError
 
@@ -26,7 +29,7 @@ from remote_watch.commands.transport import CommandError
 # КОНСТАНТЫ
 #******************************************************************************************************************
 
-SOURCE_STAGES = frozenset({"storage", "hub", "provider_poll", "provider_reply", "provider_ack"})
+SOURCE_STAGES = frozenset({"storage", "hub", "provider_open", "provider_poll", "provider_reply", "provider_ack"})
 FAULT_FIELDS = frozenset({"stage", "code", "http_status", "error_kind", "verify_code",
                           "tls_reason", "busy_reason"})
 
@@ -122,6 +125,39 @@ def validate_source_health(
         result.append(copied)
 
     return result
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ФУНКЦИЯ : Проверка имён источников для служебного оповещения
+#------------------------------------------------------------------------------------------------------------------
+def validate_source_labels(
+    value: object,
+    count: int,
+    ) -> list[str]:
+
+    """
+    Accept bounded configured source identifiers in the exact order of the source health list.
+
+    :param value: Names carried separately from numeric health diagnostics.
+    :type value: object
+
+    :param count: Number of validated source health entries in the same snapshot.
+    :type count: int
+
+    :return: Independent ordered list for owner alerts.
+    :rtype: list[str]
+    """
+
+    # value — допускаем тот же набор символов, что у CommandSource.source_id.
+    # count — исключаем подстановку неполного списка от другого запуска.
+
+    if type(value) is not list or len(value) != count or not 0 <= count <= 8:
+        raise ValueError("invalid source labels")
+    if any(type(item) is not str or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", item) for item in value):
+        raise ValueError("invalid source label")
+    if len(set(value)) != count:
+        raise ValueError("duplicate source labels")
+    return list(value)
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

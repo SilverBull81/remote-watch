@@ -1,10 +1,10 @@
 ﻿# Проверки командного процесса под manager и восстановления источника без живых провайдеров.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-091604
+# Дата и время последнего изменения: 261127-003516
 #
 # Тесты:
 # -> test_command_process(): Настоящий hub и SQLite с подставным временем и входящим провайдером.
@@ -89,11 +89,12 @@ setup_deployment = _setup_deployment
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Настоящий hub и SQLite с подставным временем и входящим провайдером.
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("both", [False, True])
+@pytest.mark.parametrize("both,partial", [(False, False), (True, False), (True, True)])
 def test_command_process(
     setup_deployment: DeploymentConfig,
     monkeypatch: pytest.MonkeyPatch,
     both: bool,
+    partial: bool,
     ) -> None:
 
     """
@@ -107,9 +108,13 @@ def test_command_process(
 
     :param both: Enable notifications alongside commands.
     :type both: bool
+
+    :param partial: Reject one command provider while leaving the other usable.
+    :type partial: bool
     """
 
     # setup_deployment/monkeypatch/both — продукт не получает механизма выбора произвольного bootstrap.
+    # partial — проверяем, что начальный барьер принимает частично готовый командный компонент.
 
     pytest.importorskip("aiohttp")
     base = setup_deployment.control_dir.parent
@@ -117,16 +122,25 @@ def test_command_process(
     config_path.parent.mkdir()
     example = Path(__file__).resolve().parents[2] / "docs/examples/command_gateway.telegram.example.json"
     config_path.write_bytes(example.read_bytes())
+    if partial:
+        raw = json.loads(config_path.read_bytes())
+        raw["sources"].append({**raw["sources"][0], "source_id": "rejected-reader",
+                               "settings": {"token_env": "TEST_REJECTED_READER"}})
+        config_path.write_text(json.dumps(raw), encoding="utf-8")
     script = base / "command_test_child.py"
     script.write_text("""import asyncio,sys,time
 from remote_watch.adapters.timeapi import TimeApiTimeSource
 from remote_watch.adapters.telegram_commands import TelegramCommandProvider
 from remote_watch.commands.time import TimeSample
+from remote_watch.commands.transport import CommandError
 from remote_watch.gateway_server.child import main
 async def sample(self):
     now=time.time()
     return TimeSample(lower_utc=now-0.01,upper_utc=now+0.01,observed_at=time.monotonic())
-async def opened(self): return 'synthetic-provider-owner'
+async def opened(self):
+    if self.config.token_env == 'TEST_REJECTED_READER':
+        raise CommandError('conflict',http_status=409)
+    return 'synthetic-provider-owner'
 async def poll(self,*args,**kwargs):
     await asyncio.sleep(.05)
     return ()
@@ -198,16 +212,22 @@ raise SystemExit(main())
 
             manager = GatewayManager(config)
             task = asyncio.create_task(manager.run())
+            expected = "degraded" if partial else "ready"
             try:
-                await wait_state(manager, "ready")
+                await wait_state(manager, expected)
                 neighbor = manager.children["notifications"].process if both else None
                 child = manager.children["commands"]
                 old = child.process
+                if partial:
+                    assert child.message["reason"] == "source_partial" and old.poll() is None
+                    assert child.message["source_labels"] == ["telegram", "rejected-reader"]
+                    assert "source_labels" not in manager.status()["components"]["commands"]
                 journals = set(base.rglob("*.sqlite"))
                 assert len(journals) >= 2
                 old.kill()
                 end = monotonic() + 12
-                while child.process is old or manager.state != "ready":
+                while (child.process is old or manager.state != expected
+                       or manager.status()["components"]["commands"]["state"] != expected):
                     assert monotonic() < end, manager.status()
                     await asyncio.sleep(.05)
                 assert manager.status()["command_sessions"] == "re_registration_required"
