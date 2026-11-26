@@ -1,12 +1,16 @@
 ﻿# Ограниченное получение UTC из нескольких явно доверенных HTTPS-источников.
 #
-# Version 1.0.0
+# Version 1.0.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261126-232526
 #
 # Классы:
+# -> TimeSourceConfigError: Известное поле и причина ошибки настроек UTC.
+#    Конструктор:
+#    -> __init__(): Сохранение только пути в схеме и категории.
+#
 # -> TimeSourceSettings: Явные настройки одного источника времени.
 #    Интерфейс:
 #    -> build(): Создание источника без запуска I/O.
@@ -24,6 +28,8 @@
 #
 # Функции:
 # -> parse_time_sources(): Строгая проверка раздела trusted_time.
+#
+# -> _time_source_row(): Проверка одного источника и привязка ошибки к его номеру.
 #
 # -> validate_time_health(): Проверка диагностического снимка перед IPC.
 
@@ -60,6 +66,44 @@ TIME_ERRORS = frozenset({"source_failed", "timeout", "dns", "connect", "tls_cert
 #******************************************************************************************************************
 # КЛАССЫ
 #******************************************************************************************************************
+
+#------------------------------------------------------------------------------------------------------------------
+# КЛАСС : Известное поле и причина ошибки настроек UTC
+#------------------------------------------------------------------------------------------------------------------
+class TimeSourceConfigError(ValueError):
+    """
+    Carry a schema path and a fixed reason without including the configured value.
+    """
+
+    #--------------------------------------------------------------------------------------------------------------
+    # КОНСТРУКТОР
+    #--------------------------------------------------------------------------------------------------------------
+    def __init__(
+        self,
+        field: str,
+        reason: str,
+        ) -> None:
+
+        """
+        Record the diagnostic supplied by the trusted-time validator.
+
+        :param field: Known relative schema path.
+        :type field: str
+
+        :param reason: Fixed validation reason.
+        :type reason: str
+        """
+
+        # field — формируется валидатором, а не берётся из ключей файла.
+        # reason — фиксированная категория, которую переведёт CLI.
+
+        self.field = field
+        self.reason = reason
+        self.related: tuple[TimeSourceConfigError, ...] = ()
+        self.entry_indices: tuple[int, ...] = ()
+        super().__init__("invalid time source configuration")
+    #--------------------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
 # КЛАСС : Явные настройки одного источника времени
@@ -122,11 +166,20 @@ class TimeSourceSettings:
         """
 
         if type(self.provider) is not str or self.provider not in {"utctime", "timeapi", "https_date"}:
-            raise ValueError("invalid time provider")
-        require_number(self.timeout, "time timeout")
-        require_number(self.accuracy, "time accuracy", allow_zero=True)
-        if not 0.1 <= self.timeout <= 3 or self.accuracy > 2:
-            raise ValueError("invalid time limits")
+            raise TimeSourceConfigError("provider", "time_provider")
+        try:
+            require_number(self.timeout, "time timeout")
+            if not 0.1 <= self.timeout <= 3:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            raise TimeSourceConfigError("timeout", "time_timeout") from None
+
+        try:
+            require_number(self.accuracy, "time accuracy", allow_zero=True)
+            if self.accuracy > 2:
+                raise ValueError
+        except (TypeError, ValueError, OverflowError):
+            raise TimeSourceConfigError("accuracy", "time_accuracy") from None
 
         if self.endpoint is None and self.provider != "https_date":
             endpoint = ("https://utctime.app/api/now" if self.provider == "utctime"
@@ -134,7 +187,10 @@ class TimeSourceSettings:
             object.__setattr__(self, "endpoint", endpoint)
 
         # Конструкторы проверяют HTTPS и отсутствие credentials, но не запускают сеть.
-        self.build()
+        try:
+            self.build()
+        except (TypeError, ValueError, OverflowError):
+            raise TimeSourceConfigError("endpoint", "time_endpoint") from None
     #--------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -321,22 +377,89 @@ def parse_time_sources(
 
     if value is None:
         return (TimeSourceSettings(provider="utctime"), TimeSourceSettings(provider="timeapi"))
-    if type(value) is not dict or set(value) != {"sources"}:
-        raise ValueError("invalid trusted time configuration")
+    if type(value) is not dict:
+        raise TimeSourceConfigError("trusted_time", "config_object")
+    if "sources" not in value:
+        raise TimeSourceConfigError("trusted_time.sources", "config_missing")
+    if set(value) != {"sources"}:
+        error = TimeSourceConfigError("trusted_time", "config_unknown")
+        error.entry_indices = tuple(index for index, name in enumerate(value) if name != "sources")[:8]
+        raise error
     rows = value["sources"]
     if type(rows) is not list or not 1 <= len(rows) <= 4:
-        raise ValueError("invalid time source count")
+        raise TimeSourceConfigError("trusted_time.sources", "time_sources")
 
     result = []
-    for row in rows:
-        if (type(row) is not dict or "provider" not in row
-                or set(row) - {"provider", "accuracy", "timeout", "endpoint"}
-                or (row["provider"] == "https_date" and not {"accuracy", "endpoint"} <= set(row))):
-            raise ValueError("invalid time source configuration")
-        result.append(TimeSourceSettings(**row))
-    if len({(item.provider, item.endpoint) for item in result}) != len(result):
-        raise ValueError("duplicate time sources")
+    errors = []
+    seen = set()
+    for index, row in enumerate(rows):
+        section = f"trusted_time.sources[{index}]"
+        try:
+            item = _time_source_row(row, section)
+        except TimeSourceConfigError as error:
+            errors.append(error)
+            continue
+
+        marker = (item.provider, item.endpoint)
+        if marker in seen:
+            errors.append(TimeSourceConfigError(section, "duplicate_time_source"))
+            continue
+        seen.add(marker)
+        result.append(item)
+
+    # Ошибки разных источников независимы: оператор может исправить их за один проход.
+    # Список конечен, адреса и значения не входят в итоговое исключение.
+    if errors:
+        errors[0].related = tuple(errors[1:])
+        raise errors[0] from None
+
     return tuple(result)
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Проверка одного источника и привязка ошибки к его номеру
+#------------------------------------------------------------------------------------------------------------------
+def _time_source_row(
+    row: object,
+    section: str,
+    ) -> TimeSourceSettings:
+
+    """
+    Validate one independently configured UTC provider.
+
+    :param row: JSON element from the bounded list of sources.
+    :type row: object
+
+    :param section: Fixed schema path with the element index.
+    :type section: str
+
+    :return: Validated settings for a single source.
+    :rtype: TimeSourceSettings
+    """
+
+    # row — данные одного источника, его адрес и значения не идут в исключение.
+    # section — номер элемента вычисляется валидатором.
+
+    if type(row) is not dict:
+        raise TimeSourceConfigError(section, "config_object")
+    if "provider" not in row:
+        raise TimeSourceConfigError(section + ".provider", "config_missing")
+
+    known = {"provider", "accuracy", "timeout", "endpoint"}
+    if row.keys() - known:
+        error = TimeSourceConfigError(section, "config_unknown")
+        error.entry_indices = tuple(index for index, name in enumerate(row) if name not in known)[:8]
+        raise error
+
+    if row["provider"] == "https_date":
+        if "endpoint" not in row:
+            raise TimeSourceConfigError(section + ".endpoint", "time_endpoint")
+        if "accuracy" not in row:
+            raise TimeSourceConfigError(section + ".accuracy", "time_accuracy")
+    try:
+        return TimeSourceSettings(**row)
+    except TimeSourceConfigError as error:
+        raise TimeSourceConfigError(section + "." + error.field, error.reason) from None
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

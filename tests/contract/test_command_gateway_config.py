@@ -1,10 +1,10 @@
 ﻿# Проверки JSON-настроек и управления двумя приложениями через один hub.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261126-232526
 #
 # Классы:
 # -> FakeTime: Подставное время без внешней сети
@@ -392,7 +392,11 @@ def test_time_configuration(
         with pytest.raises(CommandConfigError) as caught:
             check_command_gateway(path)
         assert "must-not-appear" not in str(caught.value)
-        assert caught.value.field == ("hub" if case == "bad_retry" else "trusted_time")
+        expected_field = {
+            "bad_retry": "hub", "null": "trusted_time", "empty": "trusted_time.sources",
+            "unknown": "trusted_time.sources[0].provider",
+        }
+        assert caught.value.field == expected_field[case]
     assert not (tmp_path / "state").exists()
 #------------------------------------------------------------------------------------------------------------------
 

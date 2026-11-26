@@ -1,10 +1,10 @@
 ﻿# Явные JSON-настройки командного сервера и клиента приложения.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261126-232526
 #
 # Классы:
 # -> CommandConfigError: Безопасная ошибка с названием раздела настроек
@@ -27,6 +27,8 @@
 # -> load_command_client(): Подготовка клиента с новой сессией и постоянным журналом
 #
 # -> read_command_json(): Чтение ограниченного строгого JSON
+#
+# -> _read_command_document(): Чтение схемы вместе с текстом для координат ошибок.
 #
 # -> _gateway(): Проверка разделов серверного JSON
 #
@@ -63,11 +65,12 @@ from pathlib import Path
 from secrets import token_hex
 from typing import Any
 
+from remote_watch._config_diagnostics import JSON_HINTS, json_location, json_syntax_location, json_syntax_reason
 from remote_watch._credentials import CredentialError, resolve_token, validate_credentials
 from remote_watch.adapters.command_http import HttpsCommandTransport
 from remote_watch.adapters.ntfy_commands import NtfyCommandConfig
 from remote_watch.adapters.telegram_commands import TelegramCommandConfig
-from remote_watch.adapters.trusted_time import TimeSourceSettings, parse_time_sources
+from remote_watch.adapters.trusted_time import TimeSourceConfigError, TimeSourceSettings, parse_time_sources
 from remote_watch.commands.client import CommandClient
 from remote_watch.commands.hub_config import (
     CommandAccess,
@@ -139,7 +142,8 @@ class CommandConfigError(ValueError):
         pattern = (r"(?:config(?:\.(?:schema_version|state_dir|targets|principals|"
                    r"sources|scope_sets|trusted_time))?|schema|"
                    r"targets(?:\[[0-9]{1,2}\](?:\.(?:service|environment|region|host|instance_id))?)?|"
-                   r"hub|state_dir|trusted_time|scope_sets(?:\[[0-9]{1,2}\])?|"
+                   r"hub|state_dir|trusted_time(?:\.sources(?:\[[0-3]\]"
+                   r"(?:\.(?:provider|endpoint|accuracy|timeout))?)?)?|scope_sets(?:\[[0-9]{1,2}\])?|"
                    r"client(?:\.(?:schema_version|token|token_env|identity|commands|endpoint|ca_file|"
                    r"state_file|owner_id|allow_loopback_http|display_mode))?|"
                    r"principals(?:\[[0-9]{1,2}\])?(?:\.(?:token|token_env|name|targets|scopes|scope_set))?|"
@@ -152,8 +156,11 @@ class CommandConfigError(ValueError):
                  "unknown_target", "unassigned_target", "duplicate_source", "duplicate_provider",
                  "credential_source", "credential_environment", "credential_value", "source_acl",
                  "ca_read", "ca_invalid", "endpoint_invalid", "config_missing", "config_unknown",
-                 "config_object", "config_list", "scope_source", "unknown_scope_set"}
+                 "config_object", "config_list", "scope_source", "unknown_scope_set",
+                 "time_sources", "time_provider", "time_timeout", "time_accuracy", "time_endpoint",
+                 "duplicate_time_source"}
         self.code = code if type(code) is str and code in known else "config_value"
+        self.entry_indices: tuple[int, ...] = ()
         self.hint = {
             "scope_source": "Укажите ровно одно поле: scopes со списком или scope_set с именем набора.",
             "unknown_scope_set": "Указанный набор отсутствует в scope_sets; проверьте определение и ссылку.",
@@ -179,23 +186,16 @@ class CommandConfigError(ValueError):
             "config_unknown": "В разделе есть неизвестные поля. Сверьте названия с шаблоном JSON.",
             "config_object": "В этом поле нужен JSON-объект {...}, а не список, строка или null.",
             "config_list": "В этом поле нужен непустой JSON-список [...] в пределах допустимого размера.",
+            "time_sources": "Укажите от одного до четырёх объектов источников времени.",
+            "time_provider": "Допустимые значения provider: utctime, timeapi и https_date.",
+            "time_timeout": "Укажите числовой timeout от 0.1 до 3 секунд.",
+            "time_accuracy": "Укажите числовую погрешность accuracy от 0 до 2 секунд.",
+            "time_endpoint": "Укажите HTTPS-адрес источника без credentials, query и fragment.",
+            "duplicate_time_source": "Этот источник времени уже указан в списке.",
         }.get(self.code, "Проверьте указанное поле настроек.")
         if self.code == "config_json":
-            explanations = {
-                "escape": "Недопустимая escape-последовательность. В JSON-пути используйте / либо \\\\.",
-                "trailing_comma": "Лишняя запятая перед ] или }. Уберите запятую после последнего элемента.",
-                "delimiter": "Ожидается запятая или разделитель между элементами JSON.",
-                "property": "Ключ объекта должен быть в двойных кавычках; уберите запятую перед }.",
-                "value": "Ожидается значение JSON; проверьте кавычки, запятые и отсутствие комментариев.",
-                "extra": "После завершённого JSON есть лишние данные; в файле нужен один объект.",
-                "control": "В JSON-строке есть неэкранированный управляющий символ.",
-                "encoding": "Файл должен быть сохранён в UTF-8; кодировка UTF-16 не поддерживается.",
-                "duplicate": "В JSON повторяется ключ. У каждого объекта должны быть уникальные ключи.",
-                "constant": "NaN и Infinity не допускаются в JSON-настройках.",
-                "object": "На верхнем уровне файла нужен один JSON-объект {...}.",
-            }
-            if type(json_reason) is str and json_reason in explanations:
-                self.hint = explanations[json_reason]
+            if type(json_reason) is str and json_reason in JSON_HINTS:
+                self.hint = JSON_HINTS[json_reason]
             if (type(line) is int and type(column) is int
                     and 1 <= line <= 1048577 and 1 <= column <= 1048577):
                 self.hint += f" Строка {line}, столбец {column}."
@@ -453,6 +453,28 @@ def read_command_json(
 
     # path — явный путь локальных данных либо фиксированный путь HTTP-операции.
 
+    return _read_command_document(path)[0]
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Чтение схемы вместе с текстом для координат ошибок
+#------------------------------------------------------------------------------------------------------------------
+def _read_command_document(
+    path: Path,
+    ) -> tuple[dict[str, Any], str]:
+
+    """
+    Decode strict bounded JSON and keep the input only while validating its schema.
+
+    :param path: Local command configuration file.
+    :type path: Path
+
+    :return: Validated JSON root and matching decoded text for local coordinate lookup.
+    :rtype: tuple[dict[str, Any], str]
+    """
+
+    # path — единственное чтение документа; исходный текст в ошибки не добавляется.
+
     try:
         with path.open("rb") as stream:
             body = stream.read(1048577)
@@ -462,27 +484,20 @@ def read_command_json(
     try:
         if len(body) > 1048576:
             raise CommandConfigError("config", "config_size")
-        value = json.loads(body.decode("utf-8-sig"), object_pairs_hook=_pairs, parse_constant=_constant)
+        document = body.decode("utf-8-sig")
+        value = json.loads(document, object_pairs_hook=_pairs, parse_constant=_constant)
         if type(value) is not dict:
             raise CommandConfigError("config", "config_json", json_reason="object")
-        return value
+        return value, document
     except CommandConfigError:
         raise
     except UnicodeDecodeError:
         raise CommandConfigError("config", "config_json", json_reason="encoding") from None
     except json.JSONDecodeError as error:
-        # msg используется только как ключ закрытой таблицы; исходный текст
-        # парсера и его doc содержат JSON с токенами и никогда не печатаются.
-        reasons = {"Invalid \\escape": "escape", "Invalid \\uXXXX escape": "escape",
-                   "Expecting ',' delimiter": "delimiter", "Expecting ':' delimiter": "delimiter",
-                   "Expecting property name enclosed in double quotes": "property",
-                   "Expecting value": "value", "Extra data": "extra",
-                   "Invalid control character at": "control"}
-        reason = reasons.get(error.msg, "syntax")
-        if error.doc[error.pos:error.pos + 1] in ("}", "]") and error.doc[:error.pos].rstrip().endswith(","):
-            reason = "trailing_comma"
-        raise CommandConfigError("config", "config_json", line=error.lineno, column=error.colno,
-                                 json_reason=reason) from None
+        reason = json_syntax_reason(error)
+        diagnostic = CommandConfigError("config", "config_json", json_reason=reason)
+        diagnostic.hint += json_syntax_location(error, reason)
+        raise diagnostic from None
     except Exception:
         raise CommandConfigError("config", "config_json") from None
 #------------------------------------------------------------------------------------------------------------------
@@ -512,10 +527,11 @@ def _gateway(
     # resolve_environment — разрешать ли сейчас ссылки на переменные окружения.
 
     field_name = "config"
+    document = ""
 
     try:
         path = path.resolve()
-        value = read_command_json(path)
+        value, document = _read_command_document(path)
         _keys(value, {"schema_version", "state_dir", "targets", "principals", "sources"},
               {"hub", "scope_sets", "trusted_time"})
         field_name = "schema"
@@ -642,17 +658,30 @@ def _gateway(
         hub = CommandHubConfig(principals=tuple(principals), sources=tuple(sources), **limits)
         field_name = "trusted_time"
         if "trusted_time" in value and value["trusted_time"] is None:
-            raise CommandConfigError(field_name)
+            raise CommandConfigError(field_name, "config_object")
         time_sources = parse_time_sources(value.get("trusted_time"))
         field_name = "state_dir"
         return CommandGatewayConfig(state_dir=_path(path, value["state_dir"]), hub=hub,
                                     targets=targets, providers=tuple(providers), time_sources=time_sources)
-    except CommandConfigError:
+    except TimeSourceConfigError as error:
+        diagnostic = CommandConfigError(error.field, error.reason)
+        diagnostic.hint += json_location(document, diagnostic.field, entries=error.entry_indices)
+        for item in error.related:
+            detail = CommandConfigError(item.field, item.reason)
+            location = json_location(document, detail.field, entries=item.entry_indices)
+            diagnostic.hint += f" {detail.field} — {detail.hint}{location}"
+        raise diagnostic from None
+    except CommandConfigError as error:
+        error.hint += json_location(document, error.field, entries=error.entry_indices)
         raise
     except CredentialError as error:
-        raise CommandConfigError(field_name + "." + error.field, "credential_" + error.reason) from None
+        diagnostic = CommandConfigError(field_name + "." + error.field, "credential_" + error.reason)
+        diagnostic.hint += json_location(document, diagnostic.field)
+        raise diagnostic from None
     except Exception:
-        raise CommandConfigError(field_name) from None
+        diagnostic = CommandConfigError(field_name)
+        diagnostic.hint += json_location(document, diagnostic.field)
+        raise diagnostic from None
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -868,7 +897,10 @@ def _keys(
         raise CommandConfigError(field_name + "." + missing[0], "config_missing")
 
     if value.keys() - required - optional:
-        raise CommandConfigError(field_name, "config_unknown")
+        error = CommandConfigError(field_name, "config_unknown")
+        error.entry_indices = tuple(index for index, name in enumerate(value)
+                                    if name not in required and name not in optional)[:8]
+        raise error
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

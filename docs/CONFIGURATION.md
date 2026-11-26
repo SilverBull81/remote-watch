@@ -1,10 +1,10 @@
 ﻿# Настройки и идентификаторы
 
-Version 1.1.7
+Version 1.1.8
 
 Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 
-Дата и время последнего изменения: 261125-102159
+Дата и время последнего изменения: 261126-232526
 ## Какие файлы нужны
 
 | Файл | Кто читает | Для чего |
@@ -122,7 +122,8 @@ doctor client JSON и notification gateway формат не меняется: �
 
 ### Источники времени командного gateway
 
-В версии 1.4.0+ командный JSON допускает необязательный раздел `trusted_time`:
+Начиная с 1.4.0, необязательный раздел `trusted_time` размещается на верхнем уровне
+командного JSON, на который ссылается `commands.config` из общего конфига Gateway Server.
 
 ```json
 "trusted_time": {
@@ -244,6 +245,12 @@ python -m remote_watch.gateway_server --config config/gateway_server.local.json 
 python -m remote_watch.gateway --config config/notification_gateway.local.json --check-config
 python -m remote_watch.gateway.commands --config config/command_gateway.local.json --check-config
 ```
+
+При ошибке общий и командный CLI указывают причину, поле и, где возможно, строку и
+столбец. `component_field` относится к связанному JSON, выбранному настройкой
+`commands.config` или `notifications.config`. Для независимых ошибок разных источников
+времени проверка выводит несколько подсказок за один проход. Если поле отсутствует,
+координаты указывают на содержащий его объект. Значения и неизвестные имена полей скрыты.
 
 Это проверка структуры и ссылок без запуска, SQLite recovery или отправок провайдеру.
 Она не доказывает валидность provider token, доступность HTTPS и готовность приложения.

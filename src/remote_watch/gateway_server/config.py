@@ -1,10 +1,10 @@
 ﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261102-183757
+# Дата и время последнего изменения: 261126-232526
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига
@@ -35,6 +35,8 @@
 # -> load_deployment_config(): Чтение общего конфига и проверка связанных файлов
 #
 # -> _read_json(): Ограниченное чтение строгого JSON
+#
+# -> _read_document(): Чтение JSON вместе с текстом для координат ошибок.
 #
 # -> _unique_object(): Отказ при повторном ключе объекта
 #
@@ -68,6 +70,7 @@ from urllib.parse import urlsplit
 
 from remote_watch.local_logging import _MONTHS
 
+from .._config_diagnostics import JSON_HINTS, json_location, json_syntax_location, json_syntax_reason
 from .._validation import require_int, require_text
 from .application import ApplicationConfig, application_config
 from .policy import RestartPolicy, _bounded_seconds
@@ -116,14 +119,27 @@ class DeploymentConfigError(ValueError):
         # component_error — копируем только безопасную диагностику штатного загрузчика.
 
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
-                 "component_config", "path_unavailable", "operation_failed", "log_directory_shared")
+                 "component_config", "path_unavailable", "operation_failed", "log_directory_shared",
+                 "config_object", "config_missing", "config_unknown", "misplaced_trusted_time")
         fields = ("config", "schema_version", "endpoint", "control_dir", "log_dir", "notifications",
-                  "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path")
+                  "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path",
+                  "trusted_time")
         self.code = code if code in codes else "config_value"
         self.field = field_name if field_name in fields else "config"
         self.component_code: str | None = None
         self.component_field: str | None = None
-        self.hint: str | None = None
+        self.entry_indices: tuple[int, ...] = ()
+        self.hint: str | None = {
+            "config_missing": "В указанном объекте отсутствует обязательное поле. Сверьте его с шаблоном.",
+            "config_unknown": "В объекте есть неизвестные поля. Сверьте их с шаблоном.",
+            "config_object": "В указанном поле нужен JSON-объект {...}.",
+            "config_schema": "В schema_version требуется целое число 1.",
+            "misplaced_trusted_time": "Перенесите trusted_time на верхний уровень JSON из commands.config.",
+            "config_json": "Проверьте синтаксис JSON и сохраните файл в UTF-8.",
+            "config_read": "Проверьте путь к JSON и права чтения файла.",
+            "config_size": "Размер JSON не должен превышать 1 MiB.",
+            "path_unavailable": "Проверьте наличие и тип файла или каталога.",
+        }.get(self.code)
 
         # Загрузчики уже ограничивают коды, пути полей и подсказки своей схемой.
         # Исходное исключение не сохраняем; произвольные ошибки и подклассы не принимаем.
@@ -445,9 +461,10 @@ def load_deployment_config(
     # path — общий конфиг; вложенные конфиги сохраняют собственную базу относительных путей.
 
     section = "config"
+    document = ""
     try:
         location = Path(path).resolve()
-        root = _read_json(location)
+        root, document = _read_document(location)
         _object(root, {"schema_version", "endpoint", "control_dir", "log_dir"},
                 {"notifications", "commands", "caddy", "lifecycle", "restart", "application"})
         if type(root["schema_version"]) is not int or root["schema_version"] != 1:
@@ -465,13 +482,13 @@ def load_deployment_config(
         for section in ("notifications", "commands"):
             if section not in root:
                 continue
-            value = _object(root[section], {"config", "port"}, {"host"})
+            value = _object(root[section], {"config", "port"}, {"host"}, section)
             components[section] = ComponentConfig(config=_path(location, value["config"]),
                                                   port=value["port"], host=value.get("host", "127.0.0.1"))
 
         section = "caddy"
         value = _object(root.get("caddy", {"mode": "external"}), {"mode"},
-                        {"executable", "config", "data_dir"})
+                        {"executable", "config", "data_dir"}, section)
         caddy = CaddyConfig(mode=value["mode"], **{
             name: _path(location, item) for name, item in value.items() if name != "mode"})
         if caddy.mode == "managed":
@@ -482,10 +499,11 @@ def load_deployment_config(
 
         section = "lifecycle"
         value = _object(root.get(section, {}), set(), {"startup_timeout", "shutdown_timeout", "kill_timeout",
-                                                     "heartbeat_interval", "heartbeat_timeout"})
+                                                     "heartbeat_interval", "heartbeat_timeout"}, section)
         lifecycle = LifecycleConfig(**value)
         section = "restart"
-        value = _object(root.get(section, {}), set(), {"max_restarts", "window", "initial_delay", "max_delay"})
+        value = _object(root.get(section, {}), set(),
+                        {"max_restarts", "window", "initial_delay", "max_delay"}, section)
         restart = RestartPolicy(**value)
 
         section = "application"
@@ -498,10 +516,18 @@ def load_deployment_config(
                                       restart=restart, application=application, **directories, **components)
         _check_components(deployment)
         return deployment
-    except DeploymentConfigError:
+    except DeploymentConfigError as error:
+        # Координаты командного файла уже добавил его загрузчик. Использовать
+        # номера строк общего JSON для ошибки другого файла здесь нельзя.
+        if error.component_code is None:
+            place = json_location(document, error.field, entries=error.entry_indices)
+            if place:
+                error.hint = (error.hint or "") + place
         raise
     except (OSError, ValueError, TypeError, OverflowError, RecursionError):
-        raise DeploymentConfigError("config_value", section) from None
+        error = DeploymentConfigError("config_value", section)
+        error.hint = "Проверьте значения указанного раздела." + json_location(document, section)
+        raise error from None
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -589,6 +615,28 @@ def _read_json(
 
     # path — файл с потенциально приватными адресами; его содержимое не входит в ошибки.
 
+    return _read_document(path)[0]
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# СЛУЖЕБНАЯ ФУНКЦИЯ : Чтение JSON вместе с текстом для координат ошибок
+#------------------------------------------------------------------------------------------------------------------
+def _read_document(
+    path: Path,
+    ) -> tuple[dict[str, Any], str]:
+
+    """
+    Read one strict JSON document and keep text only for local diagnostic coordinates.
+
+    :param path: Deployment JSON path.
+    :type path: Path
+
+    :return: Parsed JSON object and the decoded text used to parse it.
+    :rtype: tuple[dict[str, Any], str]
+    """
+
+    # path — значения и путь файла не попадают в текст исключения.
+
     code = "config_read"
     try:
         with path.open("rb") as stream:
@@ -597,8 +645,22 @@ def _read_json(
         if len(data) > 1024 * 1024:
             raise ValueError("configuration too large")
         code = "config_json"
-        return json.loads(data.decode("utf-8-sig"), object_pairs_hook=_unique_object,
-                          parse_constant=_reject_constant)
+        document = data.decode("utf-8-sig")
+        value = json.loads(document, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+        if type(value) is not dict:
+            raise DeploymentConfigError("config_object", "config")
+        return value, document
+    except DeploymentConfigError:
+        raise
+    except json.JSONDecodeError as error:
+        diagnostic = DeploymentConfigError("config_json", "config")
+        reason = json_syntax_reason(error)
+        diagnostic.hint = JSON_HINTS.get(reason, diagnostic.hint) + json_syntax_location(error, reason)
+        raise diagnostic from None
+    except UnicodeDecodeError:
+        diagnostic = DeploymentConfigError("config_json", "config")
+        diagnostic.hint = JSON_HINTS["encoding"]
+        raise diagnostic from None
     except (OSError, ValueError, RecursionError):
         raise DeploymentConfigError(code, "config") from None
 #------------------------------------------------------------------------------------------------------------------
@@ -625,7 +687,9 @@ def _unique_object(
     result = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError("duplicate JSON key")
+            error = DeploymentConfigError("config_json", "config")
+            error.hint = JSON_HINTS["duplicate"]
+            raise error
         result[key] = value
 
     return result
@@ -647,7 +711,9 @@ def _reject_constant(
 
     # value — нечисловая константа, недопустимая в настройках сроков и пределов.
 
-    raise ValueError("nonstandard JSON constant")
+    error = DeploymentConfigError("config_json", "config")
+    error.hint = JSON_HINTS["constant"]
+    raise error
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
@@ -657,6 +723,7 @@ def _object(
     value: object,
     required: set[str],
     optional: set[str],
+    section: str = "config",
     ) -> dict[str, Any]:
 
     """
@@ -671,6 +738,9 @@ def _object(
     :param optional: Additional accepted keys.
     :type optional: set[str]
 
+    :param section: Known section of the deployment schema.
+    :type section: str
+
     :return: Validated object without copying private values into errors.
     :rtype: dict[str, Any]
     """
@@ -678,9 +748,23 @@ def _object(
     # value — проверяемый узел JSON.
     # required — обязательные поля.
     # optional — допустимые дополнительные поля.
+    # section — уже известная часть схемы, без имён из файла.
 
-    if type(value) is not dict or not required <= value.keys() or value.keys() - required - optional:
-        raise ValueError("invalid object fields")
+    if type(value) is not dict:
+        raise DeploymentConfigError("config_object", section)
+    missing = required - value.keys()
+    if missing:
+        error = DeploymentConfigError("config_missing", section)
+        error.hint = "Добавьте обязательные поля: " + ", ".join(sorted(missing)) + "."
+        raise error
+    if section == "config" and "trusted_time" in value:
+        raise DeploymentConfigError("misplaced_trusted_time", "trusted_time")
+
+    names = value.keys() - required - optional
+    if names:
+        error = DeploymentConfigError("config_unknown", section)
+        error.entry_indices = tuple(index for index, name in enumerate(value) if name in names)[:8]
+        raise error
 
     return value
 #------------------------------------------------------------------------------------------------------------------

@@ -1,15 +1,17 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261126-232526
 #
 # Функции:
 # -> deployment(): Создание только подставных конфигов в отдельной папке
 #
 # Тесты:
+# -> test_deployment_diagnostic_locations(): Координаты синтаксиса, неизвестных и неверно вложенных полей.
+#
 # -> test_modes_are_read_only(): Три режима без сети, секретов окружения и новых файлов
 #
 # -> test_invalid_deployment(): Отказ при противоречиях и неверных типах
@@ -279,7 +281,7 @@ def test_icon_path(
     (None, "config_read"), (b"\xff", "config_json"), (b"{", "config_json"),
     (b'{"schema_version":1,"schema_version":1}', "config_json"),
     (b'{"restart":{"window":NaN}}', "config_json"), (b" " * (1024 * 1024 + 1), "config_size"),
-    (b"[1,2]", "config_value"), (b"[" * 1100, "config_json"),
+        (b"[1,2]", "config_object"), (b"[" * 1100, "config_json"),
 ], ids=["absent", "encoding", "syntax", "duplicate", "nan", "oversized", "array", "depth"])
 def test_json_failures(
     tmp_path: Path,
@@ -386,6 +388,62 @@ def test_component_failure(
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Координаты синтаксиса, неизвестных и неверно вложенных полей
+#------------------------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ["syntax", "misplaced", "unknown"])
+def test_deployment_diagnostic_locations(
+    deployment: tuple[Path, dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    case: str,
+    ) -> None:
+
+    """
+    Print precise deployment diagnostic coordinates without exposing arbitrary keys, paths or values.
+
+    :param deployment: Synthetic file and valid component references.
+    :type deployment: tuple[Path, dict[str, Any]]
+
+    :param capsys: Captured main CLI output.
+    :type capsys: pytest.CaptureFixture[str]
+
+    :param case: Invalid syntax, misplaced time settings, or multiple unknown keys.
+    :type case: str
+    """
+
+    # deployment — изолированная копия структуры, без службы и рабочих файлов.
+    # capsys — проверяем именно сообщение CLI, включая номера строк.
+    # case — содержимое во всех случаях должно остаться скрытым.
+
+    path, value = deployment
+    if case == "syntax":
+        content = '{\n  "private-key": "private-value",\n}'
+        code = "config_json"
+        places = [(3, 1)]
+    elif case == "misplaced":
+        content = json.dumps({**value, "trusted_time": {"sources": []}}, indent=2)
+        code = "misplaced_trusted_time"
+        places = [(content[:content.index('"trusted_time"')].count("\n") + 1, 3)]
+    else:
+        value["commands"]["private-key"] = "private-value"
+        value["commands"]["another-private-key"] = "private-value"
+        content = json.dumps(value, indent=2)
+        code = "config_unknown"
+        places = [(index, 5) for index, line in enumerate(content.splitlines(), 1) if '"private-value"' in line]
+
+    path.write_text(content, encoding="utf-8-sig")
+    assert main(["--config", str(path), "--check-config"]) == 1
+    output = capsys.readouterr().out
+    assert f"code={code}" in output
+    for line, column in places:
+        assert f"Строка {line}, столбец {column}." in output
+    assert "private-" not in output and str(path) not in output
+    if case == "misplaced":
+        assert "commands.config" in output
+    if case == "syntax":
+        assert "Запятая находится на строке 2, столбец 33." in output
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Причина отказа связанного JSON без раскрытия его содержимого
 #------------------------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize(("component", "failure", "code", "field_name", "hint"), [
@@ -395,6 +453,7 @@ def test_component_failure(
     ("notifications", "json", "config_json", "config", "синтаксис JSON"),
     ("commands", "legacy", "config_unknown", "sources[0]", "неизвестные поля"),
     ("commands", "unknown", "config_unknown", "sources[0]", "неизвестные поля"),
+    ("commands", "time", "time_timeout", "trusted_time.sources[0].timeout", "от 0.1 до 3 секунд"),
     ("notifications", "unknown", "config_fields", "config", "допустимые поля"),
 ])
 def test_component_diagnostics(
@@ -444,6 +503,13 @@ def test_component_diagnostics(
         linked.unlink()
     elif failure == "json":
         linked.write_text('{\n"secret-key": "secret-value",\n}', encoding="utf-8")
+    elif failure == "time":
+        content["trusted_time"] = {"sources": [
+            {"provider": "utctime", "timeout": 5},
+            {"provider": "https_date", "accuracy": 1},
+        ]}
+        document = json.dumps(content, indent=2)
+        linked.write_text(document, encoding="utf-8")
     else:
         target = content["sources"][0] if component == "commands" else content
         target["command_display_mode" if failure == "legacy" else "secret-key"] = "secret-value"
@@ -461,6 +527,10 @@ def test_component_diagnostics(
     output = capsys.readouterr().out
     assert f"component_code={code} component_field={field_name}" in output
     assert hint in output
+    if failure == "time":
+        timeout_line = document[:document.index('"timeout"')].count("\n") + 1
+        assert f"Строка {timeout_line}, столбец 9." in output
+        assert "trusted_time.sources[1].endpoint" in output
     for private in ("secret-key", "secret-value", str(linked), str(path)):
         assert private not in output + str(error) + repr(error)
 
