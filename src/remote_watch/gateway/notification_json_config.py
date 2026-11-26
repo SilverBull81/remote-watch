@@ -1,10 +1,10 @@
 ﻿# Чтение локальной JSON-конфигурации gateway без исполнения Python-кода.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> NotificationGatewayConfigError: Ошибка с фиксированной категорией и разделом схемы
@@ -100,7 +100,7 @@ class NotificationGatewayConfigError(ValueError):
         # reason - фиксированное объяснение ошибки токена.
 
         self.code = code if code in ("config_read", "config_size", "config_json", "config_fields",
-                                      "config_schema", "config_value") else "config_value"
+                                      "config_schema", "config_value", "command_config_given") else "config_value"
         fields = ("config", "schema_version", "destinations", "principals", "gateway")
 
         # В подробном пути допустимы только известные поля и ограниченный индекс списка.
@@ -110,6 +110,11 @@ class NotificationGatewayConfigError(ValueError):
             or indexed[1] == "principals" and int(indexed[2]) < 256 and indexed[3] is None)
         self.field = field if field in fields or safe_path else "config"
         self.reason = reason if isinstance(reason, str) and reason in CREDENTIAL_HINTS else None
+        self.hint = CREDENTIAL_HINTS.get(self.reason)
+        if self.code == "command_config_given":
+            self.hint = ("Передан конфиг командного канала. Проверьте его через "
+                         "python -m remote_watch.gateway.commands --config <файл> --check-config. "
+                         "Модуль remote_watch.gateway принимает конфиг уведомлений.")
         super().__init__(f"Invalid gateway JSON configuration: code={self.code} field={self.field}")
     #--------------------------------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------------------------------------
@@ -152,6 +157,11 @@ def load_notification_gateway_config(
         root = json.loads(data.decode("utf-8-sig"), object_pairs_hook=_unique_object,
                           parse_constant=_invalid_constant)
         code = "config_fields"
+        # Распознаём известную чужую схему по набору полей. Имя файла и его
+        # значения не участвуют в подсказке, переключать модуль автоматически нельзя.
+        command_keys = {"schema_version", "state_dir", "targets", "principals", "sources"}
+        if type(root) is dict and command_keys <= root.keys() and "destinations" not in root:
+            raise NotificationGatewayConfigError("command_config_given", "config")
         root = _object(root, {"schema_version", "destinations", "principals", "gateway"},
                        {"schema_version", "destinations", "principals"})
         code, field = "config_schema", "schema_version"

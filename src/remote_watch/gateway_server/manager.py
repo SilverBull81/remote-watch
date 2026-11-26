@@ -1,10 +1,10 @@
 ﻿# Управление собственными процессами gateway и закрытый локальный канал состояния.
 #
-# Version 1.1.0
+# Version 1.1.1
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> StatusLog: Ограниченный журнал с безопасным признаком ошибки записи
@@ -59,7 +59,7 @@ from time import monotonic
 
 from remote_watch.commands.source_store import ProcessLock
 from remote_watch.gateway_server.application import OperatorAlerts
-from remote_watch.gateway_server.config import DeploymentConfig, check_log_directory
+from remote_watch.gateway_server.config import DeploymentConfig, DeploymentConfigError, check_log_directory
 from remote_watch.gateway_server.messages import MAX_STATUS_BYTES, read_limited, status_message
 from remote_watch.gateway_server.policy import FailureKind, RestartBudget
 from remote_watch.gateway_server.processes import ProcessGroup, private_directory
@@ -316,18 +316,23 @@ class GatewayManager:
             if path.is_symlink() or path.exists() and getattr(path.lstat(), "st_file_attributes", 0) & 0x400:
                 raise RuntimeError("control_permissions")
 
-        if self.config.control_dir.exists():
-            # При разных аккаунтах service/operator второй --start не должен
-            # менять ACL живого владельца до отказа по manager.lock.
-            self._lock.open()
-            try:
+        try:
+            if self.config.control_dir.exists():
+                # При разных аккаунтах service/operator второй --start не должен
+                # менять ACL живого владельца до отказа по manager.lock.
+                self._lock.open()
+                try:
+                    private_directory(self.config.control_dir, self._operator_sid)
+                except BaseException:
+                    self._lock.close()
+                    raise
+            else:
                 private_directory(self.config.control_dir, self._operator_sid)
-            except BaseException:
-                self._lock.close()
-                raise
-        else:
-            private_directory(self.config.control_dir, self._operator_sid)
-            self._lock.open()
+                self._lock.open()
+        except PermissionError:
+            raise DeploymentConfigError("control_access", "control_dir") from None
+        except OSError:
+            raise DeploymentConfigError("control_io", "control_dir") from None
 
         result = 1
         try:

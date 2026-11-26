@@ -1,10 +1,10 @@
 ﻿# Общие настройки развёртывания сервера и их проверка без запуска серверов.
 #
-# Version 1.0.9
+# Version 1.1.0
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-232526
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> DeploymentConfigError: Безопасная ошибка общего конфига
@@ -120,7 +120,8 @@ class DeploymentConfigError(ValueError):
 
         codes = ("config_read", "config_size", "config_json", "config_schema", "config_value",
                  "component_config", "path_unavailable", "operation_failed", "log_directory_shared",
-                 "config_object", "config_missing", "config_unknown", "misplaced_trusted_time")
+                 "config_object", "config_missing", "config_unknown", "misplaced_trusted_time",
+                 "control_access", "control_io")
         fields = ("config", "schema_version", "endpoint", "control_dir", "log_dir", "notifications",
                   "commands", "caddy", "lifecycle", "restart", "application", "application.icon_path",
                   "trusted_time")
@@ -139,12 +140,16 @@ class DeploymentConfigError(ValueError):
             "config_read": "Проверьте путь к JSON и права чтения файла.",
             "config_size": "Размер JSON не должен превышать 1 MiB.",
             "path_unavailable": "Проверьте наличие и тип файла или каталога.",
+            "control_access": "Операция с каталогом управления запрещена. Для установленной службы "
+                              "используйте start-service.cmd. Для консольного режима проверьте права "
+                              "учётной записи на каталог и файл manager.lock.",
+            "control_io": "Не удалось открыть каталог управления или manager.lock. "
+                          "Проверьте доступность каталога и состояние файловой системы.",
         }.get(self.code)
 
         # Загрузчики уже ограничивают коды, пути полей и подсказки своей схемой.
         # Исходное исключение не сохраняем; произвольные ошибки и подклассы не принимаем.
         if self.code == "component_config" and component_error is not None:
-            from .._credentials import CREDENTIAL_HINTS
             from ..gateway.command_config import CommandConfigError
             from ..gateway.notification_json_config import NotificationGatewayConfigError
 
@@ -154,7 +159,7 @@ class DeploymentConfigError(ValueError):
                 if type(component_error) is CommandConfigError:
                     self.hint = component_error.hint
                 else:
-                    self.hint = CREDENTIAL_HINTS.get(component_error.reason) or {
+                    self.hint = component_error.hint or {
                         "config_read": "Проверьте путь к JSON и права чтения файла.",
                         "config_size": "Размер JSON не должен превышать 1 MiB.",
                         "config_json": "Проверьте UTF-8, синтаксис JSON и отсутствие повторяющихся ключей.",

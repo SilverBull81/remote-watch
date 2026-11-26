@@ -1,10 +1,10 @@
 ﻿# Исходящий gateway-сервер с точными правами приложений и ограниченной обработкой.
 #
-# Version 1.1.4
+# Version 1.1.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-194441
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> _GatewayParser: Безопасные ошибки командной строки
@@ -71,7 +71,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from remote_watch._credentials import CREDENTIAL_HINTS, resolve_token
+from remote_watch._credentials import resolve_token
 from remote_watch.events import Identity
 from remote_watch.gateway.doctor_protocol import ProbeEndpoint
 from remote_watch.gateway.notification_config import NotificationGatewayPrincipal, NotificationGatewayServerConfig
@@ -992,7 +992,7 @@ def main(
             code, field = "dependency_missing", stage
         else:
             code, field = "operation_failed", stage
-        hint = CREDENTIAL_HINTS.get(error.reason, "") if isinstance(error, NotificationGatewayConfigError) else ""
+        hint = error.hint if isinstance(error, NotificationGatewayConfigError) else None
         print(f"Ошибка gateway: code={code} field={field}. {hint or 'Значения и детали скрыты.'}", flush=True)
         return 1
 

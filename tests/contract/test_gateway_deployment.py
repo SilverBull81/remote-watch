@@ -1,16 +1,18 @@
 ﻿# Проверки общей конфигурации deployment без запуска сети и рабочих журналов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-232526
+# Дата и время последнего изменения: 261126-235708
 #
 # Функции:
 # -> deployment(): Создание только подставных конфигов в отдельной папке
 #
 # Тесты:
 # -> test_deployment_diagnostic_locations(): Координаты синтаксиса, неизвестных и неверно вложенных полей.
+#
+# -> test_foreground_control_access(): Отказ Windows-оператору при открытии служебного lock.
 #
 # -> test_modes_are_read_only(): Три режима без сети, секретов окружения и новых файлов
 #
@@ -441,6 +443,54 @@ def test_deployment_diagnostic_locations(
         assert "commands.config" in output
     if case == "syntax":
         assert "Запятая находится на строке 2, столбец 33." in output
+#------------------------------------------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------------------------------------------
+# ТЕСТ : Отказ Windows-оператору при открытии служебного lock
+#------------------------------------------------------------------------------------------------------------------
+def test_foreground_control_access(
+    deployment: tuple[Path, dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+
+    """
+    Report denied foreground startup separately from a valid deployment configuration.
+
+    :param deployment: Synthetic deployment and component configuration.
+    :type deployment: tuple[Path, dict[str, Any]]
+
+    :param capsys: Captured CLI output.
+    :type capsys: pytest.CaptureFixture[str]
+
+    :param monkeypatch: Injection of a denied lock open without changing filesystem ACLs.
+    :type monkeypatch: pytest.MonkeyPatch
+    """
+
+    # deployment — подставные JSON без службы и настоящих журналов.
+    # capsys — проверяем сообщение запуска, в котором нет пути из исключения.
+    # monkeypatch — не меняем права в ОС и не запускаем процессы.
+
+    path, value = deployment
+    path.write_text(json.dumps(value), encoding="utf-8")
+    control = path.parent / value["control_dir"]
+    control.mkdir()
+    lock = control / "manager.lock"
+    lock.write_bytes(b"0")
+    monkeypatch.setattr("remote_watch.gateway_server.manager.ProcessLock.open",
+                        Mock(side_effect=PermissionError("private-lock-path")))
+    permissions = Mock()
+    monkeypatch.setattr("remote_watch.gateway_server.manager.private_directory", permissions)
+
+    base_args = ["--config", str(path)]
+    assert main([*base_args, "--check-config"]) == 0
+    capsys.readouterr()
+    assert main([*base_args, "--start"]) == 1
+    output = capsys.readouterr().out
+    assert "code=control_access field=control_dir" in output and "start-service.cmd" in output
+    assert "private-lock-path" not in output and str(path) not in output
+    assert lock.read_bytes() == b"0"
+    permissions.assert_not_called()
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

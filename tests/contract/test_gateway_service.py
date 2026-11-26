@@ -1,10 +1,10 @@
 ﻿# Проверки установки службы, границ прав, отдельного UI и переходов жизненного цикла.
 #
-# Version 1.0.5
+# Version 1.0.6
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-090725
+# Дата и время последнего изменения: 261126-235827
 #
 # Функции:
 # -> service_plan(): Изолированные конфиги и фиктивный venv без сетевых вызовов
@@ -410,6 +410,7 @@ def test_second_manager_acl(
     # смены прав. Ошибка самой защиты каталога также не должна оставлять lock.
 
     from remote_watch.commands.storage import StoreConflict
+    from remote_watch.gateway_server.config import DeploymentConfigError
     from remote_watch.gateway_server.manager import GatewayManager
 
     path = service_plan.deployment.control_dir / "manager.lock"
@@ -424,8 +425,9 @@ def test_second_manager_acl(
     finally:
         owner.close()
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(DeploymentConfigError) as caught:
         asyncio.run(GatewayManager(service_plan.deployment).run())
+    assert (caught.value.code, caught.value.field) == ("control_access", "control_dir")
 
     owner.open()
     owner.close()

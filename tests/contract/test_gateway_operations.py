@@ -1,10 +1,10 @@
 ﻿# Эксплуатация gateway: штатная остановка, безопасная диагностика и общий получатель.
 #
-# Version 1.0.7
+# Version 1.0.8
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> Provider: Канал с управляемым завершением попытки
@@ -320,6 +320,8 @@ def test_cli_summary(
 @pytest.mark.parametrize(("raw", "code", "field"), [
     (None, "config_read", "config"), (b"{private", "config_json", "config"),
     (b'{"private_key": "private_value"}', "config_fields", "config"),
+    (b'{"schema_version":1,"state_dir":"private","principals":[],"targets":{},"sources":[]}',
+     "command_config_given", "config"),
     (b'{"schema_version":2,"destinations":[],"principals":[]}', "config_schema", "schema_version"),
     (b'{"schema_version":1,"destinations":[],"principals":[]}', "config_value", "destinations"),
 ])
@@ -368,6 +370,8 @@ def test_config_categories(
     output = capsys.readouterr().out
     assert f"code={code} field={field}" in output
     assert "private" not in output
+    if code == "command_config_given":
+        assert "python -m remote_watch.gateway.commands --config <файл> --check-config" in output
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

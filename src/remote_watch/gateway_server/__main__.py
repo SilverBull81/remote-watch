@@ -1,10 +1,10 @@
 ﻿# Запуск gateway server, проверка настроек, локальное состояние и остановка.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261126-232526
+# Дата и время последнего изменения: 261126-235708
 #
 # Классы:
 # -> DeploymentParser: Разбор CLI без раскрытия неизвестных значений
@@ -105,6 +105,7 @@ def main(
     if args.headless and not args.start:
         parser.error("headless")
 
+    stage = "config"
     try:
         if args.status or args.stop:
             from .manager import control_request
@@ -117,6 +118,7 @@ def main(
         if args.headless:
             config = replace(config, application=replace(config.application, ui="headless"))
         if not args.check_config:
+            stage = "startup"
             from .manager import GatewayManager
 
             if args.start:
@@ -133,7 +135,7 @@ def main(
         from remote_watch.commands.storage import StoreConflict
 
         code = error.code if isinstance(error, DeploymentConfigError) else "operation_failed"
-        field_name = error.field if isinstance(error, DeploymentConfigError) else "config"
+        field_name = error.field if isinstance(error, DeploymentConfigError) else stage
         if isinstance(error, StoreConflict):
             code, field_name = "ownership", "control"
         elif isinstance(error, ImportError):
