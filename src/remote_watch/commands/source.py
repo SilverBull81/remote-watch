@@ -1,10 +1,10 @@
 ﻿# Приём команд от провайдеров и независимая доставка сохранённых результатов.
 #
-# Version 1.0.8
+# Version 1.0.9
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261015-111157
+# Дата и время последнего изменения: 261126-103736
 #
 # Классы:
 # -> SourceStats: Счётчики источника без приватных данных
@@ -57,6 +57,7 @@ from remote_watch.commands.source_protocol import (
     source_result_text,
 )
 from remote_watch.commands.source_store import SourceJournal
+from remote_watch.commands.time import FreshnessReason
 from remote_watch.commands.transport import CommandError
 
 #------------------------------------------------------------------------------------------------------------------
@@ -539,7 +540,16 @@ class CommandSourceRunner:
         notice = pending.notice
 
         if pending.request is not None and admitted.command is None:
-            notice = "Command rejected: authorization, freshness or trusted time check failed."
+            # Отсеянное по границе журнала событие также уже просрочено. Для
+            # остальных отказов берём только причину нового решения от hub.
+            reason = FreshnessReason.TOO_OLD if retired else admitted.freshness_reason
+            notice = {
+                FreshnessReason.TIME_UNAVAILABLE: "Command rejected: trusted time is temporarily unavailable. "
+                "Send a new command once the gateway recovers.",
+                FreshnessReason.TOO_OLD: "Command rejected: the message is too old. Send a new command.",
+                FreshnessReason.FUTURE: "Command rejected: the message timestamp is ahead of the gateway's "
+                "trusted time. Try a new command. If this repeats, contact the gateway operator.",
+            }.get(reason, "Command rejected: authorization, freshness or trusted time check failed.")
 
         if notice is not None and pending.event.conversation_id is not None:
             self._receive_stage = "provider_reply"

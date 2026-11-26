@@ -1,10 +1,10 @@
 ﻿# Понятные владельцу сообщения о сбоях gateway без приватных подробностей.
 #
-# Version 1.0.1
+# Version 1.0.2
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261103-083907
+# Дата и время последнего изменения: 261126-103736
 #
 # Функции:
 # -> operator_notice(): Описание сбоя или восстановления для мессенджера.
@@ -114,6 +114,8 @@ def operator_notice(
     title = COMPONENTS[name]
     if state == "ready":
         lines = ["Remote Watch gateway", f"{title} is ready again."]
+        if name == "commands":
+            lines.append("If a command was rejected, send it again as a new message.")
         if type(duration) is int and 0 <= duration <= 2**63 - 1:
             minutes, seconds = divmod(duration, 60)
             lines.append(f"Observed interruption: {minutes} min {seconds} sec.")

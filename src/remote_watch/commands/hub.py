@@ -1,10 +1,10 @@
 ﻿# Центральная маршрутизация команд, регистраций и сохранённых результатов.
 #
-# Version 1.1.3
+# Version 1.1.4
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261125-102159
+# Дата и время последнего изменения: 261126-103736
 #
 # Классы:
 # -> _Session: Регистрация процесса, сохраняемая и после истечения срока
@@ -76,7 +76,7 @@ import asyncio
 import hashlib
 import hmac
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from secrets import token_hex
 from time import monotonic
 
@@ -800,11 +800,18 @@ class CommandHub:
 
             store = self._worker.store
 
-            if accepted is not None and position > store.cursor(source.source_id):
+            new_position = permitted and position > store.cursor(source.source_id)
+            if accepted is not None and new_position:
                 if len(store.pending(limit=1000)) >= self.config.max_pending:
                     raise CommandError("capacity")
 
-            return store.admit(source.source_id, position, expected_cursor, accepted, deadline, reason)
+            admission = store.admit(source.source_id, position, expected_cursor, accepted, deadline, reason)
+            if new_position and decision is not None and decision.reason is not None and admission.command is None:
+                # Причина относится к только что записанному отказу. Для повторной
+                # позиции не выдаём сегодняшнюю проверку времени за прежнее решение.
+                return replace(admission, freshness_reason=decision.reason)
+
+            return admission
         #----------------------------------------------------------------------------------------------------------
 
 

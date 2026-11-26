@@ -1,10 +1,10 @@
 ﻿# Контракты ограниченного постоянного хранения команд и результатов.
 #
-# Version 1.0.6
+# Version 1.0.7
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261126-103736
 #
 # Классы:
 # -> StoreError: Ошибка хранилища без вывода его содержимого
@@ -66,6 +66,7 @@ from remote_watch.commands.protocol import (
     CommandSession,
 )
 from remote_watch.commands.state import CommandAction, CommandDeadline, CommandRecord
+from remote_watch.commands.time import FreshnessReason
 
 #------------------------------------------------------------------------------------------------------------------
 
@@ -245,11 +246,15 @@ class Admission:
 
     :param inserted: Whether admission created a new durable record.
     :type inserted: bool
+
+    :param freshness_reason: In-process explanation for a newly committed freshness rejection.
+    :type freshness_reason: FreshnessReason | None
     """
 
     cursor: int                         # Уже записанная позиция; только её можно подтвердить источнику.
     command: StoredCommand | None       # None для отклонённого, пропущенного или очищенного события.
     inserted: bool                      # Новая команда записана именно этой транзакцией.
+    freshness_reason: FreshnessReason | None = None  # Причина нового отказа по времени, только в памяти.
 #------------------------------------------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------------------------------------------

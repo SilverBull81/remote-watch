@@ -1,10 +1,10 @@
 ﻿# Проверки разбора команд, постоянной позиции и восстановления источника.
 #
-# Version 1.0.4
+# Version 1.0.5
 #
 # Автор: Sergey Fundobny (silverbull@mail.ru) + GPT-6
 #
-# Дата и время последнего изменения: 261014-164146
+# Дата и время последнего изменения: 261126-103736
 #
 # Классы:
 # -> FakeProvider: Подставной провайдер с наблюдаемыми подтверждениями
@@ -61,6 +61,7 @@ from remote_watch.commands.source import CommandSourceRunner
 from remote_watch.commands.source_protocol import SourceEvent, SourcePending, SourceTargets, parse_source_command
 from remote_watch.commands.source_store import ProcessLock, SourceJournal
 from remote_watch.commands.storage import StoreConflict, StoreFull
+from remote_watch.commands.time import TimeSample, TimeUnavailable
 from remote_watch.commands.transport import CommandError
 
 #------------------------------------------------------------------------------------------------------------------
@@ -373,7 +374,9 @@ def test_source_journal_capacity_and_lock(
 #------------------------------------------------------------------------------------------------------------------
 # ТЕСТ : Права, свежесть и потери подтверждений источника
 #------------------------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("kind", ["normal", "lost_ack", "lost_hub_response", "foreign", "old", "help", "long"])
+@pytest.mark.parametrize("kind", [
+    "normal", "lost_ack", "lost_hub_response", "foreign", "old", "expired", "future", "no_time", "help", "long",
+])
 def test_source_admission(
     tmp_path: Path,
     kind: str,
@@ -410,6 +413,14 @@ def test_source_admission(
             incoming = replace(incoming, actor_id="intruder")
         elif kind == "old":
             incoming = replace(incoming, message_date=500)
+        elif kind == "expired":
+            incoming = replace(incoming, message_date=880)
+        elif kind == "future":
+            incoming = replace(incoming, message_date=1005)
+        elif kind == "no_time":
+            # Сессия приложения остаётся живой, но нового показания UTC принять нельзя.
+            with pytest.raises(TimeUnavailable):
+                rig.trusted.install(TimeSample(lower_utc=1000, upper_utc=1010, observed_at=rig.now))
         elif kind == "help":
             incoming = replace(incoming, text="/rw loader")
         elif kind == "long":
@@ -474,10 +485,28 @@ def test_source_admission(
                     await rig.client.acquire()
             else:
                 assert ticket is None
-            if kind == "foreign":
+            if kind in {"foreign", "old"}:
                 assert not provider.replies
             elif kind == "help":
                 assert "resume_load" in provider.replies[0][1]
+            elif kind == "expired":
+                assert "message is too old" in provider.replies[0][1]
+            elif kind == "future":
+                assert "timestamp is ahead of the gateway's trusted time" in provider.replies[0][1]
+            elif kind == "no_time":
+                assert not rig.hub.health()["ready"]
+                assert "trusted time is temporarily unavailable" in provider.replies[0][1]
+
+                # После восстановления можно принять новое сообщение. Отказанное
+                # событие уже подтверждено и не должно ожить благодаря новому времени.
+                rig.trusted.install(TimeSample(lower_utc=1000, upper_utc=1000.1, observed_at=rig.now))
+                assert rig.hub.health()["ready"]
+                provider.events.append(event(number=2))
+                await runner.step()
+                assert provider.acks == ["1", "2"]
+                ticket = await rig.client.acquire()
+                assert ticket is not None
+                assert ticket.grant.request.source_event_id == "2"
         finally:
             await runner.close()
             await rig.close()
